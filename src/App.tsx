@@ -127,6 +127,7 @@ export default function App() {
   });
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const ADMIN_DASHBOARD_PASSWORD = 'pinakaaz420';
 
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
@@ -796,7 +797,12 @@ export default function App() {
                     onClick={(e) => {
                       triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
                       soundManager.playUIClick();
-                      setTimeout(() => setGameState('ADMIN_DASHBOARD'), 250);
+                      const input = window.prompt('Enter admin password');
+                      if (input === ADMIN_DASHBOARD_PASSWORD) {
+                        setTimeout(() => setGameState('ADMIN_DASHBOARD'), 250);
+                      } else if (input !== null) {
+                        window.alert('Incorrect password');
+                      }
                     }}
                     onMouseEnter={() => soundManager.playUIHover()}
                     className="group relative flex items-center h-12 cursor-pointer overflow-hidden"
