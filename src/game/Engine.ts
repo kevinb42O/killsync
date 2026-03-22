@@ -26,6 +26,20 @@ export interface BalanceTuning {
   bossXPRewardMultiplier: number;
 }
 
+export interface AutoUpgradeNotice {
+  id: string;
+  name: string;
+  type: 'stat' | 'weapon' | 'weapon_upgrade' | 'dash' | 'heal';
+  rarity?: 'common' | 'rare' | 'legendary';
+  expiresAt: number;
+}
+
+export interface SystemNotice {
+  text: string;
+  color: string;
+  expiresAt: number;
+}
+
 export const DEFAULT_BALANCE_TUNING: BalanceTuning = {
   difficultyTimeScalePerMinute: 0.15,
   difficultyKillBonusDivisor: 2000,
@@ -144,6 +158,12 @@ export class GameEngine {
   onShopEnter: () => void;
   onExfill: (coins: number, level: number) => void;
   shopInteractionCooldown: number = 0;
+  public recentAutoUpgrade: AutoUpgradeNotice | null = null;
+  public recentSystemNotice: SystemNotice | null = null;
+  private autoUpgradeNoDashStreak: number = 0;
+  private lastAutoUpgradeId: string | null = null;
+  private queuedAutoSkips: number = 0;
+  private queuedAutoRerolls: number = 0;
 
   constructor(
     canvas: HTMLCanvasElement, 
@@ -261,18 +281,18 @@ export class GameEngine {
 
   createDefaultDashState(): DashState {
     return {
-      deadlockBurst: false,
-      twinVector: false,
-      aegisSlip: false,
-      afterimageMinefield: false,
-      phaseLaceration: false,
-      nullWake: false,
-      inertiaVault: false,
-      kineticRefund: false,
-      bulwarkRam: false,
-      echoRecall: false,
-      prismGuard: false,
-      cataclysmBrake: false,
+      deadlockBurst: 0,
+      twinVector: 0,
+      aegisSlip: 0,
+      afterimageMinefield: 0,
+      phaseLaceration: 0,
+      nullWake: 0,
+      inertiaVault: 0,
+      kineticRefund: 0,
+      bulwarkRam: 0,
+      echoRecall: 0,
+      prismGuard: 0,
+      cataclysmBrake: 0,
       dashCharges: 1,
       maxDashCharges: 1,
       dashRechargeTimer: 0,
@@ -295,6 +315,43 @@ export class GameEngine {
     return this.player.permanentUpgrades?.[id] || 0;
   }
 
+  private getDashUpgradeLevel(id: string): number {
+    const rawKey = id.replace('dash_', '');
+    const camelKey = rawKey.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase()) as keyof DashState;
+    const value = (this.dashState as any)[camelKey];
+    return Number.isFinite(value) ? Number(value) : 0;
+  }
+
+  private getDashUpgradeLevelByKey(key: keyof DashState): number {
+    const value = (this.dashState as any)[key];
+    return Number.isFinite(value) ? Number(value) : 0;
+  }
+
+  private getDashUpgradeMaxLevel(): number {
+    return 3;
+  }
+
+  private getDashAegisPostShieldMs(): number {
+    return 350 + Math.max(0, this.getDashUpgradeLevelByKey('aegisSlip') - 1) * 150;
+  }
+
+  private getDashEchoRecallWindowMs(): number {
+    return 700 + Math.max(0, this.getDashUpgradeLevelByKey('echoRecall') - 1) * 250;
+  }
+
+  private getDashKineticWindowMs(): number {
+    return 1500 + Math.max(0, this.getDashUpgradeLevelByKey('kineticRefund') - 1) * 500;
+  }
+
+  private getDashKineticRefundFraction(): number {
+    const level = this.getDashUpgradeLevelByKey('kineticRefund');
+    return Math.min(0.4, 0.15 + Math.max(0, level - 1) * 0.1);
+  }
+
+  private getDashNullWakeLifeMs(): number {
+    return 1200 + Math.max(0, this.getDashUpgradeLevelByKey('nullWake') - 1) * 400;
+  }
+
   private getEffectiveDashCooldownMs(): number {
     const rechargeLevel = this.getPermanentUpgradeLevel('perm_dash_recharge');
     const rechargeMult = Math.max(0.5, 1 - rechargeLevel * 0.1);
@@ -307,7 +364,7 @@ export class GameEngine {
 
   private syncDashChargeCapacity() {
     const baseCharges = 1 + this.getPermanentUpgradeLevel('perm_dash_charge');
-    const desiredMax = baseCharges + (this.dashState.twinVector ? 1 : 0);
+    const desiredMax = baseCharges + this.getDashUpgradeLevelByKey('twinVector');
     if (this.dashState.maxDashCharges !== desiredMax) {
       const oldMax = this.dashState.maxDashCharges;
       this.dashState.maxDashCharges = desiredMax;
@@ -324,9 +381,9 @@ export class GameEngine {
 
   hasDashUpgrade(): boolean {
     const ds = this.dashState;
-    return ds.deadlockBurst || ds.twinVector || ds.aegisSlip || ds.afterimageMinefield ||
-           ds.phaseLaceration || ds.nullWake || ds.inertiaVault || ds.kineticRefund ||
-           ds.bulwarkRam || ds.echoRecall || ds.prismGuard || ds.cataclysmBrake;
+      return ds.deadlockBurst > 0 || ds.twinVector > 0 || ds.aegisSlip > 0 || ds.afterimageMinefield > 0 ||
+        ds.phaseLaceration > 0 || ds.nullWake > 0 || ds.inertiaVault > 0 || ds.kineticRefund > 0 ||
+        ds.bulwarkRam > 0 || ds.echoRecall > 0 || ds.prismGuard > 0 || ds.cataclysmBrake > 0;
   }
 
   start() {
@@ -544,6 +601,212 @@ export class GameEngine {
     return Math.floor(this.balanceTuning.xpBaseRequirement * Math.pow(this.balanceTuning.xpLevelScaling, level - 1));
   }
 
+  private buildUpgradePool() {
+    if (!(this.player.bannedUpgrades instanceof Set)) {
+      this.player.bannedUpgrades = new Set(this.player.bannedUpgrades as any);
+    }
+
+    const statUpgrades = UPGRADES.map(up => ({ ...up, type: 'stat' as const }))
+      .filter(u => !this.player.bannedUpgrades.has(u.id));
+
+    const weaponUpgrades = WEAPON_DEFINITIONS
+      .filter(def => !this.player.weapons.find(w => w.id === def.id))
+      .filter(def => !this.player.bannedUpgrades.has(def.id))
+      .map(def => ({ id: def.id, name: def.name, description: def.description, type: 'weapon' as const, rarity: 'common' as const }));
+
+    const existingWeaponUpgrades = this.player.weapons
+      .filter(w => w.level < w.maxLevel)
+      .map(w => ({ id: w.id, name: `${w.name} (Lvl ${w.level + 1})`, description: 'Increases damage and efficiency.', type: 'weapon_upgrade' as const, rarity: 'common' as const }));
+
+    const dashPool = DASH_UPGRADES
+      .filter(d => !this.player.bannedUpgrades.has(d.id))
+      .map(d => {
+        const level = this.getDashUpgradeLevel(d.id);
+        return {
+          ...d,
+          type: 'dash' as const,
+          level,
+          maxLevel: this.getDashUpgradeMaxLevel(),
+          name: level > 0 ? `${d.name} (Lvl ${level + 1})` : d.name,
+        };
+      })
+      .filter(d => d.level < d.maxLevel);
+
+    return [...statUpgrades, ...weaponUpgrades, ...existingWeaponUpgrades, ...dashPool];
+  }
+
+  private getUpgradeWeight(item: { rarity?: string }) {
+    if (item.rarity === 'legendary') return 0.02 * this.player.stats.luck;
+    if (item.rarity === 'rare') return 0.1 * this.player.stats.luck;
+    return 1;
+  }
+
+  private pickWeightedItem<T extends { rarity?: string }>(pool: T[]): T | null {
+    if (pool.length === 0) return null;
+    const totalWeight = pool.reduce((sum, item) => sum + this.getUpgradeWeight(item), 0);
+    if (totalWeight <= 0) return pool[Math.floor(Math.random() * pool.length)] ?? null;
+
+    let r = Math.random() * totalWeight;
+    for (const item of pool) {
+      r -= this.getUpgradeWeight(item);
+      if (r <= 0) return item;
+    }
+    return pool[pool.length - 1] ?? null;
+  }
+
+  private chooseAutoUpgrade() {
+    return this.chooseSingleAutoUpgrade(this.buildXPOnlyUpgradePool());
+  }
+
+  private buildXPOnlyUpgradePool() {
+    const pool = this.buildUpgradePool();
+    const ownedStatIds = new Set(
+      this.player.upgrades
+        .filter((upgrade: any) => upgrade.type === 'stat')
+        .map((upgrade: any) => upgrade.id)
+    );
+
+    return pool.filter((item: any) => {
+      if (item.type === 'weapon_upgrade') return true;
+      if (item.type === 'weapon') return false;
+      if (item.type === 'dash') return (item.level || 0) > 0;
+      if (item.type === 'stat') return ownedStatIds.has(item.id);
+      return false;
+    });
+  }
+
+  private chooseSingleAutoUpgrade(poolOverride?: any[]) {
+    const pool = poolOverride ? [...poolOverride] : this.buildUpgradePool();
+    if (pool.length === 0) {
+      return {
+        id: 'full_heal',
+        name: 'Full Repair',
+        description: 'Fully restores health without improving stats or weapons.',
+        type: 'heal',
+        icon: 'heart',
+        rarity: 'common'
+      };
+    }
+
+    const weaponPool = pool.filter(item => item.type === 'weapon' || item.type === 'weapon_upgrade');
+    const dashPool = pool.filter(item => item.type === 'dash');
+    const statPool = pool.filter(item => item.type === 'stat');
+
+    const bucketWeights: Array<{ key: 'weapon' | 'dash' | 'stat'; weight: number; items: any[] }> = [
+      { key: 'weapon', weight: 0.5, items: weaponPool },
+      { key: 'dash', weight: this.autoUpgradeNoDashStreak >= 3 ? 0.55 : 0.25, items: dashPool },
+      { key: 'stat', weight: this.autoUpgradeNoDashStreak >= 3 ? 0.15 : 0.25, items: statPool },
+    ].filter(bucket => bucket.items.length > 0);
+
+    if (bucketWeights.length === 0) {
+      const fallback = this.pickWeightedItem(pool);
+      return fallback ?? {
+        id: 'full_heal',
+        name: 'Full Repair',
+        description: 'Fully restores health without improving stats or weapons.',
+        type: 'heal',
+        icon: 'heart',
+        rarity: 'common'
+      };
+    }
+
+    const bucketTotal = bucketWeights.reduce((sum, bucket) => sum + bucket.weight, 0);
+    let roll = Math.random() * bucketTotal;
+    let selectedBucket = bucketWeights[0];
+    for (const bucket of bucketWeights) {
+      roll -= bucket.weight;
+      if (roll <= 0) {
+        selectedBucket = bucket;
+        break;
+      }
+    }
+
+    let candidates = selectedBucket.items;
+    if (selectedBucket.key === 'weapon') {
+      const ownedWeaponUpgrades = candidates.filter(item => item.type === 'weapon_upgrade');
+      if (ownedWeaponUpgrades.length > 0) {
+        const minLevel = ownedWeaponUpgrades.reduce((min, item) => {
+          const weapon = this.player.weapons.find(w => w.id === item.id);
+          return Math.min(min, weapon?.level ?? Number.MAX_SAFE_INTEGER);
+        }, Number.MAX_SAFE_INTEGER);
+
+        const catchup = ownedWeaponUpgrades.filter(item => {
+          const weapon = this.player.weapons.find(w => w.id === item.id);
+          return (weapon?.level ?? Number.MAX_SAFE_INTEGER) === minLevel;
+        });
+
+        // Favor catching up existing low-level weapons, but still keep room for new weapon drops.
+        if (catchup.length > 0 && Math.random() < 0.7) {
+          candidates = catchup;
+        }
+      }
+    }
+
+    if (this.lastAutoUpgradeId && candidates.length > 1) {
+      const withoutRepeat = candidates.filter(item => item.id !== this.lastAutoUpgradeId);
+      if (withoutRepeat.length > 0) candidates = withoutRepeat;
+    }
+
+    const picked = this.pickWeightedItem(candidates) ?? this.pickWeightedItem(pool);
+    return picked ?? {
+      id: 'full_heal',
+      name: 'Full Repair',
+      description: 'Fully restores health without improving stats or weapons.',
+      type: 'heal',
+      icon: 'heart',
+      rarity: 'common'
+    };
+  }
+
+  private chooseAutoUpgradeWithRerollBoost() {
+    const restrictedPool = this.buildXPOnlyUpgradePool();
+    const attempts = [
+      this.chooseSingleAutoUpgrade(restrictedPool),
+      this.chooseSingleAutoUpgrade(restrictedPool),
+      this.chooseSingleAutoUpgrade(restrictedPool),
+    ];
+
+    const rarityScore = (rarity?: string) => {
+      if (rarity === 'legendary') return 4;
+      if (rarity === 'rare') return 2;
+      return 1;
+    };
+
+    const typeScore = (type: string) => {
+      if (type === 'weapon_upgrade') return 1.35;
+      if (type === 'dash') return 1.2;
+      if (type === 'weapon') return 1.1;
+      if (type === 'stat') return 1.0;
+      return 0.5;
+    };
+
+    let best = attempts[0];
+    let bestScore = rarityScore(best?.rarity) + typeScore(best?.type || 'stat');
+
+    for (let i = 1; i < attempts.length; i++) {
+      const candidate = attempts[i];
+      const score = rarityScore(candidate?.rarity) + typeScore(candidate?.type || 'stat') + Math.random() * 0.03;
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+
+    return best;
+  }
+
+  processPendingXPLevelUps(maxLevels: number = 12) {
+    let leveled = 0;
+    while (
+      leveled < maxLevels &&
+      this.player.experience >= this.player.experienceToNextLevel
+    ) {
+      this.levelUp('xp');
+      leveled++;
+    }
+    return leveled;
+  }
+
   getEffectiveXPMultiplier(): number {
     const growthBonus = Math.max(0, this.player.stats.growth - 1);
     const dampenedGrowth = 1 + growthBonus * this.balanceTuning.xpGrowthEffectiveness;
@@ -729,7 +992,9 @@ export class GameEngine {
     if (ds.deadlockBurst) {
       if (!isMoving && !this.isDashing) {
         ds.standStillTimer += dt;
-        if (ds.standStillTimer >= 1000 && !ds.deadlockCharged) {
+        const deadlockLevel = this.getDashUpgradeLevelByKey('deadlockBurst');
+        const chargeThreshold = Math.max(450, 1000 - (deadlockLevel - 1) * 220);
+        if (ds.standStillTimer >= chargeThreshold && !ds.deadlockCharged) {
           ds.deadlockCharged = true;
           // Visual charge-ready indicator
           this.createExplosion(this.player.position.x, this.player.position.y, '#ff6600', 8);
@@ -756,9 +1021,10 @@ export class GameEngine {
     // Prism Guard shard timer + damage
     if (ds.prismShardTimer > 0) {
       ds.prismShardTimer -= dt;
+      const prismLevel = this.getDashUpgradeLevelByKey('prismGuard');
       // Damage nearby enemies with rotating shards
-      const shardRadius = 100 * this.player.stats.area;
-      const shardDmg = 15 * this.player.stats.might * (dt / 300);
+      const shardRadius = (100 + Math.max(0, prismLevel - 1) * 25) * this.player.stats.area;
+      const shardDmg = (15 + Math.max(0, prismLevel - 1) * 8) * this.player.stats.might * (dt / 300);
       for (const enemy of this.enemies) {
         if (enemy.id === 'dead') continue;
         const dx = this.player.position.x - enemy.position.x;
@@ -777,6 +1043,8 @@ export class GameEngine {
     }
 
     // Null Wake trail decay + slow + visual particles
+    const nullWakeLevel = this.getDashUpgradeLevelByKey('nullWake');
+    const nullWakeSlow = Math.max(0.12, 0.3 - Math.max(0, nullWakeLevel - 1) * 0.08);
     ds.nullWakeTrail = ds.nullWakeTrail.filter(p => {
       p.life -= dt;
       if (p.life <= 0) return false;
@@ -786,7 +1054,7 @@ export class GameEngine {
         const dx = p.x - enemy.position.x;
         const dy = p.y - enemy.position.y;
         if (dx * dx + dy * dy < 3600) { // 60px radius
-          enemy.slowMultiplier = Math.min(enemy.slowMultiplier || 1, 0.3);
+          enemy.slowMultiplier = Math.min(enemy.slowMultiplier || 1, nullWakeSlow);
         }
       }
       // Ambient particles
@@ -804,6 +1072,7 @@ export class GameEngine {
     });
 
     // Afterimage minefield: tick and detonate
+    const afterimageLevel = this.getDashUpgradeLevelByKey('afterimageMinefield');
     ds.afterimages = ds.afterimages.filter(a => {
       a.timer -= dt;
       // Tick particles
@@ -819,8 +1088,8 @@ export class GameEngine {
       }
       if (a.timer <= 0) {
         // Detonate
-        const radius = 120 * this.player.stats.area;
-        const dmg = 50 * this.player.stats.might;
+        const radius = (120 + Math.max(0, afterimageLevel - 1) * 30) * this.player.stats.area;
+        const dmg = (50 + Math.max(0, afterimageLevel - 1) * 20) * this.player.stats.might;
         for (const enemy of this.enemies) {
           if (enemy.id === 'dead') continue;
           const dx = a.x - enemy.position.x;
@@ -841,10 +1110,11 @@ export class GameEngine {
     // Cataclysm Brake: trigger implosion when player stops after dash
     if (ds.cataclysmPending && !this.isDashing) {
       if (!isMoving) {
+        const cataclysmLevel = this.getDashUpgradeLevelByKey('cataclysmBrake');
         ds.cataclysmPending = false;
         ds.cataclysmMoveTimer = 0;
-        const pullRadius = 200 * this.player.stats.area;
-        const dmg = 30 * this.player.stats.might * this.getDashImpactMultiplier();
+        const pullRadius = (200 + Math.max(0, cataclysmLevel - 1) * 50) * this.player.stats.area;
+        const dmg = (30 + Math.max(0, cataclysmLevel - 1) * 15) * this.player.stats.might * this.getDashImpactMultiplier();
         for (const enemy of this.enemies) {
           if (enemy.id === 'dead' || enemy.type === 'boss') continue;
           const dx = this.player.position.x - enemy.position.x;
@@ -1010,10 +1280,12 @@ export class GameEngine {
         let dashSpeed = 15 * dashSpeedMult;
         let dashDur = this.dashDuration + dashDurationBonus;
         if (ds.inertiaVault) {
+          const inertiaLevel = this.getDashUpgradeLevelByKey('inertiaVault');
           const currentSpeed = Math.sqrt(this.player.velocity.x ** 2 + this.player.velocity.y ** 2);
-          const speedBonus = Math.min(currentSpeed / this.player.speed, 1.5);
-          dashSpeed = (15 + speedBonus * 8) * dashSpeedMult;
-          dashDur = this.dashDuration + dashDurationBonus + speedBonus * 80;
+          const speedCap = 1.5 + Math.max(0, inertiaLevel - 1) * 0.25;
+          const speedBonus = Math.min(currentSpeed / this.player.speed, speedCap);
+          dashSpeed = (15 + speedBonus * (8 + Math.max(0, inertiaLevel - 1) * 2)) * dashSpeedMult;
+          dashDur = this.dashDuration + dashDurationBonus + speedBonus * (80 + Math.max(0, inertiaLevel - 1) * 25);
         }
 
         const mag = Math.sqrt(move.x * move.x + move.y * move.y);
@@ -1024,10 +1296,12 @@ export class GameEngine {
 
         // Deadlock Burst: if charged, trigger shockwave at start
         if (ds.deadlockBurst && ds.deadlockCharged) {
+          const deadlockLevel = this.getDashUpgradeLevelByKey('deadlockBurst');
           ds.deadlockCharged = false;
           ds.standStillTimer = 0;
-          const radius = 180 * this.player.stats.area;
-          const dmg = 60 * this.player.stats.might * this.getDashImpactMultiplier();
+          const radius = (180 + Math.max(0, deadlockLevel - 1) * 45) * this.player.stats.area;
+          const dmg = (60 + Math.max(0, deadlockLevel - 1) * 25) * this.player.stats.might * this.getDashImpactMultiplier();
+          const knockback = 8 + Math.max(0, deadlockLevel - 1) * 2;
           for (const enemy of this.enemies) {
             if (enemy.id === 'dead') continue;
             const dx = this.player.position.x - enemy.position.x;
@@ -1036,8 +1310,8 @@ export class GameEngine {
               enemy.health -= dmg;
               enemy.hitFlash = 150;
               const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-              enemy.velocity.x -= (dx / dist) * 8;
-              enemy.velocity.y -= (dy / dist) * 8;
+              enemy.velocity.x -= (dx / dist) * knockback;
+              enemy.velocity.y -= (dy / dist) * knockback;
               if (enemy.health <= 0) this.killEnemy(enemy);
             }
           }
@@ -1059,18 +1333,19 @@ export class GameEngine {
 
         // Aegis Slip: activate shield
         if (ds.aegisSlip) {
-          ds.aegisShieldTimer = dashDur + 350;
+          ds.aegisShieldTimer = dashDur + this.getDashAegisPostShieldMs();
         }
 
         // Echo Recall: store origin
         if (ds.echoRecall) {
           ds.echoRecallOrigin = { ...this.dashStartPos };
-          ds.echoRecallWindow = 700;
+          ds.echoRecallWindow = this.getDashEchoRecallWindowMs();
         }
 
         // Prism Guard: activate shards
         if (ds.prismGuard) {
-          ds.prismShardTimer = 2000;
+          const prismLevel = this.getDashUpgradeLevelByKey('prismGuard');
+          ds.prismShardTimer = 2000 + Math.max(0, prismLevel - 1) * 600;
         }
 
         // Cataclysm Brake: mark pending
@@ -1081,7 +1356,7 @@ export class GameEngine {
 
         // Kinetic Refund: open window
         if (ds.kineticRefund) {
-          ds.kineticRefundWindow = 1500;
+          ds.kineticRefundWindow = this.getDashKineticWindowMs();
         }
 
         const dashStartSnapshot = { ...this.dashStartPos };
@@ -1105,27 +1380,33 @@ export class GameEngine {
 
           // Afterimage Minefield: drop afterimages along dash path
           if (ds.afterimageMinefield) {
+            const afterimageLevel = this.getDashUpgradeLevelByKey('afterimageMinefield');
             const dx = dashEndSnapshot.x - dashStartSnapshot.x;
             const dy = dashEndSnapshot.y - dashStartSnapshot.y;
-            for (let i = 0; i < 3; i++) {
-              const t = (i + 1) / 4;
+            const afterimageCount = 3 + Math.max(0, afterimageLevel - 1);
+            const mineTimer = Math.max(280, 500 - Math.max(0, afterimageLevel - 1) * 90);
+            for (let i = 0; i < afterimageCount; i++) {
+              const t = (i + 1) / (afterimageCount + 1);
               ds.afterimages.push({
                 x: dashStartSnapshot.x + dx * t,
                 y: dashStartSnapshot.y + dy * t,
-                timer: 500
+                timer: mineTimer
               });
             }
           }
           // Null Wake: leave trail
           if (ds.nullWake) {
+            const nullWakeLevel = this.getDashUpgradeLevelByKey('nullWake');
             const dx = dashEndSnapshot.x - dashStartSnapshot.x;
             const dy = dashEndSnapshot.y - dashStartSnapshot.y;
-            for (let i = 0; i < 8; i++) {
-              const t = i / 7;
+            const trailPoints = 8 + Math.max(0, nullWakeLevel - 1) * 2;
+            const trailLife = this.getDashNullWakeLifeMs();
+            for (let i = 0; i < trailPoints; i++) {
+              const t = trailPoints === 1 ? 1 : i / (trailPoints - 1);
               ds.nullWakeTrail.push({
                 x: dashStartSnapshot.x + dx * t,
                 y: dashStartSnapshot.y + dy * t,
-                life: 1200
+                life: trailLife
               });
             }
           }
@@ -1165,7 +1446,9 @@ export class GameEngine {
 
       // Phase Laceration: damage enemies crossed during dash
       if (this.dashState.phaseLaceration) {
-        const sliceDmg = 40 * this.player.stats.might * this.getDashImpactMultiplier();
+        const phaseLevel = this.getDashUpgradeLevelByKey('phaseLaceration');
+        const sliceDmg = (40 + Math.max(0, phaseLevel - 1) * 18) * this.player.stats.might * this.getDashImpactMultiplier();
+        const slowMult = Math.max(0.2, 0.4 - Math.max(0, phaseLevel - 1) * 0.1);
         for (const enemy of this.enemies) {
           if (enemy.id === 'dead') continue;
           const dx = this.player.position.x - enemy.position.x;
@@ -1175,7 +1458,7 @@ export class GameEngine {
           if (distSq < touchDist * touchDist) {
             enemy.health -= sliceDmg * (dt / 200);
             enemy.hitFlash = 80;
-            enemy.slowMultiplier = 0.4;
+            enemy.slowMultiplier = slowMult;
             if (enemy.health <= 0) this.killEnemy(enemy);
           }
         }
@@ -1183,6 +1466,7 @@ export class GameEngine {
 
       // Bulwark Ram: first enemy hit gets knocked back hard
       if (this.dashState.bulwarkRam && !this.dashState.bulwarkRamHit) {
+        const bulwarkLevel = this.getDashUpgradeLevelByKey('bulwarkRam');
         for (const enemy of this.enemies) {
           if (enemy.id === 'dead') continue;
           const dx = this.player.position.x - enemy.position.x;
@@ -1192,11 +1476,12 @@ export class GameEngine {
           if (distSq < touchDist * touchDist) {
             this.dashState.bulwarkRamHit = true;
             const dist = Math.sqrt(distSq) || 1;
-            enemy.velocity.x -= (dx / dist) * 20;
-            enemy.velocity.y -= (dy / dist) * 20;
-            enemy.health -= 80 * this.player.stats.might * this.getDashImpactMultiplier();
+            const knockback = 20 + Math.max(0, bulwarkLevel - 1) * 7;
+            enemy.velocity.x -= (dx / dist) * knockback;
+            enemy.velocity.y -= (dy / dist) * knockback;
+            enemy.health -= (80 + Math.max(0, bulwarkLevel - 1) * 30) * this.player.stats.might * this.getDashImpactMultiplier();
             enemy.hitFlash = 300;
-            enemy.slowMultiplier = 0.1; // stun-like
+            enemy.slowMultiplier = Math.max(0.05, 0.1 - Math.max(0, bulwarkLevel - 1) * 0.03); // stun-like
             this.screenShake = 10;
             this.createExplosion(enemy.position.x, enemy.position.y, '#ffaa00', 12);
             if (enemy.health <= 0) this.killEnemy(enemy);
@@ -1523,9 +1808,7 @@ export class GameEngine {
     const bonus = tierBonuses[treasure.tier];
     this.player.coins += Math.floor(bonus.coins * this.player.stats.greed * this.balanceTuning.goldGainMultiplier);
     this.player.experience += bonus.xp * this.getEffectiveXPMultiplier() * this.balanceTuning.treasureXPGainMultiplier;
-    if (this.player.experience >= this.player.experienceToNextLevel) {
-      // Store excess XP, don't trigger level up during treasure
-    }
+    this.processPendingXPLevelUps();
     this.damageTexts.push({
       x: treasure.position.x, y: treasure.position.y - 40,
       text: `+${Math.floor(bonus.coins * this.player.stats.greed * this.balanceTuning.goldGainMultiplier)} GOLD`,
@@ -1549,67 +1832,95 @@ export class GameEngine {
   collectGem(gem: ExperienceGem) {
     this.player.experience += gem.value * this.getEffectiveXPMultiplier();
     soundManager.playCollect();
-    if (this.player.experience >= this.player.experienceToNextLevel) {
-      // We don't trigger levelUp from XP anymore
-      this.player.experience -= this.player.experienceToNextLevel;
-      this.player.experienceToNextLevel = this.getXPRequiredForLevel(this.player.level + 1); // just increase req, or keep tracking
-    }
+    this.processPendingXPLevelUps();
   }
 
-  levelUp() {
-    this.player.level++;
+  levelUp(reason: 'wave' | 'xp' | 'free' = 'wave') {
+    if (reason !== 'xp') {
+      // Wave/free level-ups remain manual so reroll/banish/skip UI flow is preserved.
+      this.player.level++;
+      this.player.experienceToNextLevel = this.getXPRequiredForLevel(this.player.level);
+      this.gameState = 'LEVEL_UP';
+      soundManager.playLevelUp();
+
+      const options = this.generateUpgrades();
+      this.onLevelUp(options);
+      return;
+    }
+
+    if (this.player.experience < this.player.experienceToNextLevel) return;
     this.player.experience -= this.player.experienceToNextLevel;
+
+    this.player.level++;
     this.player.experienceToNextLevel = this.getXPRequiredForLevel(this.player.level);
-    this.gameState = 'LEVEL_UP';
     soundManager.playLevelUp();
-    
-    const options = this.generateUpgrades();
-    this.onLevelUp(options);
+
+    if (this.queuedAutoSkips > 0) {
+      this.queuedAutoSkips--;
+      const xpReward = 20 * this.player.level * this.getEffectiveXPMultiplier();
+      this.player.experience += xpReward;
+      this.recentSystemNotice = {
+        text: `AUTO SKIP USED (+${Math.floor(xpReward)} XP)`,
+        color: '#22d3ee',
+        expiresAt: this.gameTime + 2200,
+      };
+
+      this.lastTime = performance.now();
+      this.requestUpdate();
+      return;
+    }
+
+    const useRerollBoost = this.queuedAutoRerolls > 0;
+    if (useRerollBoost) {
+      this.queuedAutoRerolls--;
+    }
+
+    const selected = useRerollBoost
+      ? this.chooseAutoUpgradeWithRerollBoost()
+      : this.chooseAutoUpgrade();
+    this.applyUpgrade(selected, { auto: true, skipResume: true });
+
+    if (selected.type === 'dash') {
+      this.autoUpgradeNoDashStreak = 0;
+    } else {
+      this.autoUpgradeNoDashStreak++;
+    }
+
+    this.lastAutoUpgradeId = selected.id;
+    this.recentAutoUpgrade = {
+      id: selected.id,
+      name: selected.name,
+      type: selected.type,
+      rarity: selected.rarity,
+      expiresAt: this.gameTime + 2400,
+    };
+
+    if (useRerollBoost) {
+      this.recentSystemNotice = {
+        text: 'AUTO REROLL BOOST APPLIED',
+        color: '#a78bfa',
+        expiresAt: this.gameTime + 1800,
+      };
+    }
+
+    if (this.gameState !== 'GAME_OVER' && this.gameState !== 'TREASURE' && this.gameState !== 'SHOP') {
+      this.gameState = 'PLAYING';
+    }
+    this.lastTime = performance.now();
+    this.requestUpdate();
   }
 
   generateUpgrades(isTreasure: boolean = false) {
-    if (!(this.player.bannedUpgrades instanceof Set)) {
-      this.player.bannedUpgrades = new Set(this.player.bannedUpgrades as any);
-    }
-    const statUpgrades = UPGRADES.map(up => ({ ...up, type: 'stat' }))
-      .filter(u => !this.player.bannedUpgrades.has(u.id));
-    const weaponUpgrades = WEAPON_DEFINITIONS
-      .filter(def => !this.player.weapons.find(w => w.id === def.id))
-      .filter(def => !this.player.bannedUpgrades.has(def.id))
-      .map(def => ({ id: def.id, name: def.name, description: def.description, type: 'weapon', rarity: 'common' }));
-    const existingWeaponUpgrades = this.player.weapons
-      .filter(w => w.level < w.maxLevel)
-      .map(w => ({ id: w.id, name: `${w.name} (Lvl ${w.level + 1})`, description: 'Increases damage and efficiency.', type: 'weapon_upgrade', rarity: 'common' }));
-
-    // Dash upgrades — filter out already-owned ones
-    const ownedDashIds = new Set(
-      DASH_UPGRADES.filter(d => {
-        const key = d.id.replace('dash_', '') as keyof typeof this.dashState;
-        const camelKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-        return (this.dashState as any)[camelKey] === true;
-      }).map(d => d.id)
-    );
-    const dashPool = DASH_UPGRADES
-      .filter(d => !ownedDashIds.has(d.id) && !this.player.bannedUpgrades.has(d.id))
-      .map(d => ({ ...d, type: 'dash' }));
-
-    const pool = [...statUpgrades, ...weaponUpgrades, ...existingWeaponUpgrades, ...dashPool];
-    
-    // Weighted selection based on rarity
-    const getWeight = (rarity: string = 'common') => {
-      if (rarity === 'legendary') return 0.02 * this.player.stats.luck;
-      if (rarity === 'rare') return 0.1 * this.player.stats.luck;
-      return 1;
-    };
+    const pool = this.buildUpgradePool();
 
     const selected: any[] = [];
     const count = isTreasure ? 3 : 3;
     
     while (selected.length < count && pool.length > 0) {
-      const totalWeight = pool.reduce((sum, item) => sum + getWeight(item.rarity), 0);
+      const totalWeight = pool.reduce((sum, item) => sum + this.getUpgradeWeight(item), 0);
       let r = Math.random() * totalWeight;
       for (let i = 0; i < pool.length; i++) {
-        r -= getWeight(pool[i].rarity);
+        r -= this.getUpgradeWeight(pool[i]);
         if (r <= 0) {
           selected.push(pool.splice(i, 1)[0]);
           break;
@@ -1629,6 +1940,14 @@ export class GameEngine {
     }
 
     return selected;
+  }
+
+  getQueuedAutoSkips() {
+    return this.queuedAutoSkips;
+  }
+
+  getQueuedAutoRerolls() {
+    return this.queuedAutoRerolls;
   }
 
   rerollUpgrades() {
@@ -1652,6 +1971,54 @@ export class GameEngine {
 
   getRemainingRerollsThisWave() {
     return Math.max(0, this.MAX_REROLLS_PER_WAVE - this.player.rerollsThisWave);
+  }
+
+  queueAutoReroll() {
+    const rerollCost = this.getRerollCost();
+    if (rerollCost === null || this.player.coins < rerollCost) {
+      return false;
+    }
+
+    this.player.coins -= rerollCost;
+    this.player.rerollsThisWave++;
+    this.queuedAutoRerolls++;
+    soundManager.playUIClick();
+    this.recentSystemNotice = {
+      text: `AUTO REROLL ARMED (-${rerollCost} COINS)`,
+      color: '#a78bfa',
+      expiresAt: this.gameTime + 2200,
+    };
+    return true;
+  }
+
+  queueAutoSkip() {
+    if (this.player.skips <= 0) {
+      return false;
+    }
+    this.player.skips--;
+    this.queuedAutoSkips++;
+    soundManager.playUIClick();
+    this.recentSystemNotice = {
+      text: 'AUTO SKIP ARMED',
+      color: '#22d3ee',
+      expiresAt: this.gameTime + 2200,
+    };
+    return true;
+  }
+
+  banishLastAutoUpgrade() {
+    if (this.player.banishes <= 0 || !this.lastAutoUpgradeId) {
+      return false;
+    }
+    this.player.banishes--;
+    this.player.bannedUpgrades.add(this.lastAutoUpgradeId);
+    soundManager.playUIClick();
+    this.recentSystemNotice = {
+      text: `BANISHED: ${this.lastAutoUpgradeId.toUpperCase()}`,
+      color: '#fb7185',
+      expiresAt: this.gameTime + 2400,
+    };
+    return true;
   }
 
   banishUpgrade(upgradeId: string) {
@@ -1679,8 +2046,10 @@ export class GameEngine {
     return false;
   }
 
-  applyUpgrade(upgrade: any) {
-    soundManager.playUIClick();
+  applyUpgrade(upgrade: any, options: { auto?: boolean; skipResume?: boolean } = {}) {
+    if (!options.auto) {
+      soundManager.playUIClick();
+    }
     if (upgrade.type === 'stat') {
       const existing = this.player.upgrades.find(u => u.id === upgrade.id);
       if (!existing) {
@@ -1760,17 +2129,30 @@ export class GameEngine {
       // Map dash_snake_case id to camelCase dashState key
       const rawKey = upgrade.id.replace('dash_', '');
       const camelKey = rawKey.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase()) as keyof DashState;
-      (this.dashState as any)[camelKey] = true;
-      // Twin Vector: grant extra dash charge
+      const maxLevel = this.getDashUpgradeMaxLevel();
+      const currentLevel = this.getDashUpgradeLevel(upgrade.id);
+      const nextLevel = Math.min(maxLevel, currentLevel + 1);
+      (this.dashState as any)[camelKey] = nextLevel;
+
+      const existingDashUpgrade = this.player.upgrades.find(u => u.id === upgrade.id);
+      if (existingDashUpgrade) {
+        (existingDashUpgrade as any).level = nextLevel;
+      } else {
+        this.player.upgrades.push({ ...upgrade, level: nextLevel, maxLevel } as any);
+      }
+
+      // Twin Vector: each level grants +1 dash charge capacity
       if (upgrade.id === 'dash_twin_vector') {
         this.syncDashChargeCapacity();
         this.dashState.dashCharges = this.dashState.maxDashCharges;
       }
-      this.player.upgrades.push({ ...upgrade, level: 1 } as any);
     }
-    this.gameState = 'PLAYING';
-    this.lastTime = performance.now();
-    this.requestUpdate();
+
+    if (!options.skipResume) {
+      this.gameState = 'PLAYING';
+      this.lastTime = performance.now();
+      this.requestUpdate();
+    }
   }
 
   updateWeapons(time: number) {
@@ -2758,7 +3140,7 @@ export class GameEngine {
 
     // Kinetic Refund: kills during window refund dash cooldown
     if (this.dashState.kineticRefundWindow > 0 && this.dashTimer > 0) {
-      const refund = this.getEffectiveDashCooldownMs() * 0.15;
+      const refund = this.getEffectiveDashCooldownMs() * this.getDashKineticRefundFraction();
       this.dashTimer = Math.max(0, this.dashTimer - refund);
     }
 
@@ -3878,7 +4260,7 @@ export class GameEngine {
 
     // Echo Recall: window indicator
     if (ds.echoRecallWindow > 0) {
-      const alpha = ds.echoRecallWindow / 700;
+      const alpha = ds.echoRecallWindow / this.getDashEchoRecallWindowMs();
       ctx.strokeStyle = `rgba(255, 0, 255, ${alpha * 0.7})`;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([3, 3]);
@@ -3890,7 +4272,7 @@ export class GameEngine {
 
     // Kinetic Refund window: green rim
     if (ds.kineticRefundWindow > 0) {
-      const alpha = ds.kineticRefundWindow / 1500 * 0.5;
+      const alpha = (ds.kineticRefundWindow / this.getDashKineticWindowMs()) * 0.5;
       ctx.strokeStyle = `rgba(0, 255, 100, ${alpha})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -3906,7 +4288,7 @@ export class GameEngine {
 
     // Null Wake trail
     for (const p of ds.nullWakeTrail) {
-      const alpha = (p.life / 1200) * 0.6;
+      const alpha = (p.life / this.getDashNullWakeLifeMs()) * 0.6;
       const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 30);
       grad.addColorStop(0, `rgba(0, 180, 255, ${alpha})`);
       grad.addColorStop(1, 'transparent');
@@ -3950,7 +4332,7 @@ export class GameEngine {
     // Echo Recall origin ghost
     if (ds.echoRecallOrigin && ds.echoRecallWindow > 0) {
       const o = ds.echoRecallOrigin;
-      const alpha = (ds.echoRecallWindow / 700) * 0.4;
+      const alpha = (ds.echoRecallWindow / this.getDashEchoRecallWindowMs()) * 0.4;
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = '#ff00ff';
       ctx.lineWidth = 2;
@@ -5010,6 +5392,132 @@ export class GameEngine {
           this.ctx.arc(nodes2[i].x, nodes2[i].y, 2.5, 0, Math.PI * 2);
           this.ctx.fill();
         }
+        break;
+      // Dash upgrades
+      case 'dash_deadlock_burst':
+        this.ctx.moveTo(-s * 0.2, -s);
+        this.ctx.lineTo(s * 0.5, -s * 0.1);
+        this.ctx.lineTo(0, -s * 0.1);
+        this.ctx.lineTo(s * 0.2, s);
+        this.ctx.lineTo(-s * 0.5, s * 0.1);
+        this.ctx.lineTo(0, s * 0.1);
+        this.ctx.closePath();
+        this.ctx.fill();
+        break;
+      case 'dash_twin_vector':
+        this.ctx.moveTo(-s, -s * 0.5);
+        this.ctx.lineTo(0, -s * 0.5);
+        this.ctx.lineTo(-s * 0.2, -s * 0.8);
+        this.ctx.moveTo(-s, s * 0.5);
+        this.ctx.lineTo(0, s * 0.5);
+        this.ctx.lineTo(-s * 0.2, s * 0.8);
+        this.ctx.moveTo(s * 0.2, -s * 0.5);
+        this.ctx.lineTo(s, -s * 0.5);
+        this.ctx.lineTo(s * 0.8, -s * 0.8);
+        this.ctx.moveTo(s * 0.2, s * 0.5);
+        this.ctx.lineTo(s, s * 0.5);
+        this.ctx.lineTo(s * 0.8, s * 0.8);
+        this.ctx.stroke();
+        break;
+      case 'dash_aegis_slip':
+        this.ctx.moveTo(0, -s);
+        this.ctx.lineTo(s * 0.8, -s * 0.3);
+        this.ctx.lineTo(s * 0.6, s * 0.8);
+        this.ctx.lineTo(0, s);
+        this.ctx.lineTo(-s * 0.6, s * 0.8);
+        this.ctx.lineTo(-s * 0.8, -s * 0.3);
+        this.ctx.closePath();
+        this.ctx.stroke();
+        break;
+      case 'dash_afterimage_minefield':
+        for (let i = -1; i <= 1; i++) {
+          this.ctx.beginPath();
+          this.ctx.arc(i * s * 0.6, 0, s * 0.28, 0, Math.PI * 2);
+          this.ctx.stroke();
+          this.ctx.beginPath();
+          this.ctx.moveTo(i * s * 0.6, -s * 0.5);
+          this.ctx.lineTo(i * s * 0.6, s * 0.5);
+          this.ctx.moveTo(i * s * 0.3, 0);
+          this.ctx.lineTo(i * s * 0.9, 0);
+          this.ctx.stroke();
+        }
+        break;
+      case 'dash_phase_laceration':
+        this.ctx.moveTo(-s, s * 0.8);
+        this.ctx.lineTo(s, -s * 0.8);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(-s * 0.6, s);
+        this.ctx.lineTo(s * 0.6, -s);
+        this.ctx.stroke();
+        break;
+      case 'dash_null_wake':
+        this.ctx.moveTo(-s, 0);
+        this.ctx.quadraticCurveTo(-s * 0.3, -s * 0.8, s * 0.2, 0);
+        this.ctx.quadraticCurveTo(s * 0.6, s * 0.8, s, 0);
+        this.ctx.stroke();
+        break;
+      case 'dash_inertia_vault':
+        this.ctx.moveTo(-s, s * 0.7);
+        this.ctx.lineTo(0, -s * 0.8);
+        this.ctx.lineTo(s, s * 0.7);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(-s * 0.5, s * 0.2);
+        this.ctx.lineTo(s * 0.5, s * 0.2);
+        this.ctx.stroke();
+        break;
+      case 'dash_kinetic_refund':
+        this.ctx.arc(0, 0, s * 0.75, Math.PI * 0.2, Math.PI * 1.8);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(-s * 0.6, -s * 0.3);
+        this.ctx.lineTo(-s * 0.9, -s * 0.4);
+        this.ctx.lineTo(-s * 0.75, -s * 0.1);
+        this.ctx.fill();
+        break;
+      case 'dash_bulwark_ram':
+        this.ctx.moveTo(-s * 0.9, -s * 0.4);
+        this.ctx.lineTo(s * 0.2, -s * 0.4);
+        this.ctx.lineTo(s * 0.8, 0);
+        this.ctx.lineTo(s * 0.2, s * 0.4);
+        this.ctx.lineTo(-s * 0.9, s * 0.4);
+        this.ctx.closePath();
+        this.ctx.stroke();
+        break;
+      case 'dash_echo_recall':
+        this.ctx.arc(0, 0, s * 0.65, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, -s * 0.25);
+        this.ctx.lineTo(0, s * 0.35);
+        this.ctx.lineTo(-s * 0.25, s * 0.12);
+        this.ctx.stroke();
+        break;
+      case 'dash_prism_guard':
+        for (let i = 0; i < 4; i++) {
+          const a = (i * Math.PI) / 2;
+          const ox = Math.cos(a) * s * 0.65;
+          const oy = Math.sin(a) * s * 0.65;
+          this.ctx.beginPath();
+          this.ctx.moveTo(ox, oy - s * 0.25);
+          this.ctx.lineTo(ox + s * 0.25, oy);
+          this.ctx.lineTo(ox, oy + s * 0.25);
+          this.ctx.lineTo(ox - s * 0.25, oy);
+          this.ctx.closePath();
+          this.ctx.stroke();
+        }
+        break;
+      case 'dash_cataclysm_brake':
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, s * 0.8, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(-s * 0.8, 0);
+        this.ctx.lineTo(s * 0.8, 0);
+        this.ctx.moveTo(0, -s * 0.8);
+        this.ctx.lineTo(0, s * 0.8);
+        this.ctx.stroke();
         break;
       default:
         this.ctx.strokeRect(-s, -s, s * 2, s * 2);

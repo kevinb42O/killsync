@@ -136,18 +136,18 @@ export interface Upgrade {
 
 export interface DashState {
   // Upgrade flags
-  deadlockBurst: boolean;
-  twinVector: boolean;
-  aegisSlip: boolean;
-  afterimageMinefield: boolean;
-  phaseLaceration: boolean;
-  nullWake: boolean;
-  inertiaVault: boolean;
-  kineticRefund: boolean;
-  bulwarkRam: boolean;
-  echoRecall: boolean;
-  prismGuard: boolean;
-  cataclysmBrake: boolean;
+  deadlockBurst: number;
+  twinVector: number;
+  aegisSlip: number;
+  afterimageMinefield: number;
+  phaseLaceration: number;
+  nullWake: number;
+  inertiaVault: number;
+  kineticRefund: number;
+  bulwarkRam: number;
+  echoRecall: number;
+  prismGuard: number;
+  cataclysmBrake: number;
 
   // Runtime state
   dashCharges: number;

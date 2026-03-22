@@ -31,6 +31,8 @@ import {
   getAccountXPRequired
 } from './game/xpProgression';
 
+const EMPTY_INVENTORY: Inventory = { armorTier: 0, hasRevive: false, nukeCount: 0 };
+
 type KnobDef = {
   key: keyof BalanceTuning;
   label: string;
@@ -145,10 +147,7 @@ export default function App() {
     const saved = localStorage.getItem('savedDataCores');
     return saved ? parseInt(saved) : 0;
   });
-  const [playerInventory, setPlayerInventory] = useState<Inventory>(() => {
-    const saved = localStorage.getItem('playerInventory');
-    return saved ? JSON.parse(saved) : { armorTier: 0, hasRevive: false, nukeCount: 0 };
-  });
+  const [playerInventory, setPlayerInventory] = useState<Inventory>(EMPTY_INVENTORY);
 
   const [nightmareMode, setNightmareMode] = useState(() => {
     return localStorage.getItem('nightmareMode') === 'true';
@@ -185,13 +184,8 @@ export default function App() {
     for (const unlocked of unlocks) {
       engine.player.coins += unlocked.definition.rewardCoins;
       engine.player.experience += unlocked.definition.rewardXP;
-
-      while (engine.player.experience >= engine.player.experienceToNextLevel) {
-        engine.player.experience -= engine.player.experienceToNextLevel;
-        engine.player.level += 1;
-        currentWaveLevelUpsRef.current += 1;
-        engine.player.experienceToNextLevel = engine.getXPRequiredForLevel(engine.player.level);
-      }
+      const gainedLevels = engine.processPendingXPLevelUps();
+      currentWaveLevelUpsRef.current += gainedLevels;
     }
   }, []);
 
@@ -336,8 +330,7 @@ export default function App() {
     localStorage.setItem('accountLevel', accountLevel.toString());
     localStorage.setItem('accountXP', accountXP.toString());
     localStorage.setItem('adminBalanceTuning', JSON.stringify(adminBalance));
-    localStorage.setItem('playerInventory', JSON.stringify(playerInventory));
-  }, [playerLevel, playerCoins, permanentUpgrades, selectedOperator, unlockedOperators, savedDataCores, nightmareMode, accountLevel, accountXP, adminBalance, playerInventory]);
+  }, [playerLevel, playerCoins, permanentUpgrades, selectedOperator, unlockedOperators, savedDataCores, nightmareMode, accountLevel, accountXP, adminBalance]);
 
   useEffect(() => {
     localStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(achievementUnlocks));
@@ -564,7 +557,7 @@ export default function App() {
           setHasExfillCarryover(false);
           setPlayerLevel(1);
           setPlayerExperience(0);
-          setPlayerInventory({ armorTier: 0, hasRevive: false, nukeCount: 0 });
+          setPlayerInventory(EMPTY_INVENTORY);
           setSavedDataCores(prev => prev + collectedCores);
         },
         (upgrade) => {
@@ -686,6 +679,22 @@ export default function App() {
         return;
       }
 
+      if (gameState === 'PLAYING' && engineRef.current) {
+        const key = e.key.toLowerCase();
+        if (key === 'r') {
+          engineRef.current.queueAutoReroll();
+          return;
+        }
+        if (key === 'b') {
+          engineRef.current.banishLastAutoUpgrade();
+          return;
+        }
+        if (key === 'k') {
+          engineRef.current.queueAutoSkip();
+          return;
+        }
+      }
+
       if (gameState !== 'MENU') return;
       
       cheatBuffer += e.key.toLowerCase();
@@ -739,6 +748,7 @@ export default function App() {
       engineRef.current.setBalanceTuning(adminBalance);
       engineRef.current.eventManager.nightmareMode = nightmareMode;
       if (!hasExfillCarryover || !exfillCarryoverRef.current) {
+        setPlayerInventory(EMPTY_INVENTORY);
         engineRef.current.player = engineRef.current.resetPlayer(1, 0, 0, permanentUpgrades, selectedOperator);
       } else {
         const carry = exfillCarryoverRef.current;
@@ -795,9 +805,14 @@ export default function App() {
         setGameState('PLAYING');
       }
       
-      // Inject inventory after resetting
-      engineRef.current.player.inventory = { ...playerInventory };
-      engineRef.current.player.armorHp = engineRef.current.getMaxArmorHp();
+      // Inventory only carries via a successful exfill chain.
+      if (!hasExfillCarryover || !exfillCarryoverRef.current) {
+        engineRef.current.player.inventory = { ...EMPTY_INVENTORY };
+        engineRef.current.player.armorHp = 0;
+      } else {
+        engineRef.current.player.inventory = { ...playerInventory };
+        engineRef.current.player.armorHp = engineRef.current.getMaxArmorHp();
+      }
       setAchievementQueue([]);
       setActiveAchievementBanner(null);
       resetRunAchievementTracking(engineRef.current);
@@ -898,6 +913,352 @@ export default function App() {
       currentWaveLevelUps: currentWaveLevelUpsRef.current
     };
   })();
+
+  const formatUpgradeId = (value: string) => {
+    return value
+      .split('_')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
+  const formatMs = (value: number) => `${Math.round(value)}ms`;
+
+  const getAverageWeaponCooldownMs = (engine: GameEngine, cooldownMultiplierOverride?: number) => {
+    const weapons = engine.player.weapons || [];
+    if (weapons.length === 0) return 0;
+    const cooldownMult = cooldownMultiplierOverride ?? engine.player.stats.cooldown;
+    const overdriveMult = engine.isOverdrive ? 0.4 : 1;
+    const total = weapons.reduce((sum, weapon) => sum + weapon.cooldown * cooldownMult * overdriveMult, 0);
+    return total / weapons.length;
+  };
+
+  const getPauseSkillPreview = (upgrade: any, engine: GameEngine) => {
+    const level = Number(upgrade.level || 1);
+    const player = engine.player;
+
+    if (upgrade.id === 'cooldown') {
+      const currentAvg = getAverageWeaponCooldownMs(engine, player.stats.cooldown);
+      const nextAvg = getAverageWeaponCooldownMs(engine, player.stats.cooldown * 0.9);
+      return {
+        current: `Avg weapon cooldown ${formatMs(currentAvg)}`,
+        next: `Avg weapon cooldown ${formatMs(nextAvg)} (-10%)`
+      };
+    }
+
+    if (upgrade.id === 'health') {
+      const nextMax = player.maxHealth * 1.2;
+      return {
+        current: `Max HP ${Math.round(player.maxHealth)} (current HP ${Math.round(player.health)})`,
+        next: `Max HP ${Math.round(nextMax)} (+${Math.round(nextMax - player.maxHealth)})`
+      };
+    }
+
+    if (upgrade.id === 'regen') {
+      return {
+        current: `Regen ${player.stats.regen.toFixed(1)} HP / 5s`,
+        next: `Regen ${(player.stats.regen + 1).toFixed(1)} HP / 5s`
+      };
+    }
+
+    if (upgrade.id === 'amount') {
+      return {
+        current: `Extra projectiles +${player.stats.amount}`,
+        next: `Extra projectiles +${player.stats.amount + 1}`
+      };
+    }
+
+    if (upgrade.id === 'magnet_range') {
+      return {
+        current: `Pickup range x${player.stats.magnet_range.toFixed(2)}`,
+        next: `Pickup range x${(player.stats.magnet_range + 0.25).toFixed(2)}`
+      };
+    }
+
+    if (upgrade.id === 'vampirism') {
+      return {
+        current: `Life steal ${player.stats.vampirism.toFixed(0)} HP / kill`,
+        next: `Life steal ${(player.stats.vampirism + 3).toFixed(0)} HP / kill`
+      };
+    }
+
+    if (upgrade.id === 'armor') {
+      return {
+        current: `Damage reduction ${(player.stats.armor * 100).toFixed(0)}%`,
+        next: `Damage reduction ${((player.stats.armor + 0.25) * 100).toFixed(0)}%`
+      };
+    }
+
+    if (upgrade.id === 'chain_lightning') {
+      return {
+        current: `Might x${player.stats.might.toFixed(2)} • Area x${player.stats.area.toFixed(2)}`,
+        next: `Might x${(player.stats.might + 0.1).toFixed(2)} • Area x${(player.stats.area + 0.15).toFixed(2)}`
+      };
+    }
+
+    if (upgrade.id === 'instant_kill') {
+      return {
+        current: `Luck x${player.stats.luck.toFixed(2)}`,
+        next: `Luck x${(player.stats.luck + 0.15).toFixed(2)}`
+      };
+    }
+
+    if (upgrade.id === 'time_warp') {
+      return {
+        current: `Enemy speed ${(Math.max(0, 1 - player.stats.timeWarp) * 100).toFixed(0)}%`,
+        next: `Enemy speed ${(Math.max(0, 1 - (player.stats.timeWarp + 0.2)) * 100).toFixed(0)}%`
+      };
+    }
+
+    if (upgrade.id === 'gold_rush') {
+      return {
+        current: `Greed x${player.stats.greed.toFixed(2)} (+${((player.stats.greed - 1) * 100).toFixed(0)}%)`,
+        next: `Greed x${(player.stats.greed + 2).toFixed(2)} (+${(((player.stats.greed + 2) - 1) * 100).toFixed(0)}%)`
+      };
+    }
+
+    if (upgrade.id === 'god_mode') {
+      return {
+        current: 'God Mode active: +50% might/area/luck, -50% cooldown, +30% speed',
+        next: 'Next level refreshes 30s God Mode timer'
+      };
+    }
+
+    if (upgrade.id === 'speed') {
+      return {
+        current: `Move speed ${player.speed.toFixed(2)}`,
+        next: `Move speed ${(player.speed + 0.3).toFixed(2)}`
+      };
+    }
+
+    if (upgrade.id === 'might') {
+      return {
+        current: `Damage multiplier x${player.stats.might.toFixed(2)}`,
+        next: `Damage multiplier x${(player.stats.might + 0.15).toFixed(2)}`
+      };
+    }
+
+    if (upgrade.id === 'area') {
+      return {
+        current: `Area multiplier x${player.stats.area.toFixed(2)}`,
+        next: `Area multiplier x${(player.stats.area + 0.15).toFixed(2)}`
+      };
+    }
+
+    if (upgrade.id === 'growth') {
+      return {
+        current: `XP gain x${player.stats.growth.toFixed(2)} (+${((player.stats.growth - 1) * 100).toFixed(0)}%)`,
+        next: `XP gain x${(player.stats.growth + 0.15).toFixed(2)} (+${(((player.stats.growth + 0.15) - 1) * 100).toFixed(0)}%)`
+      };
+    }
+
+    if (upgrade.id === 'luck') {
+      return {
+        current: `Luck x${player.stats.luck.toFixed(2)} (+${((player.stats.luck - 1) * 100).toFixed(0)}%)`,
+        next: `Luck x${(player.stats.luck + 0.15).toFixed(2)} (+${(((player.stats.luck + 0.15) - 1) * 100).toFixed(0)}%)`
+      };
+    }
+
+    const fallbackPerLevel = upgrade.id === 'speed' ? 10 : 15;
+    return {
+      current: `${formatUpgradeId(upgrade.id)} +${(level * fallbackPerLevel).toFixed(0)}%`,
+      next: `${formatUpgradeId(upgrade.id)} +${((level + 1) * fallbackPerLevel).toFixed(0)}%`
+    };
+  };
+
+  const getPauseDashPreview = (dash: any, engine: GameEngine) => {
+    const level = Number(dash.level || 1);
+    const nextLevel = Math.min(3, level + 1);
+    const isMax = level >= 3;
+
+    if (dash.id === 'dash_deadlock_burst') {
+      const current = Math.max(450, 1000 - (level - 1) * 220);
+      const next = Math.max(450, 1000 - (nextLevel - 1) * 220);
+      return {
+        current: `Charge time ${formatMs(current)} • Shockwave dmg ${(60 + (level - 1) * 25).toFixed(0)}% base`,
+        next: isMax ? 'MAX rank reached' : `Charge time ${formatMs(next)} • Shockwave dmg ${(60 + (nextLevel - 1) * 25).toFixed(0)}% base`
+      };
+    }
+
+    if (dash.id === 'dash_twin_vector') {
+      const baseCharges = 1 + (engine.player.permanentUpgrades?.perm_dash_charge || 0);
+      return {
+        current: `Max dash charges ${baseCharges + level}`,
+        next: isMax ? 'MAX rank reached' : `Max dash charges ${baseCharges + nextLevel}`
+      };
+    }
+
+    if (dash.id === 'dash_aegis_slip') {
+      const current = 350 + (level - 1) * 150;
+      const next = 350 + (nextLevel - 1) * 150;
+      return {
+        current: `Post-dash invulnerability ${formatMs(current)}`,
+        next: isMax ? 'MAX rank reached' : `Post-dash invulnerability ${formatMs(next)}`
+      };
+    }
+
+    if (dash.id === 'dash_afterimage_minefield') {
+      const currentCount = 3 + (level - 1);
+      const currentMine = Math.max(280, 500 - (level - 1) * 90);
+      const nextCount = 3 + (nextLevel - 1);
+      const nextMine = Math.max(280, 500 - (nextLevel - 1) * 90);
+      return {
+        current: `${currentCount} mines • Detonation ${formatMs(currentMine)} • ${(50 + (level - 1) * 20).toFixed(0)} dmg base`,
+        next: isMax ? 'MAX rank reached' : `${nextCount} mines • Detonation ${formatMs(nextMine)} • ${(50 + (nextLevel - 1) * 20).toFixed(0)} dmg base`
+      };
+    }
+
+    if (dash.id === 'dash_phase_laceration') {
+      return {
+        current: `Slice dmg ${(40 + (level - 1) * 18).toFixed(0)}% base • Slow x${Math.max(0.2, 0.4 - (level - 1) * 0.1).toFixed(2)}`,
+        next: isMax ? 'MAX rank reached' : `Slice dmg ${(40 + (nextLevel - 1) * 18).toFixed(0)}% base • Slow x${Math.max(0.2, 0.4 - (nextLevel - 1) * 0.1).toFixed(2)}`
+      };
+    }
+
+    if (dash.id === 'dash_null_wake') {
+      const currentLife = 1200 + (level - 1) * 400;
+      const nextLife = 1200 + (nextLevel - 1) * 400;
+      const currentSlow = Math.max(0.12, 0.3 - (level - 1) * 0.08);
+      const nextSlow = Math.max(0.12, 0.3 - (nextLevel - 1) * 0.08);
+      return {
+        current: `Trail duration ${formatMs(currentLife)} • Enemy speed x${currentSlow.toFixed(2)}`,
+        next: isMax ? 'MAX rank reached' : `Trail duration ${formatMs(nextLife)} • Enemy speed x${nextSlow.toFixed(2)}`
+      };
+    }
+
+    if (dash.id === 'dash_inertia_vault') {
+      return {
+        current: `Speed cap +${(1.5 + (level - 1) * 0.25).toFixed(2)}x movement scaling`,
+        next: isMax ? 'MAX rank reached' : `Speed cap +${(1.5 + (nextLevel - 1) * 0.25).toFixed(2)}x movement scaling`
+      };
+    }
+
+    if (dash.id === 'dash_kinetic_refund') {
+      const currentWindow = 1500 + (level - 1) * 500;
+      const nextWindow = 1500 + (nextLevel - 1) * 500;
+      const currentRefund = Math.min(0.4, 0.15 + (level - 1) * 0.1);
+      const nextRefund = Math.min(0.4, 0.15 + (nextLevel - 1) * 0.1);
+      return {
+        current: `Window ${formatMs(currentWindow)} • Refund ${(currentRefund * 100).toFixed(0)}% per kill`,
+        next: isMax ? 'MAX rank reached' : `Window ${formatMs(nextWindow)} • Refund ${(nextRefund * 100).toFixed(0)}% per kill`
+      };
+    }
+
+    if (dash.id === 'dash_bulwark_ram') {
+      return {
+        current: `Impact dmg ${(80 + (level - 1) * 30).toFixed(0)}% base • Knockback ${(20 + (level - 1) * 7).toFixed(0)}`,
+        next: isMax ? 'MAX rank reached' : `Impact dmg ${(80 + (nextLevel - 1) * 30).toFixed(0)}% base • Knockback ${(20 + (nextLevel - 1) * 7).toFixed(0)}`
+      };
+    }
+
+    if (dash.id === 'dash_echo_recall') {
+      const currentWindow = 700 + (level - 1) * 250;
+      const nextWindow = 700 + (nextLevel - 1) * 250;
+      return {
+        current: `Recall window ${formatMs(currentWindow)}`,
+        next: isMax ? 'MAX rank reached' : `Recall window ${formatMs(nextWindow)}`
+      };
+    }
+
+    if (dash.id === 'dash_prism_guard') {
+      const currentDuration = 2000 + (level - 1) * 600;
+      const nextDuration = 2000 + (nextLevel - 1) * 600;
+      return {
+        current: `Shards ${formatMs(currentDuration)} • DPS ${(15 + (level - 1) * 8).toFixed(0)} base tick`,
+        next: isMax ? 'MAX rank reached' : `Shards ${formatMs(nextDuration)} • DPS ${(15 + (nextLevel - 1) * 8).toFixed(0)} base tick`
+      };
+    }
+
+    if (dash.id === 'dash_cataclysm_brake') {
+      return {
+        current: `Implosion radius ${(200 + (level - 1) * 50).toFixed(0)} • dmg ${(30 + (level - 1) * 15).toFixed(0)}% base`,
+        next: isMax ? 'MAX rank reached' : `Implosion radius ${(200 + (nextLevel - 1) * 50).toFixed(0)} • dmg ${(30 + (nextLevel - 1) * 15).toFixed(0)}% base`
+      };
+    }
+
+    return {
+      current: `Dash protocol level ${level}/3 active`,
+      next: isMax ? 'MAX rank reached' : `Dash protocol level ${nextLevel}/3`
+    };
+  };
+
+  const getLevelUpDashOfferPreview = (option: any, engine: GameEngine) => {
+    const currentLevel = Number(option.level || 0);
+    const offeredLevel = Math.min(3, currentLevel + 1);
+    const offeredPreview = getPauseDashPreview({ ...option, level: offeredLevel }, engine);
+
+    return {
+      badge: `Lv ${offeredLevel}/3`,
+      onPick: offeredPreview.current,
+      next: offeredPreview.next,
+    };
+  };
+
+  const getPauseWeaponPreview = (weapon: any) => {
+    const level = Number(weapon.level || 1);
+    const maxLevel = Number(weapon.maxLevel || 8);
+    const currentDamageMult = 1 + (level - 1) * 0.2;
+    const currentCooldownMult = Math.pow(0.9, Math.max(level - 1, 0));
+    const atMax = level >= maxLevel;
+    const definition = WEAPON_DEFINITIONS.find(def => def.id === weapon.id);
+
+    if (atMax) {
+      return {
+        current: `Damage x${currentDamageMult.toFixed(2)} • Cooldown x${currentCooldownMult.toFixed(2)}`,
+        next: definition?.evolution
+          ? `MAX rank reached • Evolution: ${formatUpgradeId(definition.evolution)}`
+          : 'MAX rank reached'
+      };
+    }
+
+    const nextLevel = level + 1;
+    const nextDamageMult = 1 + (nextLevel - 1) * 0.2;
+    const nextCooldownMult = Math.pow(0.9, Math.max(nextLevel - 1, 0));
+    const evolutionNote = nextLevel >= maxLevel && definition?.evolution
+      ? ` • Unlocks ${formatUpgradeId(definition.evolution)}`
+      : '';
+
+    return {
+      current: `Damage x${currentDamageMult.toFixed(2)} • Cooldown x${currentCooldownMult.toFixed(2)}`,
+      next: `Lv ${nextLevel}: Damage x${nextDamageMult.toFixed(2)} • Cooldown x${nextCooldownMult.toFixed(2)}${evolutionNote}`
+    };
+  };
+
+  const getPauseEntryIcon = (entry: { kind: 'weapon' | 'skill' | 'dash'; id: string }) => {
+    if (entry.kind === 'weapon') {
+      return <Crosshair size={18} className="text-cyan-300" />;
+    }
+
+    if (entry.kind === 'dash') {
+      return <Wind size={18} className="text-orange-300" />;
+    }
+
+    if (entry.id === 'might' || entry.id === 'cooldown' || entry.id === 'luck' || entry.id === 'gold_rush') {
+      return <Zap size={18} className="text-yellow-300" />;
+    }
+    if (entry.id === 'area' || entry.id === 'chain_lightning') {
+      return <Target size={18} className="text-cyan-300" />;
+    }
+    if (entry.id === 'speed' || entry.id === 'regen' || entry.id === 'time_warp') {
+      return <Activity size={18} className="text-emerald-300" />;
+    }
+    if (entry.id === 'health' || entry.id === 'armor' || entry.id === 'god_mode') {
+      return <Shield size={18} className="text-rose-300" />;
+    }
+    if (entry.id === 'vampirism') {
+      return <Heart size={18} className="text-rose-300" />;
+    }
+    if (entry.id === 'instant_kill') {
+      return <Skull size={18} className="text-red-300" />;
+    }
+    if (entry.id === 'growth') {
+      return <Trophy size={18} className="text-purple-300" />;
+    }
+    if (entry.id === 'amount') {
+      return <Sparkles size={18} className="text-orange-300" />;
+    }
+
+    return <Zap size={18} className="text-white" />;
+  };
 
   return (
     <div ref={appRef} className="relative w-full h-screen bg-[#0a0a0a] overflow-hidden text-white font-sans">
@@ -1455,30 +1816,159 @@ export default function App() {
           >
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
             
-            <div className="relative bg-[#0a0a0a] border border-white/10 p-12 rounded-3xl text-center max-w-lg w-full shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-              <h2 className="text-5xl font-black italic text-cyan-400 mb-2">PAUSED</h2>
-              <p className="text-white/40 uppercase tracking-widest text-xs mb-8">Neural Stream Suspended</p>
-              
-              <div className="grid grid-cols-2 gap-4 mb-8 text-left bg-white/5 p-6 rounded-2xl border border-white/5">
+            <div className="relative bg-[#0a0a0a] border border-white/10 p-4 md:p-8 rounded-3xl text-center w-[min(96vw,1120px)] max-h-[92vh] overflow-y-auto shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+              <h2 className="text-4xl md:text-5xl font-black italic text-cyan-400 mb-2">PAUSED</h2>
+              <p className="text-white/40 uppercase tracking-widest text-[10px] md:text-xs mb-6">Neural Stream Suspended</p>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 text-left bg-white/5 p-4 rounded-2xl border border-white/5">
                 <div>
                   <div className="text-[10px] text-white/30 uppercase font-bold tracking-tighter">Kills</div>
-                  <div className="text-2xl font-black italic">{engineRef.current?.killCount || 0}</div>
+                  <div className="text-xl md:text-2xl font-black italic">{engineRef.current?.killCount || 0}</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-white/30 uppercase font-bold tracking-tighter">Gold</div>
-                  <div className="text-2xl font-black italic">{engineRef.current?.coins || 0}</div>
+                  <div className="text-xl md:text-2xl font-black italic">{engineRef.current?.player.coins || 0}</div>
                 </div>
-                <div className="mt-2">
+                <div>
                   <div className="text-[10px] text-white/30 uppercase font-bold tracking-tighter">Level</div>
-                  <div className="text-2xl font-black italic">{engineRef.current?.player.level || 1}</div>
+                  <div className="text-xl md:text-2xl font-black italic">{engineRef.current?.player.level || 1}</div>
                 </div>
-                <div className="mt-2">
+                <div>
                   <div className="text-[10px] text-white/30 uppercase font-bold tracking-tighter">Data Cores</div>
-                  <div className="text-2xl font-black italic text-cyan-400">+{engineRef.current?.player.pendingDataCores || 0}</div>
+                  <div className="text-xl md:text-2xl font-black italic text-cyan-400">+{engineRef.current?.player.pendingDataCores || 0}</div>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3">
+              {(() => {
+                const engine = engineRef.current;
+                const player = engineRef.current?.player;
+                const weapons = player?.weapons || [];
+                const skills = (player?.upgrades || []).filter((upgrade: any) => upgrade.type === 'stat');
+                const dashes = (player?.upgrades || []).filter((upgrade: any) => upgrade.type === 'dash');
+
+                const sections = [
+                  {
+                    key: 'weapons',
+                    title: 'Weapons',
+                    accent: 'text-cyan-300 border-cyan-400/25',
+                    tooltipTone: 'border-amber-300/80 shadow-[0_0_28px_rgba(251,191,36,0.32)]',
+                    emptyText: 'No weapons detected',
+                    entries: weapons.map((weapon: any) => {
+                      const preview = getPauseWeaponPreview(weapon);
+                      return {
+                        key: `weapon-${weapon.id}`,
+                        id: weapon.id,
+                        kind: 'weapon' as const,
+                        name: weapon.name,
+                        description: weapon.description,
+                        levelLabel: `Lv ${weapon.level}/${weapon.maxLevel}`,
+                        current: preview.current,
+                        next: preview.next,
+                      };
+                    })
+                  },
+                  {
+                    key: 'skills',
+                    title: 'Skills',
+                    accent: 'text-yellow-300 border-yellow-400/25',
+                    tooltipTone: 'border-sky-300/80 shadow-[0_0_28px_rgba(56,189,248,0.30)]',
+                    emptyText: 'No skills acquired yet',
+                    entries: skills.map((skill: any) => {
+                      const preview = engine ? getPauseSkillPreview(skill, engine) : { current: '-', next: '-' };
+                      return {
+                        key: `skill-${skill.id}`,
+                        id: skill.id,
+                        kind: 'skill' as const,
+                        name: skill.name,
+                        description: skill.description,
+                        levelLabel: `Lv ${skill.level || 1}`,
+                        current: preview.current,
+                        next: preview.next,
+                      };
+                    })
+                  },
+                  {
+                    key: 'dash',
+                    title: 'Dash',
+                    accent: 'text-orange-300 border-orange-400/25',
+                    tooltipTone: 'border-fuchsia-300/80 shadow-[0_0_28px_rgba(232,121,249,0.30)]',
+                    emptyText: 'No dash protocols unlocked',
+                    entries: dashes.map((dash: any) => {
+                      const dashLevel = Number(dash.level || 1);
+                      const dashPreview = engine ? getPauseDashPreview(dash, engine) : { current: '-', next: '-' };
+                      return {
+                        key: `dash-${dash.id}`,
+                        id: dash.id,
+                        kind: 'dash' as const,
+                        name: dash.name,
+                        description: dash.description,
+                        levelLabel: `Lv ${dashLevel}/3`,
+                        current: dashPreview.current,
+                        next: dashPreview.next,
+                      };
+                    })
+                  }
+                ];
+
+                return (
+                  <div className="mb-6 text-left">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm md:text-base font-black uppercase tracking-[0.18em] text-white/80">Loadout Intel</h3>
+                      <div className="text-[10px] text-white/40 uppercase tracking-widest">Hover a card for detail</div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {sections.map(section => (
+                        <div key={section.key} className={`rounded-2xl border bg-white/[0.02] p-3 ${section.accent}`}>
+                          <div className="text-[11px] uppercase tracking-[0.18em] font-black mb-2">{section.title}</div>
+                          <div className="space-y-2">
+                            {section.entries.length === 0 && (
+                              <div className="text-xs text-white/35 border border-white/10 bg-black/30 rounded-xl px-3 py-3">
+                                {section.emptyText}
+                              </div>
+                            )}
+                            {section.entries.map((entry: any) => (
+                              <div
+                                key={entry.key}
+                                className="group relative rounded-xl border border-white/10 bg-[#0a0f14] px-3 py-3 hover:border-white/25 hover:bg-[#101923] transition-colors"
+                                onMouseEnter={() => soundManager.playUIHover()}
+                              >
+                                <div className={`absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 max-w-[90vw] rounded-lg border bg-gradient-to-b from-[#16181f] to-[#0a0d12] p-3 shadow-[0_12px_30px_rgba(0,0,0,0.6)] opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-30 ${section.tooltipTone}`}>
+                                  <div className="text-[11px] font-black uppercase tracking-wide text-white">{entry.name}</div>
+                                  <div className="text-[10px] text-white/70 mt-1 leading-relaxed">{entry.description}</div>
+                                  <div className="mt-3 space-y-1.5">
+                                    <div className="text-[10px] text-cyan-300">
+                                      <span className="text-cyan-500/80 uppercase tracking-wider mr-1">Now:</span>{entry.current}
+                                    </div>
+                                    <div className="text-[10px] text-emerald-300">
+                                      <span className="text-emerald-500/80 uppercase tracking-wider mr-1">Next:</span>{entry.next}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-start gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg border border-white/15 bg-white/[0.03] flex items-center justify-center mt-0.5">
+                                    {getPauseEntryIcon({ kind: entry.kind, id: entry.id })}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="text-xs font-bold uppercase tracking-wide text-white/90 truncate">{entry.name}</div>
+                                      <div className="text-[10px] font-mono text-white/55 whitespace-nowrap">{entry.levelLabel}</div>
+                                    </div>
+                                    <div className="text-[10px] text-white/50 mt-1 leading-relaxed">{entry.current}</div>
+                                    <div className="text-[10px] text-emerald-300/80 mt-1 leading-relaxed">Next: {entry.next}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <button
                   onClick={() => {
                     setGameState('PLAYING');
@@ -1496,6 +1986,7 @@ export default function App() {
                     setHasExfillCarryover(false);
                     setPlayerLevel(1);
                     setPlayerExperience(0);
+                    setPlayerInventory(EMPTY_INVENTORY);
                     if (engineRef.current) engineRef.current.stop();
                     soundManager.playUIClick();
                   }}
@@ -1778,6 +2269,9 @@ export default function App() {
                   const isRare = option.rarity === 'rare';
                   const isWeapon = option.type === 'weapon' || option.type === 'weapon_upgrade';
                   const isDash = option.type === 'dash';
+                  const dashOfferPreview = isDash && engineRef.current
+                    ? getLevelUpDashOfferPreview(option, engineRef.current)
+                    : null;
 
                   const borderColor = isLegendary ? 'from-yellow-400 via-amber-500 to-yellow-600'
                     : isRare ? 'from-purple-400 via-fuchsia-500 to-purple-600'
@@ -1812,7 +2306,7 @@ export default function App() {
                         }
                       }}
                       onMouseEnter={() => soundManager.playUIHover()}
-                      className={`group relative flex flex-col items-center p-0 rounded-2xl transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 shadow-lg ${glowColor} hover:shadow-xl cursor-pointer w-full sm:w-[calc(50%-1.25rem)] md:w-[calc(33.33%-1.25rem)] lg:w-[calc(25%-1.25rem)] max-w-sm`}
+                      className={`group relative z-0 hover:z-50 flex flex-col items-center p-0 rounded-2xl transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 shadow-lg ${glowColor} hover:shadow-xl cursor-pointer w-full sm:w-[calc(50%-1.25rem)] md:w-[calc(33.33%-1.25rem)] lg:w-[calc(25%-1.25rem)] max-w-sm`}
                     >
                       {/* Animated gradient border */}
                       <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${borderColor} p-[1.5px]`}>
@@ -1862,6 +2356,26 @@ export default function App() {
                               Dash Protocol
                             </span>
                           )}
+                          {isDash && dashOfferPreview && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-200 border border-amber-400/40 shadow-[0_0_14px_rgba(251,191,36,0.25)]">
+                              {dashOfferPreview.badge}
+                            </span>
+                          )}
+
+                          {isDash && dashOfferPreview && (
+                            <div className="absolute left-0 top-full mt-2 w-72 max-w-[75vw] rounded-lg border border-amber-300/70 bg-gradient-to-b from-[#1d1710] to-[#0f0b07] px-3 py-2.5 shadow-[0_0_26px_rgba(251,191,36,0.28)] opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-[70]">
+                              <div className="text-[10px] font-black uppercase tracking-wider text-amber-200 mb-1">Dash Scaling Preview</div>
+                              <div className="text-[10px] text-amber-100/90 leading-relaxed">
+                                <span className="text-amber-400/90 uppercase mr-1">On pick:</span>
+                                {dashOfferPreview.onPick}
+                              </div>
+                              <div className="text-[10px] text-emerald-200/90 leading-relaxed mt-1">
+                                <span className="text-emerald-400/90 uppercase mr-1">Next:</span>
+                                {dashOfferPreview.next}
+                              </div>
+                            </div>
+                          )}
+
                           {engineRef.current?.player && engineRef.current.player.banishes > 0 && option.id !== 'full_heal' && upgradeScreenContext !== 'first' && (
                             <button
                               onClick={(e) => {
@@ -2550,6 +3064,7 @@ export default function App() {
                     setHasExfillCarryover(false);
                     setPlayerLevel(1);
                     setPlayerExperience(0);
+                    setPlayerInventory(EMPTY_INVENTORY);
                     if (engineRef.current) engineRef.current.stop();
                     setGameState('MENU');
                   }}

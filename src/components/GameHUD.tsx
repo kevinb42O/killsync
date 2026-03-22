@@ -21,6 +21,7 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
           gameTime: engine.gameTime,
           coins: engine.player.coins,
            exfillExtractRequired: 0, // Placeholder
+          pendingDataCores: engine.player.pendingDataCores,
           weaponDamageStats: { ...engine.weaponDamageStats },
           comboCount: engine.comboCount,
           comboMax: engine.COMBO_MAX,
@@ -33,6 +34,36 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
           currentWave: engine.player.currentWave,
           waveTimer: engine.waveTimer,
           waveDuration: engine.waveDuration,
+          canvasWidth: engine.canvas.width,
+          canvasHeight: engine.canvas.height,
+          autoUpgrade: engine.recentAutoUpgrade && engine.recentAutoUpgrade.expiresAt > engine.gameTime
+            ? { ...engine.recentAutoUpgrade }
+            : null,
+          systemNotice: engine.recentSystemNotice && engine.recentSystemNotice.expiresAt > engine.gameTime
+            ? { ...engine.recentSystemNotice }
+            : null,
+          autoControls: {
+            rerollsLeft: engine.getRemainingRerollsThisWave(),
+            rerollCost: engine.getRerollCost(),
+            queuedRerolls: engine.getQueuedAutoRerolls(),
+            banishes: engine.player.banishes,
+            skips: engine.player.skips,
+            queuedSkips: engine.getQueuedAutoSkips(),
+          },
+          loadoutWeapons: engine.player.weapons.map(w => ({
+            id: w.id,
+            name: w.name,
+            description: w.description,
+            level: w.level,
+            maxLevel: w.maxLevel,
+          })),
+          loadoutUpgrades: engine.player.upgrades.map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            description: u.description,
+            level: u.level || 1,
+            type: u.type || 'stat',
+          })),
           inventory: engine.player.inventory,
           armorHp: engine.player.armorHp,
           maxArmorHp: engine.getMaxArmorHp(),
@@ -53,6 +84,48 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
   }, [engine]);
 
   if (!hudData) return null;
+
+  const iconSize = 28;
+  const iconPadding = 6;
+  const viewportWidth = Math.max(320, Number(hudData.canvasWidth) || 1280);
+  const xpRegionWidth = Math.min(672, viewportWidth - 80);
+  const regionStartX = Math.round((viewportWidth - xpRegionWidth) / 2);
+  const weaponsY = 72;
+  const upgradesY = weaponsY + iconSize + iconPadding;
+  const loadoutWeapons = hudData.loadoutWeapons || [];
+  const loadoutUpgrades = hudData.loadoutUpgrades || [];
+
+  const weaponHoverSlots = loadoutWeapons.map((weapon: any, index: number) => {
+    const step = loadoutWeapons.length <= 1 ? 0 : (xpRegionWidth - iconSize) / (loadoutWeapons.length - 1);
+    const x = Math.round(regionStartX + index * step);
+    return {
+      key: `weapon-${weapon.id}-${index}`,
+      x,
+      y: weaponsY,
+      name: weapon.name,
+      description: weapon.description,
+      meta: `Weapon • Lv ${weapon.level}/${weapon.maxLevel}`,
+      accent: 'text-cyan-200 border-cyan-300/60'
+    };
+  });
+
+  const upgradeHoverSlots = loadoutUpgrades.map((upgrade: any, index: number) => {
+    const step = loadoutUpgrades.length <= 1 ? 0 : (xpRegionWidth - iconSize) / (loadoutUpgrades.length - 1);
+    const x = Math.round(regionStartX + index * step);
+    const typeLabel = upgrade.type === 'dash' ? 'Dash Skill' : upgrade.type === 'weapon' ? 'Weapon' : 'Skill';
+    const accent = upgrade.type === 'dash' ? 'text-orange-200 border-orange-300/60' : 'text-yellow-200 border-yellow-300/60';
+    return {
+      key: `upgrade-${upgrade.id}-${index}`,
+      x,
+      y: upgradesY,
+      name: upgrade.name,
+      description: upgrade.description,
+      meta: `${typeLabel} • Lv ${upgrade.level}`,
+      accent,
+    };
+  });
+
+  const hoverSlots = [...weaponHoverSlots, ...upgradeHoverSlots];
 
   return (
     <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between z-40">
@@ -81,6 +154,65 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
             />
           </div>
         </div>
+
+      </div>
+
+      <AnimatePresence>
+        {hudData.autoUpgrade && (
+          <motion.div
+            key={`${hudData.autoUpgrade.id}-${hudData.autoUpgrade.expiresAt}`}
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -12, scale: 0.97 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-14 left-1/2 -translate-x-1/2 z-[85] pointer-events-none"
+          >
+            <div className="px-3 py-1.5 rounded-full border border-cyan-400/35 bg-black/70 backdrop-blur-sm shadow-[0_0_18px_rgba(34,211,238,0.25)]">
+              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">
+                Auto Upgrade: {hudData.autoUpgrade.name}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {hudData.systemNotice && (
+          <motion.div
+            key={`${hudData.systemNotice.text}-${hudData.systemNotice.expiresAt}`}
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="absolute top-24 left-1/2 -translate-x-1/2 z-[85] pointer-events-none"
+          >
+            <div className="px-3 py-1 rounded-full border bg-black/70 backdrop-blur-sm"
+              style={{ borderColor: `${hudData.systemNotice.color}66` }}>
+              <span className="text-[10px] font-black uppercase tracking-[0.13em]"
+                style={{ color: hudData.systemNotice.color }}>
+                {hudData.systemNotice.text}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Invisible hover zones + tooltips over original canvas top loadout bar */}
+      <div className="absolute inset-0 z-[88] pointer-events-none">
+        {hoverSlots.map(slot => (
+          <div
+            key={slot.key}
+            className="group absolute pointer-events-auto"
+            style={{ left: slot.x, top: slot.y, width: iconSize, height: iconSize }}
+          >
+            <div className="w-full h-full opacity-0" />
+            <div className={`absolute left-1/2 top-full mt-2 -translate-x-1/2 w-60 rounded-md border bg-gradient-to-b from-[#111113] to-[#070708] px-3 py-2 shadow-[0_12px_30px_rgba(0,0,0,0.65)] opacity-0 group-hover:opacity-100 transition-opacity duration-120 pointer-events-none z-[90] ${slot.accent}`}>
+              <div className="text-[11px] font-bold tracking-wide">{slot.name}</div>
+              <div className="text-[10px] text-white/75 mt-1 leading-snug">{slot.description}</div>
+              <div className="mt-2 text-[10px] font-mono text-white/80">{slot.meta}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
        <div className="absolute top-6 left-6 flex flex-col gap-1">
@@ -147,6 +279,14 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
             <div className="w-3 h-3 bg-white rounded-sm rotate-45 border border-cyan-400 shadow-[0_0_5px_rgba(34,211,238,0.5)]" />
             <span>{hudData.pendingDataCores} DATA CORES</span>
           </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2 text-[10px] font-mono text-white/55">
+          <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10">R: REROLL {hudData.autoControls.queuedRerolls > 0 ? `(${hudData.autoControls.queuedRerolls})` : ''}</span>
+          <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10">B: BANISH {hudData.autoControls.banishes}</span>
+          <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10">K: SKIP {hudData.autoControls.queuedSkips > 0 ? `(${hudData.autoControls.queuedSkips})` : hudData.autoControls.skips}</span>
+          <span className="text-white/35">
+            RR {hudData.autoControls.rerollsLeft}/3 • Cost {hudData.autoControls.rerollCost ?? 'MAX'}
+          </span>
         </div>
       </div>
 
