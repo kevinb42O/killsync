@@ -37,17 +37,17 @@ export const applyAccountXP = (startLevel: number, startXP: number, gainedXP: nu
   return { level, xp, overflow: remaining };
 };
 
-export const createDeathXPBreakdown = (timeMs: number, kills: number): XPBreakdownItem[] => {
-  const timeXP = Math.floor((timeMs / 1000) * 2);
+export const createDeathXPBreakdown = (wavesCleared: number, kills: number): XPBreakdownItem[] => {
+  const wavesXP = wavesCleared * 50;
   const killXP = kills * 4;
   return [
     { label: 'Kill XP', value: killXP },
-    { label: 'Survival Time XP', value: timeXP }
+    { label: 'Waves Cleared XP', value: wavesXP }
   ];
 };
 
 export const createExfillXPBreakdown = (params: {
-  timeMs: number;
+  wavesCleared: number;
   kills: number;
   level: number;
   coins: number;
@@ -56,7 +56,7 @@ export const createExfillXPBreakdown = (params: {
   weaponLevelTotal: number;
   upgradeCount: number;
 }): XPBreakdownItem[] => {
-  const timeXP = Math.floor((params.timeMs / 1000) * 2.2);
+  const wavesXP = params.wavesCleared * 100;
   const killXP = params.kills * 5;
   const exfillBonusXP = 250;
   const levelXP = params.level * 30;
@@ -69,7 +69,7 @@ export const createExfillXPBreakdown = (params: {
   return [
     { label: 'Exfill Bonus XP', value: exfillBonusXP },
     { label: 'Kill XP', value: killXP },
-    { label: 'Survival Time XP', value: timeXP },
+    { label: 'Waves Cleared XP', value: wavesXP },
     { label: 'Level Reached XP', value: levelXP },
     { label: 'Weapons Collected XP', value: weaponCountXP },
     { label: 'Weapon Mastery XP', value: weaponMasteryXP },

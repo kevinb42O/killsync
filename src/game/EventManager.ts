@@ -1,4 +1,4 @@
-import { ENEMY_TYPES, ITEM_TYPES } from '../constants';
+import { ENEMY_TYPES, ITEM_TYPES, GAME_WIDTH, GAME_HEIGHT } from '../constants';
 import { soundManager } from './SoundManager';
 import type { GameEngine } from './Engine';
 
@@ -66,10 +66,8 @@ export class EventManager {
     bountyRewardGemCount: 6,
     bountyRewardGemValue: 30,
     bountyDataCoreChance: 0.5,
-    supplyHealthThreshold: 0.35,
     supplyHealAmount: 25,
     supplyDataCoreChance: 0.35,
-    supplyCooldown: 240000,
     dataStormDuration: 18000,
     dataStormSpawnInterval: 380,
     dataStormGemMin: 10,
@@ -79,7 +77,6 @@ export class EventManager {
     nanoPoolDps: 16,
     nanoPoolChance: 0.6,
     nanoPoolLife: 7000,
-    firewallStartAt: 720000,
     firewallDuration: 35000,
     firewallMaxShrink: 520,
     firewallOutsideDps: 26,
@@ -97,17 +94,6 @@ export class EventManager {
   supplyCrates: SupplyCrate[] = [];
 
   // Cooldowns & scheduling
-  private breachCooldown: number = 0;
-  private breachNextCheck: number = 120000; // First possible breach at 2 min
-  private bountyTimer: number = 180000; // First bounty at 3 min
-  private supplyTimer: number = 0;
-  private stormCooldown: number = 0;
-  private stormNextCheck: number = 300000; // First storm at 5 min
-  private plagueFired: boolean = false;
-  private firewallFired: boolean = false;
-  private blackoutTimes: number[] = [420000, 840000]; // 7min, 14min
-  private blackoutsFired: Set<number> = new Set();
-
   // Firewall state
   firewallBoundary: number = 0; // 0 = no shrink, positive = pixels inward
   firewallMaxShrink: number = this.BALANCE.firewallMaxShrink;
@@ -124,12 +110,6 @@ export class EventManager {
     this.toxicPools = [];
     this.bountyTarget = null;
     this.supplyCrates = [];
-    this.breachCooldown = 0;
-    this.supplyTimer = 0;
-    this.stormCooldown = 0;
-    this.plagueFired = false;
-    this.firewallFired = false;
-    this.blackoutsFired = new Set();
     this.firewallBoundary = 0;
     this.firewallActive = false;
     this.breachActive = false;
@@ -137,16 +117,7 @@ export class EventManager {
     this.adaptiveMultiplier = 1.0;
 
     if (this.nightmareMode) {
-      this.breachNextCheck = 60000;    // First breach at 1 min
-      this.bountyTimer    = 120000;    // First bounty at 2 min
-      this.stormNextCheck = 180000;    // First storm at 3 min
-      this.blackoutTimes  = [300000, 600000, 900000]; // 5, 10, 15 min
       this.announce('☠ NIGHTMARE MODE', 'The grid will not forgive you', '#ff0033');
-    } else {
-      this.breachNextCheck = 120000;
-      this.bountyTimer    = 180000;
-      this.stormNextCheck = 300000;
-      this.blackoutTimes  = [420000, 840000];
     }
   }
 
@@ -196,10 +167,11 @@ export class EventManager {
       const dx = engine.player.position.x - pool.x;
       const dy = engine.player.position.y - pool.y;
       if (dx * dx + dy * dy < pool.radius * pool.radius) {
+        if (engine.reviveInvulnTimer > 0) continue;
         engine.player.health -= this.BALANCE.nanoPoolDps * this.adaptiveMultiplier * (dt / 1000);
         if (engine.player.health <= 0) {
-          engine.gameOver();
-          return;
+          engine.processPlayerDeath();
+          if (engine.gameState === 'GAME_OVER') return;
         }
       }
     }
@@ -249,64 +221,76 @@ export class EventManager {
         this.bountyTarget = null;
       }
     }
-
-    // ─── Schedule new events ───────────────────────────────
-    this.checkBlackout(gt, engine);
-    this.checkSystemBreach(dt, gt, engine);
-    this.checkBountyTarget(dt, gt, engine);
-    this.checkSupplyDrop(dt, gt, engine);
-    this.checkDataStorm(dt, gt, engine);
-    this.checkNanoPlague(gt, kills, engine);
-    this.checkFirewallCollapse(gt, engine);
-
     // Update firewall boundary damage
     if (this.firewallActive) {
       this.applyFirewallDamage(dt, engine);
     }
   }
 
-  // ─── Blackout Protocol ──────────────────────────────────
-  private checkBlackout(gt: number, engine: GameEngine) {
-    for (const time of this.blackoutTimes) {
-      if (!this.blackoutsFired.has(time) && gt >= time) {
-        this.blackoutsFired.add(time);
+  // ─── Wave Based Triggers ─────────────────────────────────
+  triggerWaveEvents(wave: number, engine: GameEngine, startOfWave: boolean) {
+    if (!startOfWave) return;
+
+    if (wave === 5 || wave === 25) {
+      if (!this.isActive('system_breach')) {
+        this.breachActive = true;
+        this.startEvent('system_breach', this.BALANCE.breachDuration, {}, engine);
+        this.announce('⚠ SYSTEM BREACH', 'Enemies spawning from portals!', '#ff3333');
+        soundManager.playExplosion();
+        // Cancel any in-progress extraction before disabling portals
+        engine.abortExfill();
+        for (const p of engine.portals) p.active = false;
+      }
+    }
+
+    if (wave === 10 || wave === 30) {
+      if (!this.isActive('data_storm')) {
+        const horizontal = Math.random() > 0.5;
+        this.startEvent('data_storm', this.BALANCE.dataStormDuration, {
+          horizontal,
+          spawnTimer: 0,
+        }, engine);
+        this.announce('DATA STORM INCOMING', 'Risk the storm for XP & coins!', '#00ffaa');
+        soundManager.playExplosion();
+      }
+    }
+
+    if (wave === 15) {
+      if (!this.isActive('blackout')) {
         this.startEvent('blackout', this.BALANCE.blackoutDuration, { xpMultiplier: this.BALANCE.blackoutXpMultiplier }, engine);
         this.announce('BLACKOUT PROTOCOL', `${this.BALANCE.blackoutXpMultiplier.toFixed(1)}× XP — Survive the dark`, '#00ccff');
         soundManager.playExplosion();
       }
     }
-  }
 
-  // ─── System Breach ──────────────────────────────────────
-  private checkSystemBreach(dt: number, gt: number, engine: GameEngine) {
-    if (this.isActive('system_breach') || this.isActive('blackout')) return;
-    this.breachCooldown -= dt;
-    if (gt >= this.breachNextCheck && this.breachCooldown <= 0) {
-      if (Math.random() < Math.min(0.85, this.BALANCE.breachChance * Math.sqrt(this.adaptiveMultiplier))) {
-        this.breachActive = true;
-        this.startEvent('system_breach', this.BALANCE.breachDuration, {}, engine);
-        this.announce('⚠ SYSTEM BREACH', 'Enemies spawning from portals!', '#ff3333');
+    if (wave === 20) {
+      if (!this.isActive('nano_plague')) {
+        this.startEvent('nano_plague', 50000, {}, engine);
+        this.announce('NANO PLAGUE ACTIVE', 'Enemy corpses leave toxic zones!', '#88ff00');
         soundManager.playExplosion();
-        // Disable all portals during breach
-        for (const p of engine.portals) p.active = false;
       }
-      this.breachNextCheck = gt + 120000 + Math.random() * 120000; // 2-4 min between checks
-      this.breachCooldown = 30000;
+    }
+
+    if (wave === 35 || (this.nightmareMode && wave === 18)) {
+      if (!this.isActive('firewall_collapse')) {
+        this.firewallActive = true;
+        this.firewallBoundary = 0;
+        this.startEvent('firewall_collapse', this.BALANCE.firewallDuration, {}, engine);
+        this.announce('⚠ FIREWALL COLLAPSE', 'The grid is closing in!', '#ff0066');
+        soundManager.playExplosion();
+      }
+    }
+
+    if (wave % 3 === 0 && !this.bountyTarget) {
+      this.spawnBountyTarget(engine);
+    }
+
+    if (wave % 4 === 0) {
+      this.spawnSupplyDrop(engine);
     }
   }
 
   // ─── Bounty Target ─────────────────────────────────────
-  private checkBountyTarget(dt: number, gt: number, engine: GameEngine) {
-    if (this.bountyTarget) return;
-    this.bountyTimer -= dt;
-    if (gt >= 180000 && this.bountyTimer <= 0) {
-      this.spawnBountyTarget(engine);
-      this.bountyTimer = this.nightmareMode
-        ? 40000 + Math.random() * 40000   // 40-80s in nightmare
-        : 60000 + Math.random() * 60000;  // 60-120s normal
-    }
-  }
-
   private spawnBountyTarget(engine: GameEngine) {
     const angle = Math.random() * Math.PI * 2;
     const dist = Math.max(engine.canvas.width, engine.canvas.height) / 2 + 100;
@@ -357,21 +341,6 @@ export class EventManager {
     soundManager.playTreasureSpawn();
   }
 
-  // ─── Supply Drop ────────────────────────────────────────
-  private checkSupplyDrop(dt: number, gt: number, engine: GameEngine) {
-    if (gt < 120000) return;
-    this.supplyTimer -= dt;
-    if (this.supplyTimer > 0) return;
-
-    const hpPercent = engine.player.health / engine.player.maxHealth;
-    if (hpPercent < this.BALANCE.supplyHealthThreshold) {
-      this.spawnSupplyDrop(engine);
-      this.supplyTimer = this.BALANCE.supplyCooldown;
-    } else {
-      this.supplyTimer = 10000; // Check again in 10s
-    }
-  }
-
   private spawnSupplyDrop(engine: GameEngine) {
     const angle = Math.random() * Math.PI * 2;
     const dist = 300 + Math.random() * 200;
@@ -407,51 +376,6 @@ export class EventManager {
     soundManager.playTreasureSpawn();
   }
 
-  // ─── Data Storm ─────────────────────────────────────────
-  private checkDataStorm(dt: number, gt: number, engine: GameEngine) {
-    if (this.isActive('data_storm') || this.isActive('blackout')) return;
-    this.stormCooldown -= dt;
-    if (gt >= this.stormNextCheck && this.stormCooldown <= 0) {
-      if (Math.random() < 0.4) {
-        // Storm sweeps left-to-right or top-to-bottom
-        const horizontal = Math.random() > 0.5;
-        this.startEvent('data_storm', this.BALANCE.dataStormDuration, {
-          horizontal,
-          spawnTimer: 0,
-        }, engine);
-        this.announce('DATA STORM INCOMING', 'Risk the storm for XP & coins!', '#00ffaa');
-        soundManager.playExplosion();
-      }
-      this.stormNextCheck = gt + 90000 + Math.random() * 90000;
-      this.stormCooldown = 15000;
-    }
-  }
-
-  // ─── Nano Plague ────────────────────────────────────────
-  private checkNanoPlague(gt: number, kills: number, engine: GameEngine) {
-    if (this.plagueFired || this.isActive('nano_plague')) return;
-    if (gt >= 600000 && kills >= 500) {
-      this.plagueFired = true;
-      this.startEvent('nano_plague', 50000, {}, engine);
-      this.announce('NANO PLAGUE ACTIVE', 'Enemy corpses leave toxic zones!', '#88ff00');
-      soundManager.playExplosion();
-    }
-  }
-
-  // ─── Firewall Collapse ─────────────────────────────────
-  private checkFirewallCollapse(gt: number, engine: GameEngine) {
-    if (this.firewallFired || this.isActive('firewall_collapse')) return;
-    const firewallStart = this.nightmareMode ? 480000 : this.BALANCE.firewallStartAt; // 8 min in nightmare
-    if (gt >= firewallStart) {
-      this.firewallFired = true;
-      this.firewallActive = true;
-      this.firewallBoundary = 0;
-      this.startEvent('firewall_collapse', this.BALANCE.firewallDuration, {}, engine);
-      this.announce('⚠ FIREWALL COLLAPSE', 'The grid is closing in!', '#ff0066');
-      soundManager.playExplosion();
-    }
-  }
-
   private applyFirewallDamage(dt: number, engine: GameEngine) {
     const ev = this.getActive('firewall_collapse');
     if (!ev) return;
@@ -464,26 +388,26 @@ export class EventManager {
     const px = engine.player.position.x;
     const py = engine.player.position.y;
 
-    // Damage player if outside boundary
-    const outsideLeft = px < margin;
-    const outsideRight = px > 2000 - margin;
-    const outsideTop = py < margin;
-    const outsideBottom = py > 2000 - margin;
+    // Damage player if outside boundary (world is GAME_WIDTH × GAME_HEIGHT)
+    const outsideLeft   = px < margin;
+    const outsideRight  = px > GAME_WIDTH - margin;
+    const outsideTop    = py < margin;
+    const outsideBottom = py > GAME_HEIGHT - margin;
 
-    if (outsideLeft || outsideRight || outsideTop || outsideBottom) {
+    if ((outsideLeft || outsideRight || outsideTop || outsideBottom) && engine.reviveInvulnTimer <= 0) {
       engine.player.health -= this.BALANCE.firewallOutsideDps * this.adaptiveMultiplier * (dt / 1000);
       engine.screenShake = 3;
       if (engine.player.health <= 0) {
-        engine.gameOver();
+        engine.processPlayerDeath();
       }
     }
 
     // Push enemies inward
     for (const enemy of engine.enemies) {
-      if (enemy.position.x < margin) enemy.position.x = margin + 10;
-      if (enemy.position.x > 2000 - margin) enemy.position.x = 2000 - margin - 10;
-      if (enemy.position.y < margin) enemy.position.y = margin + 10;
-      if (enemy.position.y > 2000 - margin) enemy.position.y = 2000 - margin - 10;
+      if (enemy.position.x < margin)               enemy.position.x = margin + 10;
+      if (enemy.position.x > GAME_WIDTH - margin)  enemy.position.x = GAME_WIDTH - margin - 10;
+      if (enemy.position.y < margin)               enemy.position.y = margin + 10;
+      if (enemy.position.y > GAME_HEIGHT - margin) enemy.position.y = GAME_HEIGHT - margin - 10;
     }
   }
 
@@ -585,8 +509,10 @@ export class EventManager {
   // ─── Spawn Override for System Breach ──────────────────
   getBreachSpawnPosition(engine: GameEngine): { x: number; y: number } | null {
     if (!this.breachActive) return null;
-    // Spawn from a random portal position
-    const portal = engine.portals[Math.floor(Math.random() * engine.portals.length)];
+    // Only spawn from portals that are currently active (not disabled by other effects)
+    const activePortals = engine.portals.filter(p => p.active);
+    if (activePortals.length === 0) return null;
+    const portal = activePortals[Math.floor(Math.random() * activePortals.length)];
     const jitter = 40;
     return {
       x: portal.position.x + (Math.random() - 0.5) * jitter,
@@ -645,7 +571,15 @@ export class EventManager {
       const inStorm = ev.data.horizontal
         ? Math.abs(playerDx) < 80
         : Math.abs(playerDy) < 80;
-      if (inStorm) engine.player.health -= this.BALANCE.dataStormDps * this.adaptiveMultiplier * (this.BALANCE.dataStormSpawnInterval / 1000);
+      if (inStorm) {
+        if (engine.reviveInvulnTimer <= 0) {
+          engine.player.health -= this.BALANCE.dataStormDps * this.adaptiveMultiplier * (this.BALANCE.dataStormSpawnInterval / 1000);
+          if (engine.player.health <= 0) {
+            engine.processPlayerDeath();
+            if (engine.gameState === 'GAME_OVER') return;
+          }
+        }
+      }
     }
   }
 
@@ -1048,19 +982,21 @@ export class EventManager {
     const enemy = engine.enemies.find(e => e.id === this.bountyTarget!.enemyId);
     if (!enemy) return;
 
-    // Draw golden aura ring around bounty in world space (we're in screen space here, so convert)
-    const sx = enemy.position.x - engine.camera.x;
-    const sy = enemy.position.y - engine.camera.y;
+    // Convert world position → screen position (accounts for zoom)
+    const zoom = engine.cameraZoom;
+    // Camera is centred on the player, so:
+    const screenX = canvas.width / 2 + (enemy.position.x - engine.player.position.x) * zoom;
+    const screenY = canvas.height / 2 + (enemy.position.y - engine.player.position.y) * zoom;
     const time = Date.now() / 1000;
 
     // Golden rotating rings around bounty
     ctx.save();
-    ctx.translate(sx, sy);
+    ctx.translate(screenX, screenY);
     ctx.strokeStyle = '#ffd700';
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.6 + Math.sin(time * 4) * 0.3;
     ctx.beginPath();
-    ctx.arc(0, 0, enemy.radius + 15 + Math.sin(time * 3) * 5, 0, Math.PI * 2);
+    ctx.arc(0, 0, (enemy.radius + 15 + Math.sin(time * 3) * 5) * zoom, 0, Math.PI * 2);
     ctx.stroke();
     // Rotating dashes
     ctx.setLineDash([8, 8]);
@@ -1068,7 +1004,7 @@ export class EventManager {
     ctx.save();
     ctx.rotate(time * 2);
     ctx.beginPath();
-    ctx.arc(0, 0, enemy.radius + 25, 0, Math.PI * 2);
+    ctx.arc(0, 0, (enemy.radius + 25) * zoom, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
     ctx.setLineDash([]);
@@ -1077,15 +1013,15 @@ export class EventManager {
     ctx.fillStyle = '#ffd700';
     ctx.font = 'bold 11px Inter';
     ctx.textAlign = 'center';
-    ctx.fillText(this.bountyTarget.name, 0, -enemy.radius - 30);
+    ctx.fillText(this.bountyTarget.name, 0, -(enemy.radius + 30) * zoom);
     // Timer
     ctx.fillStyle = this.bountyTarget.timeLimit < 5000 ? '#ff4444' : '#ffffff';
     ctx.font = 'bold 10px Inter';
-    ctx.fillText(`${Math.ceil(this.bountyTarget.timeLimit / 1000)}s`, 0, -enemy.radius - 18);
+    ctx.fillText(`${Math.ceil(this.bountyTarget.timeLimit / 1000)}s`, 0, -(enemy.radius + 18) * zoom);
     ctx.restore();
 
     // Off-screen arrow if bounty is not visible
-    if (sx < -20 || sy < -20 || sx > canvas.width + 20 || sy > canvas.height + 20) {
+    if (screenX < -20 || screenY < -20 || screenX > canvas.width + 20 || screenY > canvas.height + 20) {
       const dx = enemy.position.x - engine.player.position.x;
       const dy = enemy.position.y - engine.player.position.y;
       const angle = Math.atan2(dy, dx);
@@ -1114,6 +1050,7 @@ export class EventManager {
       ctx.restore();
     }
   }
+
 
   // ─── Display Helpers ───────────────────────────────────
   private getEventDisplay(type: EventType): { label: string; color: string } {

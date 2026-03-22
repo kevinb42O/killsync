@@ -1,5 +1,5 @@
-import { Vector2D, Player, Enemy, Projectile, ExperienceGem, GameState, Weapon, WorldItem, Treasure, OperatorDefinition } from '../types';
-import { GAME_WIDTH, GAME_HEIGHT, INITIAL_PLAYER_STATS, ENEMY_TYPES, WEAPON_DEFINITIONS, UPGRADES, ITEM_TYPES, PERMANENT_UPGRADES, OPERATOR_DEFINITIONS } from '../constants';
+import { Vector2D, Player, Enemy, Projectile, ExperienceGem, GameState, Weapon, WorldItem, Treasure, OperatorDefinition, Shop, Inventory, DashState } from '../types';
+import { GAME_WIDTH, GAME_HEIGHT, INITIAL_PLAYER_STATS, ENEMY_TYPES, WEAPON_DEFINITIONS, UPGRADES, ITEM_TYPES, PERMANENT_UPGRADES, OPERATOR_DEFINITIONS, DASH_UPGRADES } from '../constants';
 import { soundManager } from './SoundManager';
 import { EventManager } from './EventManager';
 
@@ -27,12 +27,12 @@ export interface BalanceTuning {
 }
 
 export const DEFAULT_BALANCE_TUNING: BalanceTuning = {
-  difficultyTimeScalePerMinute: 0.5,
+  difficultyTimeScalePerMinute: 0.15,
   difficultyKillBonusDivisor: 2000,
   difficultyKillBonusCap: 0.5,
   spawnBaseIntervalMs: 400,
   spawnMinIntervalMs: 60,
-  weaponSpawnStep: 0.5,
+  weaponSpawnStep: 0.0,
   enemyHealthMultiplier: 1,
   enemyDamageMultiplier: 1,
   playerDamageTakenMultiplier: 1,
@@ -50,15 +50,17 @@ export const DEFAULT_BALANCE_TUNING: BalanceTuning = {
 };
 
 export class GameEngine {
+  private readonly DEFAULT_WEAPON_DAMAGE_MULTIPLIER = 1.2;
   private readonly MAX_ENEMIES = 500;
   private readonly MAX_PROJECTILES = 1400;
   private readonly MAX_PARTICLES = 1600;
   private readonly MAX_DAMAGE_TEXTS = 180;
   private readonly COLLISION_CELL_SIZE = 160;
   private readonly MAX_ACTIVE_TREASURES = 2;
-  private readonly MIN_CAMERA_ZOOM = 0.3;
-  private readonly CAMERA_SAFE_SCREEN_RATIO = 0.85;
-  private readonly CAMERA_ZOOM_LERP = 0.12;
+  private readonly SHOP_MIN_DISTANCE_FROM_SPAWN = 800;
+  private readonly SHOP_RING_DISTANCE = 1300;
+  private readonly REROLL_COSTS = [100, 250, 500];
+  private readonly MAX_REROLLS_PER_WAVE = 3;
 
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -70,6 +72,10 @@ export class GameEngine {
   treasures: Treasure[] = [];
   portals: { position: Vector2D; radius: number; active: boolean }[] = [];
   activePortalIndex: number = -1;
+  shops: Shop[] = [];
+  nearbyShop: Shop | null = null;
+  reviveInvulnTimer: number = 0;
+  hasRevived: boolean = false;
   particles: any[] = [];
   damageTexts: { x: number, y: number, text: string, life: number, maxLife: number, color: string }[] = [];
   screenShake: number = 0;
@@ -82,6 +88,7 @@ export class GameEngine {
   camera: Vector2D = { x: 0, y: 0 };
   cameraZoom: number = 1;
   keys: Set<string> = new Set();
+  dashSpaceWasDown: boolean = false;
   
   lastTime: number = 0;
   spawnTimer: number = 0;
@@ -93,8 +100,16 @@ export class GameEngine {
   isDashing: boolean = false;
   dashDuration: number = 200;
   dashVelocity: Vector2D = { x: 0, y: 0 };
+  dashStartPos: Vector2D = { x: 0, y: 0 };
+  dashGhostTimer: number = 0;
+  dashMomentumTimer: number = 0;
   regenTimer: number = 0;
   lastBossHitTime: number = 0;
+
+  dashState: DashState = this.createDefaultDashState();
+
+  waveTimer: number = 0;
+  waveDuration: number = 90000;
 
   public weaponDamageStats: Record<string, number> = {};
   
@@ -112,19 +127,7 @@ export class GameEngine {
   // Runtime-editable balancing values for admin dashboard tuning.
   balanceTuning: BalanceTuning = { ...DEFAULT_BALANCE_TUNING };
   
-  // Exfill state machine
-  exfillState: 'idle' | 'activating' | 'escaping' | 'disabled' = 'idle';
-  exfillTimer: number = 0;
-  exfillEscapeTimer: number = 0;
-  exfillDisabledTimer: number = 0;
-  exfillZoneStayTimer: number = 0; // time spent continuously inside a portal zone (for 5s entry)
-  exfillExtractTimer: number = 0; // time spent inside portal during escape (for 5s extract)
-  EXFILL_ZONE_STAY_REQUIRED: number = 5000; // 5 seconds to call in exfill
-  EXFILL_EXTRACT_STAY_REQUIRED: number = 5000; // 5 seconds standing in portal to leave
-  EXFILL_ACTIVATION_TIME: number = 30000; // 30 seconds to activate
-  EXFILL_ESCAPE_TIME: number = 15000; // 15 seconds window to get to portal and stay 5s
-  EXFILL_DISABLED_TIME: number = 30000; // 30 seconds cooldown after failed escape
-  EXFILL_ZONE_RADIUS: number = 250;
+  // Exfill is now triggered explicitly from the UI end-of-wave screen
 
   // Smooth movement
   targetRotation: number = 0;
@@ -138,13 +141,16 @@ export class GameEngine {
   onLevelUp: (options: any[]) => void;
   onGameOver: (stats: any) => void;
   onTreasure: (upgrade: any) => void;
+  onShopEnter: () => void;
   onExfill: (coins: number, level: number) => void;
+  shopInteractionCooldown: number = 0;
 
   constructor(
     canvas: HTMLCanvasElement, 
     onLevelUp: (options: any[]) => void, 
     onGameOver: (stats: any) => void, 
     onTreasure: (upgrade: any) => void,
+    onShopEnter: () => void,
     onExfill: (coins: number, level: number) => void
   ) {
     this.canvas = canvas;
@@ -152,16 +158,10 @@ export class GameEngine {
     this.onLevelUp = onLevelUp;
     this.onGameOver = onGameOver;
     this.onTreasure = onTreasure;
+    this.onShopEnter = onShopEnter;
     this.onExfill = onExfill;
     
-    // 5 portals spread evenly across the 4000×4000 map (none at center where player spawns)
-    this.portals = [
-      { position: { x: 600, y: 600 }, radius: 60, active: true },
-      { position: { x: 3400, y: 600 }, radius: 60, active: true },
-      { position: { x: 2000, y: 700 }, radius: 60, active: true },
-      { position: { x: 600, y: 3400 }, radius: 60, active: true },
-      { position: { x: 3400, y: 3400 }, radius: 60, active: true },
-    ];
+    this.portals = [];
 
     this.player = this.resetPlayer();
     
@@ -246,13 +246,95 @@ export class GameEngine {
       coins: coins,
       permanentUpgrades: { ...permanentUpgrades },
       operatorId: operatorId,
-      pendingDataCores: 0
+      pendingDataCores: 0,
+      currentWave: 1,
+      rerolls: permanentUpgrades['perm_reroll'] || 0,
+      rerollsThisWave: 0,
+      banishes: permanentUpgrades['perm_banish'] || 0,
+      skips: permanentUpgrades['perm_skip'] || 0,
+      bannedUpgrades: new Set<string>(),
+      inventory: { armorTier: 0, hasRevive: false, nukeCount: 0 },
+      armorHp: 0,
+      lastHitTime: 0
     };
+  }
+
+  createDefaultDashState(): DashState {
+    return {
+      deadlockBurst: false,
+      twinVector: false,
+      aegisSlip: false,
+      afterimageMinefield: false,
+      phaseLaceration: false,
+      nullWake: false,
+      inertiaVault: false,
+      kineticRefund: false,
+      bulwarkRam: false,
+      echoRecall: false,
+      prismGuard: false,
+      cataclysmBrake: false,
+      dashCharges: 1,
+      maxDashCharges: 1,
+      dashRechargeTimer: 0,
+      standStillTimer: 0,
+      deadlockCharged: false,
+      echoRecallOrigin: null,
+      echoRecallWindow: 0,
+      kineticRefundWindow: 0,
+      aegisShieldTimer: 0,
+      prismShardTimer: 0,
+      nullWakeTrail: [],
+      afterimages: [],
+      cataclysmPending: false,
+      cataclysmMoveTimer: 0,
+      bulwarkRamHit: false,
+    };
+  }
+
+  private getPermanentUpgradeLevel(id: string): number {
+    return this.player.permanentUpgrades?.[id] || 0;
+  }
+
+  private getEffectiveDashCooldownMs(): number {
+    const rechargeLevel = this.getPermanentUpgradeLevel('perm_dash_recharge');
+    const rechargeMult = Math.max(0.5, 1 - rechargeLevel * 0.1);
+    return this.dashCooldown * this.player.stats.dash_cooldown * rechargeMult;
+  }
+
+  private getDashImpactMultiplier(): number {
+    return 1 + this.getPermanentUpgradeLevel('perm_dash_impact') * 0.15;
+  }
+
+  private syncDashChargeCapacity() {
+    const baseCharges = 1 + this.getPermanentUpgradeLevel('perm_dash_charge');
+    const desiredMax = baseCharges + (this.dashState.twinVector ? 1 : 0);
+    if (this.dashState.maxDashCharges !== desiredMax) {
+      const oldMax = this.dashState.maxDashCharges;
+      this.dashState.maxDashCharges = desiredMax;
+      if (desiredMax > oldMax) {
+        this.dashState.dashCharges = desiredMax;
+      } else {
+        this.dashState.dashCharges = Math.min(this.dashState.dashCharges, desiredMax);
+        if (this.dashState.dashCharges <= 0) {
+          this.dashState.dashCharges = 1;
+        }
+      }
+    }
+  }
+
+  hasDashUpgrade(): boolean {
+    const ds = this.dashState;
+    return ds.deadlockBurst || ds.twinVector || ds.aegisSlip || ds.afterimageMinefield ||
+           ds.phaseLaceration || ds.nullWake || ds.inertiaVault || ds.kineticRefund ||
+           ds.bulwarkRam || ds.echoRecall || ds.prismGuard || ds.cataclysmBrake;
   }
 
   start() {
     this.gameState = 'PLAYING';
     this.paused = false;
+    this.shopInteractionCooldown = 0;
+    this.reviveInvulnTimer = 0;
+    this.hasRevived = false;
     this.lastTime = performance.now();
     this.cameraZoom = 1;
     this.enemies = [];
@@ -262,24 +344,31 @@ export class GameEngine {
     this.particles = [];
     this.gameTime = 0;
     this.killCount = 0;
+    this.waveTimer = 0;
     this.weaponDamageStats = {};
     this.difficultyMultiplier = 1;
     // Reset exfill state
-    this.exfillState = 'idle';
-    this.exfillTimer = 0;
-    this.exfillEscapeTimer = 0;
-    this.exfillDisabledTimer = 0;
     this.activePortalIndex = -1;
-    for (const p of this.portals) p.active = true;
+    // Shop setup: always place shops away from spawn so the run starts clean.
+    this.shops = this.generateShops();
     // Reset event system
     this.eventManager.reset();
+    // Reset dash upgrades
+    this.dashState = this.createDefaultDashState();
+    this.syncDashChargeCapacity();
+    this.dashGhostTimer = 0;
+    this.dashMomentumTimer = 0;
+    this.dashSpaceWasDown = false;
     this.requestUpdate();
   }
 
   stop() {
     this.gameState = 'MENU';
     this.paused = false;
+    this.dashGhostTimer = 0;
+    this.dashMomentumTimer = 0;
     this.keys.clear();
+    this.dashSpaceWasDown = false;
   }
 
   lerpAngle(a: number, b: number, t: number): number {
@@ -299,6 +388,31 @@ export class GameEngine {
     return this.canvas.width / this.cameraZoom;
   }
 
+  private generateShops(): Shop[] {
+    const spawn = this.player.position;
+    const baseAngle = Math.random() * Math.PI * 2;
+    const shops: Shop[] = [];
+
+    for (let i = 0; i < 2; i++) {
+      const angle = baseAngle + i * Math.PI;
+      let distance = this.SHOP_RING_DISTANCE;
+      if (distance < this.SHOP_MIN_DISTANCE_FROM_SPAWN) {
+        distance = this.SHOP_MIN_DISTANCE_FROM_SPAWN;
+      }
+
+      shops.push({
+        id: i === 0 ? 'shopA' : 'shopB',
+        position: {
+          x: spawn.x + Math.cos(angle) * distance,
+          y: spawn.y + Math.sin(angle) * distance,
+        },
+        radius: 120,
+      });
+    }
+
+    return shops;
+  }
+
   private getViewportWorldHeight(): number {
     return this.canvas.height / this.cameraZoom;
   }
@@ -312,34 +426,6 @@ export class GameEngine {
 
   private isScreenBoundAOEProjectile(projectileId: string): boolean {
     return projectileId === 'orbit' || projectileId === 'scythe' || projectileId === 'aura' || projectileId === 'pulse' || projectileId === 'frost_aura';
-  }
-
-  private getLargestScreenBoundAOEReach(): number {
-    let maxReach = 0;
-    for (const projectile of this.projectiles) {
-      if (!this.isScreenBoundAOEProjectile(projectile.id)) continue;
-      const dx = projectile.position.x - this.player.position.x;
-      const dy = projectile.position.y - this.player.position.y;
-      const centerDistance = Math.sqrt(dx * dx + dy * dy);
-      maxReach = Math.max(maxReach, centerDistance + projectile.radius + 24);
-    }
-    return maxReach;
-  }
-
-  private updateCameraZoom(dt: number) {
-    const largestReach = this.getLargestScreenBoundAOEReach();
-    const halfMinScreenWorldAtZoom1 = Math.min(this.canvas.width, this.canvas.height) * 0.5;
-    const safeHalfScreenRadius = halfMinScreenWorldAtZoom1 * this.CAMERA_SAFE_SCREEN_RATIO;
-    const targetZoom = largestReach > 0
-      ? Math.max(this.MIN_CAMERA_ZOOM, Math.min(1, safeHalfScreenRadius / largestReach))
-      : 1;
-
-    // Sticky zoom-out: once camera zooms out during a run, it never zooms back in.
-    if (targetZoom >= this.cameraZoom) return;
-
-    const dtFactor = dt / 16.67;
-    const lerp = Math.min(1, this.CAMERA_ZOOM_LERP * dtFactor);
-    this.cameraZoom += (targetZoom - this.cameraZoom) * lerp;
   }
 
   private isInView(position: Vector2D, radius: number, margin: number = 0): boolean {
@@ -481,12 +567,34 @@ export class GameEngine {
     }
 
     this.gameTime += deltaTime;
+    this.waveTimer += deltaTime;
+    if (this.shopInteractionCooldown > 0) {
+      this.shopInteractionCooldown = Math.max(0, this.shopInteractionCooldown - deltaTime);
+    }
 
-    this.updateCameraZoom(deltaTime);
+    if (this.waveTimer >= this.waveDuration) {
+      this.waveTimer = 0;
+      this.player.currentWave++;
+      this.player.rerollsThisWave = 0;
+      this.enemies = [];
+      this.projectiles = [];
+      // Cancel any active bounty target — the enemy no longer exists
+      if (this.eventManager.bountyTarget && !this.eventManager.bountyTarget.claimed) {
+        this.eventManager.bountyTarget = null;
+        this.eventManager.announce('BOUNTY ESCAPED', 'Target vanished with the wave', '#ff4444');
+      }
+      this.createExplosion(this.player.position.x, this.player.position.y, '#ffffff', 50);
+      soundManager.playExplosion();
+      this.eventManager.triggerWaveEvents(this.player.currentWave, this, true);
+      this.levelUp();
+      return; // Wait for level up selection before continuing
+    }
 
     // Increase difficulty over time from run performance only.
     const killBonus = Math.min(this.killCount / Math.max(1, this.balanceTuning.difficultyKillBonusDivisor), this.balanceTuning.difficultyKillBonusCap); // Capped bonus
-    this.difficultyMultiplier = 1 + (this.gameTime / 60000) * this.balanceTuning.difficultyTimeScalePerMinute + killBonus;
+    // Use current wave for base pacing to create distinct difficulty steps
+    const waveBonus = Math.max(0, this.player.currentWave - 1) * this.balanceTuning.difficultyTimeScalePerMinute;
+    this.difficultyMultiplier = 1 + waveBonus + killBonus;
 
     // Handle Combo Decay
     if (this.comboCount > 0 && !this.isOverdrive) {
@@ -519,6 +627,51 @@ export class GameEngine {
       }
     }
 
+    // Revive Invulnerability Timer
+    if (this.reviveInvulnTimer > 0) {
+      this.reviveInvulnTimer -= deltaTime;
+    }
+
+    // Armor Regen Logic
+    if (this.player.inventory.armorTier > 0 && this.player.armorHp < this.getMaxArmorHp()) {
+      if (this.gameTime - this.player.lastHitTime > 3000) {
+        // Regenerate 10% of max armor per second (or cap at max)
+        this.player.armorHp = Math.min(this.getMaxArmorHp(), this.player.armorHp + this.getMaxArmorHp() * 0.1 * (deltaTime / 1000));
+      }
+    }
+
+    // Shop interaction logic: player must press Enter inside the perimeter.
+    this.nearbyShop = null;
+    for (const shop of this.shops) {
+      if (this.shopInteractionCooldown > 0) continue;
+      const dx = this.player.position.x - shop.position.x;
+      const dy = this.player.position.y - shop.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < shop.radius) {
+        this.nearbyShop = shop;
+        break;
+      }
+    }
+
+    if (this.nearbyShop && this.keys.has('enter')) {
+      const dx = this.player.position.x - this.nearbyShop.position.x;
+      const dy = this.player.position.y - this.nearbyShop.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      this.gameState = 'SHOP';
+      this.player.velocity.x = 0;
+      this.player.velocity.y = 0;
+      // Bump player slightly outside the radius to prevent immediate re-trigger on unpause
+      const pushBase = this.nearbyShop.radius + 5; // 5px padding outside radius
+      const angle = dist > 0.0001 ? Math.atan2(dy, dx) : 0;
+      this.player.position.x = this.nearbyShop.position.x + Math.cos(angle) * pushBase;
+      this.player.position.y = this.nearbyShop.position.y + Math.sin(angle) * pushBase;
+      this.shopInteractionCooldown = 300;
+      this.keys.clear();
+      this.onShopEnter();
+      this.draw();
+      return; // Pause the engine loop here
+    }
+
     this.handleInput();
     this.updatePlayer(deltaTime);
     this.updatePortal(deltaTime);
@@ -542,9 +695,195 @@ export class GameEngine {
     if (this.screenShake > 0) this.screenShake -= deltaTime * 0.05;
     if (this.chromaticAberration > 0) this.chromaticAberration -= deltaTime * 0.05;
     if (this.dashTimer > 0) this.dashTimer -= deltaTime;
+    this.updateDashState(deltaTime);
     
     this.draw();
     this.requestUpdate();
+  }
+
+  updateDashState(dt: number) {
+    const ds = this.dashState;
+    const isMoving = Math.abs(this.player.velocity.x) > 0.1 || Math.abs(this.player.velocity.y) > 0.1;
+
+    this.syncDashChargeCapacity();
+
+    if (this.dashGhostTimer > 0) {
+      this.dashGhostTimer = Math.max(0, this.dashGhostTimer - dt);
+    }
+    if (this.dashMomentumTimer > 0) {
+      this.dashMomentumTimer = Math.max(0, this.dashMomentumTimer - dt);
+    }
+
+    // Multi-charge dash: recharge one charge per cooldown cycle.
+    if (ds.maxDashCharges > 1 && ds.dashCharges < ds.maxDashCharges) {
+      ds.dashRechargeTimer = Math.max(0, ds.dashRechargeTimer - dt);
+      if (ds.dashRechargeTimer <= 0) {
+        ds.dashCharges++;
+        if (ds.dashCharges < ds.maxDashCharges) {
+          ds.dashRechargeTimer = this.getEffectiveDashCooldownMs();
+        }
+      }
+    }
+
+    // Deadlock Burst: track stand-still time
+    if (ds.deadlockBurst) {
+      if (!isMoving && !this.isDashing) {
+        ds.standStillTimer += dt;
+        if (ds.standStillTimer >= 1000 && !ds.deadlockCharged) {
+          ds.deadlockCharged = true;
+          // Visual charge-ready indicator
+          this.createExplosion(this.player.position.x, this.player.position.y, '#ff6600', 8);
+        }
+      } else if (isMoving && !this.isDashing) {
+        ds.standStillTimer = 0;
+        // Don't unset deadlockCharged — it persists until used
+      }
+    }
+
+    // Echo Recall window decay
+    if (ds.echoRecallWindow > 0) {
+      ds.echoRecallWindow -= dt;
+      if (ds.echoRecallWindow <= 0) {
+        ds.echoRecallOrigin = null;
+      }
+    }
+
+    // Aegis Slip shield timer decay
+    if (ds.aegisShieldTimer > 0) {
+      ds.aegisShieldTimer -= dt;
+    }
+
+    // Prism Guard shard timer + damage
+    if (ds.prismShardTimer > 0) {
+      ds.prismShardTimer -= dt;
+      // Damage nearby enemies with rotating shards
+      const shardRadius = 100 * this.player.stats.area;
+      const shardDmg = 15 * this.player.stats.might * (dt / 300);
+      for (const enemy of this.enemies) {
+        if (enemy.id === 'dead') continue;
+        const dx = this.player.position.x - enemy.position.x;
+        const dy = this.player.position.y - enemy.position.y;
+        if (dx * dx + dy * dy < shardRadius * shardRadius) {
+          enemy.health -= shardDmg;
+          if (Math.random() < 0.05) enemy.hitFlash = 60;
+          if (enemy.health <= 0) this.killEnemy(enemy);
+        }
+      }
+    }
+
+    // Kinetic Refund window decay
+    if (ds.kineticRefundWindow > 0) {
+      ds.kineticRefundWindow -= dt;
+    }
+
+    // Null Wake trail decay + slow + visual particles
+    ds.nullWakeTrail = ds.nullWakeTrail.filter(p => {
+      p.life -= dt;
+      if (p.life <= 0) return false;
+      // Slow enemies near trail
+      for (const enemy of this.enemies) {
+        if (enemy.id === 'dead') continue;
+        const dx = p.x - enemy.position.x;
+        const dy = p.y - enemy.position.y;
+        if (dx * dx + dy * dy < 3600) { // 60px radius
+          enemy.slowMultiplier = Math.min(enemy.slowMultiplier || 1, 0.3);
+        }
+      }
+      // Ambient particles
+      if (Math.random() < 0.04) {
+        this.particles.push({
+          x: p.x + (Math.random() - 0.5) * 20,
+          y: p.y + (Math.random() - 0.5) * 20,
+          vx: 0, vy: -0.02,
+          life: 400, maxLife: 400,
+          color: 'rgba(0, 180, 255, 0.6)',
+          size: 2 + Math.random() * 2
+        });
+      }
+      return true;
+    });
+
+    // Afterimage minefield: tick and detonate
+    ds.afterimages = ds.afterimages.filter(a => {
+      a.timer -= dt;
+      // Tick particles
+      if (Math.random() < 0.1) {
+        this.particles.push({
+          x: a.x + (Math.random() - 0.5) * 15,
+          y: a.y + (Math.random() - 0.5) * 15,
+          vx: 0, vy: -0.03,
+          life: 300, maxLife: 300,
+          color: 'rgba(255, 100, 255, 0.7)',
+          size: 2 + Math.random() * 2
+        });
+      }
+      if (a.timer <= 0) {
+        // Detonate
+        const radius = 120 * this.player.stats.area;
+        const dmg = 50 * this.player.stats.might;
+        for (const enemy of this.enemies) {
+          if (enemy.id === 'dead') continue;
+          const dx = a.x - enemy.position.x;
+          const dy = a.y - enemy.position.y;
+          if (dx * dx + dy * dy < radius * radius) {
+            enemy.health -= dmg;
+            enemy.hitFlash = 120;
+            if (enemy.health <= 0) this.killEnemy(enemy);
+          }
+        }
+        this.createExplosion(a.x, a.y, '#ff44ff', 20);
+        this.screenShake = 5;
+        return false;
+      }
+      return true;
+    });
+
+    // Cataclysm Brake: trigger implosion when player stops after dash
+    if (ds.cataclysmPending && !this.isDashing) {
+      if (!isMoving) {
+        ds.cataclysmPending = false;
+        ds.cataclysmMoveTimer = 0;
+        const pullRadius = 200 * this.player.stats.area;
+        const dmg = 30 * this.player.stats.might * this.getDashImpactMultiplier();
+        for (const enemy of this.enemies) {
+          if (enemy.id === 'dead' || enemy.type === 'boss') continue;
+          const dx = this.player.position.x - enemy.position.x;
+          const dy = this.player.position.y - enemy.position.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < pullRadius * pullRadius) {
+            const dist = Math.sqrt(distSq) || 1;
+            enemy.velocity.x += (dx / dist) * 6;
+            enemy.velocity.y += (dy / dist) * 6;
+            enemy.health -= dmg;
+            enemy.hitFlash = 100;
+            if (enemy.health <= 0) this.killEnemy(enemy);
+          }
+        }
+        // Implosion visual
+        for (let i = 0; i < 24; i++) {
+          const a = (i / 24) * Math.PI * 2;
+          const dist = pullRadius * 0.8;
+          this.particles.push({
+            x: this.player.position.x + Math.cos(a) * dist,
+            y: this.player.position.y + Math.sin(a) * dist,
+            vx: -Math.cos(a) * 0.5,
+            vy: -Math.sin(a) * 0.5,
+            life: 500, maxLife: 500,
+            color: '#8b00ff',
+            size: 3 + Math.random() * 3
+          });
+        }
+        this.screenShake = 12;
+        soundManager.playExplosion();
+      } else {
+        // Cancel implosion if player keeps moving after dash.
+        ds.cataclysmMoveTimer += dt;
+        if (ds.cataclysmMoveTimer >= 200) {
+          ds.cataclysmPending = false;
+          ds.cataclysmMoveTimer = 0;
+        }
+      }
+    }
   }
 
   updateRegen(dt: number) {
@@ -627,22 +966,184 @@ export class GameEngine {
     if (this.keys.has('a') || this.keys.has('arrowleft')) move.x -= 1;
     if (this.keys.has('d') || this.keys.has('arrowright')) move.x += 1;
 
-    if (this.keys.has(' ') && this.dashTimer <= 0 && (move.x !== 0 || move.y !== 0)) {
-      this.isDashing = true;
-      this.dashTimer = this.dashCooldown * this.player.stats.dash_cooldown;
-      const mag = Math.sqrt(move.x * move.x + move.y * move.y);
-      this.dashVelocity = { x: (move.x / mag) * 15, y: (move.y / mag) * 15 };
-      this.chromaticAberration = 10;
+    const ds = this.dashState;
+    this.syncDashChargeCapacity();
+    const isMoving = move.x !== 0 || move.y !== 0;
+    const spaceDown = this.keys.has(' ');
+    const spacePressed = spaceDown && !this.dashSpaceWasDown;
+
+    // Echo Recall: re-press space during recall window to blink back
+    if (spacePressed && ds.echoRecall && ds.echoRecallWindow > 0 && ds.echoRecallOrigin && !this.isDashing) {
+      // Teleport back
+      this.player.position.x = ds.echoRecallOrigin.x;
+      this.player.position.y = ds.echoRecallOrigin.y;
+      ds.echoRecallOrigin = null;
+      ds.echoRecallWindow = 0;
+      this.chromaticAberration = 15;
       soundManager.playDash();
-      setTimeout(() => { this.isDashing = false; }, this.dashDuration);
+      this.createExplosion(this.player.position.x, this.player.position.y, '#a855f7', 15);
     }
+    // Normal dash activation
+    else if (spacePressed && isMoving && !this.isDashing) {
+      // Use charge system when max charges are above one.
+      const canDash = ds.maxDashCharges > 1
+        ? ds.dashCharges > 0
+        : this.dashTimer <= 0;
+
+      if (canDash) {
+        this.isDashing = true;
+        ds.bulwarkRamHit = false;
+
+        if (ds.maxDashCharges > 1) {
+          ds.dashCharges--;
+          if (ds.dashCharges < ds.maxDashCharges && ds.dashRechargeTimer <= 0) {
+            ds.dashRechargeTimer = this.getEffectiveDashCooldownMs();
+          }
+        } else {
+          this.dashTimer = this.getEffectiveDashCooldownMs();
+        }
+
+        const dashSpeedMult = 1 + this.getPermanentUpgradeLevel('perm_dash_speed') * 0.08;
+        const dashDurationBonus = this.getPermanentUpgradeLevel('perm_dash_duration') * 30;
+
+        // Inertia Vault: scale speed with current move speed
+        let dashSpeed = 15 * dashSpeedMult;
+        let dashDur = this.dashDuration + dashDurationBonus;
+        if (ds.inertiaVault) {
+          const currentSpeed = Math.sqrt(this.player.velocity.x ** 2 + this.player.velocity.y ** 2);
+          const speedBonus = Math.min(currentSpeed / this.player.speed, 1.5);
+          dashSpeed = (15 + speedBonus * 8) * dashSpeedMult;
+          dashDur = this.dashDuration + dashDurationBonus + speedBonus * 80;
+        }
+
+        const mag = Math.sqrt(move.x * move.x + move.y * move.y);
+        this.dashVelocity = { x: (move.x / mag) * dashSpeed, y: (move.y / mag) * dashSpeed };
+        this.dashStartPos = { x: this.player.position.x, y: this.player.position.y };
+        this.chromaticAberration = 10;
+        soundManager.playDash();
+
+        // Deadlock Burst: if charged, trigger shockwave at start
+        if (ds.deadlockBurst && ds.deadlockCharged) {
+          ds.deadlockCharged = false;
+          ds.standStillTimer = 0;
+          const radius = 180 * this.player.stats.area;
+          const dmg = 60 * this.player.stats.might * this.getDashImpactMultiplier();
+          for (const enemy of this.enemies) {
+            if (enemy.id === 'dead') continue;
+            const dx = this.player.position.x - enemy.position.x;
+            const dy = this.player.position.y - enemy.position.y;
+            if (dx * dx + dy * dy < radius * radius) {
+              enemy.health -= dmg;
+              enemy.hitFlash = 150;
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              enemy.velocity.x -= (dx / dist) * 8;
+              enemy.velocity.y -= (dy / dist) * 8;
+              if (enemy.health <= 0) this.killEnemy(enemy);
+            }
+          }
+          // Shockwave visual particles
+          for (let i = 0; i < 30; i++) {
+            const a = (i / 30) * Math.PI * 2;
+            this.particles.push({
+              x: this.player.position.x + Math.cos(a) * 30,
+              y: this.player.position.y + Math.sin(a) * 30,
+              vx: Math.cos(a) * 0.4,
+              vy: Math.sin(a) * 0.4,
+              life: 600, maxLife: 600,
+              color: '#ff6600',
+              size: 4 + Math.random() * 3
+            });
+          }
+          this.screenShake = 15;
+        }
+
+        // Aegis Slip: activate shield
+        if (ds.aegisSlip) {
+          ds.aegisShieldTimer = dashDur + 350;
+        }
+
+        // Echo Recall: store origin
+        if (ds.echoRecall) {
+          ds.echoRecallOrigin = { ...this.dashStartPos };
+          ds.echoRecallWindow = 700;
+        }
+
+        // Prism Guard: activate shards
+        if (ds.prismGuard) {
+          ds.prismShardTimer = 2000;
+        }
+
+        // Cataclysm Brake: mark pending
+        if (ds.cataclysmBrake) {
+          ds.cataclysmPending = true;
+          ds.cataclysmMoveTimer = 0;
+        }
+
+        // Kinetic Refund: open window
+        if (ds.kineticRefund) {
+          ds.kineticRefundWindow = 1500;
+        }
+
+        const dashStartSnapshot = { ...this.dashStartPos };
+        setTimeout(() => {
+          this.isDashing = false;
+          const dashEndSnapshot = { x: this.player.position.x, y: this.player.position.y };
+
+          const ghostFrames = this.getPermanentUpgradeLevel('perm_dash_ghost') * 80;
+          if (ghostFrames > 0) {
+            this.dashGhostTimer = ghostFrames;
+          }
+
+          const repairAmount = this.getPermanentUpgradeLevel('perm_dash_repair') * 3;
+          if (repairAmount > 0 && this.player.health > 0) {
+            this.player.health = Math.min(this.player.maxHealth, this.player.health + repairAmount);
+          }
+
+          if (this.getPermanentUpgradeLevel('perm_dash_momentum') > 0) {
+            this.dashMomentumTimer = 1500;
+          }
+
+          // Afterimage Minefield: drop afterimages along dash path
+          if (ds.afterimageMinefield) {
+            const dx = dashEndSnapshot.x - dashStartSnapshot.x;
+            const dy = dashEndSnapshot.y - dashStartSnapshot.y;
+            for (let i = 0; i < 3; i++) {
+              const t = (i + 1) / 4;
+              ds.afterimages.push({
+                x: dashStartSnapshot.x + dx * t,
+                y: dashStartSnapshot.y + dy * t,
+                timer: 500
+              });
+            }
+          }
+          // Null Wake: leave trail
+          if (ds.nullWake) {
+            const dx = dashEndSnapshot.x - dashStartSnapshot.x;
+            const dy = dashEndSnapshot.y - dashStartSnapshot.y;
+            for (let i = 0; i < 8; i++) {
+              const t = i / 7;
+              ds.nullWakeTrail.push({
+                x: dashStartSnapshot.x + dx * t,
+                y: dashStartSnapshot.y + dy * t,
+                life: 1200
+              });
+            }
+          }
+        }, dashDur);
+      }
+    }
+
+    this.dashSpaceWasDown = spaceDown;
 
     // Smooth velocity interpolation for buttery movement
     const smoothing = 0.18;
-    if (move.x !== 0 || move.y !== 0) {
+    const momentumBoost = this.dashMomentumTimer > 0
+      ? 1 + this.getPermanentUpgradeLevel('perm_dash_momentum') * 0.06
+      : 1;
+    if (isMoving) {
       const mag = Math.sqrt(move.x * move.x + move.y * move.y);
-      const targetVx = (move.x / mag) * this.player.speed;
-      const targetVy = (move.y / mag) * this.player.speed;
+      const targetVx = (move.x / mag) * this.player.speed * momentumBoost;
+      const targetVy = (move.y / mag) * this.player.speed * momentumBoost;
       this.player.velocity.x += (targetVx - this.player.velocity.x) * smoothing;
       this.player.velocity.y += (targetVy - this.player.velocity.y) * smoothing;
       // Update target rotation for smooth turning
@@ -661,107 +1162,74 @@ export class GameEngine {
     if (this.isDashing) {
       this.player.position.x += this.dashVelocity.x * dtFactor;
       this.player.position.y += this.dashVelocity.y * dtFactor;
+
+      // Phase Laceration: damage enemies crossed during dash
+      if (this.dashState.phaseLaceration) {
+        const sliceDmg = 40 * this.player.stats.might * this.getDashImpactMultiplier();
+        for (const enemy of this.enemies) {
+          if (enemy.id === 'dead') continue;
+          const dx = this.player.position.x - enemy.position.x;
+          const dy = this.player.position.y - enemy.position.y;
+          const distSq = dx * dx + dy * dy;
+          const touchDist = (this.player.radius + enemy.radius) * 1.5;
+          if (distSq < touchDist * touchDist) {
+            enemy.health -= sliceDmg * (dt / 200);
+            enemy.hitFlash = 80;
+            enemy.slowMultiplier = 0.4;
+            if (enemy.health <= 0) this.killEnemy(enemy);
+          }
+        }
+      }
+
+      // Bulwark Ram: first enemy hit gets knocked back hard
+      if (this.dashState.bulwarkRam && !this.dashState.bulwarkRamHit) {
+        for (const enemy of this.enemies) {
+          if (enemy.id === 'dead') continue;
+          const dx = this.player.position.x - enemy.position.x;
+          const dy = this.player.position.y - enemy.position.y;
+          const distSq = dx * dx + dy * dy;
+          const touchDist = this.player.radius + enemy.radius;
+          if (distSq < touchDist * touchDist) {
+            this.dashState.bulwarkRamHit = true;
+            const dist = Math.sqrt(distSq) || 1;
+            enemy.velocity.x -= (dx / dist) * 20;
+            enemy.velocity.y -= (dy / dist) * 20;
+            enemy.health -= 80 * this.player.stats.might * this.getDashImpactMultiplier();
+            enemy.hitFlash = 300;
+            enemy.slowMultiplier = 0.1; // stun-like
+            this.screenShake = 10;
+            this.createExplosion(enemy.position.x, enemy.position.y, '#ffaa00', 12);
+            if (enemy.health <= 0) this.killEnemy(enemy);
+            break;
+          }
+        }
+      }
     } else {
       this.player.position.x += this.player.velocity.x * dtFactor;
       this.player.position.y += this.player.velocity.y * dtFactor;
     }
 
-    // === EXFILL STATE MACHINE (multiple portals) ===
-    if (this.portals.length > 0) {
-      switch (this.exfillState) {
-        case 'idle': {
-          // Check if player is inside ANY active portal's zone
-          let insidePortalIndex = -1;
-          for (let i = 0; i < this.portals.length; i++) {
-            const p = this.portals[i];
-            if (!p.active) continue;
-            const dx = this.player.position.x - p.position.x;
-            const dy = this.player.position.y - p.position.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < this.EXFILL_ZONE_RADIUS) {
-              insidePortalIndex = i;
-              break;
-            }
-          }
-          if (insidePortalIndex >= 0) {
-            // Accumulate stay time
-            if (this.activePortalIndex === insidePortalIndex) {
-              this.exfillZoneStayTimer += dt;
-            } else {
-              // Switched portals or first entry
-              this.activePortalIndex = insidePortalIndex;
-              this.exfillZoneStayTimer = dt;
-            }
-            // After 5 continuous seconds, activate
-            if (this.exfillZoneStayTimer >= this.EXFILL_ZONE_STAY_REQUIRED) {
-              this.exfillState = 'activating';
-              this.exfillTimer = this.EXFILL_ACTIVATION_TIME;
-              this.exfillZoneStayTimer = 0;
-              soundManager.playTreasureSpawn();
-            }
-          } else {
-            // Left all zones — reset stay timer
-            this.exfillZoneStayTimer = 0;
-            this.activePortalIndex = -1;
-          }
-          break;
-        }
-
-        case 'activating':
-          // Countdown continues regardless of player position (leaving does NOT cancel)
-          this.exfillTimer -= dt;
-          if (this.exfillTimer <= 0) {
-            this.exfillState = 'escaping';
-            this.exfillEscapeTimer = this.EXFILL_ESCAPE_TIME;
-            this.exfillExtractTimer = 0;
-            soundManager.playLevelUp();
-          }
-          break;
-
-        case 'escaping': {
-          // Window timer counts down
-          this.exfillEscapeTimer -= dt;
-          const ap = this.portals[this.activePortalIndex];
-          const adx = this.player.position.x - ap.position.x;
-          const ady = this.player.position.y - ap.position.y;
-          const adist = Math.sqrt(adx * adx + ady * ady);
-          // Player must stay inside portal radius for 5 continuous seconds
-          if (adist < this.EXFILL_ZONE_RADIUS) {
-            this.exfillExtractTimer += dt;
-            if (this.exfillExtractTimer >= this.EXFILL_EXTRACT_STAY_REQUIRED) {
-              this.gameState = 'MENU';
-              this.onExfill(this.player.coins, this.player.level);
-              return;
-            }
-          } else {
-            // Left the zone — reset extract progress
-            this.exfillExtractTimer = 0;
-          }
-          // Timer expired → portal disabled
-          if (this.exfillEscapeTimer <= 0) {
-            this.exfillState = 'disabled';
-            this.exfillDisabledTimer = this.EXFILL_DISABLED_TIME;
-            this.exfillExtractTimer = 0;
-            ap.active = false;
-            soundManager.playDamage();
-          }
-          break;
-        }
-
-        case 'disabled':
-          // 30s cooldown before the failed portal reappears
-          this.exfillDisabledTimer -= dt;
-          if (this.exfillDisabledTimer <= 0) {
-            this.portals[this.activePortalIndex].active = true;
-            this.activePortalIndex = -1;
-            this.exfillState = 'idle';
-            soundManager.playTreasureSpawn();
-          }
-          break;
-      }
-    }
+    // EXFILL IS NOW HANDLED IN UI between waves
 
     this.updateCameraPosition();
+  }
+
+  triggerExfill() {
+    this.gameState = 'MENU';
+    this.onExfill(this.player.coins, this.player.level);
+  }
+
+  exitShop() {
+    this.gameState = 'PLAYING';
+    this.paused = false;
+    this.lastTime = performance.now();
+    this.keys.clear();
+    this.requestUpdate();
+  }
+
+  abortExfill() {
+    // Current wave-based exfill doesn't require a stateful abort on the engine.
+    // This is a stub to satisfy EventManager calls.
   }
 
   updatePortal(dt: number) {
@@ -799,7 +1267,8 @@ export class GameEngine {
       }
       
       const slowMultiplier = enemy.slowMultiplier || 1;
-      const speedScale = enemy.type === 'boss' ? 1 : (1 + (this.difficultyMultiplier - 1) * 0.4);
+      // Cap speed scaling to a max of 2.0x, softly scaling with difficulty
+      const speedScale = enemy.type === 'boss' ? 1 : Math.min(2.0, 1 + (this.difficultyMultiplier - 1) * 0.2);
       const baseSpeed = enemy.speed * speedScale;
       const timeWarpFactor = Math.max(0.3, 1 - this.player.stats.timeWarp);
       let effectiveSpeed = baseSpeed * slowMultiplier * timeWarpFactor;
@@ -823,6 +1292,8 @@ export class GameEngine {
   }
 
   updateProjectiles(dt: number) {
+    const dtFactor = dt / 16.67;
+
     // Reset hitEnemies for projectiles with damage tick intervals (e.g. gravity well, frost aura)
     for (const p of this.projectiles) {
       if (p.damageTickInterval && p.hitEnemies && p.lastDamageTick !== undefined) {
@@ -855,8 +1326,8 @@ export class GameEngine {
           const currentSpeed = Math.sqrt(p.velocity.x * p.velocity.x + p.velocity.y * p.velocity.y);
           const targetVx = (dx / dist) * currentSpeed;
           const targetVy = (dy / dist) * currentSpeed;
-          p.velocity.x += (targetVx - p.velocity.x) * 0.1; // Steering force
-          p.velocity.y += (targetVy - p.velocity.y) * 0.1;
+          p.velocity.x += (targetVx - p.velocity.x) * 0.1 * dtFactor; // Steering force
+          p.velocity.y += (targetVy - p.velocity.y) * 0.1 * dtFactor;
         }
       }
       
@@ -869,8 +1340,8 @@ export class GameEngine {
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < p.radius && dist > 10) {
             const pullForce = (1 - dist / p.radius) * 2;
-            enemy.velocity.x += (dx / dist) * pullForce;
-            enemy.velocity.y += (dy / dist) * pullForce;
+            enemy.velocity.x += (dx / dist) * pullForce * dtFactor;
+            enemy.velocity.y += (dy / dist) * pullForce * dtFactor;
           }
         }
       }
@@ -895,8 +1366,8 @@ export class GameEngine {
         if (bounced) p.penetration--;
       }
       
-      p.position.x += p.velocity.x;
-      p.position.y += p.velocity.y;
+      p.position.x += p.velocity.x * dtFactor;
+      p.position.y += p.velocity.y * dtFactor;
       this.clampProjectileRadius(p);
       p.duration -= dt;
       return p.duration > 0;
@@ -1079,7 +1550,9 @@ export class GameEngine {
     this.player.experience += gem.value * this.getEffectiveXPMultiplier();
     soundManager.playCollect();
     if (this.player.experience >= this.player.experienceToNextLevel) {
-      this.levelUp();
+      // We don't trigger levelUp from XP anymore
+      this.player.experience -= this.player.experienceToNextLevel;
+      this.player.experienceToNextLevel = this.getXPRequiredForLevel(this.player.level + 1); // just increase req, or keep tracking
     }
   }
 
@@ -1095,15 +1568,32 @@ export class GameEngine {
   }
 
   generateUpgrades(isTreasure: boolean = false) {
-    const statUpgrades = UPGRADES.map(up => ({ ...up, type: 'stat' }));
+    if (!(this.player.bannedUpgrades instanceof Set)) {
+      this.player.bannedUpgrades = new Set(this.player.bannedUpgrades as any);
+    }
+    const statUpgrades = UPGRADES.map(up => ({ ...up, type: 'stat' }))
+      .filter(u => !this.player.bannedUpgrades.has(u.id));
     const weaponUpgrades = WEAPON_DEFINITIONS
       .filter(def => !this.player.weapons.find(w => w.id === def.id))
+      .filter(def => !this.player.bannedUpgrades.has(def.id))
       .map(def => ({ id: def.id, name: def.name, description: def.description, type: 'weapon', rarity: 'common' }));
     const existingWeaponUpgrades = this.player.weapons
       .filter(w => w.level < w.maxLevel)
       .map(w => ({ id: w.id, name: `${w.name} (Lvl ${w.level + 1})`, description: 'Increases damage and efficiency.', type: 'weapon_upgrade', rarity: 'common' }));
-    
-    const pool = [...statUpgrades, ...weaponUpgrades, ...existingWeaponUpgrades];
+
+    // Dash upgrades — filter out already-owned ones
+    const ownedDashIds = new Set(
+      DASH_UPGRADES.filter(d => {
+        const key = d.id.replace('dash_', '') as keyof typeof this.dashState;
+        const camelKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+        return (this.dashState as any)[camelKey] === true;
+      }).map(d => d.id)
+    );
+    const dashPool = DASH_UPGRADES
+      .filter(d => !ownedDashIds.has(d.id) && !this.player.bannedUpgrades.has(d.id))
+      .map(d => ({ ...d, type: 'dash' }));
+
+    const pool = [...statUpgrades, ...weaponUpgrades, ...existingWeaponUpgrades, ...dashPool];
     
     // Weighted selection based on rarity
     const getWeight = (rarity: string = 'common') => {
@@ -1126,7 +1616,67 @@ export class GameEngine {
         }
       }
     }
+
+    if (!isTreasure) {
+      selected.push({
+        id: 'full_heal',
+        name: 'Full Repair',
+        description: 'Fully restores health without improving stats or weapons.',
+        type: 'heal',
+        icon: 'heart',
+        rarity: 'common'
+      });
+    }
+
     return selected;
+  }
+
+  rerollUpgrades() {
+    const rerollCost = this.getRerollCost();
+    if (rerollCost !== null && this.player.coins >= rerollCost) {
+      soundManager.playUIClick();
+      this.player.coins -= rerollCost;
+      this.player.rerollsThisWave++;
+      return this.generateUpgrades();
+    }
+    return [];
+  }
+
+  getRerollCost() {
+    if (this.player.rerollsThisWave >= this.MAX_REROLLS_PER_WAVE) {
+      return null;
+    }
+
+    return this.REROLL_COSTS[this.player.rerollsThisWave] ?? this.REROLL_COSTS[this.REROLL_COSTS.length - 1];
+  }
+
+  getRemainingRerollsThisWave() {
+    return Math.max(0, this.MAX_REROLLS_PER_WAVE - this.player.rerollsThisWave);
+  }
+
+  banishUpgrade(upgradeId: string) {
+    if (this.player.banishes > 0) {
+      soundManager.playUIClick();
+      this.player.banishes--;
+      this.player.bannedUpgrades.add(upgradeId);
+      return this.generateUpgrades();
+    }
+    return [];
+  }
+
+  skipUpgrades() {
+    if (this.player.skips > 0) {
+      soundManager.playUIClick();
+      this.player.skips--;
+      // Grant a small XP reward based on level
+      const xpReward = 20 * this.player.level * this.getEffectiveXPMultiplier();
+      this.player.experience += xpReward;
+      this.gameState = 'PLAYING';
+      this.lastTime = performance.now();
+      this.requestUpdate();
+      return true;
+    }
+    return false;
   }
 
   applyUpgrade(upgrade: any) {
@@ -1180,6 +1730,8 @@ export class GameEngine {
         (this.player.stats as any)[upgrade.id] += 0.15;
         if (upgrade.id === 'speed') this.player.speed += 0.3;
       }
+    } else if (upgrade.type === 'heal') {
+      this.player.health = this.player.maxHealth;
     } else if (upgrade.type === 'weapon') {
       const def = WEAPON_DEFINITIONS.find(d => d.id === upgrade.id)!;
       this.player.weapons.push({
@@ -1204,6 +1756,17 @@ export class GameEngine {
           weapon.cooldown *= 0.6;
         }
       }
+    } else if (upgrade.type === 'dash') {
+      // Map dash_snake_case id to camelCase dashState key
+      const rawKey = upgrade.id.replace('dash_', '');
+      const camelKey = rawKey.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase()) as keyof DashState;
+      (this.dashState as any)[camelKey] = true;
+      // Twin Vector: grant extra dash charge
+      if (upgrade.id === 'dash_twin_vector') {
+        this.syncDashChargeCapacity();
+        this.dashState.dashCharges = this.dashState.maxDashCharges;
+      }
+      this.player.upgrades.push({ ...upgrade, level: 1 } as any);
     }
     this.gameState = 'PLAYING';
     this.lastTime = performance.now();
@@ -1980,6 +2543,7 @@ export class GameEngine {
 
     // Assign source weapon and clamp oversized visuals so projectiles stay readable.
     for (let i = initialProjectileCount; i < this.projectiles.length; i++) {
+      this.projectiles[i].damage *= this.DEFAULT_WEAPON_DAMAGE_MULTIPLIER;
         this.projectiles[i].sourceWeaponId = weapon.id;
         this.clampProjectileRadius(this.projectiles[i]);
     }
@@ -2019,8 +2583,9 @@ export class GameEngine {
           }
           if (projectile.id === 'sonic') {
             // Apply knockback
-            const pushX = dx / Math.sqrt(distSq) * 10;
-            const pushY = dy / Math.sqrt(distSq) * 10;
+            const dist = Math.max(0.0001, Math.sqrt(distSq));
+            const pushX = dx / dist * 10;
+            const pushY = dy / dist * 10;
             enemy.velocity.x -= pushX; // Move away from projectile
             enemy.velocity.y -= pushY;
           }
@@ -2090,10 +2655,16 @@ export class GameEngine {
       const radiusSum = this.player.radius + enemy.radius;
       
       if (distSq < radiusSum * radiusSum) {
+        if (this.reviveInvulnTimer > 0) continue; // Skip damage if reviving
+        // Aegis Slip or Ghost Frame: invulnerable windows
+        if (this.dashState.aegisShieldTimer > 0) continue;
+        if (this.dashGhostTimer > 0) continue;
+
+        let damageAmount = 0;
         if (enemy.damagePercent) {
           // Bosses deal % max HP damage with a 1-second cooldown (i-frames)
           if (performance.now() - this.lastBossHitTime > 1000) {
-            this.player.health -= this.player.maxHealth * enemy.damagePercent * this.balanceTuning.bossDamagePercentMultiplier * this.balanceTuning.playerDamageTakenMultiplier;
+            damageAmount = this.player.maxHealth * enemy.damagePercent * this.balanceTuning.bossDamagePercentMultiplier * this.balanceTuning.playerDamageTakenMultiplier;
             this.lastBossHitTime = performance.now();
             this.screenShake = 20;
             this.chromaticAberration = 15;
@@ -2101,48 +2672,81 @@ export class GameEngine {
           }
         } else {
           // Regular enemies (dt-normalized)
-          this.player.health -= enemy.damage * this.balanceTuning.playerDamageTakenMultiplier * 0.05 * (dt / 16.67);
+          damageAmount = enemy.damage * this.balanceTuning.playerDamageTakenMultiplier * 0.05 * (dt / 16.67);
           this.screenShake = 5;
           this.chromaticAberration = 5;
           soundManager.playDamage();
         }
 
-        if (this.player.health <= 0) {
-          if ((this.player.permanentUpgrades['perm_revive'] || 0) > 0 && !(this as any).hasRevived) {
-            // Emergency Reboot!
-            (this as any).hasRevived = true;
-            this.player.health = this.player.maxHealth * 0.5; // 50% HP
-            
-            // Big visual & audio effect
-            soundManager.playLevelUp(); // Temporary sound for revive
-            this.screenShake = 30;
-            this.createExplosion(this.player.position.x, this.player.position.y, '#00ff00', 100);
-            
-            this.damageTexts.push({
-              x: this.player.position.x,
-              y: this.player.position.y - 40,
-              text: "EMERGENCY REBOOT!",
-              life: 2000,
-              maxLife: 2000,
-              color: '#00ff00'
-            });
-            
-            // clear nearby enemies to prevent instant re-death
-            for (const e of this.enemies) {
-               const ex = this.player.position.x - e.position.x;
-               const ey = this.player.position.y - e.position.y;
-               if (ex * ex + ey * ey < 40000) { // 200px radius
-                 e.health = 0;
-                 if (e.type !== 'boss' && e.type !== 'titan') {
-                   this.killEnemy(e);
-                 }
-               }
+        if (damageAmount > 0) {
+          const dashGuardLevel = this.getPermanentUpgradeLevel('perm_dash_guard');
+          if ((this.isDashing || this.dashGhostTimer > 0) && dashGuardLevel > 0) {
+            const reduction = Math.min(0.75, dashGuardLevel * 0.12);
+            damageAmount *= (1 - reduction);
+          }
+
+          this.player.lastHitTime = this.gameTime;
+          if (this.player.armorHp > 0) {
+            if (damageAmount <= this.player.armorHp) {
+              this.player.armorHp -= damageAmount;
+              damageAmount = 0;
+            } else {
+              damageAmount -= this.player.armorHp;
+              this.player.armorHp = 0;
             }
+          }
+          this.player.health -= damageAmount;
+        }
+
+        if (this.player.health <= 0) {
+          if (this.player.inventory.hasRevive) {
+            this.player.inventory.hasRevive = false;
+            this.player.health = this.player.maxHealth * 0.5;
+            this.reviveInvulnTimer = 3000; // 3 seconds invulnerability
+            this.createExplosion(this.player.position.x, this.player.position.y, '#00ffff', 30);
+            soundManager.playLevelUp();
           } else {
-            this.gameOver();
+            this.processPlayerDeath();
+            if (this.gameState === 'GAME_OVER') return;
           }
         }
       }
+    }
+  }
+
+  getMaxArmorHp(): number {
+    switch (this.player.inventory.armorTier) {
+      case 1: return 50;
+      case 2: return 100;
+      case 3: return 200;
+      default: return 0;
+    }
+  }
+
+  activateNuke() {
+    if (this.player.inventory.nukeCount > 0) {
+      this.player.inventory.nukeCount--;
+      this.screenShake = 100;
+      this.chromaticAberration = 50;
+      
+      const viewportWidth = this.getViewportWorldWidth();
+      const viewportHeight = this.getViewportWorldHeight();
+      const left = this.camera.x;
+      const right = this.camera.x + viewportWidth;
+      const top = this.camera.y;
+      const bottom = this.camera.y + viewportHeight;
+
+      // Kill enemies on screen
+      for (const enemy of this.enemies) {
+        if (enemy.id !== 'dead' && enemy.type !== 'boss' && enemy.type !== 'titan') {
+          if (enemy.position.x >= left && enemy.position.x <= right && enemy.position.y >= top && enemy.position.y <= bottom) {
+            enemy.health = 0;
+            this.createExplosion(enemy.position.x, enemy.position.y, '#ff4400', 3);
+            this.killEnemy(enemy);
+          }
+        }
+      }
+      soundManager.playExplosion();
     }
   }
 
@@ -2151,6 +2755,12 @@ export class GameEngine {
     // Clean up orbit damage cooldowns for this enemy
     this.orbitDamageCooldowns.delete(`orbit:${enemy.id}`);
     this.orbitDamageCooldowns.delete(`scythe:${enemy.id}`);
+
+    // Kinetic Refund: kills during window refund dash cooldown
+    if (this.dashState.kineticRefundWindow > 0 && this.dashTimer > 0) {
+      const refund = this.getEffectiveDashCooldownMs() * 0.15;
+      this.dashTimer = Math.max(0, this.dashTimer - refund);
+    }
 
     // Vampirism: heal on kill
     if (this.player.stats.vampirism > 0) {
@@ -2296,8 +2906,8 @@ export class GameEngine {
 
       if (this.enemies.length >= this.MAX_ENEMIES) return;
 
-      const weaponCount = Math.max(1, this.player.weapons.length);
-      const spawnMultiplier = 1 + (weaponCount - 1) * this.balanceTuning.weaponSpawnStep;
+      // Scale spawn rate with difficulty, completely ignoring weapon count
+      const spawnMultiplier = 1 + (this.difficultyMultiplier - 1) * 0.5;
       const guaranteedSpawns = Math.floor(spawnMultiplier);
       const extraSpawnChance = spawnMultiplier - guaranteedSpawns;
       // Supports infinite scaling with 0.5 steps: 1x, 1.5x, 2x, 2.5x, 3x, ...
@@ -2364,7 +2974,8 @@ export class GameEngine {
           health: (isHolder ? 50 : config.health) * this.difficultyMultiplier * this.balanceTuning.enemyHealthMultiplier,
           maxHealth: (isHolder ? 50 : config.health) * this.difficultyMultiplier * this.balanceTuning.enemyHealthMultiplier,
           color: isHolder ? '#d4a373' : config.color,
-          damage: (isHolder ? 0 : config.damage) * this.difficultyMultiplier * this.balanceTuning.enemyDamageMultiplier,
+          // Damage scales half as fast as health to prevent 1-shotting at high waves
+          damage: (isHolder ? 0 : config.damage) * (1 + (this.difficultyMultiplier - 1) * 0.5) * this.balanceTuning.enemyDamageMultiplier,
           speed: isHolder ? 0.5 : config.speed,
           experienceValue: isHolder ? 0 : config.xp,
           type,
@@ -2420,6 +3031,55 @@ export class GameEngine {
     });
   }
 
+  // ─── Centralised death handler ─────────────────────────────
+  // All event damage sources (Nano Plague, Firewall, Data Storm)
+  // MUST call this instead of gameOver() directly so that the
+  // perm_revive mechanic is honoured consistently.
+  processPlayerDeath() {
+    if (this.player.health > 0) return; // Safety guard — still alive
+    if (this.player.inventory.hasRevive) {
+      this.player.inventory.hasRevive = false;
+      this.player.health = this.player.maxHealth * 0.5;
+      this.reviveInvulnTimer = 3000;
+      soundManager.playLevelUp();
+      this.screenShake = 20;
+      this.chromaticAberration = 15;
+      this.createExplosion(this.player.position.x, this.player.position.y, '#00ffff', 30);
+      return;
+    }
+    if ((this.player.permanentUpgrades['perm_revive'] || 0) > 0 && !this.hasRevived) {
+      this.hasRevived = true;
+      this.player.health = this.player.maxHealth * 0.5;
+      this.reviveInvulnTimer = 3000;
+      soundManager.playLevelUp();
+      this.screenShake = 30;
+      this.createExplosion(this.player.position.x, this.player.position.y, '#00ff00', 100);
+      this.damageTexts.push({
+        x: this.player.position.x,
+        y: this.player.position.y - 40,
+        text: 'EMERGENCY REBOOT!',
+        life: 2000,
+        maxLife: 2000,
+        color: '#00ff00'
+      });
+      // Clear nearby enemies to prevent instant re-death
+      for (const e of this.enemies) {
+        const ex = this.player.position.x - e.position.x;
+        const ey = this.player.position.y - e.position.y;
+        if (ex * ex + ey * ey < 40000) {
+          e.health = 0;
+          if (e.type !== 'boss' && e.type !== 'titan') {
+            this.killEnemy(e);
+          }
+        }
+      }
+    } else {
+      this.gameOver();
+    }
+  }
+
+
+
   draw() {
     // Clear background — grid draws its own base
     this.ctx.fillStyle = '#050505';
@@ -2440,6 +3100,8 @@ export class GameEngine {
     this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
     this.ctx.scale(this.cameraZoom, this.cameraZoom);
     this.ctx.translate(-this.player.position.x, -this.player.position.y);
+
+    this.drawShops();
 
     // Draw Items
     for (const item of this.items) {
@@ -2462,208 +3124,7 @@ export class GameEngine {
     }
     this.ctx.globalAlpha = 1.0;
 
-    // Draw Portals (based on exfill state)
-    for (let pi = 0; pi < this.portals.length; pi++) {
-      const portal = this.portals[pi];
-      const { x, y } = portal.position;
-      const r = portal.radius;
-      const time = Date.now() / 1000;
-      const isActivePortal = pi === this.activePortalIndex;
 
-      if (!portal.active && isActivePortal && this.exfillState === 'disabled') {
-        // This portal is disabled — show faint ghost outline
-        this.ctx.save();
-        this.ctx.globalAlpha = 0.15 + Math.sin(time * 2) * 0.05;
-        this.ctx.strokeStyle = '#ff4444';
-        this.ctx.setLineDash([5, 10]);
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.setLineDash([]);
-        
-        // Disabled label
-        this.ctx.globalAlpha = 0.5;
-        this.ctx.fillStyle = '#ff4444';
-        this.ctx.font = 'bold 14px Inter';
-        this.ctx.textAlign = 'center';
-        const disabledTimeLeft = Math.ceil(this.exfillDisabledTimer / 1000);
-        this.ctx.fillText(`EXFILL DISABLED: ${disabledTimeLeft}s`, x, y - r - 15);
-        this.ctx.font = '10px Inter';
-        this.ctx.fillText('RECHARGING...', x, y - r);
-        this.ctx.restore();
-      } else if (portal.active) {
-        // Determine this portal's visual state
-        const portalState = isActivePortal ? this.exfillState : 'idle';
-
-        // Beacon column — tall vertical light pillar visible from far away
-        {
-          const beaconColor = portalState === 'escaping' ? 'rgba(0,255,255,' 
-            : portalState === 'activating' ? 'rgba(251,191,36,' 
-            : 'rgba(100,200,255,';
-          const beaconHeight = 600;
-          const beaconWidth = portalState === 'idle' ? 6 : 14;
-          const pulse = 0.5 + Math.sin(time * (portalState === 'escaping' ? 6 : 2)) * 0.3;
-          // Core beam
-          const beamGrad = this.ctx.createLinearGradient(x, y, x, y - beaconHeight);
-          beamGrad.addColorStop(0, beaconColor + (pulse * 0.5).toFixed(2) + ')');
-          beamGrad.addColorStop(0.3, beaconColor + (pulse * 0.25).toFixed(2) + ')');
-          beamGrad.addColorStop(1, beaconColor + '0)');
-          this.ctx.fillStyle = beamGrad;
-          this.ctx.fillRect(x - beaconWidth / 2, y - beaconHeight, beaconWidth, beaconHeight);
-          // Wider glow behind beam
-          const glowWidth = beaconWidth * 5;
-          const glowGrad = this.ctx.createLinearGradient(x, y, x, y - beaconHeight * 0.7);
-          glowGrad.addColorStop(0, beaconColor + (pulse * 0.12).toFixed(2) + ')');
-          glowGrad.addColorStop(1, beaconColor + '0)');
-          this.ctx.fillStyle = glowGrad;
-          this.ctx.fillRect(x - glowWidth / 2, y - beaconHeight * 0.7, glowWidth, beaconHeight * 0.7);
-          // Floating particles rising along beacon
-          for (let bp = 0; bp < 4; bp++) {
-            const particleT = ((time * 0.5 + bp * 0.25) % 1);
-            const py2 = y - particleT * beaconHeight * 0.8;
-            const px2 = x + Math.sin(time * 3 + bp * 1.5) * (beaconWidth + 4);
-            const pAlpha = (1 - particleT) * pulse * 0.6;
-            this.ctx.fillStyle = beaconColor + pAlpha.toFixed(2) + ')';
-            this.ctx.beginPath();
-            this.ctx.arc(px2, py2, 2 + (1 - particleT) * 2, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-        }
-
-        // Exfill Zone Circle
-        this.ctx.save();
-        this.ctx.translate(x, y);
-        const zoneColor = portalState === 'escaping' ? '#00ffff' 
-          : portalState === 'activating' ? '#fbbf24' 
-          : 'rgba(255, 255, 255, 0.1)';
-        this.ctx.strokeStyle = zoneColor;
-        this.ctx.setLineDash([10, 10]);
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, this.EXFILL_ZONE_RADIUS, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.setLineDash([]);
-        this.ctx.restore();
-
-        // Outer glow
-        const grad = this.ctx.createRadialGradient(x, y, 0, x, y, r * 2);
-        const portalColor = portalState === 'escaping' ? 'rgba(0, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.1)';
-        grad.addColorStop(0, portalColor);
-        grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.05)');
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        this.ctx.fillStyle = grad;
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, r * 2.5, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        if (portalState === 'escaping') {
-          // Active swirl effect — portal is open!
-          this.ctx.strokeStyle = '#00ffff';
-          this.ctx.lineWidth = 4;
-          for (let i = 0; i < 4; i++) {
-            const angle = time * 2.5 + (i * Math.PI * 2) / 4;
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, r * (0.4 + i * 0.15), angle, angle + Math.PI * 0.8);
-            this.ctx.stroke();
-          }
-          // Core
-          this.ctx.fillStyle = '#fff';
-          this.ctx.beginPath();
-          this.ctx.arc(x, y, r * 0.25 + Math.sin(time * 8) * 3, 0, Math.PI * 2);
-          this.ctx.fill();
-        } else if (portalState === 'activating') {
-          // Charging up — pulsing ring
-          const progress = 1 - (this.exfillTimer / this.EXFILL_ACTIVATION_TIME);
-          this.ctx.strokeStyle = '#fbbf24';
-          this.ctx.lineWidth = 3;
-          this.ctx.beginPath();
-          this.ctx.arc(x, y, r * 0.6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
-          this.ctx.stroke();
-          // Inner static ring
-          this.ctx.strokeStyle = 'rgba(251, 191, 36, 0.2)';
-          this.ctx.lineWidth = 1;
-          this.ctx.beginPath();
-          this.ctx.arc(x, y, r * 0.6, 0, Math.PI * 2);
-          this.ctx.stroke();
-        } else {
-          // Idle portal visuals
-          this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-          this.ctx.lineWidth = 2;
-          this.ctx.beginPath();
-          this.ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
-          this.ctx.stroke();
-        }
-
-        // Label
-        this.ctx.font = 'bold 16px Inter';
-        this.ctx.textAlign = 'center';
-        
-        if (portalState === 'escaping') {
-          const escTimeLeft = Math.ceil(this.exfillEscapeTimer / 1000);
-          const extractProgress = Math.min(this.exfillExtractTimer / this.EXFILL_EXTRACT_STAY_REQUIRED, 1);
-          if (extractProgress > 0) {
-            // Actively extracting — show progress
-            const pct = Math.round(extractProgress * 100);
-            const urgentPulse = 0.7 + Math.sin(time * 10) * 0.3;
-            this.ctx.globalAlpha = urgentPulse;
-            this.ctx.fillStyle = '#ff3333';
-            this.ctx.fillText(`EXTRACTING... ${pct}%`, x, y - r - 20);
-            this.ctx.font = '10px Inter';
-            this.ctx.fillText('HOLD POSITION!', x, y - r - 5);
-            // Progress bar
-            this.ctx.globalAlpha = 0.8;
-            const barW = this.EXFILL_ZONE_RADIUS * 1.2;
-            const barH = 4;
-            const barX = x - barW / 2;
-            const barY = y + r + 15;
-            this.ctx.fillStyle = 'rgba(255,255,255,0.15)';
-            this.ctx.fillRect(barX, barY, barW, barH);
-            this.ctx.fillStyle = '#ff3333';
-            this.ctx.fillRect(barX, barY, barW * extractProgress, barH);
-          } else {
-            const urgentPulse = Math.sin(time * 8) > 0 ? 1 : 0.6;
-            this.ctx.globalAlpha = urgentPulse;
-            this.ctx.fillStyle = '#00ffff';
-            this.ctx.fillText(`ESCAPE NOW! ${escTimeLeft}s`, x, y - r - 20);
-            this.ctx.font = '10px Inter';
-            this.ctx.fillText('STAY IN ZONE 5s TO LEAVE!', x, y - r - 5);
-          }
-          this.ctx.globalAlpha = 1;
-        } else if (portalState === 'activating') {
-          const timeLeft = Math.ceil(this.exfillTimer / 1000);
-          this.ctx.fillStyle = '#fbbf24';
-          this.ctx.fillText(`EXTRACTING: ${timeLeft}s`, x, y - r - 20);
-          this.ctx.font = '10px Inter';
-          this.ctx.fillStyle = '#fbbf24';
-          this.ctx.fillText('PORTAL CHARGING...', x, y - r - 5);
-        } else {
-          // Idle — show stay progress if player is inside
-          const stayProgress = (this.activePortalIndex === pi && this.exfillZoneStayTimer > 0) 
-            ? Math.min(this.exfillZoneStayTimer / this.EXFILL_ZONE_STAY_REQUIRED, 1) : 0;
-          if (stayProgress > 0) {
-            this.ctx.fillStyle = '#fbbf24';
-            this.ctx.fillText(`CALLING IN... ${Math.round(stayProgress * 100)}%`, x, y - r - 20);
-            this.ctx.font = '10px Inter';
-            this.ctx.fillText('STAY IN ZONE!', x, y - r - 5);
-            // Progress bar
-            const barW = this.EXFILL_ZONE_RADIUS * 1.2;
-            const barH = 4;
-            const barX = x - barW / 2;
-            const barY = y + r + 15;
-            this.ctx.fillStyle = 'rgba(255,255,255,0.15)';
-            this.ctx.fillRect(barX, barY, barW, barH);
-            this.ctx.fillStyle = '#fbbf24';
-            this.ctx.fillRect(barX, barY, barW * stayProgress, barH);
-          } else {
-            this.ctx.fillStyle = '#ffffff';
-            this.ctx.fillText('EXFILL ZONE', x, y - r - 20);
-            this.ctx.font = '10px Inter';
-            this.ctx.fillText('STAY 5s TO CALL EXFILL', x, y - r - 5);
-          }
-        }
-      }
-    }
 
     // Draw Gems
     for (const gem of this.gems) {
@@ -2983,6 +3444,7 @@ export class GameEngine {
     this.ctx.globalAlpha = 1.0;
 
     // Draw Player
+    this.drawDashEffectsWorld();
     this.drawPlayer();
 
     // Draw event world-space effects (toxic pools, supply crates, data storm, firewall)
@@ -2996,21 +3458,6 @@ export class GameEngine {
     // Draw compass
     this.drawCompass();
 
-    // Red screen overlay during escape extraction (builds over 5 seconds)
-    if (this.exfillState === 'escaping' && this.exfillExtractTimer > 0) {
-      const progress = Math.min(this.exfillExtractTimer / this.EXFILL_EXTRACT_STAY_REQUIRED, 1);
-      this.ctx.fillStyle = `rgba(180, 0, 0, ${progress * 0.7})`;
-      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-      // Vignette intensifies at edges
-      const vigGrad = this.ctx.createRadialGradient(
-        this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.2 * (1 - progress),
-        this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.6
-      );
-      vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      vigGrad.addColorStop(1, `rgba(120, 0, 0, ${progress * 0.5})`);
-      this.ctx.fillStyle = vigGrad;
-      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    }
 
     // Draw event screen-space effects (blackout, announcements, bounty arrows)
     this.eventManager.drawScreenSpace(this.ctx, this.canvas, this);
@@ -3085,6 +3532,7 @@ export class GameEngine {
     }
 
     // Rotate to face direction
+    ctx.save(); // save pre-rotation state for dash effects
     ctx.rotate(this.player.rotation || 0);
 
     // Idle breathing — subtle body scale pulse
@@ -3322,7 +3770,217 @@ export class GameEngine {
     ctx.arc(r * 0.88, 0, r * 0.04, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.restore(); // restore rotation — back to translated player space
+
+    // === DASH UPGRADE PLAYER EFFECTS (no rotation) ===
+    this.drawDashEffectsPlayer(ctx, r, time);
+
     ctx.restore(); // restore player transform
+  }
+
+  drawDashEffectsPlayer(ctx: CanvasRenderingContext2D, r: number, time: number) {
+    const ds = this.dashState;
+
+    // Deadlock Burst: pulsing orange ring when charged
+    if (ds.deadlockCharged) {
+      const pulse = 0.5 + Math.sin(time * 8) * 0.3;
+      ctx.strokeStyle = `rgba(255, 102, 0, ${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 2 + Math.sin(time * 6) * 3, 0, Math.PI * 2);
+      ctx.stroke();
+      // Inner glow
+      const glow = ctx.createRadialGradient(0, 0, r, 0, 0, r * 2.5);
+      glow.addColorStop(0, `rgba(255, 102, 0, ${pulse * 0.3})`);
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Aegis Slip: shield bubble
+    if (ds.aegisShieldTimer > 0) {
+      const alpha = Math.min(1, ds.aegisShieldTimer / 200) * 0.6;
+      ctx.strokeStyle = `rgba(0, 220, 255, ${alpha})`;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Inner hex fill
+      const bubbleGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.2);
+      bubbleGlow.addColorStop(0, `rgba(0, 220, 255, ${alpha * 0.15})`);
+      bubbleGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = bubbleGlow;
+      ctx.fill();
+    }
+
+    // Prism Guard: rotating shards
+    if (ds.prismShardTimer > 0) {
+      const shardCount = 4;
+      const orbitR = 60 * this.player.stats.area;
+      const fadeAlpha = Math.min(1, ds.prismShardTimer / 300);
+      const colors = ['#ff0066', '#00ff88', '#4488ff', '#ffcc00'];
+      for (let i = 0; i < shardCount; i++) {
+        const angle = (time * 4) + (i / shardCount) * Math.PI * 2;
+        const sx = Math.cos(angle) * orbitR;
+        const sy = Math.sin(angle) * orbitR;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(angle + time * 8);
+        ctx.globalAlpha = fadeAlpha;
+        ctx.fillStyle = colors[i];
+        // Diamond shape
+        ctx.beginPath();
+        ctx.moveTo(0, -8);
+        ctx.lineTo(5, 0);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(-5, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+    }
+
+    // Multi-charge dash: charge indicators
+    if (ds.maxDashCharges > 1) {
+      for (let i = 0; i < ds.maxDashCharges; i++) {
+        const cx = -r * 1.5 + i * 12;
+        const cy = -r * 2.2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        if (i < ds.dashCharges) {
+          ctx.fillStyle = '#00ff88';
+          ctx.fill();
+        } else {
+          ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Cataclysm Brake pending: dark purple ring
+    if (ds.cataclysmPending) {
+      const pulse = 0.3 + Math.sin(time * 10) * 0.2;
+      ctx.strokeStyle = `rgba(139, 0, 255, ${pulse})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Echo Recall: window indicator
+    if (ds.echoRecallWindow > 0) {
+      const alpha = ds.echoRecallWindow / 700;
+      ctx.strokeStyle = `rgba(255, 0, 255, ${alpha * 0.7})`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2 * alpha);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Kinetic Refund window: green rim
+    if (ds.kineticRefundWindow > 0) {
+      const alpha = ds.kineticRefundWindow / 1500 * 0.5;
+      ctx.strokeStyle = `rgba(0, 255, 100, ${alpha})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  drawDashEffectsWorld() {
+    const ctx = this.ctx;
+    const ds = this.dashState;
+    const time = Date.now() / 1000;
+
+    // Null Wake trail
+    for (const p of ds.nullWakeTrail) {
+      const alpha = (p.life / 1200) * 0.6;
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 30);
+      grad.addColorStop(0, `rgba(0, 180, 255, ${alpha})`);
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 30, 0, Math.PI * 2);
+      ctx.fill();
+      // Hex pattern
+      ctx.strokeStyle = `rgba(0, 140, 255, ${alpha * 0.5})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const hx = p.x + Math.cos(a) * 18;
+        const hy = p.y + Math.sin(a) * 18;
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    // Afterimage mines
+    for (const a of ds.afterimages) {
+      const alpha = 0.3 + Math.sin(time * 12 + a.x) * 0.15;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ff44ff';
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, 12, 0, Math.PI * 2);
+      ctx.fill();
+      // Pulsing ring
+      const ringR = 12 + Math.sin(time * 8) * 4;
+      ctx.strokeStyle = 'rgba(255, 100, 255, 0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // Echo Recall origin ghost
+    if (ds.echoRecallOrigin && ds.echoRecallWindow > 0) {
+      const o = ds.echoRecallOrigin;
+      const alpha = (ds.echoRecallWindow / 700) * 0.4;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#ff00ff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, this.player.radius * 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Ghost silhouette
+      ctx.fillStyle = 'rgba(255, 0, 255, 0.2)';
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, this.player.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Phase Laceration: red dash trail while dashing
+    if (this.isDashing && ds.phaseLaceration) {
+      const sp = this.dashStartPos;
+      if (sp) {
+        ctx.strokeStyle = 'rgba(255, 0, 50, 0.5)';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(sp.x, sp.y);
+        ctx.lineTo(this.player.position.x, this.player.position.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
   }
 
   drawEnemy(enemy: Enemy) {
@@ -4020,6 +4678,25 @@ export class GameEngine {
         this.drawIconBox(x, upgradesY, iconSize, upgrade.id, (upgrade as any).level, '#ffaa00');
       });
     }
+
+    if (this.nearbyShop) {
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      this.ctx.strokeStyle = 'rgba(103, 232, 249, 0.65)';
+      this.ctx.lineWidth = 1;
+      const promptWidth = 320;
+      const promptHeight = 34;
+      const promptX = Math.round((this.canvas.width - promptWidth) / 2);
+      const promptY = this.canvas.height - 96;
+      this.ctx.beginPath();
+      this.ctx.roundRect(promptX, promptY, promptWidth, promptHeight, 8);
+      this.ctx.fill();
+      this.ctx.stroke();
+
+      this.ctx.fillStyle = '#67e8f9';
+      this.ctx.font = 'bold 14px Inter';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('PRESS ENTER TO ENTER SHOP', this.canvas.width / 2, promptY + 22);
+    }
   }
 
   drawIconBox(x: number, y: number, size: number, id: string, level: number, color: string) {
@@ -4361,22 +5038,8 @@ export class GameEngine {
     // Treasure takes priority when within 1200px
     const treasureMode = closestTreasure !== null && closestTreasure.dist < 1200;
 
-    // Find closest active portal
-    let closestPortal: { dist: number; angle: number; state: string } | null = null;
-    for (let i = 0; i < this.portals.length; i++) {
-      const p = this.portals[i];
-      if (!p.active) continue;
-      const dx = p.position.x - this.player.position.x;
-      const dy = p.position.y - this.player.position.y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (!closestPortal || d < closestPortal.dist) {
-        const isActivePortal = i === this.activePortalIndex;
-        closestPortal = { dist: d, angle: Math.atan2(dy, dx), state: isActivePortal ? this.exfillState : 'idle' };
-      }
-    }
-
     // Determine what the compass is tracking
-    const target = treasureMode ? closestTreasure! : closestPortal;
+    const target = treasureMode ? closestTreasure! : null;
     const needleAngle = target ? target.angle : 0;
 
     // Theme colors
@@ -4392,26 +5055,6 @@ export class GameEngine {
       glowColor = 'rgba(255, 215, 0, 0.15)';
       label = 'TREASURE';
       labelDist = `${Math.round(closestTreasure!.dist)}m`;
-    } else if (closestPortal) {
-      const st = closestPortal.state;
-      if (st === 'escaping') {
-        const pulse = 0.6 + Math.sin(time * 6) * 0.4;
-        rimColor = `rgba(0, 255, 255, ${pulse})`;
-        needleColor = '#00ffff';
-        glowColor = `rgba(0, 255, 255, ${pulse * 0.2})`;
-        label = 'ESCAPE!';
-      } else if (st === 'activating') {
-        rimColor = 'rgba(251, 191, 36, 0.6)';
-        needleColor = '#fbbf24';
-        glowColor = 'rgba(251, 191, 36, 0.12)';
-        label = 'CHARGING';
-      } else {
-        rimColor = 'rgba(0, 255, 255, 0.3)';
-        needleColor = '#00d4ff';
-        glowColor = 'rgba(0, 255, 255, 0.08)';
-        label = 'EXFILL';
-      }
-      labelDist = `${Math.round(closestPortal.dist)}m`;
     } else {
       rimColor = 'rgba(100, 100, 100, 0.3)';
       needleColor = '#555';
@@ -4562,6 +5205,78 @@ export class GameEngine {
         ctx.moveTo(x, y - 3); ctx.lineTo(x, y + 3);
         ctx.stroke();
       }
+    }
+  }
+
+  drawShops() {
+    const ctx = this.ctx;
+    const time = performance.now() / 1000;
+
+    for (const shop of this.shops) {
+      if (!this.isInView(shop.position, shop.radius + 40, 120)) continue;
+
+      ctx.save();
+      ctx.translate(shop.position.x, shop.position.y);
+
+      const pulse = 0.7 + Math.sin(time * 2.2) * 0.2;
+
+      // Outer soft glow
+      const glow = ctx.createRadialGradient(0, 0, shop.radius * 0.3, 0, 0, shop.radius * 1.4);
+      glow.addColorStop(0, 'rgba(34, 211, 238, 0.10)');
+      glow.addColorStop(1, 'rgba(34, 211, 238, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, shop.radius * 1.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Enterable perimeter ring
+      ctx.strokeStyle = `rgba(34, 211, 238, ${0.45 + pulse * 0.25})`;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 8]);
+      ctx.lineDashOffset = -time * 30;
+      ctx.beginPath();
+      ctx.arc(0, 0, shop.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Inner safe fill so zone reads at a glance
+      ctx.fillStyle = 'rgba(8, 35, 44, 0.22)';
+      ctx.beginPath();
+      ctx.arc(0, 0, shop.radius - 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Shop icon plate in center
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.strokeStyle = 'rgba(103, 232, 249, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-18, -16, 36, 32, 7);
+      ctx.fill();
+      ctx.stroke();
+
+      // Simple storefront glyph
+      ctx.strokeStyle = '#67e8f9';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-11, -4);
+      ctx.lineTo(11, -4);
+      ctx.moveTo(-9, -4);
+      ctx.lineTo(-9, 7);
+      ctx.moveTo(9, -4);
+      ctx.lineTo(9, 7);
+      ctx.moveTo(-2, 7);
+      ctx.lineTo(-2, 1);
+      ctx.moveTo(2, 7);
+      ctx.lineTo(2, 1);
+      ctx.stroke();
+
+      // Header marker to make it obvious from distance
+      ctx.fillStyle = 'rgba(103, 232, 249, 0.95)';
+      ctx.font = 'bold 10px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillText('SHOP', 0, -shop.radius - 8);
+
+      ctx.restore();
     }
   }
 }

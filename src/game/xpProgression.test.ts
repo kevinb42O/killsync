@@ -73,18 +73,18 @@ describe('xp progression', () => {
 });
 
 describe('xp breakdown rewards', () => {
-  it('calculates death reward only from kills and time', () => {
-    const breakdown = createDeathXPBreakdown(120000, 50);
+  it('calculates death reward only from kills and waves', () => {
+    const breakdown = createDeathXPBreakdown(10, 50);
     expect(breakdown).toEqual([
       { label: 'Kill XP', value: 200 },
-      { label: 'Survival Time XP', value: 240 }
+      { label: 'Waves Cleared XP', value: 500 }
     ]);
-    expect(sumXPBreakdown(breakdown)).toBe(440);
+    expect(sumXPBreakdown(breakdown)).toBe(700);
   });
 
   it('calculates exfill reward with all channels', () => {
     const breakdown = createExfillXPBreakdown({
-      timeMs: 180000,
+      wavesCleared: 15,
       kills: 120,
       level: 14,
       coins: 3000,
@@ -97,14 +97,14 @@ describe('xp breakdown rewards', () => {
     const lookup = Object.fromEntries(breakdown.map(item => [item.label, item.value]));
     expect(lookup['Exfill Bonus XP']).toBe(250);
     expect(lookup['Kill XP']).toBe(600);
-    expect(lookup['Survival Time XP']).toBe(396);
+    expect(lookup['Waves Cleared XP']).toBe(1500);
     expect(lookup['Level Reached XP']).toBe(420);
     expect(lookup['Weapons Collected XP']).toBe(240);
     expect(lookup['Weapon Mastery XP']).toBe(320);
     expect(lookup['Gold Extracted XP']).toBe(450);
     expect(lookup['Data Core XP']).toBe(375);
     expect(lookup['Upgrade Picks XP']).toBe(396);
-    expect(sumXPBreakdown(breakdown)).toBe(3447);
+    expect(sumXPBreakdown(breakdown)).toBe(4551);
   });
 
   it('filters non-positive values in total sum', () => {
@@ -119,7 +119,7 @@ describe('xp breakdown rewards', () => {
 
   it('supports zeroed exfill input safely', () => {
     const breakdown = createExfillXPBreakdown({
-      timeMs: 0,
+      wavesCleared: 0,
       kills: 0,
       level: 1,
       coins: 0,
@@ -131,7 +131,7 @@ describe('xp breakdown rewards', () => {
     const lookup = Object.fromEntries(breakdown.map(item => [item.label, item.value]));
     expect(lookup['Exfill Bonus XP']).toBe(250);
     expect(lookup['Kill XP']).toBe(0);
-    expect(lookup['Survival Time XP']).toBe(0);
+    expect(lookup['Waves Cleared XP']).toBe(0);
     expect(sumXPBreakdown(breakdown)).toBeGreaterThan(0);
   });
 });

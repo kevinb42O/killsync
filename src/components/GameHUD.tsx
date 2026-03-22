@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Skull, Coins, Flame, AlertTriangle } from 'lucide-react';
+import { Skull, Coins, Flame, AlertTriangle, Shield, HeartPulse, Bomb, Navigation } from 'lucide-react';
 import { GameEngine } from '../game/Engine';
 import { WEAPON_DEFINITIONS } from '../constants';
 
@@ -20,23 +20,30 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
           killCount: engine.killCount,
           gameTime: engine.gameTime,
           coins: engine.player.coins,
-          exfillState: engine.exfillState,
-          exfillTimer: engine.exfillTimer,
-          exfillEscapeTimer: engine.exfillEscapeTimer,
-          exfillDisabledTimer: engine.exfillDisabledTimer,
-          exfillExtractTimer: engine.exfillExtractTimer,
-          exfillExtractRequired: engine.EXFILL_EXTRACT_STAY_REQUIRED,
+           exfillExtractRequired: 0, // Placeholder
           weaponDamageStats: { ...engine.weaponDamageStats },
           comboCount: engine.comboCount,
           comboMax: engine.COMBO_MAX,
           isOverdrive: engine.isOverdrive,
           overdriveTimer: engine.overdriveTimer,
           overdriveMax: engine.OVERDRIVE_DURATION,
-          pendingDataCores: engine.player.pendingDataCores,
-          activeEvents: engine.eventManager.getActiveEventsInfo(),
           bountyTarget: engine.eventManager.bountyTarget,
           pressureLevel: engine.eventManager.getPressureLevel(),
           nightmareMode: engine.eventManager.nightmareMode,
+          currentWave: engine.player.currentWave,
+          waveTimer: engine.waveTimer,
+          waveDuration: engine.waveDuration,
+          inventory: engine.player.inventory,
+          armorHp: engine.player.armorHp,
+          maxArmorHp: engine.getMaxArmorHp(),
+          shops: engine.shops.map(s => {
+            const dx = s.position.x - engine.player.position.x;
+            const dy = s.position.y - engine.player.position.y;
+            return {
+              dist: Math.sqrt(dx * dx + dy * dy),
+              angle: Math.atan2(dy, dx)
+            };
+          }).sort((a, b) => a.dist - b.dist)[0] || null
         });
       }
       frameId = requestAnimationFrame(syncHud);
@@ -51,23 +58,32 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
     <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between z-40">
       <div className="w-full max-w-2xl mx-auto">
         <div className="flex justify-between items-end mb-2">
-          <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">Level {hudData.level}</span>
+          <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">WAVE {hudData.currentWave}</span>
           <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">
-            {Math.floor(hudData.gameTime / 60000)}:
-            {Math.floor((hudData.gameTime % 60000) / 1000).toString().padStart(2, '0')}
+            LVL : {hudData.level}
           </span>
         </div>
-        <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden border border-white/5">
-          <motion.div
-            className="h-full bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"
-            initial={{ width: 0 }}
-            animate={{ width: `${(hudData.experience / hudData.experienceToNextLevel) * 100}%` }}
-            transition={{ type: 'tween', duration: 0.1 }}
-          />
+        <div className="flex flex-col gap-1">
+          <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden border border-white/5">
+            <motion.div
+              className="h-full bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"
+              initial={{ width: 0 }}
+              animate={{ width: `${(hudData.experience / hudData.experienceToNextLevel) * 100}%` }}
+              transition={{ type: 'tween', duration: 0.1 }}
+            />
+          </div>
+          <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden border border-white/5">
+            <motion.div
+              className="h-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]"
+              initial={{ width: 0 }}
+              animate={{ width: `${(hudData.waveTimer / hudData.waveDuration) * 100}%` }}
+              transition={{ type: 'tween', duration: 0.1 }}
+            />
+          </div>
         </div>
       </div>
 
-       <div className="absolute top-6 left-6">
+       <div className="absolute top-6 left-6 flex flex-col gap-1">
         <div className="w-48 h-4 bg-white/10 rounded-lg overflow-hidden border border-white/5 relative">
           <motion.div
             className="h-full bg-red-500"
@@ -78,6 +94,15 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
             HP {Math.ceil(hudData.health)}
           </div>
         </div>
+        {hudData.maxArmorHp > 0 && (
+          <div className="w-48 h-2 bg-white/5 rounded-full overflow-hidden border border-cyan-500/20 relative mt-1">
+            <motion.div
+              className="h-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+              animate={{ width: `${(hudData.armorHp / hudData.maxArmorHp) * 100}%` }}
+              transition={{ type: 'tween', duration: 0.1 }}
+            />
+          </div>
+        )}
       </div>
 
       {/* CARNAGE METER (Top Right) */}
@@ -125,58 +150,55 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
         </div>
       </div>
 
-      {/* Exfill Status HUD */}
-      {hudData.exfillState && hudData.exfillState !== 'idle' && (
-        <div className="flex justify-center mt-4">
-          {hudData.exfillState === 'activating' && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="px-6 py-2.5 bg-yellow-500/10 border border-yellow-500/30 rounded-xl backdrop-blur-sm"
+      {/* Inventory Display (Bottom Right) */}
+      <div className="absolute bottom-6 right-6 flex items-end gap-3 z-40">
+        {hudData.inventory?.hasRevive && (
+          <div className="flex items-center gap-2 bg-black/60 border border-red-500/30 px-3 py-1.5 rounded-lg backdrop-blur-sm">
+            <HeartPulse size={16} className="text-red-400 animate-pulse" />
+            <span className="text-xs font-bold text-red-100 uppercase tracking-widest">Revive Active</span>
+          </div>
+        )}
+        
+        {hudData.inventory?.nukeCount > 0 && (
+          <div className="flex flex-col items-center gap-1 bg-black/60 border border-orange-500/30 px-3 py-1.5 rounded-lg backdrop-blur-sm relative cursor-pointer group">
+            <div className="flex items-center gap-2">
+              <Bomb size={16} className="text-orange-400 group-hover:text-white transition-colors" />
+              <span className="text-xs font-bold text-orange-200">NUKE ({hudData.inventory.nukeCount})</span>
+            </div>
+            <div className="text-[9px] font-mono text-white/50 bg-black px-1.5 py-0.5 rounded border border-white/10 mt-1">
+              [ N ] KEY
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Shop Compass */}
+      <AnimatePresence>
+        {hudData.shops && hudData.shops.dist < 1500 && hudData.shops.dist > 150 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 0.7, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none"
+          >
+            <div 
+              style={{ transform: `translate(${Math.cos(hudData.shops.angle) * 120}px, ${Math.sin(hudData.shops.angle) * 120}px)` }}
             >
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-                <span className="text-xs font-mono text-yellow-400 uppercase tracking-widest">
-                  Extracting: {Math.ceil(hudData.exfillTimer / 1000)}s
-                </span>
+              <div 
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/50 backdrop-blur-md text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+              >
+                <Navigation 
+                  size={16} 
+                  style={{ transform: `rotate(${hudData.shops.angle}rad) rotate(90deg)` }} 
+                />
               </div>
-            </motion.div>
-          )}
-          {hudData.exfillState === 'escaping' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: [0.7, 1, 0.7], scale: [1, 1.02, 1] }}
-              transition={{ repeat: Infinity, duration: 0.5 }}
-              className={`px-6 py-3 border-2 rounded-xl backdrop-blur-sm ${
-                hudData.exfillExtractTimer > 0 
-                  ? 'bg-red-500/15 border-red-400/60' 
-                  : 'bg-cyan-500/15 border-cyan-400/60'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full animate-ping ${hudData.exfillExtractTimer > 0 ? 'bg-red-400' : 'bg-cyan-400'}`} />
-                <span className={`text-sm font-bold font-mono uppercase tracking-widest ${hudData.exfillExtractTimer > 0 ? 'text-red-400' : 'text-cyan-400'}`}>
-                  {hudData.exfillExtractTimer > 0 
-                    ? `EXTRACTING ${Math.round((hudData.exfillExtractTimer / hudData.exfillExtractRequired) * 100)}%`
-                    : `ESCAPE NOW! ${Math.ceil(hudData.exfillEscapeTimer / 1000)}s`
-                  }
-                </span>
-              </div>
-            </motion.div>
-          )}
-          {hudData.exfillState === 'disabled' && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 0.7, y: 0 }}
-              className="px-5 py-2 bg-red-500/10 border border-red-500/20 rounded-xl backdrop-blur-sm"
-            >
-              <span className="text-[10px] font-mono text-red-400/70 uppercase tracking-widest">
-                Exfill Disabled: {Math.ceil(hudData.exfillDisabledTimer / 1000)}s
-              </span>
-            </motion.div>
-          )}
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Exfill Status HUD removed as it is now handled in UI between waves */}
+
 
       {/* DPS METER */}
       <div className="absolute top-14 left-6 w-48 flex flex-col gap-1 z-40 pointer-events-none">
@@ -302,6 +324,24 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
           })()}
         </AnimatePresence>
       </div>
+
+      {/* Wave End Countdown */}
+      <AnimatePresence>
+        {hudData.waveDuration - hudData.waveTimer <= 3000 && hudData.waveDuration - hudData.waveTimer > 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+            <motion.div
+              key={Math.ceil((hudData.waveDuration - hudData.waveTimer) / 1000)}
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1.5, opacity: 1 }}
+              exit={{ scale: 2, opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="text-[150px] font-black italic text-red-500 drop-shadow-[0_0_40px_rgba(239,68,68,1)] tracking-tighter"
+            >
+              {Math.ceil((hudData.waveDuration - hudData.waveTimer) / 1000)}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

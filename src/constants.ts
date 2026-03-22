@@ -237,6 +237,21 @@ export const UPGRADES = [
   { id: 'magnet_range', name: 'Signal Amplifier', description: 'Increases pickup range by 25%', type: 'stat', icon: 'wifi', rarity: 'common' }
 ];
 
+export const DASH_UPGRADES = [
+  { id: 'dash_deadlock_burst', name: 'Deadlock Burst', description: 'Dash: Standing still 1s charges a massive shockwave on your next dash.', rarity: 'common' },
+  { id: 'dash_twin_vector', name: 'Twin Vector', description: 'Dash: Gain a second dash charge that refills independently.', rarity: 'rare' },
+  { id: 'dash_aegis_slip', name: 'Aegis Slip', description: 'Dash: Become shielded during dash and 0.35s after, blocking all damage.', rarity: 'rare' },
+  { id: 'dash_afterimage_minefield', name: 'Afterimage Minefield', description: 'Dash: Leave 3 afterimages that detonate after 0.5s dealing AoE damage.', rarity: 'legendary' },
+  { id: 'dash_phase_laceration', name: 'Phase Laceration', description: 'Dash: Enemies crossed during dash take heavy slice damage.', rarity: 'legendary' },
+  { id: 'dash_null_wake', name: 'Null Wake', description: 'Dash: Leave a slowing trail for 1.2s that cripples enemy movement.', rarity: 'common' },
+  { id: 'dash_inertia_vault', name: 'Inertia Vault', description: 'Dash: Dash distance and speed scale with your current move speed.', rarity: 'rare' },
+  { id: 'dash_kinetic_refund', name: 'Kinetic Refund', description: 'Dash: Kills within 1.5s after dashing refund 15% dash cooldown each.', rarity: 'rare' },
+  { id: 'dash_bulwark_ram', name: 'Bulwark Ram', description: 'Dash: First enemy hit is knocked back hard, stunned, and takes 3x damage.', rarity: 'common' },
+  { id: 'dash_echo_recall', name: 'Echo Recall', description: 'Dash: Re-press dash within 0.7s to blink back to your start point.', rarity: 'legendary' },
+  { id: 'dash_prism_guard', name: 'Prism Guard', description: 'Dash: Gain 4 rotating shards for 2s that damage nearby enemies.', rarity: 'legendary' },
+  { id: 'dash_cataclysm_brake', name: 'Cataclysm Brake', description: 'Dash: Stopping after dash creates an implosion pulling enemies inward.', rarity: 'legendary' },
+];
+
 export const ITEM_TYPES = {
   hp: { color: '#ff3366', value: 30, weight: 0.4, shape: 'heart' },
   coin_bronze: { color: '#cd7f32', value: 2, weight: 0.4, shape: 'circle' },
@@ -335,9 +350,21 @@ export const PERMANENT_UPGRADES = [
   { id: 'perm_revive', name: 'Emergency Reboot', description: 'Revive once per run with 50% HP', baseCost: 10000, coreCost: 10, costScale: 1.0, maxLevel: 1, stat: 'revive', value: 1 },
   { id: 'perm_magnet_range', name: 'Signal Range', description: 'Permanent +20% Magnet Range', baseCost: 500, costScale: 1.5, maxLevel: 5, stat: 'magnet_range', value: 0.2 },
   { id: 'perm_dash_cooldown', name: 'Dash Capacitor', description: 'Permanent -10% Dash Cooldown', baseCost: 800, costScale: 1.6, maxLevel: 5, stat: 'dash_cooldown', value: -0.1 },
+  { id: 'perm_dash_speed', name: 'Vector Thrusters', description: 'Permanent +8% Dash Speed', baseCost: 900, costScale: 1.7, maxLevel: 5, stat: 'dash_speed', value: 0.08 },
+  { id: 'perm_dash_duration', name: 'Overburn Core', description: 'Permanent +30ms Dash Duration', baseCost: 1000, costScale: 1.7, maxLevel: 5, stat: 'dash_duration', value: 30 },
+  { id: 'perm_dash_impact', name: 'Impact Kernel', description: 'Permanent +15% Dash Impact Damage', baseCost: 1200, coreCost: 1, costScale: 1.8, maxLevel: 5, stat: 'dash_impact', value: 0.15 },
+  { id: 'perm_dash_guard', name: 'Phase Weave', description: 'Permanent -12% Damage While Dashing', baseCost: 1400, coreCost: 1, costScale: 1.9, maxLevel: 4, stat: 'dash_guard', value: 0.12 },
+  { id: 'perm_dash_repair', name: 'Recovery Injector', description: 'Restore +3 HP after each dash', baseCost: 1100, costScale: 1.8, maxLevel: 5, stat: 'dash_repair', value: 3 },
+  { id: 'perm_dash_charge', name: 'Capacitor Bank', description: 'Permanent +1 Max Dash Charge', baseCost: 4500, coreCost: 2, costScale: 2.8, maxLevel: 2, stat: 'dash_charge', value: 1 },
+  { id: 'perm_dash_recharge', name: 'Superconductor', description: 'Permanent -10% Dash Recharge Time', baseCost: 1600, coreCost: 1, costScale: 1.8, maxLevel: 5, stat: 'dash_recharge', value: 0.1 },
+  { id: 'perm_dash_ghost', name: 'Ghost Frame', description: 'Gain +80ms invulnerability after dash end', baseCost: 2200, coreCost: 2, costScale: 2.0, maxLevel: 4, stat: 'dash_ghost', value: 80 },
+  { id: 'perm_dash_momentum', name: 'Slipstream Drive', description: 'After dashing, gain +6% move speed for 1.5s', baseCost: 1300, costScale: 1.8, maxLevel: 5, stat: 'dash_momentum', value: 0.06 },
   { id: 'perm_starting_weapon', name: 'Weapon Cache', description: 'Start with an extra random weapon', baseCost: 15000, coreCost: 25, costScale: 1.0, maxLevel: 1, stat: 'extra_weapon', value: 1 },
   { id: 'perm_boss_damage', name: 'Titan Slayer', description: 'Permanent +20% Damage to Bosses', baseCost: 2000, coreCost: 2, costScale: 1.8, maxLevel: 5, stat: 'boss_damage', value: 0.2 },
   { id: 'perm_overdrive_ext', name: 'Overdrive Extension', name_s: 'Class-S', description: 'Overdrive duration +2 seconds', baseCost: 5000, coreCost: 5, costScale: 2.0, maxLevel: 5, stat: 'overdrive_duration', value: 2000 },
+  { id: 'perm_reroll', name: 'Probability Matrix', description: 'Reroll upgrade choices once per run per level.', baseCost: 2000, coreCost: 1, costScale: 2.5, maxLevel: 3, stat: 'reroll', value: 1 },
+  { id: 'perm_banish', name: 'Override Protocol', description: 'Banish an upgrade from the pool once per run per level.', baseCost: 3000, coreCost: 2, costScale: 3.0, maxLevel: 3, stat: 'banish', value: 1 },
+  { id: 'perm_skip', name: 'System Bypass', description: 'Skip upgrade choice for a small XP bonus once per run per level.', baseCost: 1000, coreCost: 1, costScale: 2.0, maxLevel: 3, stat: 'skip', value: 1 },
 ];
 
 export const OPERATOR_DEFINITIONS = [

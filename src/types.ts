@@ -23,9 +23,18 @@ export interface Player extends Entity {
   upgrades: Upgrade[];
   stats: PlayerStats;
   coins: number;
+  rerolls: number;
+  rerollsThisWave: number;
+  banishes: number;
+  skips: number;
+  bannedUpgrades: Set<string>;
   permanentUpgrades: Record<string, number>;
   operatorId: string;
   pendingDataCores: number;
+  currentWave: number;
+  inventory: Inventory;
+  armorHp: number;
+  lastHitTime: number;
 }
 
 export interface PlayerStats {
@@ -118,11 +127,44 @@ export interface Upgrade {
   id: string;
   name: string;
   description: string;
-  type: 'stat' | 'weapon' | 'weapon_upgrade';
+  type: 'stat' | 'weapon' | 'weapon_upgrade' | 'dash';
   icon?: string;
   rarity?: 'common' | 'rare' | 'legendary';
   cost?: number;
   coreCost?: number;
+}
+
+export interface DashState {
+  // Upgrade flags
+  deadlockBurst: boolean;
+  twinVector: boolean;
+  aegisSlip: boolean;
+  afterimageMinefield: boolean;
+  phaseLaceration: boolean;
+  nullWake: boolean;
+  inertiaVault: boolean;
+  kineticRefund: boolean;
+  bulwarkRam: boolean;
+  echoRecall: boolean;
+  prismGuard: boolean;
+  cataclysmBrake: boolean;
+
+  // Runtime state
+  dashCharges: number;
+  maxDashCharges: number;
+  dashRechargeTimer: number;
+  standStillTimer: number;
+  deadlockCharged: boolean;
+  echoRecallOrigin: Vector2D | null;
+  echoRecallWindow: number;
+  kineticRefundWindow: number;
+  aegisShieldTimer: number;
+  prismShardTimer: number;
+  nullWakeTrail: { x: number; y: number; life: number }[];
+  afterimages: { x: number; y: number; timer: number }[];
+  cataclysmPending: boolean;
+  cataclysmMoveTimer: number;
+  bulwarkRamHit: boolean;
 }
 
 export interface OperatorDefinition {
@@ -143,4 +185,16 @@ export interface OperatorDefinition {
   colorBoots: string;
 }
 
-export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'TREASURE' | 'PERMANENT_UPGRADES' | 'OPERATOR_SELECT' | 'PAUSED' | 'INTEL_ARCHIVE' | 'EXFILL_SUMMARY' | 'ADMIN_DASHBOARD';
+export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'TREASURE' | 'PERMANENT_UPGRADES' | 'OPERATOR_SELECT' | 'PAUSED' | 'INTEL_ARCHIVE' | 'EXFILL_SUMMARY' | 'ADMIN_DASHBOARD' | 'WAVE_UPGRADE' | 'SHOP' | 'ACHIEVEMENTS';
+
+export interface Inventory {
+  armorTier: number; // 0=none, 1=tier1, 2=tier2, 3=tier3
+  hasRevive: boolean;
+  nukeCount: number;
+}
+
+export interface Shop {
+  id: string;
+  position: Vector2D;
+  radius: number;
+}

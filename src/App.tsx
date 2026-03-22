@@ -1,13 +1,27 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning } from 'lucide-react';
+import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind } from 'lucide-react';
 import { GameEngine, BalanceTuning, DEFAULT_BALANCE_TUNING } from './game/Engine';
 import { GameHUD } from './components/GameHUD';
 import { MenuEffects, triggerMenuEffect } from './components/MenuEffects';
 import { IntelArchive } from './components/IntelArchive';
-import { GameState } from './types';
+import { AchievementsPage } from './components/AchievementsPage';
+import { ShopMenu } from './components/ShopMenu';
+import { GameState, Inventory } from './types';
 import { soundManager } from './game/SoundManager';
 import { PERMANENT_UPGRADES, OPERATOR_DEFINITIONS, WEAPON_DEFINITIONS } from './constants';
+import {
+  ACHIEVEMENTS,
+  AchievementRuntimeSnapshot,
+  AchievementTracker,
+  AchievementUnlock,
+  AchievementUnlockResult,
+  normalizeAchievementUnlocks
+} from './game/achievements';
+import {
+  loadAchievementUnlocksFromIndexedDB,
+  saveAchievementUnlocksToIndexedDB
+} from './game/achievementStorage';
 import {
   MAX_ACCOUNT_LEVEL,
   XPBreakdownItem,
@@ -49,6 +63,8 @@ const ADMIN_KNOBS: KnobDef[] = [
   { key: 'bossXPRewardMultiplier', label: 'Boss XP Reward Multiplier', description: 'Global multiplier for XP reward value granted when bosses are killed.', min: 0, max: 10, step: 0.05 },
 ];
 
+const ACHIEVEMENTS_STORAGE_KEY = 'achievementsUnlocked';
+
 export default function App() {
   const appRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -56,6 +72,7 @@ export default function App() {
   const exfillCarryoverRef = useRef<any>(null);
   const [gameState, setGameState] = useState<GameState>('MENU');
   const [levelUpOptions, setLevelUpOptions] = useState<any[]>([]);
+  const [upgradeScreenContext, setUpgradeScreenContext] = useState<'first' | 'wave'>('wave');
   const [treasureReward, setTreasureReward] = useState<any>(null);
   const [gameOverStats, setGameOverStats] = useState<any>(null);
   const [exfillSummary, setExfillSummary] = useState<any>(null);
@@ -81,6 +98,25 @@ export default function App() {
   const [xpAnimationActive, setXpAnimationActive] = useState(false);
   const [exfillDisplayedTotalXP, setExfillDisplayedTotalXP] = useState(0);
   const [exfillTotalRevealDone, setExfillTotalRevealDone] = useState(false);
+  const [achievementUnlocks, setAchievementUnlocks] = useState<AchievementUnlock[]>(() => {
+    try {
+      const raw = localStorage.getItem(ACHIEVEMENTS_STORAGE_KEY);
+      if (!raw) return [];
+      return normalizeAchievementUnlocks(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  });
+  const [achievementQueue, setAchievementQueue] = useState<AchievementUnlockResult[]>([]);
+  const [activeAchievementBanner, setActiveAchievementBanner] = useState<AchievementUnlockResult | null>(null);
+  const achievementTrackerRef = useRef<AchievementTracker>(new AchievementTracker(achievementUnlocks));
+  const totalCoinsCollectedRef = useRef(0);
+  const currentWaveKillCountRef = useRef(0);
+  const currentWaveLevelUpsRef = useRef(0);
+  const lastWaveSeenRef = useRef(1);
+  const prevKillCountRef = useRef(0);
+  const prevLevelRef = useRef(1);
+  const prevRunCoinsRef = useRef(0);
   
   // Persistent Player State
   const [playerLevel, setPlayerLevel] = useState(() => {
@@ -89,6 +125,7 @@ export default function App() {
   });
   const [playerExperience, setPlayerExperience] = useState(0);
   const [hasExfillCarryover, setHasExfillCarryover] = useState(false);
+  const [resumeWaveBanner, setResumeWaveBanner] = useState<number | null>(null);
   const [playerCoins, setPlayerCoins] = useState(() => {
     const saved = localStorage.getItem('playerCoins');
     return saved ? parseInt(saved) : 0;
@@ -107,6 +144,10 @@ export default function App() {
   const [savedDataCores, setSavedDataCores] = useState(() => {
     const saved = localStorage.getItem('savedDataCores');
     return saved ? parseInt(saved) : 0;
+  });
+  const [playerInventory, setPlayerInventory] = useState<Inventory>(() => {
+    const saved = localStorage.getItem('playerInventory');
+    return saved ? JSON.parse(saved) : { armorTier: 0, hasRevive: false, nukeCount: 0 };
   });
 
   const [nightmareMode, setNightmareMode] = useState(() => {
@@ -128,6 +169,76 @@ export default function App() {
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const ADMIN_DASHBOARD_PASSWORD = 'pinakaaz420';
+
+  const resetRunAchievementTracking = useCallback((engine: GameEngine) => {
+    totalCoinsCollectedRef.current = 0;
+    currentWaveKillCountRef.current = 0;
+    currentWaveLevelUpsRef.current = 0;
+    lastWaveSeenRef.current = Math.max(1, engine.player.currentWave || 1);
+    prevKillCountRef.current = engine.killCount || 0;
+    prevLevelRef.current = engine.player.level || 1;
+    prevRunCoinsRef.current = engine.player.coins || 0;
+  }, []);
+
+  const grantAchievementRewards = useCallback((engine: GameEngine, unlocks: AchievementUnlockResult[]) => {
+    if (unlocks.length === 0) return;
+    for (const unlocked of unlocks) {
+      engine.player.coins += unlocked.definition.rewardCoins;
+      engine.player.experience += unlocked.definition.rewardXP;
+
+      while (engine.player.experience >= engine.player.experienceToNextLevel) {
+        engine.player.experience -= engine.player.experienceToNextLevel;
+        engine.player.level += 1;
+        currentWaveLevelUpsRef.current += 1;
+        engine.player.experienceToNextLevel = engine.getXPRequiredForLevel(engine.player.level);
+      }
+    }
+  }, []);
+
+  const addAchievementUnlocks = useCallback((unlocks: AchievementUnlockResult[]) => {
+    if (unlocks.length === 0) return;
+
+    setAchievementQueue(prev => [...prev, ...unlocks]);
+    setAchievementUnlocks(prev => {
+      const byId = new Map<string, AchievementUnlock>(
+        prev.map(item => [item.achievementId, item] as [string, AchievementUnlock])
+      );
+      for (const unlocked of unlocks) {
+        byId.set(unlocked.unlock.achievementId, unlocked.unlock);
+      }
+      return Array.from(byId.values()).sort((a, b) => a.unlockedAt - b.unlockedAt);
+    });
+  }, []);
+
+  const evaluateAchievements = useCallback((engine: GameEngine) => {
+    let pass = 0;
+    while (pass < 5) {
+      const weaponTotalLevels = engine.player.weapons.reduce((sum, weapon) => sum + (weapon.level || 0), 0);
+      const snapshot = {
+        currentWave: engine.player.currentWave || 1,
+        playerLevel: engine.player.level || 1,
+        killCount: engine.killCount || 0,
+        totalCoinsCollected: totalCoinsCollectedRef.current,
+        runCoinsBanked: engine.player.coins || 0,
+        weaponCount: engine.player.weapons.length,
+        weaponTotalLevels,
+        upgradeCount: engine.player.upgrades.length,
+        gameTimeMs: engine.gameTime,
+        comboCount: engine.comboCount,
+        currentWaveKillCount: currentWaveKillCountRef.current,
+        currentWaveLevelUps: currentWaveLevelUpsRef.current
+      };
+
+      const unlocked = achievementTrackerRef.current.evaluate(snapshot);
+      if (unlocked.length === 0) {
+        break;
+      }
+
+      grantAchievementRewards(engine, unlocked);
+      addAchievementUnlocks(unlocked);
+      pass += 1;
+    }
+  }, [addAchievementUnlocks, grantAchievementRewards]);
 
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
@@ -225,7 +336,50 @@ export default function App() {
     localStorage.setItem('accountLevel', accountLevel.toString());
     localStorage.setItem('accountXP', accountXP.toString());
     localStorage.setItem('adminBalanceTuning', JSON.stringify(adminBalance));
-  }, [playerLevel, playerCoins, permanentUpgrades, selectedOperator, unlockedOperators, savedDataCores, nightmareMode, accountLevel, accountXP, adminBalance]);
+    localStorage.setItem('playerInventory', JSON.stringify(playerInventory));
+  }, [playerLevel, playerCoins, permanentUpgrades, selectedOperator, unlockedOperators, savedDataCores, nightmareMode, accountLevel, accountXP, adminBalance, playerInventory]);
+
+  useEffect(() => {
+    localStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(achievementUnlocks));
+    void saveAchievementUnlocksToIndexedDB(achievementUnlocks);
+  }, [achievementUnlocks]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateFromIndexedDB = async () => {
+      const indexedUnlocks = await loadAchievementUnlocksFromIndexedDB();
+      if (cancelled || !indexedUnlocks || indexedUnlocks.length === 0) return;
+
+      setAchievementUnlocks(prev => {
+        const byId = new Map<string, AchievementUnlock>(
+          prev.map(item => [item.achievementId, item] as [string, AchievementUnlock])
+        );
+
+        for (const unlock of indexedUnlocks) {
+          const existing = byId.get(unlock.achievementId);
+          if (!existing || unlock.unlockedAt > existing.unlockedAt) {
+            byId.set(unlock.achievementId, unlock);
+          }
+        }
+
+        const merged = Array.from(byId.values()).sort((a, b) => a.unlockedAt - b.unlockedAt);
+        if (
+          merged.length === prev.length &&
+          merged.every((item, index) => item.achievementId === prev[index]?.achievementId && item.unlockedAt === prev[index]?.unlockedAt)
+        ) {
+          return prev;
+        }
+
+        return merged;
+      });
+    };
+
+    void hydrateFromIndexedDB();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (engineRef.current) {
@@ -315,17 +469,88 @@ export default function App() {
   }, [gameState, exfillSummary]);
 
   useEffect(() => {
+    if (gameState !== 'PLAYING' || resumeWaveBanner === null) return;
+    const timer = window.setTimeout(() => setResumeWaveBanner(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [gameState, resumeWaveBanner]);
+
+  useEffect(() => {
+    if (gameState !== 'PLAYING') {
+      setActiveAchievementBanner(null);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const engine = engineRef.current;
+      if (!engine || engine.gameState !== 'PLAYING') return;
+
+      if (engine.player.currentWave !== lastWaveSeenRef.current) {
+        lastWaveSeenRef.current = engine.player.currentWave;
+        currentWaveKillCountRef.current = 0;
+        currentWaveLevelUpsRef.current = 0;
+      }
+
+      if (engine.killCount > prevKillCountRef.current) {
+        const gained = engine.killCount - prevKillCountRef.current;
+        currentWaveKillCountRef.current += gained;
+      }
+
+      if (engine.player.level > prevLevelRef.current) {
+        const gained = engine.player.level - prevLevelRef.current;
+        currentWaveLevelUpsRef.current += gained;
+      }
+
+      if (engine.player.coins > prevRunCoinsRef.current) {
+        const gained = engine.player.coins - prevRunCoinsRef.current;
+        totalCoinsCollectedRef.current += gained;
+      }
+
+      prevKillCountRef.current = engine.killCount;
+      prevLevelRef.current = engine.player.level;
+      prevRunCoinsRef.current = engine.player.coins;
+
+      evaluateAchievements(engine);
+    }, 180);
+
+    return () => window.clearInterval(timer);
+  }, [evaluateAchievements, gameState]);
+
+  useEffect(() => {
+    if (gameState !== 'PLAYING') return;
+    if (activeAchievementBanner || achievementQueue.length === 0) return;
+
+    const [next, ...rest] = achievementQueue;
+    setActiveAchievementBanner(next);
+    setAchievementQueue(rest);
+
+  }, [achievementQueue, activeAchievementBanner, gameState]);
+
+  useEffect(() => {
+    if (gameState !== 'PLAYING' || !activeAchievementBanner) return;
+
+    const timer = window.setTimeout(() => {
+      setActiveAchievementBanner(null);
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
+  }, [activeAchievementBanner, gameState]);
+
+  useEffect(() => {
     if (canvasRef.current && !engineRef.current) {
       const engine = new GameEngine(
         canvasRef.current,
         (options) => {
           setLevelUpOptions(options);
+          const wave = engineRef.current?.player.currentWave ?? 1;
+          setUpgradeScreenContext(wave <= 1 ? 'first' : 'wave');
           setGameState('LEVEL_UP');
         },
         (stats) => {
-          const runTime = stats.time || engineRef.current?.gameTime || 0;
-          const runKills = stats.kills || engineRef.current?.killCount || 0;
-          const deathXPBreakdown = createDeathXPBreakdown(runTime, runKills);
+          const runTime: number = stats.time || engineRef.current?.gameTime || 0;
+          const runKills: number = stats.kills || engineRef.current?.killCount || 0;
+          const collectedCores = engineRef.current?.player.pendingDataCores || 0;
+          const wavesCleared = Math.max(0, (engineRef.current?.player.currentWave || 1) - 1);
+          const deathXPBreakdown = createDeathXPBreakdown(wavesCleared, runKills);
           const deathReward = queueXPReward(deathXPBreakdown);
 
           setGameOverStats({
@@ -339,11 +564,15 @@ export default function App() {
           setHasExfillCarryover(false);
           setPlayerLevel(1);
           setPlayerExperience(0);
-          // NOTE: pendingDataCores from engineRef.current?.player are NOT saved here. They are lost.
+          setPlayerInventory({ armorTier: 0, hasRevive: false, nukeCount: 0 });
+          setSavedDataCores(prev => prev + collectedCores);
         },
         (upgrade) => {
           setTreasureReward(upgrade);
           setGameState('TREASURE');
+        },
+        () => {
+          setGameState('SHOP');
         },
         (coins, level) => {
           // Handle Exfill
@@ -353,8 +582,9 @@ export default function App() {
           const weapons = player?.weapons || [];
           const weaponLevelTotal = weapons.reduce((sum, w) => sum + (w.level || 0), 0);
           const weaponDamageStats = engineRef.current?.weaponDamageStats || {};
+          const wavesCleared = Math.max(0, (player?.currentWave || 1) - 1);
           const exfillXPBreakdown = createExfillXPBreakdown({
-            timeMs: gameTime,
+            wavesCleared,
             kills,
             level,
             coins,
@@ -367,7 +597,7 @@ export default function App() {
           const exfillRewardTotal = exfillRewardFiltered.reduce((sum, item) => sum + item.value, 0);
 
           setExfillSummary({
-            time: gameTime,
+            wavesCleared,
             kills,
             level,
             coins,
@@ -389,7 +619,22 @@ export default function App() {
           setPlayerCoins(prev => prev + coins);
           setPlayerLevel(level);
           setPlayerExperience(engineRef.current?.player.experience || 0);
-          exfillCarryoverRef.current = player ? JSON.parse(JSON.stringify(player)) : null;
+          exfillCarryoverRef.current = player
+            ? {
+                player: {
+                  ...player,
+                  velocity: { ...player.velocity },
+                  position: { ...player.position },
+                  weapons: player.weapons.map(w => ({ ...w })),
+                  upgrades: [...player.upgrades],
+                  stats: { ...player.stats },
+                  permanentUpgrades: { ...player.permanentUpgrades },
+                  inventory: { ...player.inventory },
+                  bannedUpgrades: new Set(player.bannedUpgrades)
+                },
+                killCount: kills
+              }
+            : null;
           setHasExfillCarryover(true);
           const collectedCores = engineRef.current?.player.pendingDataCores || 0;
           setSavedDataCores(prev => prev + collectedCores);
@@ -417,7 +662,11 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Pause handling
       if (e.key === 'Escape') {
-        if (gameState === 'PLAYING') {
+        if (gameState === 'SHOP') {
+          setGameState('PLAYING');
+          if (engineRef.current) engineRef.current.exitShop();
+          soundManager.playUIClick();
+        } else if (gameState === 'PLAYING') {
           setGameState('PAUSED');
           if (engineRef.current) engineRef.current.paused = true;
           soundManager.playUIClick();
@@ -425,6 +674,14 @@ export default function App() {
           setGameState('PLAYING');
           if (engineRef.current) engineRef.current.paused = false;
           soundManager.playUIClick();
+        }
+        return;
+      }
+
+      if (gameState === 'PLAYING' && e.key.toLowerCase() === 'n') {
+        if (engineRef.current && playerInventory.nukeCount > 0) {
+          engineRef.current.activateNuke();
+          setPlayerInventory(prev => ({ ...prev, nukeCount: engineRef.current!.player.inventory.nukeCount }));
         }
         return;
       }
@@ -451,6 +708,10 @@ export default function App() {
         setUnlockedOperators(['phantom']);
         setSelectedOperator('phantom');
         setSavedDataCores(0);
+        setAchievementUnlocks([]);
+        achievementTrackerRef.current = new AchievementTracker([]);
+        setAchievementQueue([]);
+        setActiveAchievementBanner(null);
         soundManager.playUIClick();
         cheatBuffer = '';
       } else if (cheatBuffer.endsWith('unlockall')) {
@@ -480,19 +741,67 @@ export default function App() {
       if (!hasExfillCarryover || !exfillCarryoverRef.current) {
         engineRef.current.player = engineRef.current.resetPlayer(1, 0, 0, permanentUpgrades, selectedOperator);
       } else {
-        engineRef.current.player = JSON.parse(JSON.stringify(exfillCarryoverRef.current));
+        const carry = exfillCarryoverRef.current;
+        const carriedPlayer = carry.player || carry;
+        engineRef.current.player = {
+          ...carriedPlayer,
+          velocity: { ...carriedPlayer.velocity },
+          position: { ...carriedPlayer.position },
+          weapons: carriedPlayer.weapons.map((w: any) => ({ ...w })),
+          upgrades: [...carriedPlayer.upgrades],
+          stats: { ...carriedPlayer.stats },
+          permanentUpgrades: { ...carriedPlayer.permanentUpgrades },
+          inventory: { ...carriedPlayer.inventory },
+          bannedUpgrades: carriedPlayer.bannedUpgrades instanceof Set
+            ? new Set(carriedPlayer.bannedUpgrades)
+            : new Set(carriedPlayer.bannedUpgrades || [])
+        };
         engineRef.current.player.health = engineRef.current.player.maxHealth;
         engineRef.current.player.velocity = { x: 0, y: 0 };
         setPlayerLevel(engineRef.current.player.level || 1);
         setPlayerExperience(engineRef.current.player.experience || 0);
       }
       engineRef.current.enemies = [];
-      engineRef.current.projectiles = [];
-      engineRef.current.gems = [];
       engineRef.current.gameTime = 0;
       engineRef.current.killCount = 0;
       engineRef.current.start();
-      setGameState('PLAYING');
+      
+      if (!hasExfillCarryover || !exfillCarryoverRef.current) {
+        setUpgradeScreenContext('first');
+        setResumeWaveBanner(null);
+        engineRef.current.levelUp(); // Triggers the LEVEL_UP screen  
+      } else {
+        const carry = exfillCarryoverRef.current;
+        const resumeWave = Math.max(1, engineRef.current.player.currentWave || 1);
+        const tuning = engineRef.current.getBalanceTuning();
+        const killCount = carry?.killCount || 0;
+
+        // Resume at the start of the same wave where exfill occurred.
+        engineRef.current.waveTimer = 0;
+        engineRef.current.gameTime = (resumeWave - 1) * engineRef.current.waveDuration;
+        engineRef.current.killCount = killCount;
+
+        const killBonus = Math.min(
+          killCount / Math.max(1, tuning.difficultyKillBonusDivisor),
+          tuning.difficultyKillBonusCap
+        );
+        const waveBonus = Math.max(0, resumeWave - 1) * tuning.difficultyTimeScalePerMinute;
+        engineRef.current.difficultyMultiplier = 1 + waveBonus + killBonus;
+
+        engineRef.current.eventManager.triggerWaveEvents(resumeWave, engineRef.current, true);
+        engineRef.current.spawnTimer = tuning.spawnBaseIntervalMs;
+        engineRef.current.spawnEnemies(0);
+        setResumeWaveBanner(resumeWave);
+        setGameState('PLAYING');
+      }
+      
+      // Inject inventory after resetting
+      engineRef.current.player.inventory = { ...playerInventory };
+      engineRef.current.player.armorHp = engineRef.current.getMaxArmorHp();
+      setAchievementQueue([]);
+      setActiveAchievementBanner(null);
+      resetRunAchievementTracking(engineRef.current);
+      evaluateAchievements(engineRef.current);
     }
   };
 
@@ -532,6 +841,64 @@ export default function App() {
     }
   };
 
+  const handleBuyItem = (itemType: string, cost: number) => {
+    const availableCoins = engineRef.current?.player.coins ?? playerCoins;
+    if (availableCoins >= cost) {
+      if (engineRef.current) {
+        engineRef.current.player.coins -= cost;
+      }
+      setPlayerInventory(prev => {
+        const next = { ...prev };
+        if (itemType === 'revive') next.hasRevive = true;
+        if (itemType === 'nuke') next.nukeCount += 1;
+        if (itemType.startsWith('armor_')) next.armorTier = parseInt(itemType.split('_')[1]);
+        if (engineRef.current) {
+          engineRef.current.player.inventory = { ...next };
+          if (itemType.startsWith('armor_')) {
+            engineRef.current.player.armorHp = Math.max(engineRef.current.player.armorHp, engineRef.current.getMaxArmorHp());
+          }
+        }
+        return next;
+      });
+    }
+  };
+
+  const achievementProgressSnapshot: AchievementRuntimeSnapshot = (() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      return {
+        currentWave: 1,
+        playerLevel,
+        killCount: 0,
+        totalCoinsCollected: totalCoinsCollectedRef.current,
+        runCoinsBanked: playerCoins,
+        weaponCount: 0,
+        weaponTotalLevels: 0,
+        upgradeCount: 0,
+        gameTimeMs: 0,
+        comboCount: 0,
+        currentWaveKillCount: currentWaveKillCountRef.current,
+        currentWaveLevelUps: currentWaveLevelUpsRef.current
+      };
+    }
+
+    const weaponTotalLevels = engine.player.weapons.reduce((sum, weapon) => sum + (weapon.level || 0), 0);
+    return {
+      currentWave: engine.player.currentWave || 1,
+      playerLevel: engine.player.level || playerLevel,
+      killCount: engine.killCount || 0,
+      totalCoinsCollected: totalCoinsCollectedRef.current,
+      runCoinsBanked: engine.player.coins || 0,
+      weaponCount: engine.player.weapons.length,
+      weaponTotalLevels,
+      upgradeCount: engine.player.upgrades.length,
+      gameTimeMs: engine.gameTime,
+      comboCount: engine.comboCount,
+      currentWaveKillCount: currentWaveKillCountRef.current,
+      currentWaveLevelUps: currentWaveLevelUpsRef.current
+    };
+  })();
+
   return (
     <div ref={appRef} className="relative w-full h-screen bg-[#0a0a0a] overflow-hidden text-white font-sans">
       {gameState === 'MENU' && <MenuEffects />}
@@ -546,6 +913,47 @@ export default function App() {
 
       {/* HUD */}
       {gameState === 'PLAYING' && <GameHUD engine={engineRef.current} />}
+
+      <AnimatePresence>
+        {gameState === 'PLAYING' && resumeWaveBanner !== null && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+            transition={{ duration: 0.25 }}
+            className="absolute top-6 left-1/2 -translate-x-1/2 z-[90] pointer-events-none"
+          >
+            <div className="px-5 py-2.5 rounded-full bg-black/70 border border-cyan-400/40 backdrop-blur-md shadow-[0_0_20px_rgba(34,211,238,0.25)]">
+              <span className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-300">
+                Resumed: Wave {resumeWaveBanner}
+              </span>
+            </div>
+          </motion.div>
+        )}
+        {gameState === 'PLAYING' && activeAchievementBanner && (
+          <motion.div
+            key={activeAchievementBanner.definition.id}
+            initial={{ opacity: 0, x: 34, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 28, scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 340, damping: 22, mass: 0.7 }}
+            className="absolute right-6 top-1/2 -translate-y-1/2 z-[95] pointer-events-none"
+          >
+            <div className="min-w-[300px] max-w-[min(420px,85vw)] px-4 py-2.5 rounded-xl bg-black/80 border border-emerald-400/40 backdrop-blur-md shadow-[0_0_24px_rgba(16,185,129,0.3)]">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-[0.24em] text-emerald-300/80">Achievement Unlocked</div>
+                  <div className="text-sm font-black text-white tracking-wide">{activeAchievementBanner.definition.title}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] font-mono text-yellow-300">+{activeAchievementBanner.definition.rewardCoins} coins</div>
+                  <div className="text-[11px] font-mono text-cyan-300">+{activeAchievementBanner.definition.rewardXP} XP</div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Screens */}
       <AnimatePresence>
@@ -668,7 +1076,7 @@ export default function App() {
                       <div className="w-8 h-8 rounded-sm bg-black/20 flex items-center justify-center mr-4 group-hover:bg-black/10 transition-colors">
                         <Play size={16} fill="currentColor" className="text-black ml-0.5" />
                       </div>
-                      <span className="text-black font-black text-sm uppercase tracking-[0.15em]">Initialize Run</span>
+                      <span className="text-black font-black text-sm uppercase tracking-[0.15em]">{hasExfillCarryover ? 'Resume Run' : 'Initialize Run'}</span>
                       <ChevronRight size={18} className="text-black/40 ml-auto group-hover:translate-x-1 transition-transform" />
                     </div>
                     {/* Bottom accent line */}
@@ -701,10 +1109,8 @@ export default function App() {
                         {/* Content */}
                         <div className="relative z-10 flex items-center w-full px-6">
                           {/* Mini operator avatar */}
-                          <div className="w-8 h-8 rounded-sm flex items-center justify-center mr-4 relative overflow-hidden" style={{ background: `${op?.colorDark || '#0a3d3d'}` }}>
-                            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 60% 40%, ${op?.colorSecondary || '#0d5e5e'}, transparent)` }} />
-                            <div className="w-2 h-3.5 rounded-full absolute" style={{ right: '8px', background: op?.colorVisor || '#00ffff', boxShadow: `0 0 6px ${op?.colorVisor || '#00ffff'}`, opacity: 0.9 }} />
-                            <div className="w-1 h-1 rounded-full absolute" style={{ left: '10px', top: '14px', background: opColor, boxShadow: `0 0 4px ${opColor}` }} />
+                          <div className="w-8 h-8 rounded-sm flex items-center justify-center mr-4 relative overflow-hidden bg-black/40">
+                            {op && <img src={`/${op.id}.png`} alt={op.name} className="w-full h-full object-cover" />}
                           </div>
                           <div className="flex flex-col items-start">
                             <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Operators</span>
@@ -785,6 +1191,37 @@ export default function App() {
                       <div className="ml-auto flex items-center gap-2 opacity-40 group-hover:opacity-70 transition-opacity">
                         <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider hidden sm:inline">Threats &amp; Arms</span>
                         <ChevronRight size={16} className="text-white/10 group-hover:text-white/30 group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </div>
+                  </motion.button>
+
+                  {/* ▸ ACHIEVEMENTS */}
+                  <motion.button
+                    initial={{ x: -40, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.34, type: 'spring', damping: 20 }}
+                    onClick={(e) => {
+                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
+                      soundManager.playUIClick();
+                      setTimeout(() => setGameState('ACHIEVEMENTS'), 300);
+                    }}
+                    onMouseEnter={() => soundManager.playUIHover()}
+                    className="group relative flex items-center h-12 cursor-pointer overflow-hidden"
+                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
+                  >
+                    <div className="absolute inset-0 bg-white/[0.03] border border-white/[0.06] group-hover:bg-white/[0.08] group-hover:border-white/15 transition-all duration-300" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-emerald-500/30" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-center bg-emerald-400" />
+                    <div className="relative z-10 flex items-center w-full px-6">
+                      <div className="w-8 h-8 rounded-sm bg-emerald-500/10 flex items-center justify-center mr-4 group-hover:bg-emerald-500/20 transition-colors">
+                        <Trophy size={15} className="text-emerald-300/80 group-hover:text-emerald-200 transition-colors" />
+                      </div>
+                      <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Achievements</span>
+                      <div className="ml-auto flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300/90">
+                          {achievementUnlocks.length}/{ACHIEVEMENTS.length}
+                        </span>
+                        <ChevronRight size={16} className="text-white/20 group-hover:text-emerald-200 group-hover:translate-x-1 transition-all" />
                       </div>
                     </div>
                   </motion.button>
@@ -923,34 +1360,21 @@ export default function App() {
                       />
                       {/* Main avatar circle */}
                       <div
-                        className="w-32 h-32 rounded-full relative overflow-hidden"
+                        className="w-32 h-32 rounded-full relative overflow-hidden bg-black/40"
                         style={{
-                          background: `radial-gradient(circle at 55% 40%, ${op.colorSecondary}, ${op.colorDark})`,
                           boxShadow: `0 0 40px ${op.colorGlow}, 0 0 80px ${op.colorGlow}, inset 0 0 20px ${op.colorDark}`
                         }}
                       >
-                        {/* Helmet visor */}
-                        <motion.div
-                          animate={{ opacity: [0.7, 1, 0.7] }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                          className="absolute w-5 h-9 rounded-full"
-                          style={{ right: '28px', top: '28px', background: op.colorVisor, boxShadow: `0 0 12px ${op.colorVisor}, 0 0 25px ${op.colorVisor}40` }}
-                        />
-                        {/* Core energy */}
-                        <motion.div
-                          animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.9, 0.5] }}
-                          transition={{ duration: 1.5, repeat: Infinity }}
-                          className="absolute w-2.5 h-2.5 rounded-full"
-                          style={{ left: '44px', top: '55px', background: op.color, boxShadow: `0 0 10px ${op.color}` }}
-                        />
-                        {/* Limb accents */}
-                        <div className="absolute bottom-3 left-6 w-4 h-8 rounded-sm" style={{ background: op.colorLimbs, opacity: 0.5 }} />
-                        <div className="absolute bottom-3 right-6 w-4 h-8 rounded-sm" style={{ background: op.colorLimbs, opacity: 0.5 }} />
-                        {/* Boot accents */}
-                        <div className="absolute bottom-0 left-5 w-5 h-3 rounded-t-sm" style={{ background: op.colorBoots, opacity: 0.6 }} />
-                        <div className="absolute bottom-0 right-5 w-5 h-3 rounded-t-sm" style={{ background: op.colorBoots, opacity: 0.6 }} />
+                        <img src={`/${op.id}.png`} alt={op.name} className="w-full h-full object-cover relative z-10" />
                         {/* Scanline overlay */}
-                        <div className="absolute inset-0 opacity-[0.06]" style={{ background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)' }} />
+                        <div className="absolute inset-0 z-20 pointer-events-none opacity-[0.2]" style={{ background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)' }} />
+                        {/* Holographic tint */}
+                        <motion.div 
+                          className="absolute inset-0 mix-blend-screen z-30 pointer-events-none"
+                          style={{ backgroundColor: `${op.color}20` }}
+                          animate={{ opacity: [0.6, 1, 0.6] }}
+                          transition={{ duration: 3, repeat: Infinity }}
+                        />
                       </div>
                       {/* Base glow */}
                       <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-24 h-1 rounded-full" style={{ background: op.color, boxShadow: `0 0 20px ${op.color}60`, opacity: 0.5 }} />
@@ -1158,7 +1582,16 @@ export default function App() {
                             {upgrade.stat === 'regen' && <Activity size={24} />}
                             {upgrade.stat === 'amount' && <Zap size={24} />}
                             {upgrade.stat === 'revive' && <Zap size={24} />}
-                            {!['might', 'area', 'speed', 'health', 'regen', 'amount', 'revive'].includes(upgrade.stat) && <Zap size={24} />}
+                            {upgrade.stat === 'reroll' && <Sparkles size={24} />}
+                            {upgrade.stat === 'banish' && <Skull size={24} />}
+                            {upgrade.stat === 'skip' && <ArrowUpCircle size={24} />}
+                            {upgrade.stat === 'dash_guard' && <Shield size={24} />}
+                            {upgrade.stat === 'dash_repair' && <Heart size={24} />}
+                            {upgrade.stat === 'dash_impact' && <Target size={24} />}
+                            {upgrade.stat === 'dash_momentum' && <Activity size={24} />}
+                            {upgrade.stat === 'dash_charge' && <Sparkles size={24} />}
+                            {(upgrade.stat === 'dash_speed' || upgrade.stat === 'dash_duration' || upgrade.stat === 'dash_recharge' || upgrade.stat === 'dash_ghost' || upgrade.stat === 'dash_cooldown') && <Wind size={24} />}
+                            {!['might', 'area', 'speed', 'health', 'regen', 'amount', 'revive', 'reroll', 'banish', 'skip', 'dash_guard', 'dash_repair', 'dash_impact', 'dash_momentum', 'dash_charge', 'dash_speed', 'dash_duration', 'dash_recharge', 'dash_ghost', 'dash_cooldown'].includes(upgrade.stat) && <Zap size={24} />}
                           </div>
                           <div className="text-right">
                             <div className="text-[10px] text-white/40 uppercase font-bold tracking-widest mb-1">Level</div>
@@ -1302,24 +1735,49 @@ export default function App() {
                 transition={{ type: 'spring', damping: 20 }}
                 className="text-center mb-10"
               >
-                <h2 className="text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-500">
-                  SYSTEM UPGRADE
-                </h2>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: '120px' }}
-                  transition={{ delay: 0.3, duration: 0.6 }}
-                  className="h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent mx-auto mt-3"
-                />
-                <p className="text-white/30 text-xs uppercase tracking-[0.4em] mt-3">Select Enhancement Protocol</p>
+                {upgradeScreenContext === 'first' ? (
+                  <>
+                    <h2 className="text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-500">
+                      BOOT SEQUENCE
+                    </h2>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: '140px' }}
+                      transition={{ delay: 0.3, duration: 0.6 }}
+                      className="h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent mx-auto mt-3"
+                    />
+                    <p className="text-white/40 text-xs uppercase tracking-[0.4em] mt-3">Choose your primary directive</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="inline-flex items-center gap-3 mb-2">
+                      <span className="text-xs font-mono text-yellow-400/60 uppercase tracking-[0.3em]">WAVE CLEAR</span>
+                      <span className="text-yellow-400/30">·</span>
+                      <span className="text-xs font-mono text-yellow-400/60 uppercase tracking-[0.3em]">
+                        WAVE {(engineRef.current?.player.currentWave ?? 1)} INCOMING
+                      </span>
+                    </div>
+                    <h2 className="text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-500">
+                      SYSTEM UPGRADE
+                    </h2>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: '120px' }}
+                      transition={{ delay: 0.3, duration: 0.6 }}
+                      className="h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent mx-auto mt-3"
+                    />
+                    <p className="text-white/30 text-xs uppercase tracking-[0.4em] mt-3">Select enhancement protocol</p>
+                  </>
+                )}
               </motion.div>
 
               {/* Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="flex flex-wrap justify-center gap-5">
                 {levelUpOptions.map((option, i) => {
                   const isLegendary = option.rarity === 'legendary';
                   const isRare = option.rarity === 'rare';
                   const isWeapon = option.type === 'weapon' || option.type === 'weapon_upgrade';
+                  const isDash = option.type === 'dash';
 
                   const borderColor = isLegendary ? 'from-yellow-400 via-amber-500 to-yellow-600'
                     : isRare ? 'from-purple-400 via-fuchsia-500 to-purple-600'
@@ -1335,17 +1793,26 @@ export default function App() {
 
                   const accentColor = isLegendary ? 'text-yellow-400'
                     : isRare ? 'text-purple-400'
+                    : isDash ? 'text-orange-400'
                     : isWeapon ? 'text-cyan-400' : 'text-white';
 
                   return (
-                    <motion.button
+                    <motion.div
                       key={i}
                       initial={{ y: 40, opacity: 0, scale: 0.95 }}
                       animate={{ y: 0, opacity: 1, scale: 1 }}
                       transition={{ delay: i * 0.12, type: 'spring', damping: 18, stiffness: 120 }}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => selectUpgrade(option)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          selectUpgrade(option);
+                        }
+                      }}
                       onMouseEnter={() => soundManager.playUIHover()}
-                      className={`group relative flex flex-col items-center p-0 rounded-2xl transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 shadow-lg ${glowColor} hover:shadow-xl cursor-pointer`}
+                      className={`group relative flex flex-col items-center p-0 rounded-2xl transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 shadow-lg ${glowColor} hover:shadow-xl cursor-pointer w-full sm:w-[calc(50%-1.25rem)] md:w-[calc(33.33%-1.25rem)] lg:w-[calc(25%-1.25rem)] max-w-sm`}
                     >
                       {/* Animated gradient border */}
                       <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${borderColor} p-[1.5px]`}>
@@ -1383,14 +1850,33 @@ export default function App() {
                           </motion.div>
                         )}
 
-                        {/* Type badge for weapons */}
-                        {isWeapon && (
-                          <div className="absolute top-3 left-3">
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400/80 border border-cyan-500/20">
+                        {/* Top-Left Action/Type Badges */}
+                        <div className="absolute top-3 left-3 flex flex-col gap-1 items-start z-20">
+                          {isWeapon && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400/80 border border-cyan-500/20 shadow-lg">
                               {option.type === 'weapon' ? 'New Weapon' : 'Upgrade'}
                             </span>
-                          </div>
-                        )}
+                          )}
+                          {isDash && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-orange-500/10 text-orange-400/80 border border-orange-500/20 shadow-lg">
+                              Dash Protocol
+                            </span>
+                          )}
+                          {engineRef.current?.player && engineRef.current.player.banishes > 0 && option.id !== 'full_heal' && upgradeScreenContext !== 'first' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                soundManager.playUIClick();
+                                const newOpts = engineRef.current!.banishUpgrade(option.id);
+                                setLevelUpOptions(newOpts);
+                              }}
+                              className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/30 transition-colors flex items-center gap-1 shadow-lg backdrop-blur-md w-fit"
+                            >
+                              <Skull size={10} />
+                              Banish
+                            </button>
+                          )}
+                        </div>
 
                         {/* Icon */}
                         <motion.div
@@ -1405,12 +1891,14 @@ export default function App() {
                           {option.id === 'growth' && <Trophy size={32} className="text-purple-400 drop-shadow-[0_0_8px_rgba(192,132,252,0.5)]" />}
                           {option.id === 'amount' && <Shield size={32} className="text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />}
                           {option.id === 'health' && <Shield size={32} className="text-rose-400 drop-shadow-[0_0_8px_rgba(251,113,133,0.5)]" />}
+                          {option.id === 'full_heal' && <Heart size={32} className="text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]" />}
                           {option.id === 'luck' && <Zap size={32} className="text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" />}
                           {option.id === 'regen' && <Activity size={32} className="text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]" />}
                           {option.id === 'god_mode' && <Zap size={32} className="text-yellow-300 drop-shadow-[0_0_12px_rgba(253,224,71,0.6)]" />}
                           {option.id === 'instant_kill' && <Skull size={32} className="text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]" />}
                           {option.type === 'weapon' && <Crosshair size={32} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" />}
                           {option.type === 'weapon_upgrade' && <Zap size={32} className="text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.5)]" />}
+                          {isDash && <Wind size={32} className="text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.6)]" />}
                         </motion.div>
 
                         {/* Name */}
@@ -1432,10 +1920,77 @@ export default function App() {
                           Select
                         </div>
                       </div>
-                    </motion.button>
+                    </motion.div>
                   );
                 })}
               </div>
+              
+              {/* Reroll & Skip Controls */}
+              {upgradeScreenContext !== 'first' && engineRef.current?.player && (
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="w-full flex flex-wrap justify-center gap-4 mt-8"
+                >
+                  <button
+                    onClick={() => {
+                      const options = engineRef.current!.rerollUpgrades();
+                      if (options.length > 0) {
+                        setLevelUpOptions(options);
+                      }
+                    }}
+                    onMouseEnter={() => soundManager.playUIHover()}
+                    disabled={
+                      engineRef.current.getRemainingRerollsThisWave() <= 0 ||
+                      (engineRef.current.getRerollCost() !== null &&
+                        engineRef.current.player.coins < engineRef.current.getRerollCost()!)
+                    }
+                    className="flex items-center gap-2 px-6 py-2 rounded-full border border-white/20 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors uppercase text-[10px] font-bold tracking-widest disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white/5 disabled:hover:text-white/70"
+                  >
+                    <Sparkles size={14} />
+                    Reroll - {engineRef.current.getRerollCost() ?? 'MAX'} Coins ({engineRef.current.getRemainingRerollsThisWave()}/3)
+                  </button>
+                  {engineRef.current.player.skips > 0 && (
+                    <button
+                      onClick={() => {
+                        if (engineRef.current?.skipUpgrades()) {
+                          setGameState('PLAYING');
+                        }
+                      }}
+                      onMouseEnter={() => soundManager.playUIHover()}
+                      className="flex items-center gap-2 px-6 py-2 rounded-full border border-white/20 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors uppercase text-[10px] font-bold tracking-widest"
+                    >
+                      <ArrowUpCircle size={14} />
+                      Skip ({engineRef.current.player.skips})
+                    </button>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Optional Exfill Action */}
+              {upgradeScreenContext !== 'first' && (
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.6 }}
+                  className="mt-12 flex justify-center"
+                >
+                  <button
+                    onClick={() => {
+                      soundManager.playUIClick();
+                      if (engineRef.current) {
+                        engineRef.current.triggerExfill();
+                      }
+                    }}
+                    onMouseEnter={() => soundManager.playUIHover()}
+                    className="flex items-center gap-3 px-8 py-3 bg-yellow-500/10 border-2 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black font-black uppercase tracking-widest rounded-full transition-all duration-300"
+                  >
+                    <ArrowUpCircle size={24} />
+                    Initiate Exfill & Keep Loot
+                  </button>
+                </motion.div>
+              )}
             </div>
           </motion.div>
         )}
@@ -1693,27 +2248,12 @@ export default function App() {
                       {/* Operator Preview Circle */}
                       <div className="flex items-center gap-4 mb-4">
                         <div 
-                          className="w-16 h-16 rounded-full flex items-center justify-center relative overflow-hidden" 
+                          className="w-16 h-16 rounded-full flex items-center justify-center relative overflow-hidden bg-black/40" 
                           style={{ 
-                            background: `radial-gradient(circle at 60% 40%, ${op.colorSecondary}, ${op.colorDark})`,
                             boxShadow: `0 0 20px ${op.colorGlow}, inset 0 0 15px ${op.colorDark}`
                           }}
                         >
-                          {/* Visor glow */}
-                          <div 
-                            className="w-4 h-7 rounded-full absolute" 
-                            style={{ 
-                              right: '12px',
-                              background: op.colorVisor, 
-                              boxShadow: `0 0 8px ${op.colorVisor}`,
-                              opacity: 0.9 
-                            }}
-                          />
-                          {/* Core dot */}
-                          <div 
-                            className="w-2 h-2 rounded-full absolute"
-                            style={{ left: '22px', background: op.color, boxShadow: `0 0 6px ${op.color}` }}
-                          />
+                          <img src={`/${op.id}.png`} alt={op.name} className="w-full h-full object-cover" />
                           {!isUnlocked && (
                             <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                               <Lock size={22} className="text-white/50" />
@@ -1828,6 +2368,18 @@ export default function App() {
           <IntelArchive onBack={() => { soundManager.playUIClick(); setGameState('MENU'); }} />
         )}
 
+        {gameState === 'ACHIEVEMENTS' && (
+          <AchievementsPage
+            achievements={ACHIEVEMENTS}
+            unlocks={achievementUnlocks}
+            progressSnapshot={achievementProgressSnapshot}
+            onBack={() => {
+              soundManager.playUIClick();
+              setGameState('MENU');
+            }}
+          />
+        )}
+
         {gameState === 'EXFILL_SUMMARY' && exfillSummary && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -1843,8 +2395,8 @@ export default function App() {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-                  <div className="text-white/40 text-xs uppercase tracking-widest mb-1">Time</div>
-                  <div className="text-2xl font-black italic">{formatTime(exfillSummary.time)}</div>
+                  <div className="text-white/40 text-xs uppercase tracking-widest mb-1">Waves</div>
+                  <div className="text-2xl font-black italic">{exfillSummary.wavesCleared}</div>
                 </div>
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
                   <div className="text-white/40 text-xs uppercase tracking-widest mb-1">Kills</div>
@@ -1952,10 +2504,9 @@ export default function App() {
               <h2 className="text-8xl font-black italic mb-4 text-red-500 tracking-tighter">PROTOCOL FAILED</h2>
               <div className="flex justify-center gap-12 mb-12 py-8 border-y border-white/10">
                 <div>
-                  <div className="text-white/40 text-xs uppercase tracking-widest mb-1">Time</div>
+                  <div className="text-white/40 text-xs uppercase tracking-widest mb-1">Waves</div>
                   <div className="text-3xl font-mono">
-                    {Math.floor(gameOverStats.time / 60000)}:
-                    {Math.floor((gameOverStats.time % 60000) / 1000).toString().padStart(2, '0')}
+                    {Math.max(0, (engineRef.current?.player.currentWave || 1) - 1)}
                   </div>
                 </div>
                 <div>
@@ -2013,6 +2564,20 @@ export default function App() {
               </div>
             </div>
           </motion.div>
+        )}
+
+        {gameState === 'SHOP' && (
+          <ShopMenu
+            playerCoins={engineRef.current?.player.coins ?? playerCoins}
+            inventory={playerInventory}
+            onBuy={handleBuyItem}
+            onLeave={() => {
+              setGameState('PLAYING');
+              if (engineRef.current) {
+                engineRef.current.exitShop();
+              }
+            }}
+          />
         )}
       </AnimatePresence>
     </div>
