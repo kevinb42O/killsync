@@ -127,6 +127,8 @@ export default function App() {
   });
   const [playerExperience, setPlayerExperience] = useState(0);
   const [hasExfillCarryover, setHasExfillCarryover] = useState(false);
+  const [startWaveOverride, setStartWaveOverride] = useState<number | null>(null);
+  const [startWithEverything, setStartWithEverything] = useState(false);
   const [resumeWaveBanner, setResumeWaveBanner] = useState<number | null>(null);
   const [playerCoins, setPlayerCoins] = useState(() => {
     const saved = localStorage.getItem('playerCoins');
@@ -653,6 +655,15 @@ export default function App() {
     let cheatBuffer = '';
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const activateStartWaveCheat = (wave: number) => {
+        setStartWaveOverride(Math.max(1, wave));
+        setStartWithEverything(false);
+        exfillCarryoverRef.current = null;
+        setHasExfillCarryover(false);
+        soundManager.playLevelUp();
+        cheatBuffer = '';
+      };
+
       // Pause handling
       if (e.key === 'Escape') {
         if (gameState === 'SHOP') {
@@ -697,9 +708,23 @@ export default function App() {
 
       if (gameState !== 'MENU') return;
       
-      cheatBuffer += e.key.toLowerCase();
-      if (cheatBuffer.length > 20) {
-        cheatBuffer = cheatBuffer.slice(-20);
+      const cheatKey = e.key.toLowerCase();
+      if (!/^[a-z0-9 ]$/.test(cheatKey)) {
+        return;
+      }
+
+      cheatBuffer += cheatKey;
+      if (cheatBuffer.length > 32) {
+        cheatBuffer = cheatBuffer.slice(-32);
+      }
+
+      const startWaveMatch = cheatBuffer.match(/startwave\s*(\d{1,3})$/);
+      if (startWaveMatch) {
+        const parsedWave = parseInt(startWaveMatch[1], 10);
+        if (!Number.isNaN(parsedWave)) {
+          activateStartWaveCheat(parsedWave);
+        }
+        return;
       }
       
       if (cheatBuffer.endsWith('gimmecash')) {
@@ -717,6 +742,8 @@ export default function App() {
         setUnlockedOperators(['phantom']);
         setSelectedOperator('phantom');
         setSavedDataCores(0);
+        setStartWaveOverride(null);
+        setStartWithEverything(false);
         setAchievementUnlocks([]);
         achievementTrackerRef.current = new AchievementTracker([]);
         setAchievementQueue([]);
@@ -735,6 +762,44 @@ export default function App() {
         setPermanentUpgrades(maxUpgrades);
         soundManager.playLevelUp();
         cheatBuffer = '';
+      } else if (cheatBuffer.endsWith('waveten')) {
+        activateStartWaveCheat(10);
+      } else if (cheatBuffer.endsWith('startwaveten')) {
+        activateStartWaveCheat(10);
+      } else if (cheatBuffer.endsWith('wavetwenty')) {
+        activateStartWaveCheat(20);
+      } else if (cheatBuffer.endsWith('startwavetwenty')) {
+        activateStartWaveCheat(20);
+      } else if (cheatBuffer.endsWith('wavethirty')) {
+        activateStartWaveCheat(30);
+      } else if (cheatBuffer.endsWith('startwavethirty')) {
+        activateStartWaveCheat(30);
+      } else if (cheatBuffer.endsWith('startlevelthirty')) {
+        activateStartWaveCheat(30);
+      } else if (cheatBuffer.endsWith('waveforty')) {
+        activateStartWaveCheat(40);
+      } else if (cheatBuffer.endsWith('startwaveforty')) {
+        activateStartWaveCheat(40);
+      } else if (cheatBuffer.endsWith('startwitheverything')) {
+        const maxUpgrades: Record<string, number> = {};
+        PERMANENT_UPGRADES.forEach(u => {
+          maxUpgrades[u.id] = u.maxLevel;
+        });
+        const maxAccountXP = getAccountXPRequired(MAX_ACCOUNT_LEVEL);
+
+        setPlayerCoins(9999999);
+        setSavedDataCores(9999);
+        setPermanentUpgrades(maxUpgrades);
+        setUnlockedOperators(OPERATOR_DEFINITIONS.map(o => o.id));
+        setAccountLevel(MAX_ACCOUNT_LEVEL);
+        setAccountXP(maxAccountXP);
+        setDisplayAccountLevel(MAX_ACCOUNT_LEVEL);
+        setDisplayAccountXP(maxAccountXP);
+        exfillCarryoverRef.current = null;
+        setHasExfillCarryover(false);
+        setStartWithEverything(true);
+        soundManager.playLevelUp();
+        cheatBuffer = '';
       }
     };
 
@@ -745,9 +810,13 @@ export default function App() {
   const startGame = () => {
     soundManager.playUIClick();
     if (engineRef.current) {
+      const startWave = Math.max(1, startWaveOverride || 1);
+      const forceFreshStart = startWithEverything || startWave > 1;
+      const canUseCarryover = !forceFreshStart && hasExfillCarryover && !!exfillCarryoverRef.current;
+
       engineRef.current.setBalanceTuning(adminBalance);
       engineRef.current.eventManager.nightmareMode = nightmareMode;
-      if (!hasExfillCarryover || !exfillCarryoverRef.current) {
+      if (!canUseCarryover) {
         setPlayerInventory(EMPTY_INVENTORY);
         engineRef.current.player = engineRef.current.resetPlayer(1, 0, 0, permanentUpgrades, selectedOperator);
       } else {
@@ -775,11 +844,38 @@ export default function App() {
       engineRef.current.gameTime = 0;
       engineRef.current.killCount = 0;
       engineRef.current.start();
+
+      if (!canUseCarryover) {
+        if (startWithEverything) {
+          engineRef.current.grantEverythingLoadout();
+        }
+      }
       
-      if (!hasExfillCarryover || !exfillCarryoverRef.current) {
+      if (!canUseCarryover) {
+        const tuning = engineRef.current.getBalanceTuning();
         setUpgradeScreenContext('first');
         setResumeWaveBanner(null);
-        engineRef.current.levelUp(); // Triggers the LEVEL_UP screen  
+        if (startWave <= 1 && !startWithEverything) {
+          engineRef.current.levelUp(); // Triggers the LEVEL_UP screen
+        } else {
+          if (!startWithEverything) {
+            engineRef.current.grantRandomWaveCheatLoadout(startWave);
+          }
+          engineRef.current.player.currentWave = startWave;
+          engineRef.current.waveTimer = 0;
+          engineRef.current.gameTime = (startWave - 1) * engineRef.current.waveDuration;
+          engineRef.current.killCount = 0;
+          const waveBonus = Math.max(0, startWave - 1) * tuning.difficultyTimeScalePerMinute;
+          engineRef.current.difficultyMultiplier = 1 + waveBonus;
+          engineRef.current.eventManager.triggerWaveEvents(startWave, engineRef.current, true);
+          engineRef.current.spawnTimer = tuning.spawnBaseIntervalMs;
+          engineRef.current.spawnEnemies(0);
+          setUpgradeScreenContext('wave');
+          if (startWave > 1) {
+            setResumeWaveBanner(startWave);
+          }
+          setGameState('PLAYING');
+        }
       } else {
         const carry = exfillCarryoverRef.current;
         const resumeWave = Math.max(1, engineRef.current.player.currentWave || 1);
@@ -806,7 +902,7 @@ export default function App() {
       }
       
       // Inventory only carries via a successful exfill chain.
-      if (!hasExfillCarryover || !exfillCarryoverRef.current) {
+      if (!canUseCarryover) {
         engineRef.current.player.inventory = { ...EMPTY_INVENTORY };
         engineRef.current.player.armorHp = 0;
       } else {

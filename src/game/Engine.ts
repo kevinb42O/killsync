@@ -64,7 +64,8 @@ export const DEFAULT_BALANCE_TUNING: BalanceTuning = {
 };
 
 export class GameEngine {
-  private readonly DEFAULT_WEAPON_DAMAGE_MULTIPLIER = 1.2;
+  private readonly DEFAULT_WEAPON_DAMAGE_MULTIPLIER = 1.45;
+  private readonly NON_ARC_WEAPON_COMPENSATION_MULTIPLIER = 1.55;
   private readonly MAX_ENEMIES = 500;
   private readonly MAX_PROJECTILES = 1400;
   private readonly MAX_PARTICLES = 1600;
@@ -75,6 +76,9 @@ export class GameEngine {
   private readonly SHOP_RING_DISTANCE = 1300;
   private readonly REROLL_COSTS = [100, 250, 500];
   private readonly MAX_REROLLS_PER_WAVE = 3;
+  private readonly MAX_ACTIVE_TITANS = 8;
+  private readonly MAX_ACTIVE_ELITES = 60;
+  private readonly MAX_ACTIVE_PHANTOMS = 45;
 
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -109,7 +113,7 @@ export class GameEngine {
   gameTime: number = 0;
   killCount: number = 0;
   difficultyMultiplier: number = 1;
-  dashCooldown: number = 2000;
+  dashCooldown: number = 2400;
   dashTimer: number = 0;
   isDashing: boolean = false;
   dashDuration: number = 200;
@@ -164,6 +168,7 @@ export class GameEngine {
   private lastAutoUpgradeId: string | null = null;
   private queuedAutoSkips: number = 0;
   private queuedAutoRerolls: number = 0;
+  private titanSpriteCache = new Map<string, HTMLCanvasElement>();
 
   constructor(
     canvas: HTMLCanvasElement, 
@@ -345,7 +350,11 @@ export class GameEngine {
 
   private getDashKineticRefundFraction(): number {
     const level = this.getDashUpgradeLevelByKey('kineticRefund');
-    return Math.min(0.4, 0.15 + Math.max(0, level - 1) * 0.1);
+    return Math.min(0.25, 0.08 + Math.max(0, level - 1) * 0.06);
+  }
+
+  private getDashActivationLockoutMs(): number {
+    return Math.max(240, this.dashDuration + 40);
   }
 
   private getDashNullWakeLifeMs(): number {
@@ -360,6 +369,12 @@ export class GameEngine {
 
   private getDashImpactMultiplier(): number {
     return 1 + this.getPermanentUpgradeLevel('perm_dash_impact') * 0.15;
+  }
+
+  private getWaveWeaponDamageMultiplier(): number {
+    const wave = Math.max(1, this.player.currentWave || 1);
+    // +10% damage per wave: wave 10 => 2.0x, wave 20 => 3.0x.
+    return 1 + wave * 0.1;
   }
 
   private syncDashChargeCapacity() {
@@ -416,6 +431,12 @@ export class GameEngine {
     this.dashGhostTimer = 0;
     this.dashMomentumTimer = 0;
     this.dashSpaceWasDown = false;
+    this.recentAutoUpgrade = null;
+    this.recentSystemNotice = null;
+    this.autoUpgradeNoDashStreak = 0;
+    this.lastAutoUpgradeId = null;
+    this.queuedAutoSkips = 0;
+    this.queuedAutoRerolls = 0;
     this.requestUpdate();
   }
 
@@ -693,9 +714,9 @@ export class GameEngine {
     const statPool = pool.filter(item => item.type === 'stat');
 
     const bucketWeights: Array<{ key: 'weapon' | 'dash' | 'stat'; weight: number; items: any[] }> = [
-      { key: 'weapon', weight: 0.5, items: weaponPool },
-      { key: 'dash', weight: this.autoUpgradeNoDashStreak >= 3 ? 0.55 : 0.25, items: dashPool },
-      { key: 'stat', weight: this.autoUpgradeNoDashStreak >= 3 ? 0.15 : 0.25, items: statPool },
+      { key: 'weapon' as const, weight: 0.5, items: weaponPool },
+      { key: 'dash' as const, weight: this.autoUpgradeNoDashStreak >= 3 ? 0.55 : 0.25, items: dashPool },
+      { key: 'stat' as const, weight: this.autoUpgradeNoDashStreak >= 3 ? 0.15 : 0.25, items: statPool },
     ].filter(bucket => bucket.items.length > 0);
 
     if (bucketWeights.length === 0) {
@@ -978,7 +999,7 @@ export class GameEngine {
     }
 
     // Multi-charge dash: recharge one charge per cooldown cycle.
-    if (ds.maxDashCharges > 1 && ds.dashCharges < ds.maxDashCharges) {
+    if (!this.isDashing && ds.maxDashCharges > 1 && ds.dashCharges < ds.maxDashCharges) {
       ds.dashRechargeTimer = Math.max(0, ds.dashRechargeTimer - dt);
       if (ds.dashRechargeTimer <= 0) {
         ds.dashCharges++;
@@ -1257,7 +1278,7 @@ export class GameEngine {
     else if (spacePressed && isMoving && !this.isDashing) {
       // Use charge system when max charges are above one.
       const canDash = ds.maxDashCharges > 1
-        ? ds.dashCharges > 0
+        ? ds.dashCharges > 0 && this.dashTimer <= 0
         : this.dashTimer <= 0;
 
       if (canDash) {
@@ -1269,9 +1290,8 @@ export class GameEngine {
           if (ds.dashCharges < ds.maxDashCharges && ds.dashRechargeTimer <= 0) {
             ds.dashRechargeTimer = this.getEffectiveDashCooldownMs();
           }
-        } else {
-          this.dashTimer = this.getEffectiveDashCooldownMs();
         }
+        this.dashTimer = this.getDashActivationLockoutMs();
 
         const dashSpeedMult = 1 + this.getPermanentUpgradeLevel('perm_dash_speed') * 0.08;
         const dashDurationBonus = this.getPermanentUpgradeLevel('perm_dash_duration') * 30;
@@ -2111,7 +2131,15 @@ export class GameEngine {
         description: def.description,
         cooldown: def.baseCooldown,
         lastFired: 0,
-        type: def.type as any
+        type: def.type as any,
+        ...(def.burstCount
+          ? {
+              burstCount: def.burstCount,
+              burstDelay: def.burstDelay || 200,
+              burstRemaining: 0,
+              burstTimer: 0,
+            }
+          : {})
       });
     } else if (upgrade.type === 'weapon_upgrade') {
       const weapon = this.player.weapons.find(w => w.id === upgrade.id)!;
@@ -2153,6 +2181,120 @@ export class GameEngine {
       this.lastTime = performance.now();
       this.requestUpdate();
     }
+  }
+
+  grantEverythingLoadout(statRanks: number = 5) {
+    const maxStatRanks = Math.max(1, Math.floor(statRanks));
+
+    // Max all regular stat skills to a strong fixed rank.
+    for (const statUpgrade of UPGRADES) {
+      for (let rank = 0; rank < maxStatRanks; rank++) {
+        this.applyUpgrade(
+          { ...statUpgrade, type: 'stat' },
+          { auto: true, skipResume: true }
+        );
+      }
+    }
+
+    // Ensure every weapon is owned, then raise each to max level.
+    for (const weaponDef of WEAPON_DEFINITIONS) {
+      let weapon = this.player.weapons.find(w => w.id === weaponDef.id);
+      if (!weapon) {
+        this.applyUpgrade(
+          {
+            id: weaponDef.id,
+            name: weaponDef.name,
+            description: weaponDef.description,
+            type: 'weapon',
+          },
+          { auto: true, skipResume: true }
+        );
+        weapon = this.player.weapons.find(w => w.id === weaponDef.id);
+      }
+
+      while (weapon && weapon.level < weapon.maxLevel) {
+        this.applyUpgrade(
+          {
+            id: weapon.id,
+            name: `${weapon.name} (Lvl ${weapon.level + 1})`,
+            description: 'Increases damage and efficiency.',
+            type: 'weapon_upgrade',
+          },
+          { auto: true, skipResume: true }
+        );
+        weapon = this.player.weapons.find(w => w.id === weaponDef.id);
+      }
+    }
+
+    // Max all dash skills.
+    const dashMax = this.getDashUpgradeMaxLevel();
+    for (const dashUpgrade of DASH_UPGRADES) {
+      for (let rank = 0; rank < dashMax; rank++) {
+        this.applyUpgrade(
+          { ...dashUpgrade, type: 'dash' },
+          { auto: true, skipResume: true }
+        );
+      }
+    }
+
+    this.syncDashChargeCapacity();
+    this.dashState.dashCharges = this.dashState.maxDashCharges;
+    this.dashState.dashRechargeTimer = 0;
+    this.dashTimer = 0;
+    this.player.health = this.player.maxHealth;
+  }
+
+  grantRandomWaveCheatLoadout(count: number) {
+    const wave = Math.max(1, Math.floor(count));
+    const totalWeaponDefs = WEAPON_DEFINITIONS.length;
+
+    // Wave cheats should frontload weapon variety, capped by available definitions.
+    const targetWeaponCount = Math.min(totalWeaponDefs, wave);
+    const weaponProgressionBudget = Math.max(wave, Math.floor(wave * 2));
+
+    for (let i = 0; i < weaponProgressionBudget; i++) {
+      const availableNewWeapons = WEAPON_DEFINITIONS.filter(
+        def => !this.player.weapons.some(w => w.id === def.id)
+      );
+      const shouldAddWeapon = this.player.weapons.length < targetWeaponCount && availableNewWeapons.length > 0;
+
+      if (shouldAddWeapon) {
+        const weapon = availableNewWeapons[Math.floor(Math.random() * availableNewWeapons.length)];
+        this.applyUpgrade(
+          {
+            id: weapon.id,
+            name: weapon.name,
+            description: weapon.description,
+            type: 'weapon',
+          },
+          { auto: true, skipResume: true }
+        );
+        continue;
+      }
+
+      const upgradeableWeapons = this.player.weapons.filter(w => w.level < w.maxLevel);
+      if (upgradeableWeapons.length === 0) {
+        break;
+      }
+
+      const minLevel = Math.min(...upgradeableWeapons.map(w => w.level));
+      const lowestLevelWeapons = upgradeableWeapons.filter(w => w.level === minLevel);
+      const weapon = lowestLevelWeapons[Math.floor(Math.random() * lowestLevelWeapons.length)];
+      this.applyUpgrade(
+        {
+          id: weapon.id,
+          name: `${weapon.name} (Lvl ${weapon.level + 1})`,
+          description: 'Increases damage and efficiency.',
+          type: 'weapon_upgrade',
+        },
+        { auto: true, skipResume: true }
+      );
+    }
+
+    this.syncDashChargeCapacity();
+    this.dashState.dashCharges = this.dashState.maxDashCharges;
+    this.dashState.dashRechargeTimer = 0;
+    this.player.health = this.player.maxHealth;
   }
 
   updateWeapons(time: number) {
@@ -2263,7 +2405,7 @@ export class GameEngine {
           health: 1,
           maxHealth: 1,
           color: '#ff00ff',
-          damage: 8 * this.player.stats.might * levelMult,
+          damage: 14 * this.player.stats.might * levelMult,
           duration: 50,
           ownerId: 'player',
           penetration: 999
@@ -2283,33 +2425,39 @@ export class GameEngine {
         }
       }
 
+      soundManager.playShoot();
+      let aimX: number;
+      let aimY: number;
       if (nearest) {
-        soundManager.playShoot();
         const dx = nearest.position.x - this.player.position.x;
         const dy = nearest.position.y - this.player.position.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const vx = (dx / dist) * 8;
-        const vy = (dy / dist) * 8;
+        const dist = Math.max(0.0001, Math.sqrt(dx * dx + dy * dy));
+        aimX = (dx / dist) * 8;
+        aimY = (dy / dist) * 8;
+      } else {
+        const angle = Math.random() * Math.PI * 2;
+        aimX = Math.cos(angle) * 8;
+        aimY = Math.sin(angle) * 8;
+      }
 
-        for (let i = 0; i < count; i++) {
-          const spread = (Math.random() - 0.5) * 0.2;
-          this.projectiles.push({
-            id: Math.random().toString(),
-            position: { ...this.player.position },
-            velocity: { 
-              x: vx * Math.cos(spread) - vy * Math.sin(spread), 
-              y: vx * Math.sin(spread) + vy * Math.cos(spread) 
-            },
-            radius: 8 * this.player.stats.area * levelMult,
-            health: 1,
-            maxHealth: 1,
-            color: '#ffff00',
-            damage: 20 * this.player.stats.might * levelMult,
-            duration: 2000,
-            ownerId: 'player',
-            penetration: 1
-          });
-        }
+      for (let i = 0; i < count; i++) {
+        const spread = (Math.random() - 0.5) * 0.2;
+        this.projectiles.push({
+          id: Math.random().toString(),
+          position: { ...this.player.position },
+          velocity: {
+            x: aimX * Math.cos(spread) - aimY * Math.sin(spread),
+            y: aimX * Math.sin(spread) + aimY * Math.cos(spread)
+          },
+          radius: 8 * this.player.stats.area * levelMult,
+          health: 1,
+          maxHealth: 1,
+          color: '#ffff00',
+          damage: 20 * this.player.stats.might * levelMult,
+          duration: 2000,
+          ownerId: 'player',
+          penetration: 1
+        });
       }
     } else if (weapon.id === 'void_aura') {
       this.projectiles.push({
@@ -2358,7 +2506,7 @@ export class GameEngine {
           health: 1,
           maxHealth: 1,
           color: '#ff0000',
-          damage: 6 * this.player.stats.might * levelMult,
+          damage: 12 * this.player.stats.might * levelMult,
           duration: 50,
           ownerId: 'player',
           penetration: 999
@@ -2447,7 +2595,7 @@ export class GameEngine {
         health: 1,
         maxHealth: 1,
         color: 'rgba(255, 255, 255, 0.2)',
-        damage: 15 * this.player.stats.might * levelMult,
+        damage: 28 * this.player.stats.might * levelMult,
         duration: 500,
         ownerId: 'player',
         penetration: 5
@@ -2474,7 +2622,7 @@ export class GameEngine {
       // Chain lightning — bounces between enemies
       soundManager.playShoot();
       const maxBounces = 3 + Math.floor(this.player.stats.amount) + Math.floor(weapon.level / 2);
-      const chainRange = 250 * this.player.stats.area;
+      const chainRange = 1200 * this.player.stats.area;
       const hitEnemies: Set<string> = new Set();
       let currentPos = { ...this.player.position };
       let lastPos = { ...this.player.position };
@@ -2532,6 +2680,28 @@ export class GameEngine {
 
         lastPos = { ...nearest.position };
         currentPos = { ...nearest.position };
+      }
+
+      if (hitEnemies.size === 0) {
+        const angle = Math.random() * Math.PI * 2;
+        const len = 220 * this.player.stats.area;
+        const endX = this.player.position.x + Math.cos(angle) * len;
+        const endY = this.player.position.y + Math.sin(angle) * len;
+        this.projectiles.push({
+          id: 'chain_bolt',
+          position: { x: (this.player.position.x + endX) / 2, y: (this.player.position.y + endY) / 2 },
+          velocity: { x: 0, y: 0 },
+          radius: len / 2,
+          health: 1,
+          maxHealth: 1,
+          color: 'hsl(210, 100%, 75%)',
+          damage: 22 * this.player.stats.might * levelMult,
+          duration: 180,
+          ownerId: 'player',
+          penetration: 999,
+          rotation: angle,
+          hitEnemies: new Set<string>()
+        });
       }
     } else if (weapon.id === 'gravity_well') {
       // Black hole vortex — sucks enemies in
@@ -2700,6 +2870,31 @@ export class GameEngine {
         // Tendril tip explosion
         this.createExplosion(enemy.position.x, enemy.position.y, '#8b00ff', 8);
       }
+
+      if (sortedEnemies.length === 0) {
+        const fallbackCount = 6;
+        for (let i = 0; i < fallbackCount; i++) {
+          const angle = (i / fallbackCount) * Math.PI * 2;
+          const dist = 120 * this.player.stats.area;
+          this.projectiles.push({
+            id: 'tendril',
+            position: {
+              x: this.player.position.x + Math.cos(angle) * dist,
+              y: this.player.position.y + Math.sin(angle) * dist
+            },
+            velocity: { x: 0, y: 0 },
+            radius: 10 * this.player.stats.area * levelMult,
+            health: 1,
+            maxHealth: 1,
+            color: 'rgba(130, 0, 200, 0.5)',
+            damage: 18 * this.player.stats.might * levelMult,
+            duration: 320,
+            ownerId: 'player',
+            penetration: 999,
+            hitEnemies: new Set<string>()
+          });
+        }
+      }
     } else if (weapon.id === 'solar_flare') {
       // Directional cone of fire
       soundManager.playExplosion();
@@ -2763,10 +2958,10 @@ export class GameEngine {
           radius: 22 * this.player.stats.area * levelMult,
           health: 1, maxHealth: 1,
           color: `rgba(100, 200, 255, ${0.4 - i * 0.05})`,
-          damage: 12 * this.player.stats.might * levelMult,
+          damage: 26 * this.player.stats.might * levelMult,
           duration: 1500 + i * 200,
           ownerId: 'player',
-          penetration: 2
+          penetration: 4
         });
 
         // Trail particles for each echo
@@ -2794,12 +2989,12 @@ export class GameEngine {
         radius: auraRadius,
         health: 1, maxHealth: 1,
         color: 'rgba(100, 200, 255, 0.4)',
-        damage: 25 * this.player.stats.might * levelMult,
+        damage: 40 * this.player.stats.might * levelMult,
         duration: 800,
         ownerId: 'player',
         penetration: 999,
         hitEnemies: new Set<string>(),
-        damageTickInterval: 400,
+        damageTickInterval: 280,
         lastDamageTick: this.gameTime
       });
 
@@ -2853,16 +3048,20 @@ export class GameEngine {
     } else if (weapon.id === 'arc_weaver') {
       // Electric web between nearby enemies
       soundManager.playShoot();
-      const webRadius = 350 * this.player.stats.area;
+      const webRadius = 700 * this.player.stats.area;
       const nearbyEnemies = this.enemies.filter(e => {
         const dx = e.position.x - this.player.position.x;
         const dy = e.position.y - this.player.position.y;
         return Math.sqrt(dx * dx + dy * dy) < webRadius;
       }).slice(0, 8 + Math.floor(this.player.stats.amount));
 
-      // Create arc projectiles between each pair of nearby enemies
+      // Create limited web links to avoid O(n^2) overdraw and collision spam.
+      const maxLinks = Math.max(4, 8 + Math.floor(this.player.stats.amount));
+      let createdLinks = 0;
       for (let i = 0; i < nearbyEnemies.length; i++) {
+        if (createdLinks >= maxLinks) break;
         for (let j = i + 1; j < nearbyEnemies.length; j++) {
+          if (createdLinks >= maxLinks) break;
           const a = nearbyEnemies[i];
           const b = nearbyEnemies[j];
           const midX = (a.position.x + b.position.x) / 2;
@@ -2872,25 +3071,26 @@ export class GameEngine {
           const segDist = Math.sqrt(dx * dx + dy * dy);
 
           // Only connect if reasonably close
-          if (segDist < 300) {
+          if (segDist < 420) {
             this.projectiles.push({
               id: 'arc_web',
               position: { x: midX, y: midY },
               velocity: { x: 0, y: 0 },
-              radius: segDist / 2,
+              radius: Math.max(18, segDist * 0.33),
               health: 1, maxHealth: 1,
               color: 'rgba(0, 200, 255, 0.5)',
-              damage: 10 * this.player.stats.might * levelMult,
-              duration: 500,
+              damage: 5 * this.player.stats.might * levelMult,
+              duration: 280,
               ownerId: 'player',
-              penetration: 999,
+              penetration: 4,
               rotation: Math.atan2(dy, dx),
               hitEnemies: new Set<string>()
             });
+            createdLinks++;
 
             // Spark particles along the arc
-            for (let s = 0; s < 4; s++) {
-              const t = s / 4;
+            for (let s = 0; s < 2; s++) {
+              const t = s / 2;
               this.particles.push({
                 x: a.position.x + dx * t + (Math.random() - 0.5) * 10,
                 y: a.position.y + dy * t + (Math.random() - 0.5) * 10,
@@ -2906,26 +3106,54 @@ export class GameEngine {
       }
 
       // Also damage all enemies in the web
-      for (const enemy of nearbyEnemies) {
+      const maxZapTargets = Math.max(3, 4 + Math.floor(this.player.stats.amount * 0.5));
+      for (const enemy of nearbyEnemies.slice(0, maxZapTargets)) {
         this.projectiles.push({
           id: 'arc_zap',
           position: { ...enemy.position },
           velocity: { x: 0, y: 0 },
-          radius: 25 * this.player.stats.area * levelMult,
+          radius: 18 * this.player.stats.area * levelMult,
           health: 1, maxHealth: 1,
           color: 'rgba(0, 255, 255, 0.6)',
-          damage: 10 * this.player.stats.might * levelMult,
-          duration: 300,
+          damage: 7 * this.player.stats.might * levelMult,
+          duration: 180,
           ownerId: 'player',
-          penetration: 999,
+          penetration: 2,
           hitEnemies: new Set<string>()
         });
+      }
+
+      if (nearbyEnemies.length === 0) {
+        const pulseCount = 2 + Math.floor(this.player.stats.amount * 0.5);
+        for (let i = 0; i < pulseCount; i++) {
+          const angle = (i / pulseCount) * Math.PI * 2;
+          this.projectiles.push({
+            id: 'arc_zap',
+            position: {
+              x: this.player.position.x + Math.cos(angle) * 120 * this.player.stats.area,
+              y: this.player.position.y + Math.sin(angle) * 120 * this.player.stats.area,
+            },
+            velocity: { x: 0, y: 0 },
+            radius: 16 * this.player.stats.area * levelMult,
+            health: 1,
+            maxHealth: 1,
+            color: 'rgba(0, 255, 255, 0.6)',
+            damage: 7 * this.player.stats.might * levelMult,
+            duration: 180,
+            ownerId: 'player',
+            penetration: 2,
+            hitEnemies: new Set<string>()
+          });
+        }
       }
     }
 
     // Assign source weapon and clamp oversized visuals so projectiles stay readable.
+    const waveDamageMult = this.getWaveWeaponDamageMultiplier();
     for (let i = initialProjectileCount; i < this.projectiles.length; i++) {
-      this.projectiles[i].damage *= this.DEFAULT_WEAPON_DAMAGE_MULTIPLIER;
+      const sourceId = weapon.id;
+      const nonArcComp = sourceId === 'arc_weaver' ? 1 : this.NON_ARC_WEAPON_COMPENSATION_MULTIPLIER;
+      this.projectiles[i].damage *= this.DEFAULT_WEAPON_DAMAGE_MULTIPLIER * waveDamageMult * nonArcComp;
         this.projectiles[i].sourceWeaponId = weapon.id;
         this.clampProjectileRadius(this.projectiles[i]);
     }
@@ -3139,9 +3367,10 @@ export class GameEngine {
     this.orbitDamageCooldowns.delete(`scythe:${enemy.id}`);
 
     // Kinetic Refund: kills during window refund dash cooldown
-    if (this.dashState.kineticRefundWindow > 0 && this.dashTimer > 0) {
+    if (this.dashState.kineticRefundWindow > 0 && (this.dashTimer > 0 || this.dashState.dashRechargeTimer > 0)) {
       const refund = this.getEffectiveDashCooldownMs() * this.getDashKineticRefundFraction();
       this.dashTimer = Math.max(0, this.dashTimer - refund);
+      this.dashState.dashRechargeTimer = Math.max(0, this.dashState.dashRechargeTimer - refund);
     }
 
     // Vampirism: heal on kill
@@ -3299,6 +3528,12 @@ export class GameEngine {
       );
 
       if (spawnAttempts > 0 && Math.random() < 0.2) soundManager.playEnemySpawn();
+      const activeElites = this.enemies.reduce((count, enemy) => count + (enemy.type === 'elite' ? 1 : 0), 0);
+      const activePhantoms = this.enemies.reduce((count, enemy) => count + (enemy.type === 'phantom' ? 1 : 0), 0);
+      const activeTitans = this.enemies.reduce((count, enemy) => count + (enemy.type === 'titan' ? 1 : 0), 0);
+      let eliteSpawnsThisTick = 0;
+      let phantomSpawnsThisTick = 0;
+      let titanSpawnsThisTick = 0;
 
       for (let i = 0; i < spawnAttempts; i++) {
         // System Breach: override spawn position to portals
@@ -3332,14 +3567,43 @@ export class GameEngine {
           if (effectiveMinutes >= 2) availableTypes.push('fast');
           if (effectiveMinutes >= 5) availableTypes.push('tank');
           if (effectiveMinutes >= 8) availableTypes.push('ranged');
-          if (effectiveMinutes >= 12) availableTypes.push('elite');
-          if (effectiveMinutes >= 15) availableTypes.push('phantom');
-          if (effectiveMinutes >= 20) availableTypes.push('titan');
+          if (effectiveMinutes >= 12 && activeElites + eliteSpawnsThisTick < this.MAX_ACTIVE_ELITES) availableTypes.push('elite');
+          if (effectiveMinutes >= 15 && activePhantoms + phantomSpawnsThisTick < this.MAX_ACTIVE_PHANTOMS) availableTypes.push('phantom');
+          if (effectiveMinutes >= 20 && activeTitans + titanSpawnsThisTick < this.MAX_ACTIVE_TITANS) availableTypes.push('titan');
 
-          // Weighted selection: newer types are slightly more common as time goes on
-          // but older types still appear
-          const typeIndex = Math.floor(Math.random() * availableTypes.length);
-          type = availableTypes[typeIndex];
+          const typeWeights: Record<keyof typeof ENEMY_TYPES, number> = {
+            basic: 1.2,
+            fast: 1.1,
+            tank: 0.9,
+            ranged: 0.85,
+            elite: 0.5,
+            phantom: 0.38,
+            titan: 0.14,
+          };
+
+          let totalWeight = 0;
+          for (const candidate of availableTypes) {
+            totalWeight += typeWeights[candidate] || 1;
+          }
+
+          let roll = Math.random() * totalWeight;
+          for (const candidate of availableTypes) {
+            roll -= typeWeights[candidate] || 1;
+            if (roll <= 0) {
+              type = candidate;
+              break;
+            }
+          }
+
+          if (type === 'elite') {
+            eliteSpawnsThisTick++;
+          }
+          if (type === 'phantom') {
+            phantomSpawnsThisTick++;
+          }
+          if (type === 'titan') {
+            titanSpawnsThisTick++;
+          }
         }
 
         const config = ENEMY_TYPES[type as keyof typeof ENEMY_TYPES] || ENEMY_TYPES.basic;
@@ -3541,9 +3805,11 @@ export class GameEngine {
     }
 
     // Draw Enemies
+    const enemyDrawTime = performance.now();
+    const lowDetailEnemyFx = this.enemies.length > 180;
     for (const enemy of this.enemies) {
       if (!this.isInView(enemy.position, enemy.radius, 120)) continue;
-      this.drawEnemy(enemy);
+      this.drawEnemy(enemy, enemyDrawTime, lowDetailEnemyFx);
       
       if (enemy.health < enemy.maxHealth) {
         this.ctx.fillStyle = '#111';
@@ -4365,14 +4631,91 @@ export class GameEngine {
     }
   }
 
-  drawEnemy(enemy: Enemy) {
+  private getTitanSprite(radius: number, color: string): HTMLCanvasElement {
+    const normalizedRadius = Math.max(24, Math.round(radius / 4) * 4);
+    const key = `${normalizedRadius}:${color}`;
+    const cached = this.titanSpriteCache.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    const size = Math.ceil(normalizedRadius * 3.6);
+    const sprite = document.createElement('canvas');
+    sprite.width = size;
+    sprite.height = size;
+    const sctx = sprite.getContext('2d');
+
+    if (!sctx) {
+      this.titanSpriteCache.set(key, sprite);
+      return sprite;
+    }
+
+    const c = size / 2;
+    const r = normalizedRadius;
+    sctx.translate(c, c);
+
+    sctx.strokeStyle = 'rgba(255, 0, 0, 0.45)';
+    sctx.lineWidth = Math.max(2, r * 0.1);
+    sctx.beginPath();
+    sctx.arc(0, 0, r * 1.3, 0, Math.PI * 2);
+    sctx.stroke();
+
+    sctx.fillStyle = '#141414';
+    sctx.strokeStyle = color;
+    sctx.lineWidth = Math.max(2, r * 0.05);
+    sctx.beginPath();
+    sctx.arc(0, 0, r * 0.95, 0, Math.PI * 2);
+    sctx.fill();
+    sctx.stroke();
+
+    sctx.fillStyle = '#232323';
+    sctx.strokeStyle = color;
+    sctx.lineWidth = Math.max(1.5, r * 0.035);
+    const shellCount = 10;
+    for (let i = 0; i < shellCount; i++) {
+      const a = (i / shellCount) * Math.PI * 2;
+      const tipX = Math.cos(a) * r * 1.12;
+      const tipY = Math.sin(a) * r * 1.12;
+      const sideA = a - 0.18;
+      const sideB = a + 0.18;
+      sctx.beginPath();
+      sctx.moveTo(Math.cos(sideA) * r * 0.9, Math.sin(sideA) * r * 0.9);
+      sctx.lineTo(tipX, tipY);
+      sctx.lineTo(Math.cos(sideB) * r * 0.9, Math.sin(sideB) * r * 0.9);
+      sctx.closePath();
+      sctx.fill();
+      sctx.stroke();
+    }
+
+    sctx.fillStyle = '#0d0d0d';
+    sctx.strokeStyle = '#555';
+    sctx.lineWidth = Math.max(1, r * 0.03);
+    sctx.beginPath();
+    const gearTeeth = 12;
+    for (let i = 0; i < gearTeeth; i++) {
+      const a = (i / gearTeeth) * Math.PI * 2;
+      const d = i % 2 === 0 ? r * 0.5 : r * 0.64;
+      const gx = Math.cos(a) * d;
+      const gy = Math.sin(a) * d;
+      if (i === 0) sctx.moveTo(gx, gy);
+      else sctx.lineTo(gx, gy);
+    }
+    sctx.closePath();
+    sctx.fill();
+    sctx.stroke();
+
+    this.titanSpriteCache.set(key, sprite);
+    return sprite;
+  }
+
+  drawEnemy(enemy: Enemy, now: number, lowDetailMode: boolean = false) {
     const ctx = this.ctx;
     const x = enemy.position.x;
     const y = enemy.position.y;
     const r = enemy.radius;
     
     // Common pulsing metric
-    const pulse = (Math.sin(performance.now() * 0.005) + 1) / 2;
+    const pulse = (Math.sin(now * 0.005) + 1) / 2;
 
     ctx.save();
     ctx.translate(x, y);
@@ -4390,7 +4733,7 @@ export class GameEngine {
     // If enemy is slowed, show a cold aura
     if (enemy.slowMultiplier && enemy.slowMultiplier < 1) {
       ctx.beginPath();
-      ctx.arc(0, 0, r + 5 + Math.random() * 2, 0, Math.PI * 2);
+      ctx.arc(0, 0, r + 6, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(150, 200, 255, ${0.3 * (1 - enemy.slowMultiplier)})`;
       ctx.fill();
     }
@@ -4398,7 +4741,7 @@ export class GameEngine {
     if ((enemy as any).isHolder) {
       // --- HOLDER (Loot Crate) ---
       // Hover effect
-      const hoverY = Math.sin(performance.now() * 0.003) * 5;
+      const hoverY = Math.sin(now * 0.003) * 5;
       ctx.translate(0, hoverY);
       
       // Repulsor engines
@@ -4453,12 +4796,27 @@ export class GameEngine {
 
       switch (enemy.type) {
         case 'basic': {
+          if (lowDetailMode) {
+            ctx.fillStyle = '#1f1f1f';
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = enemy.color;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = enemy.color;
+            ctx.beginPath();
+            ctx.arc(r * 0.38, 0, r * 0.16, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+          }
+
           // --- DRONE (Mechanical Orb) ---
           // Outer spinning ring
           ctx.strokeStyle = '#555';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.ellipse(0, 0, r, r * 0.8, performance.now() * 0.003, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, r, r * 0.8, now * 0.003, 0, Math.PI * 2);
           ctx.stroke();
           
           // Core body
@@ -4481,6 +4839,20 @@ export class GameEngine {
           break;
         }
         case 'fast': {
+          if (lowDetailMode) {
+            ctx.fillStyle = '#222';
+            ctx.strokeStyle = enemy.color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(r, 0);
+            ctx.lineTo(-r * 0.9, r * 0.55);
+            ctx.lineTo(-r * 0.9, -r * 0.55);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            break;
+          }
+
           // --- SCOUT (Sleek Dart) ---
           // Engine trail
           ctx.fillStyle = `rgba(255, 150, 0, ${0.3 + pulse * 0.3})`;
@@ -4552,12 +4924,14 @@ export class GameEngine {
         case 'ranged': {
           // --- SNIPER (Segmented Drone) ---
           // Targeting Laser
-          ctx.strokeStyle = `rgba(0, 255, 0, ${0.2 + pulse * 0.2})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(r, 0);
-          ctx.lineTo(r * 15, 0); // Long laser pointer
-          ctx.stroke();
+          if (!lowDetailMode) {
+            ctx.strokeStyle = `rgba(0, 255, 0, ${0.2 + pulse * 0.2})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(r, 0);
+            ctx.lineTo(r * 15, 0); // Long laser pointer
+            ctx.stroke();
+          }
 
           // Diamond Body Base
           ctx.fillStyle = '#222';
@@ -4573,20 +4947,22 @@ export class GameEngine {
           ctx.stroke();
           
           // Inner Diamond (Floating segment)
-          const spin = performance.now() * 0.002;
-          ctx.save();
-          ctx.rotate(spin);
-          ctx.fillStyle = '#111';
-          ctx.strokeStyle = enemy.color;
-          ctx.beginPath();
-          ctx.moveTo(r*0.6, 0);
-          ctx.lineTo(0, r*0.6);
-          ctx.lineTo(-r*0.6, 0);
-          ctx.lineTo(0, -r*0.6);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
+          if (!lowDetailMode) {
+            const spin = now * 0.002;
+            ctx.save();
+            ctx.rotate(spin);
+            ctx.fillStyle = '#111';
+            ctx.strokeStyle = enemy.color;
+            ctx.beginPath();
+            ctx.moveTo(r*0.6, 0);
+            ctx.lineTo(0, r*0.6);
+            ctx.lineTo(-r*0.6, 0);
+            ctx.lineTo(0, -r*0.6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          }
 
           // Gun Barrel
           ctx.fillStyle = '#333';
@@ -4602,16 +4978,18 @@ export class GameEngine {
         case 'elite': {
           // --- GUARD (Shielded Obelisk) ---
           // Energy Shields
-          ctx.globalAlpha = 0.3 + pulse * 0.2;
-          ctx.strokeStyle = enemy.color;
-          ctx.lineWidth = 2;
-          const shieldSpin = performance.now() * -0.001;
-          for (let i = 0; i < 3; i++) {
-            ctx.beginPath();
-            ctx.ellipse(0, 0, r * 1.2, r * 1.2, shieldSpin + (i * Math.PI / 1.5), -Math.PI/4, Math.PI/4);
-            ctx.stroke();
+          if (!lowDetailMode) {
+            ctx.globalAlpha = 0.3 + pulse * 0.2;
+            ctx.strokeStyle = enemy.color;
+            ctx.lineWidth = 2;
+            const shieldSpin = now * -0.001;
+            for (let i = 0; i < 3; i++) {
+              ctx.beginPath();
+              ctx.ellipse(0, 0, r * 1.2, r * 1.2, shieldSpin + (i * Math.PI / 1.5), -Math.PI/4, Math.PI/4);
+              ctx.stroke();
+            }
+            ctx.globalAlpha = 1.0;
           }
-          ctx.globalAlpha = 1.0;
 
           // Obelisk Body (Hexagon)
           ctx.fillStyle = '#111';
@@ -4629,13 +5007,15 @@ export class GameEngine {
           ctx.fill();
           ctx.stroke();
           
-          // Complex inner runes/lines
-          ctx.strokeStyle = enemy.color;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(-r*0.5, -r*0.5); ctx.lineTo(r*0.5, r*0.5);
-          ctx.moveTo(-r*0.5, r*0.5); ctx.lineTo(r*0.5, -r*0.5);
-          ctx.stroke();
+          if (!lowDetailMode) {
+            // Complex inner runes/lines
+            ctx.strokeStyle = enemy.color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(-r*0.5, -r*0.5); ctx.lineTo(r*0.5, r*0.5);
+            ctx.moveTo(-r*0.5, r*0.5); ctx.lineTo(r*0.5, -r*0.5);
+            ctx.stroke();
+          }
           
           // Beating core
           ctx.fillStyle = '#fff';
@@ -4647,18 +5027,20 @@ export class GameEngine {
         case 'phantom': {
           // --- PHANTOM (Digital Glitch) ---
           // Scanlines and jitter
-          const jitterX = (Math.random() - 0.5) * 4;
-          const jitterY = (Math.random() - 0.5) * 4;
+          const jitterX = lowDetailMode ? 0 : (Math.random() - 0.5) * 4;
+          const jitterY = lowDetailMode ? 0 : (Math.random() - 0.5) * 4;
           ctx.translate(jitterX, jitterY);
           
-          ctx.globalAlpha = 0.6 + Math.random() * 0.4;
+          ctx.globalAlpha = lowDetailMode ? 0.85 : 0.6 + Math.random() * 0.4;
           
-          // Ghastly Trail
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-          ctx.beginPath();
-          ctx.moveTo(r * 0.5, 0);
-          ctx.bezierCurveTo(-r * 2, -r * 1.5, -r * 2, r * 1.5, r * 0.5, 0);
-          ctx.fill();
+          if (!lowDetailMode) {
+            // Ghastly Trail
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.beginPath();
+            ctx.moveTo(r * 0.5, 0);
+            ctx.bezierCurveTo(-r * 2, -r * 1.5, -r * 2, r * 1.5, r * 0.5, 0);
+            ctx.fill();
+          }
 
           // Body Silhouette (jagged/glitching)
           ctx.fillStyle = '#fff';
@@ -4676,23 +5058,41 @@ export class GameEngine {
           
           // Dark digital voids for eyes
           ctx.fillStyle = '#000';
-          ctx.fillRect(r * 0.2, -r * 0.4, r * 0.2 + Math.random()*2, r * 0.2);
-          ctx.fillRect(r * 0.2, r * 0.2, r * 0.2 + Math.random()*2, r * 0.2);
+          ctx.fillRect(r * 0.2, -r * 0.4, r * 0.2 + (lowDetailMode ? 0.8 : Math.random() * 2), r * 0.2);
+          ctx.fillRect(r * 0.2, r * 0.2, r * 0.2 + (lowDetailMode ? 0.8 : Math.random() * 2), r * 0.2);
           
           // Glitch lines across body
           ctx.fillStyle = enemy.color;
-          ctx.fillRect(-r*0.8, -r*0.6, r*1.6, Math.random() * 3);
-          ctx.fillRect(-r*0.6, 0, r*1.2, Math.random() * 3);
-          ctx.fillRect(-r*0.8, r*0.6, r*1.6, Math.random() * 3);
+          ctx.fillRect(-r*0.8, -r*0.6, r*1.6, lowDetailMode ? 1.5 : Math.random() * 3);
+          ctx.fillRect(-r*0.6, 0, r*1.2, lowDetailMode ? 1.5 : Math.random() * 3);
+          ctx.fillRect(-r*0.8, r*0.6, r*1.6, lowDetailMode ? 1.5 : Math.random() * 3);
           
           ctx.globalAlpha = 1.0;
           break;
         }
         case 'boss':
         case 'titan': {
+          if (enemy.type === 'titan') {
+            ctx.rotate(now * 0.00045);
+            const titanSprite = this.getTitanSprite(r, enemy.color);
+            const halfSize = titanSprite.width / 2;
+            ctx.drawImage(titanSprite, -halfSize, -halfSize);
+
+            const coreRadius = r * (lowDetailMode ? 0.42 : 0.48) + Math.sin(now * 0.01) * r * 0.03;
+            const coreGradient = ctx.createRadialGradient(0, 0, r * 0.06, 0, 0, coreRadius);
+            coreGradient.addColorStop(0, '#ffffff');
+            coreGradient.addColorStop(0.25, enemy.color);
+            coreGradient.addColorStop(1, '#000000');
+            ctx.fillStyle = coreGradient;
+            ctx.beginPath();
+            ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+          }
+
           // --- BOSS/TITAN (Multi-stage Fortress) ---
           // Rotate whole assembly slowly
-          ctx.rotate(performance.now() * 0.0005);
+          ctx.rotate(now * 0.0005);
           
           // 1. Outer Danger Ring (pulsing loudly)
           ctx.strokeStyle = `rgba(255, 0, 0, ${0.2 + pulse * 0.3})`;
@@ -4705,10 +5105,10 @@ export class GameEngine {
           ctx.fillStyle = '#222';
           ctx.strokeStyle = enemy.color;
           ctx.lineWidth = 3;
-          const shellCount = enemy.type === 'titan' ? 12 : 8;
+          const shellCount = lowDetailMode ? 5 : 8;
           for (let i = 0; i < shellCount; i++) {
             ctx.save();
-            ctx.rotate((i * Math.PI * 2) / shellCount + performance.now() * 0.001);
+            ctx.rotate((i * Math.PI * 2) / shellCount + now * 0.001);
             ctx.beginPath();
             ctx.moveTo(r, -r * 0.2);
             ctx.lineTo(r * 1.1, 0);
@@ -4725,9 +5125,9 @@ export class GameEngine {
           ctx.strokeStyle = '#555';
           ctx.lineWidth = 2;
           ctx.save();
-          ctx.rotate(performance.now() * -0.002);
+          ctx.rotate(now * -0.002);
           ctx.beginPath();
-          const gearTeeth = 16;
+          const gearTeeth = lowDetailMode ? 10 : 16;
           for (let i = 0; i < gearTeeth; i++) {
             const angle = (i * Math.PI * 2) / gearTeeth;
             const d = i % 2 === 0 ? r * 0.7 : r * 0.85;
@@ -4748,7 +5148,7 @@ export class GameEngine {
           bossGrad.addColorStop(1, '#000');
           ctx.fillStyle = bossGrad;
           ctx.beginPath();
-          ctx.arc(0, 0, r * 0.6 + Math.sin(performance.now() * 0.01) * r * 0.05, 0, Math.PI * 2);
+          ctx.arc(0, 0, r * 0.6 + Math.sin(now * 0.01) * r * 0.05, 0, Math.PI * 2);
           ctx.fill();
           
           // 5. Four Eye-Nodes

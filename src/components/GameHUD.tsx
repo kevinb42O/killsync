@@ -415,22 +415,29 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
         )}
 
         <AnimatePresence>
-          {hudData.weaponDamageStats && Object.keys(hudData.weaponDamageStats).length > 0 && (() => {
-            const stats = Object.entries(hudData.weaponDamageStats)
-              .map(([id, dmg]) => {
+          {(() => {
+            const ownedWeapons = (hudData.loadoutWeapons || []).map((w: any) => w.id);
+            const dealtWeaponIds = Object.keys(hudData.weaponDamageStats || {});
+            const allWeaponIds = Array.from(new Set([...ownedWeapons, ...dealtWeaponIds]));
+            if (allWeaponIds.length === 0) return null;
+
+            const stats = allWeaponIds
+              .map((id) => {
                 const def = WEAPON_DEFINITIONS.find(w => w.id === id);
+                const dmg = Number((hudData.weaponDamageStats || {})[id] || 0);
                 return {
                   id,
                   name: def ? def.name : id,
-                  damage: Number(dmg),
-                  dps: Number(dmg) / Math.max(1, hudData.gameTime / 1000)
+                  damage: dmg,
+                  dps: dmg / Math.max(1, hudData.gameTime / 1000)
                 };
               })
               .sort((a, b) => b.damage - a.damage);
 
             const maxDamage = stats[0]?.damage || 1;
+            const visibleCount = Math.max(6, ownedWeapons.length || 0);
 
-            return stats.slice(0, 6).map((stat, idx) => (
+            return stats.slice(0, visibleCount).map((stat, idx) => (
               <motion.div
                 key={stat.id}
                 layout

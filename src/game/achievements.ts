@@ -432,6 +432,20 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
 
 export const ACHIEVEMENTS_BY_ID = new Map(ACHIEVEMENTS.map((achievement) => [achievement.id, achievement]));
 
+const ACHIEVEMENTS_BY_TYPE = new Map<AchievementDefinition['type'], AchievementDefinition[]>();
+for (const achievement of ACHIEVEMENTS) {
+	const list = ACHIEVEMENTS_BY_TYPE.get(achievement.type);
+	if (list) {
+		list.push(achievement);
+	} else {
+		ACHIEVEMENTS_BY_TYPE.set(achievement.type, [achievement]);
+	}
+}
+
+for (const list of ACHIEVEMENTS_BY_TYPE.values()) {
+	list.sort((a, b) => a.target - b.target);
+}
+
 export const TOTAL_ACHIEVEMENTS = ACHIEVEMENTS.length;
 
 export function getDefaultUnlocks(): AchievementUnlock[] {
@@ -502,9 +516,19 @@ export function getAchievementProgress(
 
 export class AchievementTracker {
 	private unlockedById: Map<string, AchievementUnlock>;
+	private nextIndexByType: Map<AchievementDefinition['type'], number>;
 
 	constructor(unlocks: AchievementUnlock[]) {
 		this.unlockedById = new Map(unlocks.map((unlock) => [unlock.achievementId, unlock]));
+		this.nextIndexByType = new Map();
+
+		for (const [type, definitions] of ACHIEVEMENTS_BY_TYPE) {
+			let index = 0;
+			while (index < definitions.length && this.unlockedById.has(definitions[index].id)) {
+				index += 1;
+			}
+			this.nextIndexByType.set(type, index);
+		}
 	}
 
 	getUnlocks() {
@@ -517,18 +541,66 @@ export class AchievementTracker {
 
 	evaluate(snapshot: AchievementRuntimeSnapshot): AchievementUnlockResult[] {
 		const unlockedNow: AchievementUnlockResult[] = [];
-		for (const definition of ACHIEVEMENTS) {
-			if (this.unlockedById.has(definition.id)) continue;
-			if (!isDefinitionSatisfied(definition, snapshot)) continue;
 
-			const unlock: AchievementUnlock = {
-				achievementId: definition.id,
-				unlockedAt: Date.now()
-			};
-			this.unlockedById.set(definition.id, unlock);
-			unlockedNow.push({ definition, unlock });
+		for (const [type, definitions] of ACHIEVEMENTS_BY_TYPE) {
+			let index = this.nextIndexByType.get(type) ?? 0;
+			const current = currentValueForType(type, snapshot);
+
+			while (index < definitions.length) {
+				const definition = definitions[index];
+
+				if (this.unlockedById.has(definition.id)) {
+					index += 1;
+					continue;
+				}
+
+				if (current < definition.target) {
+					break;
+				}
+
+				const unlock: AchievementUnlock = {
+					achievementId: definition.id,
+					unlockedAt: Date.now()
+				};
+				this.unlockedById.set(definition.id, unlock);
+				unlockedNow.push({ definition, unlock });
+				index += 1;
+			}
+
+			this.nextIndexByType.set(type, index);
 		}
 		return unlockedNow;
+	}
+}
+
+function currentValueForType(type: AchievementDefinition['type'], snapshot: AchievementRuntimeSnapshot): number {
+	switch (type) {
+		case 'reach_wave':
+			return snapshot.currentWave;
+		case 'reach_level':
+			return snapshot.playerLevel;
+		case 'kill_total':
+			return snapshot.killCount;
+		case 'coins_collected_total':
+			return snapshot.totalCoinsCollected;
+		case 'coins_banked_total':
+			return snapshot.runCoinsBanked;
+		case 'weapon_count':
+			return snapshot.weaponCount;
+		case 'weapon_total_levels':
+			return snapshot.weaponTotalLevels;
+		case 'upgrade_count':
+			return snapshot.upgradeCount;
+		case 'survive_time_seconds':
+			return Math.floor(snapshot.gameTimeMs / 1000);
+		case 'combo':
+			return snapshot.comboCount;
+		case 'kills_in_wave':
+			return snapshot.currentWaveKillCount;
+		case 'levels_in_wave':
+			return snapshot.currentWaveLevelUps;
+		default:
+			return 0;
 	}
 }
 
