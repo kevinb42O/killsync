@@ -76,6 +76,8 @@ export interface Projectile extends Entity {
   hitEnemies?: Set<string>;
   damageTickInterval?: number;
   lastDamageTick?: number;
+  z?: number;
+  vz?: number;
 }
 
 export interface Weapon {
@@ -198,3 +200,6 @@ export interface Shop {
   position: Vector2D;
   radius: number;
 }
+
+export type ViewMode = 'TOPDOWN_2D' | 'FIRST_PERSON' | 'THIRD_PERSON';
+

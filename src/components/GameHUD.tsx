@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Skull, Coins, Flame, AlertTriangle, Shield, HeartPulse, Bomb, Navigation } from 'lucide-react';
+import { Skull, Coins, Flame, AlertTriangle, Shield, HeartPulse, Bomb, Navigation, Eye, Crosshair, Compass, MousePointer } from 'lucide-react';
 import { GameEngine } from '../game/Engine';
 import { WEAPON_DEFINITIONS } from '../constants';
 
@@ -9,73 +9,103 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
 
   useEffect(() => {
     let frameId: number;
-    const syncHud = () => {
+    let lastSync = 0;
+
+    const syncHud = (time: number) => {
       if (engine && engine.gameState === 'PLAYING') {
-        setHudData({
-          level: engine.player.level,
-          experience: engine.player.experience,
-          experienceToNextLevel: engine.player.experienceToNextLevel,
-          health: engine.player.health,
-          maxHealth: engine.player.maxHealth,
-          killCount: engine.killCount,
-          gameTime: engine.gameTime,
-          coins: engine.player.coins,
-           exfillExtractRequired: 0, // Placeholder
-          pendingDataCores: engine.player.pendingDataCores,
-          weaponDamageStats: { ...engine.weaponDamageStats },
-          comboCount: engine.comboCount,
-          comboMax: engine.COMBO_MAX,
-          isOverdrive: engine.isOverdrive,
-          overdriveTimer: engine.overdriveTimer,
-          overdriveMax: engine.OVERDRIVE_DURATION,
-          bountyTarget: engine.eventManager.bountyTarget,
-          pressureLevel: engine.eventManager.getPressureLevel(),
-          nightmareMode: engine.eventManager.nightmareMode,
-          currentWave: engine.player.currentWave,
-          waveTimer: engine.waveTimer,
-          waveDuration: engine.waveDuration,
-          canvasWidth: engine.canvas.width,
-          canvasHeight: engine.canvas.height,
-          autoUpgrade: engine.recentAutoUpgrade && engine.recentAutoUpgrade.expiresAt > engine.gameTime
-            ? { ...engine.recentAutoUpgrade }
-            : null,
-          systemNotice: engine.recentSystemNotice && engine.recentSystemNotice.expiresAt > engine.gameTime
-            ? { ...engine.recentSystemNotice }
-            : null,
-          autoControls: {
-            rerollsLeft: engine.getRemainingRerollsThisWave(),
-            rerollCost: engine.getRerollCost(),
-            queuedRerolls: engine.getQueuedAutoRerolls(),
-            banishes: engine.player.banishes,
-            skips: engine.player.skips,
-            queuedSkips: engine.getQueuedAutoSkips(),
-          },
-          loadoutWeapons: engine.player.weapons.map(w => ({
-            id: w.id,
-            name: w.name,
-            description: w.description,
-            level: w.level,
-            maxLevel: w.maxLevel,
-          })),
-          loadoutUpgrades: engine.player.upgrades.map((u: any) => ({
-            id: u.id,
-            name: u.name,
-            description: u.description,
-            level: u.level || 1,
-            type: u.type || 'stat',
-          })),
-          inventory: engine.player.inventory,
-          armorHp: engine.player.armorHp,
-          maxArmorHp: engine.getMaxArmorHp(),
-          shops: engine.shops.map(s => {
-            const dx = s.position.x - engine.player.position.x;
-            const dy = s.position.y - engine.player.position.y;
-            return {
-              dist: Math.sqrt(dx * dx + dy * dy),
-              angle: Math.atan2(dy, dx)
-            };
-          }).sort((a, b) => a.dist - b.dist)[0] || null
-        });
+        if (time - lastSync >= 50) {
+          lastSync = time;
+          setHudData({
+            level: engine.player.level,
+            experience: engine.player.experience,
+            experienceToNextLevel: engine.player.experienceToNextLevel,
+            health: engine.player.health,
+            maxHealth: engine.player.maxHealth,
+            killCount: engine.killCount,
+            gameTime: engine.gameTime,
+            coins: engine.player.coins,
+            exfillExtractRequired: 0, // Placeholder
+            pendingDataCores: engine.player.pendingDataCores,
+            weaponDamageStats: { ...engine.weaponDamageStats },
+            comboCount: engine.comboCount,
+            comboMax: engine.COMBO_MAX,
+            isOverdrive: engine.isOverdrive,
+            overdriveTimer: engine.overdriveTimer,
+            overdriveMax: engine.OVERDRIVE_DURATION,
+            bountyTarget: engine.eventManager.bountyTarget,
+            pressureLevel: engine.eventManager.getPressureLevel(),
+            nightmareMode: engine.eventManager.nightmareMode,
+            currentWave: engine.player.currentWave,
+            waveTimer: engine.waveTimer,
+            waveDuration: engine.waveDuration,
+            canvasWidth: engine.canvas.width,
+            canvasHeight: engine.canvas.height,
+            viewMode: engine.viewMode,
+            isPointerLocked: engine.renderer3D?.isPointerLocked || false,
+            isAimingDownSights: engine.renderer3D?.isAimingDownSights || false,
+            adsProgress: engine.renderer3D?.adsProgress || 0,
+            cameraYaw: engine.renderer3D?.yaw || 0,
+            threats: engine.enemies.slice(0, 45).map(e => {
+              const dx = e.position.x - engine.player.position.x;
+              const dy = e.position.y - engine.player.position.y;
+              return {
+                dx,
+                dy,
+                dist: Math.hypot(dx, dy),
+                type: e.type,
+                color: e.color
+              };
+            }),
+            portalRel: engine.portals.length > 0 && engine.activePortalIndex >= 0 ? {
+              dx: engine.portals[engine.activePortalIndex].position.x - engine.player.position.x,
+              dy: engine.portals[engine.activePortalIndex].position.y - engine.player.position.y,
+              dist: Math.hypot(
+                engine.portals[engine.activePortalIndex].position.x - engine.player.position.x,
+                engine.portals[engine.activePortalIndex].position.y - engine.player.position.y
+              )
+            } : null,
+            autoUpgrade: engine.recentAutoUpgrade && engine.recentAutoUpgrade.expiresAt > engine.gameTime
+              ? { ...engine.recentAutoUpgrade }
+              : null,
+            systemNotice: engine.recentSystemNotice && engine.recentSystemNotice.expiresAt > engine.gameTime
+              ? { ...engine.recentSystemNotice }
+              : null,
+            autoControls: {
+              rerollsLeft: engine.getRemainingRerollsThisWave(),
+              rerollCost: engine.getRerollCost(),
+              queuedRerolls: engine.getQueuedAutoRerolls(),
+              banishes: engine.player.banishes,
+              skips: engine.player.skips,
+              queuedSkips: engine.getQueuedAutoSkips(),
+            },
+            loadoutWeapons: engine.player.weapons.map(w => ({
+              id: w.id,
+              name: w.name,
+              description: w.description,
+              level: w.level,
+              maxLevel: w.maxLevel,
+            })),
+            loadoutUpgrades: engine.player.upgrades.map((u: any) => ({
+              id: u.id,
+              name: u.name,
+              description: u.description,
+              level: u.level || 1,
+              type: u.type || 'stat',
+            })),
+            inventory: engine.player.inventory,
+            armorHp: engine.player.armorHp,
+            maxArmorHp: engine.getMaxArmorHp(),
+            shops: engine.shops.map(s => {
+              const dx = s.position.x - engine.player.position.x;
+              const dy = s.position.y - engine.player.position.y;
+              return {
+                dist: Math.sqrt(dx * dx + dy * dy),
+                angle: Math.atan2(dy, dx)
+              };
+            }).sort((a, b) => a.dist - b.dist)[0] || null
+          });
+
+        }
       }
       frameId = requestAnimationFrame(syncHud);
     };
@@ -236,6 +266,23 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
           </div>
         )}
       </div>
+
+      {/* Perspective Switcher [V] */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-[95]">
+        <button
+          onClick={() => engine?.toggleViewMode()}
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/70 border border-cyan-500/40 hover:border-cyan-400 hover:bg-cyan-950/60 text-cyan-300 text-[10px] font-mono uppercase tracking-widest backdrop-blur-md transition-all shadow-[0_0_15px_rgba(0,240,255,0.2)] cursor-pointer active:scale-95"
+        >
+          <Eye size={12} className="text-cyan-400 animate-pulse" />
+          <span>
+            {hudData.viewMode === 'FIRST_PERSON' ? '1ST PERSON' : hudData.viewMode === 'THIRD_PERSON' ? '3RD PERSON' : '2D TOPDOWN'}
+          </span>
+          <span className="px-1.5 py-0.5 bg-cyan-500/20 border border-cyan-400/30 text-[9px] font-bold rounded text-cyan-200">
+            V
+          </span>
+        </button>
+      </div>
+
 
       {/* CARNAGE METER (Top Right) */}
       <div className="absolute top-6 right-6 flex flex-col items-end">
@@ -489,6 +536,161 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 3D First-Person Pointer Lock Reminder */}
+
+      {hudData.viewMode === 'FIRST_PERSON' && !hudData.isPointerLocked && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[95] pointer-events-none">
+          <div className="flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-black/85 border border-cyan-400/60 shadow-[0_0_30px_rgba(0,240,255,0.4)] backdrop-blur-md animate-pulse">
+            <MousePointer size={14} className="text-cyan-300 animate-bounce" />
+            <span className="text-xs font-mono font-bold tracking-wider text-cyan-200 uppercase">
+              Click Anywhere To Lock Mouse Look • [ESC] to Unlock
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 3D First-Person Crosshair & Directional Threat Arcs */}
+      {hudData.viewMode === 'FIRST_PERSON' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[80]">
+          {/* Cyber Visor Corner Brackets */}
+          <div className="absolute inset-8 border border-cyan-500/10 rounded-3xl pointer-events-none">
+            <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-cyan-400/40 rounded-tl-xl" />
+            <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-cyan-400/40 rounded-tr-xl" />
+            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-cyan-400/40 rounded-bl-xl" />
+            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-cyan-400/40 rounded-br-xl" />
+          </div>
+
+          {/* Central Cyber Reticle (Transforms dynamically during ADS) */}
+          <div className={`relative flex items-center justify-center transition-all duration-150 ${hudData.isAimingDownSights ? 'w-8 h-8 scale-90' : 'w-12 h-12 scale-100'}`}>
+            <div className={`rounded-full bg-cyan-300 shadow-[0_0_12px_#00f0ff] transition-all duration-150 ${hudData.isAimingDownSights ? 'w-2 h-2 bg-emerald-400 shadow-[0_0_15px_#10b981]' : 'w-1.5 h-1.5'}`} />
+            <div className={`absolute -top-2 h-0.5 bg-cyan-400/80 transition-all duration-150 ${hudData.isAimingDownSights ? 'w-4 bg-emerald-400/90 -top-3' : 'w-3'}`} />
+            <div className={`absolute -bottom-2 h-0.5 bg-cyan-400/80 transition-all duration-150 ${hudData.isAimingDownSights ? 'w-4 bg-emerald-400/90 -bottom-3' : 'w-3'}`} />
+            <div className={`absolute -left-2 w-0.5 bg-cyan-400/80 transition-all duration-150 ${hudData.isAimingDownSights ? 'h-4 bg-emerald-400/90 -left-3' : 'h-3'}`} />
+            <div className={`absolute -right-2 w-0.5 bg-cyan-400/80 transition-all duration-150 ${hudData.isAimingDownSights ? 'h-4 bg-emerald-400/90 -right-3' : 'h-3'}`} />
+            <div className={`absolute inset-0 rounded-full border border-cyan-400/30 transition-all duration-150 ${hudData.isAimingDownSights ? 'border-emerald-400/50 scale-125' : ''}`} />
+            {hudData.isAimingDownSights && (
+              <div className="absolute -top-7 text-[8px] font-mono font-black text-emerald-300 tracking-widest uppercase animate-pulse">
+                ADS ZOOM
+              </div>
+            )}
+          </div>
+
+          {/* Tactical Weapon Control Prompt in First Person */}
+          <div className="absolute bottom-7 left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-1.5 rounded-full bg-black/60 border border-cyan-500/30 backdrop-blur-md shadow-[0_0_15px_rgba(0,240,255,0.15)] pointer-events-none">
+            <span className="text-[10px] font-mono font-bold text-cyan-300 tracking-wider flex items-center gap-1.5">
+              <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/30">LMB</span> FIRE
+            </span>
+            <span className="text-white/20">•</span>
+            <span className="text-[10px] font-mono font-bold text-emerald-300 tracking-wider flex items-center gap-1.5">
+              <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">RMB</span> ADS
+            </span>
+            <span className="text-white/20">•</span>
+            <span className="text-[10px] font-mono font-bold text-purple-300 tracking-wider flex items-center gap-1.5">
+              <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-400/30">SPACE</span> DASH
+            </span>
+            <span className="text-white/20">•</span>
+            <span className="text-[10px] font-mono font-bold text-cyan-300 tracking-wider flex items-center gap-1.5">
+              <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/30">V</span> VIEW
+            </span>
+          </div>
+
+          {/* Directional Threat Arcs (Close range enemies behind / beside player) */}
+          {hudData.threats?.filter((t: any) => t.dist < 260).map((threat: any, i: number) => {
+            const worldAngle = Math.atan2(threat.dy, threat.dx);
+            const camAngle = Math.atan2(-Math.cos(hudData.cameraYaw), -Math.sin(hudData.cameraYaw));
+            const relAngle = worldAngle - camAngle;
+            
+            // Show threats that are off-center / behind / flanking
+            const isBehind = Math.cos(relAngle) < 0.3;
+            if (!isBehind) return null;
+
+            const radius = 70;
+            const arcX = Math.sin(relAngle) * radius;
+            const arcY = -Math.cos(relAngle) * radius;
+            const deg = (relAngle * 180) / Math.PI;
+
+            return (
+              <div
+                key={i}
+                className="absolute w-8 h-2 bg-rose-500/90 rounded-full blur-[1px] shadow-[0_0_14px_rgba(244,63,94,1)] transition-all duration-75"
+                style={{
+                  transform: `translate(${arcX}px, ${arcY}px) rotate(${deg}deg)`
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* 360° Holographic Radar for 3D Perspectives */}
+      {(hudData.viewMode === 'FIRST_PERSON' || hudData.viewMode === 'THIRD_PERSON') && (
+        <div className="absolute bottom-6 right-6 z-[85] pointer-events-none">
+          <div className="relative w-36 h-36 rounded-full bg-black/75 border border-cyan-500/40 backdrop-blur-md overflow-hidden shadow-[0_0_25px_rgba(0,240,255,0.25)]">
+            {/* Range Rings */}
+            <div className="absolute inset-2 rounded-full border border-cyan-500/20" />
+            <div className="absolute inset-7 rounded-full border border-cyan-500/15" />
+            {/* Crosshair grid */}
+            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-cyan-500/25 -translate-x-1/2" />
+            <div className="absolute top-1/2 left-0 right-0 h-px bg-cyan-500/25 -translate-y-1/2" />
+            
+            {/* Player Center Indicator (Arrow facing UP) */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+              <div className="w-2.5 h-2.5 bg-cyan-400 rounded-full shadow-[0_0_8px_#00f0ff]" />
+              <div className="absolute -top-2 w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-b-[6px] border-b-white" />
+            </div>
+
+            {/* Threat Blips */}
+            {hudData.threats?.map((t: any, i: number) => {
+              const radarRange = 650;
+              const worldAngle = Math.atan2(t.dy, t.dx);
+              const camAngle = Math.atan2(-Math.cos(hudData.cameraYaw), -Math.sin(hudData.cameraYaw));
+              const relAngle = worldAngle - camAngle;
+              const distFactor = Math.min(1, t.dist / radarRange);
+              const r = distFactor * 62;
+              const blipX = 72 + Math.sin(relAngle) * r;
+              const blipY = 72 - Math.cos(relAngle) * r;
+
+              return (
+                <div
+                  key={i}
+                  className={`absolute rounded-full -translate-x-1/2 -translate-y-1/2 ${
+                    t.type === 'titan' || t.type === 'boss'
+                      ? 'w-3 h-3 bg-red-500 shadow-[0_0_10px_#ff0055]'
+                      : 'w-1.5 h-1.5 bg-red-400/80 shadow-[0_0_4px_#ff3366]'
+                  }`}
+                  style={{ left: `${blipX}px`, top: `${blipY}px` }}
+                />
+              );
+            })}
+
+            {/* Portal Blip */}
+            {hudData.portalRel && (
+              (() => {
+                const worldAngle = Math.atan2(hudData.portalRel.dy, hudData.portalRel.dx);
+                const camAngle = Math.atan2(-Math.cos(hudData.cameraYaw), -Math.sin(hudData.cameraYaw));
+                const relAngle = worldAngle - camAngle;
+                const distFactor = Math.min(1, hudData.portalRel.dist / 900);
+                const r = distFactor * 62;
+                const px = 72 + Math.sin(relAngle) * r;
+                const py = 72 - Math.cos(relAngle) * r;
+                return (
+                  <div
+                    className="absolute w-3 h-3 bg-emerald-400 rounded-full shadow-[0_0_12px_#00ffaa] -translate-x-1/2 -translate-y-1/2 animate-ping"
+                    style={{ left: `${px}px`, top: `${py}px` }}
+                  />
+                );
+              })()
+            )}
+
+            {/* Radar Label */}
+            <div className="absolute bottom-1.5 left-0 right-0 text-center text-[8px] font-mono font-bold text-cyan-400/70 uppercase tracking-widest">
+              360° RADAR
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

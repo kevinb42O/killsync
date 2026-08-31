@@ -1,7 +1,9 @@
-import { Vector2D, Player, Enemy, Projectile, ExperienceGem, GameState, Weapon, WorldItem, Treasure, OperatorDefinition, Shop, Inventory, DashState } from '../types';
+import { Vector2D, Player, Enemy, Projectile, ExperienceGem, GameState, Weapon, WorldItem, Treasure, OperatorDefinition, Shop, Inventory, DashState, ViewMode } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT, INITIAL_PLAYER_STATS, ENEMY_TYPES, WEAPON_DEFINITIONS, UPGRADES, ITEM_TYPES, PERMANENT_UPGRADES, OPERATOR_DEFINITIONS, DASH_UPGRADES } from '../constants';
 import { soundManager } from './SoundManager';
 import { EventManager } from './EventManager';
+import { Renderer3D } from './Renderer3D';
+
 
 export interface BalanceTuning {
   difficultyTimeScalePerMinute: number;
@@ -117,11 +119,13 @@ export class GameEngine {
   dashTimer: number = 0;
   isDashing: boolean = false;
   dashDuration: number = 200;
+  dashRemainingDuration: number = 0;
   dashVelocity: Vector2D = { x: 0, y: 0 };
   dashStartPos: Vector2D = { x: 0, y: 0 };
   dashGhostTimer: number = 0;
   dashMomentumTimer: number = 0;
   regenTimer: number = 0;
+  goldRushTimer: number = 0;
   lastBossHitTime: number = 0;
 
   dashState: DashState = this.createDefaultDashState();
@@ -155,6 +159,7 @@ export class GameEngine {
 
   // Event system
   eventManager: EventManager = new EventManager();
+  spawnedBossMilestones: Set<number> = new Set();
 
   onLevelUp: (options: any[]) => void;
   onGameOver: (stats: any) => void;
@@ -169,6 +174,18 @@ export class GameEngine {
   private queuedAutoSkips: number = 0;
   private queuedAutoRerolls: number = 0;
   private titanSpriteCache = new Map<string, HTMLCanvasElement>();
+
+  viewMode: ViewMode = 'TOPDOWN_2D';
+  renderer3D: Renderer3D | null = null;
+  onViewModeChange?: (mode: ViewMode) => void;
+
+  private handleKeyDown = (e: KeyboardEvent) => {
+    this.keys.add(e.key.toLowerCase());
+    if (e.key.toLowerCase() === 'v' && this.gameState === 'PLAYING') {
+      this.toggleViewMode();
+    }
+  };
+  private handleKeyUp = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());
 
   constructor(
     canvas: HTMLCanvasElement, 
@@ -190,9 +207,74 @@ export class GameEngine {
 
     this.player = this.resetPlayer();
     
-    window.addEventListener('keydown', (e) => this.keys.add(e.key.toLowerCase()));
-    window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
   }
+
+  setViewMode(mode: ViewMode) {
+    this.viewMode = mode;
+    if ((mode === 'FIRST_PERSON' || mode === 'THIRD_PERSON') && !this.renderer3D) {
+      this.initRenderer3D();
+    }
+    if (mode === 'TOPDOWN_2D') {
+      this.renderer3D?.exitPointerLock();
+    } else if (mode === 'FIRST_PERSON') {
+      this.renderer3D?.requestPointerLock();
+    }
+    if (this.onViewModeChange) {
+      this.onViewModeChange(mode);
+    }
+  }
+
+  toggleViewMode() {
+    if (this.viewMode === 'TOPDOWN_2D') {
+      this.setViewMode('FIRST_PERSON');
+    } else if (this.viewMode === 'FIRST_PERSON') {
+      this.setViewMode('THIRD_PERSON');
+    } else {
+      this.setViewMode('TOPDOWN_2D');
+    }
+  }
+
+  initRenderer3D(container?: HTMLElement) {
+    if (!this.renderer3D) {
+      this.renderer3D = new Renderer3D();
+      const mountTarget = container || (this.canvas.parentElement as HTMLElement);
+      if (mountTarget) {
+        this.renderer3D.mount(mountTarget);
+      }
+    }
+  }
+
+  renderFrame(deltaTime: number = 16) {
+    if (this.viewMode === 'TOPDOWN_2D') {
+      if (this.renderer3D && this.renderer3D.container) {
+        this.renderer3D.renderer.domElement.style.display = 'none';
+      }
+      this.canvas.style.display = 'block';
+      this.draw();
+    } else {
+      this.canvas.style.display = 'none';
+      if (!this.renderer3D) {
+        this.initRenderer3D();
+      }
+      if (this.renderer3D) {
+        this.renderer3D.renderer.domElement.style.display = 'block';
+        this.renderer3D.render(this, deltaTime);
+      }
+    }
+  }
+
+  destroy() {
+    this.stop();
+    if (this.renderer3D) {
+      this.renderer3D.destroy();
+      this.renderer3D = null;
+    }
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+  }
+
 
   resetPlayer(level: number = 1, experience: number = 0, coins: number = 0, permanentUpgrades: Record<string, number> = {}, operatorId: string = 'phantom'): Player {
     const operator = OPERATOR_DEFINITIONS.find(op => op.id === operatorId) || OPERATOR_DEFINITIONS[0];
@@ -417,6 +499,8 @@ export class GameEngine {
     this.gameTime = 0;
     this.killCount = 0;
     this.waveTimer = 0;
+    this.goldRushTimer = 0;
+    this.spawnedBossMilestones.clear();
     this.weaponDamageStats = {};
     this.difficultyMultiplier = 1;
     // Reset exfill state
@@ -430,6 +514,8 @@ export class GameEngine {
     this.syncDashChargeCapacity();
     this.dashGhostTimer = 0;
     this.dashMomentumTimer = 0;
+    this.isDashing = false;
+    this.dashRemainingDuration = 0;
     this.dashSpaceWasDown = false;
     this.recentAutoUpgrade = null;
     this.recentSystemNotice = null;
@@ -836,7 +922,7 @@ export class GameEngine {
 
   update(time: number) {
     if (this.paused) {
-      this.draw();
+      this.renderFrame(16);
       this.requestUpdate();
       return;
     }
@@ -845,7 +931,7 @@ export class GameEngine {
 
     if (this.hitStopTimer > 0) {
       this.hitStopTimer -= deltaTime;
-      this.draw();
+      this.renderFrame(deltaTime);
       this.requestUpdate();
       return;
     }
@@ -952,7 +1038,7 @@ export class GameEngine {
       this.shopInteractionCooldown = 300;
       this.keys.clear();
       this.onShopEnter();
-      this.draw();
+      this.renderFrame(deltaTime);
       return; // Pause the engine loop here
     }
 
@@ -979,9 +1065,15 @@ export class GameEngine {
     if (this.screenShake > 0) this.screenShake -= deltaTime * 0.05;
     if (this.chromaticAberration > 0) this.chromaticAberration -= deltaTime * 0.05;
     if (this.dashTimer > 0) this.dashTimer -= deltaTime;
+    if (this.goldRushTimer > 0) {
+      this.goldRushTimer -= deltaTime;
+      if (this.goldRushTimer <= 0) {
+        this.player.stats.greed = Math.max(1, this.player.stats.greed - 2.0);
+      }
+    }
     this.updateDashState(deltaTime);
     
-    this.draw();
+    this.renderFrame(deltaTime);
     this.requestUpdate();
   }
 
@@ -990,6 +1082,13 @@ export class GameEngine {
     const isMoving = Math.abs(this.player.velocity.x) > 0.1 || Math.abs(this.player.velocity.y) > 0.1;
 
     this.syncDashChargeCapacity();
+
+    if (this.isDashing) {
+      this.dashRemainingDuration -= dt;
+      if (this.dashRemainingDuration <= 0) {
+        this.finishDash();
+      }
+    }
 
     if (this.dashGhostTimer > 0) {
       this.dashGhostTimer = Math.max(0, this.dashGhostTimer - dt);
@@ -1177,6 +1276,61 @@ export class GameEngine {
     }
   }
 
+  finishDash() {
+    this.isDashing = false;
+    this.dashRemainingDuration = 0;
+    const ds = this.dashState;
+    const dashStartSnapshot = { ...this.dashStartPos };
+    const dashEndSnapshot = { x: this.player.position.x, y: this.player.position.y };
+
+    const ghostFrames = this.getPermanentUpgradeLevel('perm_dash_ghost') * 80;
+    if (ghostFrames > 0) {
+      this.dashGhostTimer = ghostFrames;
+    }
+
+    const repairAmount = this.getPermanentUpgradeLevel('perm_dash_repair') * 3;
+    if (repairAmount > 0 && this.player.health > 0) {
+      this.player.health = Math.min(this.player.maxHealth, this.player.health + repairAmount);
+    }
+
+    if (this.getPermanentUpgradeLevel('perm_dash_momentum') > 0) {
+      this.dashMomentumTimer = 1500;
+    }
+
+    // Afterimage Minefield: drop afterimages along dash path
+    if (ds.afterimageMinefield) {
+      const afterimageLevel = this.getDashUpgradeLevelByKey('afterimageMinefield');
+      const dx = dashEndSnapshot.x - dashStartSnapshot.x;
+      const dy = dashEndSnapshot.y - dashStartSnapshot.y;
+      const afterimageCount = 3 + Math.max(0, afterimageLevel - 1);
+      const mineTimer = Math.max(280, 500 - Math.max(0, afterimageLevel - 1) * 90);
+      for (let i = 0; i < afterimageCount; i++) {
+        const t = (i + 1) / (afterimageCount + 1);
+        ds.afterimages.push({
+          x: dashStartSnapshot.x + dx * t,
+          y: dashStartSnapshot.y + dy * t,
+          timer: mineTimer
+        });
+      }
+    }
+    // Null Wake: leave trail
+    if (ds.nullWake) {
+      const nullWakeLevel = this.getDashUpgradeLevelByKey('nullWake');
+      const dx = dashEndSnapshot.x - dashStartSnapshot.x;
+      const dy = dashEndSnapshot.y - dashStartSnapshot.y;
+      const trailPoints = 8 + Math.max(0, nullWakeLevel - 1) * 2;
+      const trailLife = this.getDashNullWakeLifeMs();
+      for (let i = 0; i < trailPoints; i++) {
+        const t = trailPoints === 1 ? 1 : i / (trailPoints - 1);
+        ds.nullWakeTrail.push({
+          x: dashStartSnapshot.x + dx * t,
+          y: dashStartSnapshot.y + dy * t,
+          life: trailLife
+        });
+      }
+    }
+  }
+
   updateRegen(dt: number) {
     if (this.player.stats.regen > 0) {
       this.regenTimer += dt;
@@ -1215,6 +1369,7 @@ export class GameEngine {
     const cleanupDistSq = cleanupDist * cleanupDist;
 
     this.enemies = this.enemies.filter(e => {
+      if (e.id === 'dead') return false;
       const dx = e.position.x - this.player.position.x;
       const dy = e.position.y - this.player.position.y;
       return dx * dx + dy * dy < cleanupDistSq;
@@ -1251,11 +1406,37 @@ export class GameEngine {
   }
 
   handleInput() {
-    const move = { x: 0, y: 0 };
-    if (this.keys.has('w') || this.keys.has('arrowup')) move.y -= 1;
-    if (this.keys.has('s') || this.keys.has('arrowdown')) move.y += 1;
-    if (this.keys.has('a') || this.keys.has('arrowleft')) move.x -= 1;
-    if (this.keys.has('d') || this.keys.has('arrowright')) move.x += 1;
+    let move = { x: 0, y: 0 };
+    if (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') {
+      let forward = 0;
+      let strafe = 0;
+      if (this.keys.has('w') || this.keys.has('arrowup')) forward += 1;
+      if (this.keys.has('s') || this.keys.has('arrowdown')) forward -= 1;
+      if (this.keys.has('d') || this.keys.has('arrowright')) strafe += 1;
+      if (this.keys.has('a') || this.keys.has('arrowleft')) strafe -= 1;
+
+      if (this.renderer3D) {
+        const yaw = this.renderer3D.yaw;
+        const forwardX = -Math.sin(yaw);
+        const forwardY = -Math.cos(yaw);
+        const rightX = Math.cos(yaw);
+        const rightY = -Math.sin(yaw);
+
+        move.x = forward * forwardX + strafe * rightX;
+        move.y = forward * forwardY + strafe * rightY;
+      } else {
+        if (this.keys.has('w') || this.keys.has('arrowup')) move.y -= 1;
+        if (this.keys.has('s') || this.keys.has('arrowdown')) move.y += 1;
+        if (this.keys.has('a') || this.keys.has('arrowleft')) move.x -= 1;
+        if (this.keys.has('d') || this.keys.has('arrowright')) move.x += 1;
+      }
+    } else {
+      if (this.keys.has('w') || this.keys.has('arrowup')) move.y -= 1;
+      if (this.keys.has('s') || this.keys.has('arrowdown')) move.y += 1;
+      if (this.keys.has('a') || this.keys.has('arrowleft')) move.x -= 1;
+      if (this.keys.has('d') || this.keys.has('arrowright')) move.x += 1;
+    }
+
 
     const ds = this.dashState;
     this.syncDashChargeCapacity();
@@ -1379,58 +1560,7 @@ export class GameEngine {
           ds.kineticRefundWindow = this.getDashKineticWindowMs();
         }
 
-        const dashStartSnapshot = { ...this.dashStartPos };
-        setTimeout(() => {
-          this.isDashing = false;
-          const dashEndSnapshot = { x: this.player.position.x, y: this.player.position.y };
-
-          const ghostFrames = this.getPermanentUpgradeLevel('perm_dash_ghost') * 80;
-          if (ghostFrames > 0) {
-            this.dashGhostTimer = ghostFrames;
-          }
-
-          const repairAmount = this.getPermanentUpgradeLevel('perm_dash_repair') * 3;
-          if (repairAmount > 0 && this.player.health > 0) {
-            this.player.health = Math.min(this.player.maxHealth, this.player.health + repairAmount);
-          }
-
-          if (this.getPermanentUpgradeLevel('perm_dash_momentum') > 0) {
-            this.dashMomentumTimer = 1500;
-          }
-
-          // Afterimage Minefield: drop afterimages along dash path
-          if (ds.afterimageMinefield) {
-            const afterimageLevel = this.getDashUpgradeLevelByKey('afterimageMinefield');
-            const dx = dashEndSnapshot.x - dashStartSnapshot.x;
-            const dy = dashEndSnapshot.y - dashStartSnapshot.y;
-            const afterimageCount = 3 + Math.max(0, afterimageLevel - 1);
-            const mineTimer = Math.max(280, 500 - Math.max(0, afterimageLevel - 1) * 90);
-            for (let i = 0; i < afterimageCount; i++) {
-              const t = (i + 1) / (afterimageCount + 1);
-              ds.afterimages.push({
-                x: dashStartSnapshot.x + dx * t,
-                y: dashStartSnapshot.y + dy * t,
-                timer: mineTimer
-              });
-            }
-          }
-          // Null Wake: leave trail
-          if (ds.nullWake) {
-            const nullWakeLevel = this.getDashUpgradeLevelByKey('nullWake');
-            const dx = dashEndSnapshot.x - dashStartSnapshot.x;
-            const dy = dashEndSnapshot.y - dashStartSnapshot.y;
-            const trailPoints = 8 + Math.max(0, nullWakeLevel - 1) * 2;
-            const trailLife = this.getDashNullWakeLifeMs();
-            for (let i = 0; i < trailPoints; i++) {
-              const t = trailPoints === 1 ? 1 : i / (trailPoints - 1);
-              ds.nullWakeTrail.push({
-                x: dashStartSnapshot.x + dx * t,
-                y: dashStartSnapshot.y + dy * t,
-                life: trailLife
-              });
-            }
-          }
-        }, dashDur);
+        this.dashRemainingDuration = dashDur;
       }
     }
 
@@ -1671,8 +1801,19 @@ export class GameEngine {
         if (bounced) p.penetration--;
       }
       
-      p.position.x += p.velocity.x * dtFactor;
-      p.position.y += p.velocity.y * dtFactor;
+      // Dynamic player tracking for auras and player-locked abilities
+      if (p.id === 'aura' || p.id === 'frost_aura' || p.sourceWeaponId === 'void_aura' || p.sourceWeaponId === 'frost_aura') {
+        p.position.x = this.player.position.x;
+        p.position.y = this.player.position.y;
+      } else if (p.id === 'blade') {
+        const angle = p.rotation || 0;
+        p.position.x = this.player.position.x + Math.cos(angle) * (p.radius * 0.4);
+        p.position.y = this.player.position.y + Math.sin(angle) * (p.radius * 0.4);
+      } else {
+        p.position.x += p.velocity.x * dtFactor;
+        p.position.y += p.velocity.y * dtFactor;
+      }
+
       this.clampProjectileRadius(p);
       p.duration -= dt;
       return p.duration > 0;
@@ -2113,8 +2254,18 @@ export class GameEngine {
       } else if (upgrade.id === 'time_warp') {
         this.player.stats.timeWarp += 0.20;
       } else if (upgrade.id === 'gold_rush') {
-        this.player.stats.greed += 2.0;
-        // Temporary — will decay, but since we don't have a timer for this, it persists as a strong reward
+        if (this.goldRushTimer <= 0) {
+          this.player.stats.greed += 2.0;
+        }
+        this.goldRushTimer = 60000; // 60-second active boost
+        this.damageTexts.push({
+          x: this.player.position.x,
+          y: this.player.position.y - 45,
+          text: "GOLD RUSH (60s)!",
+          life: 2000,
+          maxLife: 2000,
+          color: '#ffd700'
+        });
       } else {
         (this.player.stats as any)[upgrade.id] += 0.15;
         if (upgrade.id === 'speed') this.player.speed += 0.3;
@@ -2298,18 +2449,43 @@ export class GameEngine {
   }
 
   updateWeapons(time: number) {
-    for (const weapon of this.player.weapons) {
-      // Handle burst firing
+    for (let idx = 0; idx < this.player.weapons.length; idx++) {
+      const weapon = this.player.weapons[idx];
+      const isPrimaryWeapon = idx === 0;
+
+      // In First-Person Mode, the primary weapon ONLY shoots manually when holding/clicking LMB!
+      if (this.viewMode === 'FIRST_PERSON' && isPrimaryWeapon) {
+        const isShooting = this.renderer3D?.isShooting ?? false;
+
+        // Handle active burst in progress
+        if (weapon.burstRemaining && weapon.burstRemaining > 0) {
+          if (time - weapon.lastFired >= (weapon.burstDelay || 120)) {
+            this.fireWeapon(weapon, time, true);
+            weapon.burstRemaining--;
+          }
+        } else if (isShooting && (time - weapon.lastFired >= weapon.cooldown * this.player.stats.cooldown * (this.isOverdrive ? 0.4 : 1))) {
+          if (weapon.id === 'plasma_gun') {
+            weapon.burstCount = 2 + (this.player.stats.amount || 0);
+            weapon.burstDelay = 120;
+          }
+          this.fireWeapon(weapon, time, false);
+          if (weapon.burstCount && weapon.burstCount > 1) {
+            weapon.burstRemaining = weapon.burstCount - 1;
+          }
+        }
+        continue;
+      }
+
+      // Automatic firing for secondary weapons and in Topdown / Third-Person modes
       if (weapon.burstRemaining && weapon.burstRemaining > 0) {
         if (time - weapon.lastFired >= (weapon.burstDelay || 200)) {
           this.fireWeapon(weapon, time, true);
           weapon.burstRemaining--;
         }
       } else if (time - weapon.lastFired >= weapon.cooldown * this.player.stats.cooldown * (this.isOverdrive ? 0.4 : 1)) {
-        // Update burstCount for plasma_gun based on player stats
         if (weapon.id === 'plasma_gun') {
-          weapon.burstCount = 2 + (this.player.stats.amount || 0); // Start with 2 shots, scale with amount
-          weapon.burstDelay = 120; // Snappier burst
+          weapon.burstCount = 2 + (this.player.stats.amount || 0);
+          weapon.burstDelay = 120;
         }
 
         this.fireWeapon(weapon, time, false);
@@ -2320,63 +2496,128 @@ export class GameEngine {
     }
   }
 
+  getAimVectorAndMuzzle(): {
+    forward: { x: number; y: number };
+    muzzle: { x: number; y: number };
+    muzzle3D?: { x: number; y: number; z: number };
+    forward3D?: { x: number; y: number; z: number };
+  } {
+    if (this.renderer3D && this.viewMode === 'FIRST_PERSON') {
+      const transform = this.renderer3D.getMuzzleWorldTransform();
+      return {
+        forward: transform.forward2D,
+        muzzle: { x: transform.position.x, y: transform.position.z },
+        muzzle3D: transform.position,
+        forward3D: transform.forward
+      };
+    }
+
+    const yaw = this.renderer3D ? this.renderer3D.yaw : 0;
+    const forwardX = -Math.sin(yaw);
+    const forwardY = -Math.cos(yaw);
+    const rightX = Math.cos(yaw);
+    const rightY = -Math.sin(yaw);
+
+    const forwardOffset = 16;
+    const rightOffset = 10;
+
+    return {
+      forward: { x: forwardX, y: forwardY },
+      muzzle: {
+        x: this.player.position.x + forwardX * forwardOffset + rightX * rightOffset,
+        y: this.player.position.y + forwardY * forwardOffset + rightY * rightOffset
+      },
+      muzzle3D: {
+        x: this.player.position.x + forwardX * forwardOffset + rightX * rightOffset,
+        y: 24,
+        z: this.player.position.y + forwardY * forwardOffset + rightY * rightOffset
+      },
+      forward3D: { x: forwardX, y: 0, z: forwardY }
+    };
+  }
+
   fireWeapon(weapon: Weapon, time: number, isBurst: boolean = false) {
     weapon.lastFired = time;
     const count = 1 + (isBurst ? 0 : this.player.stats.amount);
     const levelMult = 1 + (weapon.level - 1) * 0.2;
     
+    // ONLY trigger weapon viewmodel recoil and muzzle flash when the player's primary held weapon fires!
+    const isPrimaryWeapon = weapon === this.player.weapons[0];
+    if (this.renderer3D && this.viewMode === 'FIRST_PERSON' && isPrimaryWeapon) {
+      const wColor = weapon.id === 'neon_shards' ? '#ff0055' : (weapon.id === 'plasma_gun' ? '#00f0ff' : '#00ffcc');
+      this.renderer3D.triggerMuzzleFlash(wColor);
+    }
+
     const initialProjectileCount = this.projectiles.length;
 
     if (weapon.id === 'plasma_gun') {
       soundManager.playShoot();
-      // Find nearest enemy
-      let nearest: Enemy | null = null;
-      let minDist = Infinity;
-      const LOCKON_RANGE = 400 * this.player.stats.area;
-      for (const enemy of this.enemies) {
-        const dx = enemy.position.x - this.player.position.x;
-        const dy = enemy.position.y - this.player.position.y;
-        const dist = dx * dx + dy * dy;
-        if (dist < minDist) {
-          minDist = dist;
-          nearest = enemy;
+
+      let norm: { x: number; y: number };
+      let spawnPos: { x: number; y: number };
+      let spawnZ = 24;
+      let vz = 0;
+
+      if (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') {
+        // In First/Third Person: shoot strictly from the inside of the physical barrel!
+        const aimInfo = this.getAimVectorAndMuzzle();
+        norm = aimInfo.forward;
+        spawnPos = aimInfo.muzzle;
+        if (aimInfo.muzzle3D) {
+          spawnZ = aimInfo.muzzle3D.y;
         }
-      }
-
-      let dir;
-      if (nearest && minDist < LOCKON_RANGE * LOCKON_RANGE) {
-        dir = { x: nearest.position.x - this.player.position.x, y: nearest.position.y - this.player.position.y };
+        if (aimInfo.forward3D) {
+          vz = aimInfo.forward3D.y * 18;
+        }
       } else {
-        const randomAngle = Math.random() * Math.PI * 2;
-        dir = { x: Math.cos(randomAngle), y: Math.sin(randomAngle) };
+        // In Topdown: auto-lock to nearest enemy or random direction
+        let nearest: Enemy | null = null;
+        let minDist = Infinity;
+        const LOCKON_RANGE = 400 * this.player.stats.area;
+        for (const enemy of this.enemies) {
+          const dx = enemy.position.x - this.player.position.x;
+          const dy = enemy.position.y - this.player.position.y;
+          const dist = dx * dx + dy * dy;
+          if (dist < minDist) {
+            minDist = dist;
+            nearest = enemy;
+          }
+        }
+        let dir;
+        if (nearest && minDist < LOCKON_RANGE * LOCKON_RANGE) {
+          dir = { x: nearest.position.x - this.player.position.x, y: nearest.position.y - this.player.position.y };
+        } else {
+          const randomAngle = Math.random() * Math.PI * 2;
+          dir = { x: Math.cos(randomAngle), y: Math.sin(randomAngle) };
+        }
+        const mag = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+        norm = { x: dir.x / mag, y: dir.y / mag };
+        spawnPos = { ...this.player.position };
       }
-      
-      const mag = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
-      const norm = { x: dir.x / mag, y: dir.y / mag };
 
-      // Add a small muzzle flash effect
-      this.ctx.save();
-      this.ctx.translate(this.player.position.x, this.player.position.y);
-      this.ctx.rotate(Math.atan2(norm.y, norm.x));
-      this.ctx.fillStyle = 'rgba(0, 255, 255, 0.6)';
-      this.ctx.beginPath();
-      this.ctx.moveTo(15, 0);
-      this.ctx.lineTo(30, -10);
-      this.ctx.lineTo(30, 10);
-      this.ctx.closePath();
-      this.ctx.fill();
-      this.ctx.restore();
+      // Add a muzzle flash particle at the actual weapon muzzle
+      this.particles.push({
+        x: spawnPos.x + norm.x * 6,
+        y: spawnPos.y + norm.y * 6,
+        vx: norm.x * 0.2,
+        vy: norm.y * 0.2,
+        life: 100,
+        maxLife: 100,
+        color: '#00ffff',
+        size: 5
+      });
 
       const shotsToFire = 1; 
 
       for (let i = 0; i < shotsToFire; i++) {
-        const spread = (Math.random() - 0.5) * 0.05; // Reduced spread for precision
-        const vx = (norm.x * Math.cos(spread) - norm.y * Math.sin(spread)) * 15; // Faster projectile
-        const vy = (norm.x * Math.sin(spread) + norm.y * Math.cos(spread)) * 15;
+        // Pinpoint precision spread so shots go right down the crosshair
+        const spread = (Math.random() - 0.5) * (this.viewMode === 'FIRST_PERSON' ? 0.015 : 0.05);
+        const vx = (norm.x * Math.cos(spread) - norm.y * Math.sin(spread)) * 18;
+        const vy = (norm.x * Math.sin(spread) + norm.y * Math.cos(spread)) * 18;
 
         this.projectiles.push({
           id: Math.random().toString(),
-          position: { ...this.player.position },
+          position: { ...spawnPos },
           velocity: { x: vx, y: vy },
           rotation: Math.atan2(vy, vx),
           radius: 12 * this.player.stats.area * levelMult,
@@ -2386,7 +2627,10 @@ export class GameEngine {
           damage: 15 * this.player.stats.might * levelMult,
           duration: 1500,
           ownerId: 'player',
-          penetration: 1
+          sourceWeaponId: 'plasma_gun',
+          penetration: 1,
+          z: spawnZ,
+          vz: vz
         });
       }
     } else if (weapon.id === 'orbit_drones') {
@@ -2408,43 +2652,61 @@ export class GameEngine {
           damage: 14 * this.player.stats.might * levelMult,
           duration: 50,
           ownerId: 'player',
+          sourceWeaponId: 'orbit_drones',
           penetration: 999
         });
       }
     } else if (weapon.id === 'neon_shards') {
-      // Find nearest enemy
-      let nearest: Enemy | null = null;
-      let minDist = Infinity;
-      for (const enemy of this.enemies) {
-        const dx = enemy.position.x - this.player.position.x;
-        const dy = enemy.position.y - this.player.position.y;
-        const dist = dx * dx + dy * dy;
-        if (dist < minDist) {
-          minDist = dist;
-          nearest = enemy;
-        }
-      }
-
       soundManager.playShoot();
       let aimX: number;
       let aimY: number;
-      if (nearest) {
-        const dx = nearest.position.x - this.player.position.x;
-        const dy = nearest.position.y - this.player.position.y;
-        const dist = Math.max(0.0001, Math.sqrt(dx * dx + dy * dy));
-        aimX = (dx / dist) * 8;
-        aimY = (dy / dist) * 8;
+      let spawnPos: { x: number; y: number };
+      let spawnZ = 24;
+      let vz = 0;
+
+      if (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') {
+        const aimInfo = this.getAimVectorAndMuzzle();
+        aimX = aimInfo.forward.x * 12;
+        aimY = aimInfo.forward.y * 12;
+        spawnPos = aimInfo.muzzle;
+        if (aimInfo.muzzle3D) {
+          spawnZ = aimInfo.muzzle3D.y;
+        }
+        if (aimInfo.forward3D) {
+          vz = aimInfo.forward3D.y * 12;
+        }
       } else {
-        const angle = Math.random() * Math.PI * 2;
-        aimX = Math.cos(angle) * 8;
-        aimY = Math.sin(angle) * 8;
+        // Find nearest enemy in topdown
+        let nearest: Enemy | null = null;
+        let minDist = Infinity;
+        for (const enemy of this.enemies) {
+          const dx = enemy.position.x - this.player.position.x;
+          const dy = enemy.position.y - this.player.position.y;
+          const dist = dx * dx + dy * dy;
+          if (dist < minDist) {
+            minDist = dist;
+            nearest = enemy;
+          }
+        }
+        if (nearest) {
+          const dx = nearest.position.x - this.player.position.x;
+          const dy = nearest.position.y - this.player.position.y;
+          const dist = Math.max(0.0001, Math.sqrt(dx * dx + dy * dy));
+          aimX = (dx / dist) * 8;
+          aimY = (dy / dist) * 8;
+        } else {
+          const angle = Math.random() * Math.PI * 2;
+          aimX = Math.cos(angle) * 8;
+          aimY = Math.sin(angle) * 8;
+        }
+        spawnPos = { ...this.player.position };
       }
 
       for (let i = 0; i < count; i++) {
-        const spread = (Math.random() - 0.5) * 0.2;
+        const spread = (Math.random() - 0.5) * (this.viewMode === 'FIRST_PERSON' ? 0.06 : 0.2);
         this.projectiles.push({
           id: Math.random().toString(),
-          position: { ...this.player.position },
+          position: { ...spawnPos },
           velocity: {
             x: aimX * Math.cos(spread) - aimY * Math.sin(spread),
             y: aimX * Math.sin(spread) + aimY * Math.cos(spread)
@@ -2456,7 +2718,10 @@ export class GameEngine {
           damage: 20 * this.player.stats.might * levelMult,
           duration: 2000,
           ownerId: 'player',
-          penetration: 1
+          sourceWeaponId: 'neon_shards',
+          penetration: 1,
+          z: spawnZ,
+          vz: vz
         });
       }
     } else if (weapon.id === 'void_aura') {
@@ -2515,10 +2780,11 @@ export class GameEngine {
     } else if (weapon.id === 'cyber_blade') {
       soundManager.playSlash();
       
-      // Targeting: Use last movement direction, or nearest enemy if standing still
-      let angle;
-      if (this.player.velocity.x === 0 && this.player.velocity.y === 0) {
-        // Find nearest enemy
+      let angle: number;
+      if (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') {
+        const aimInfo = this.getAimVectorAndMuzzle();
+        angle = Math.atan2(aimInfo.forward.y, aimInfo.forward.x);
+      } else if (this.player.velocity.x === 0 && this.player.velocity.y === 0) {
         let nearest: Enemy | null = null;
         let minDist = Infinity;
         for (const enemy of this.enemies) {
@@ -2554,6 +2820,7 @@ export class GameEngine {
         damage: 45 * this.player.stats.might * levelMult,
         duration: 200,
         ownerId: 'player',
+        sourceWeaponId: 'cyber_blade',
         penetration: 999,
         hitEnemies: new Set<string>()
       });
@@ -2575,22 +2842,28 @@ export class GameEngine {
       }
     } else if (weapon.id === 'sonic_boom') {
       soundManager.playShoot();
-      let nearest: Enemy | null = null;
-      let minDist = Infinity;
-      for (const enemy of this.enemies) {
-        if (enemy.id === 'dead') continue;
-        const dx = enemy.position.x - this.player.position.x;
-        const dy = enemy.position.y - this.player.position.y;
-        const dist = dx * dx + dy * dy;
-        if (dist < minDist) { minDist = dist; nearest = enemy; }
+      let angle: number;
+      if (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') {
+        const aimInfo = this.getAimVectorAndMuzzle();
+        angle = Math.atan2(aimInfo.forward.y, aimInfo.forward.x);
+      } else {
+        let nearest: Enemy | null = null;
+        let minDist = Infinity;
+        for (const enemy of this.enemies) {
+          if (enemy.id === 'dead') continue;
+          const dx = enemy.position.x - this.player.position.x;
+          const dy = enemy.position.y - this.player.position.y;
+          const dist = dx * dx + dy * dy;
+          if (dist < minDist) { minDist = dist; nearest = enemy; }
+        }
+        angle = nearest
+          ? Math.atan2(nearest.position.y - this.player.position.y, nearest.position.x - this.player.position.x)
+          : Math.random() * Math.PI * 2;
       }
-      const angle = nearest
-        ? Math.atan2(nearest.position.y - this.player.position.y, nearest.position.x - this.player.position.x)
-        : Math.random() * Math.PI * 2;
       this.projectiles.push({
         id: 'sonic',
         position: { ...this.player.position },
-        velocity: { x: Math.cos(angle) * 10, y: Math.sin(angle) * 10 },
+        velocity: { x: Math.cos(angle) * 12, y: Math.sin(angle) * 12 },
         radius: 80 * this.player.stats.area * levelMult,
         health: 1,
         maxHealth: 1,
@@ -2598,7 +2871,9 @@ export class GameEngine {
         damage: 28 * this.player.stats.might * levelMult,
         duration: 500,
         ownerId: 'player',
-        penetration: 5
+        sourceWeaponId: 'sonic_boom',
+        penetration: 5,
+        rotation: angle
       });
     } else if (weapon.id === 'nano_swarm') {
       soundManager.playShoot();
@@ -2770,18 +3045,23 @@ export class GameEngine {
     } else if (weapon.id === 'spectral_helix') {
       // Double-helix DNA spiral
       soundManager.playShoot();
-      let nearest: Enemy | null = null;
-      let minDist = Infinity;
-      for (const enemy of this.enemies) {
-        const dx = enemy.position.x - this.player.position.x;
-        const dy = enemy.position.y - this.player.position.y;
-        const d = dx * dx + dy * dy;
-        if (d < minDist) { minDist = d; nearest = enemy; }
+      let baseAngle: number;
+      if (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') {
+        const aimInfo = this.getAimVectorAndMuzzle();
+        baseAngle = Math.atan2(aimInfo.forward.y, aimInfo.forward.x);
+      } else {
+        let nearest: Enemy | null = null;
+        let minDist = Infinity;
+        for (const enemy of this.enemies) {
+          const dx = enemy.position.x - this.player.position.x;
+          const dy = enemy.position.y - this.player.position.y;
+          const d = dx * dx + dy * dy;
+          if (d < minDist) { minDist = d; nearest = enemy; }
+        }
+        baseAngle = nearest
+          ? Math.atan2(nearest.position.y - this.player.position.y, nearest.position.x - this.player.position.x)
+          : Math.random() * Math.PI * 2;
       }
-
-      const baseAngle = nearest
-        ? Math.atan2(nearest.position.y - this.player.position.y, nearest.position.x - this.player.position.x)
-        : Math.random() * Math.PI * 2;
 
       const helixCount = 12 + this.player.stats.amount * 4;
       for (let i = 0; i < helixCount; i++) {
@@ -2798,15 +3078,20 @@ export class GameEngine {
             x: this.player.position.x + Math.cos(baseAngle) * spreadDist + Math.cos(perpAngle) * helixOffset,
             y: this.player.position.y + Math.sin(baseAngle) * spreadDist + Math.sin(perpAngle) * helixOffset
           },
-          velocity: { x: 0, y: 0 },
+          velocity: {
+            x: Math.cos(baseAngle) * 6,
+            y: Math.sin(baseAngle) * 6
+          },
           radius: 8 * this.player.stats.area * levelMult,
           health: 1, maxHealth: 1,
           color: `hsl(${180 + t * 60}, 100%, 65%)`,
           damage: 20 * this.player.stats.might * levelMult * 0.3,
           duration: 400 + t * 200,
           ownerId: 'player',
+          sourceWeaponId: 'spectral_helix',
           penetration: 999,
-          hitEnemies: new Set<string>()
+          hitEnemies: new Set<string>(),
+          rotation: baseAngle
         });
 
         // Strand 2
@@ -2816,15 +3101,20 @@ export class GameEngine {
             x: this.player.position.x + Math.cos(baseAngle) * spreadDist - Math.cos(perpAngle) * helixOffset,
             y: this.player.position.y + Math.sin(baseAngle) * spreadDist - Math.sin(perpAngle) * helixOffset
           },
-          velocity: { x: 0, y: 0 },
+          velocity: {
+            x: Math.cos(baseAngle) * 6,
+            y: Math.sin(baseAngle) * 6
+          },
           radius: 8 * this.player.stats.area * levelMult,
           health: 1, maxHealth: 1,
           color: `hsl(${300 + t * 60}, 100%, 65%)`,
           damage: 20 * this.player.stats.might * levelMult * 0.3,
           duration: 400 + t * 200,
           ownerId: 'player',
+          sourceWeaponId: 'spectral_helix',
           penetration: 999,
-          hitEnemies: new Set<string>()
+          hitEnemies: new Set<string>(),
+          rotation: baseAngle
         });
       }
     } else if (weapon.id === 'void_tendrils') {
@@ -2898,7 +3188,13 @@ export class GameEngine {
     } else if (weapon.id === 'solar_flare') {
       // Directional cone of fire
       soundManager.playExplosion();
-      const facing = this.player.rotation || 0;
+      let facing: number;
+      if (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') {
+        const aimInfo = this.getAimVectorAndMuzzle();
+        facing = Math.atan2(aimInfo.forward.y, aimInfo.forward.x);
+      } else {
+        facing = this.player.rotation || 0;
+      }
       const coneAngle = Math.PI / 3; // 60 degree cone
       const coneLength = 250 * this.player.stats.area * levelMult;
       const rayCount = 12 + Math.floor(this.player.stats.amount) * 3;
@@ -2924,7 +3220,9 @@ export class GameEngine {
           damage: 18 * this.player.stats.might * levelMult * 0.4,
           duration: 400 + Math.random() * 200,
           ownerId: 'player',
-          penetration: 3
+          sourceWeaponId: 'solar_flare',
+          penetration: 3,
+          rotation: angle
         });
       }
 
@@ -3076,7 +3374,7 @@ export class GameEngine {
               id: 'arc_web',
               position: { x: midX, y: midY },
               velocity: { x: 0, y: 0 },
-              radius: Math.max(18, segDist * 0.33),
+              radius: Math.max(18, segDist / 2),
               health: 1, maxHealth: 1,
               color: 'rgba(0, 200, 255, 0.5)',
               damage: 5 * this.player.stats.might * levelMult,
@@ -3202,10 +3500,25 @@ export class GameEngine {
           let damage = (enemy.type === 'boss' || enemy.type === 'titan') 
             ? projectile.damage * this.player.stats.boss_damage 
             : projectile.damage;
+
+          // Double Strike Proc (20% chance for double damage)
+          if (this.player.upgrades.some(u => u.id === 'double_strike') && Math.random() < 0.20) {
+            damage *= 2;
+            this.damageTexts.push({
+              x: enemy.position.x,
+              y: enemy.position.y - 35,
+              text: "CRIT x2!",
+              life: 800,
+              maxLife: 800,
+              color: '#ffea00'
+            });
+          }
             
           // Instant Kill chance (Executioner) - doesn't work on bosses
-          if (this.player.upgrades.some(u => u.id === 'instant_kill') && enemy.type !== 'boss' && enemy.type !== 'titan') {
-            const executeChance = 0.01 * this.player.stats.luck; // Unupgraded: 1%, max upgraded: 3%
+          const executeUpgrade = this.player.upgrades.find(u => u.id === 'instant_kill');
+          if (executeUpgrade && enemy.type !== 'boss' && enemy.type !== 'titan') {
+            const executeLevel = (executeUpgrade as any).level || 1;
+            const executeChance = 0.015 * executeLevel * this.player.stats.luck; // 1.5% base * level * luck
             if (Math.random() < executeChance) {
               damage = enemy.health; // Deal exact remaining health
               this.damageTexts.push({
@@ -3487,11 +3800,26 @@ export class GameEngine {
       });
     }
 
+    // Chain Lightning on kill proc
+    if (this.player.upgrades.some(u => u.id === 'chain_lightning') && Math.random() < 0.15) {
+      const liveTargets = this.enemies.filter(e => e.id !== 'dead' && e.id !== enemy.id);
+      for (const target of liveTargets.slice(0, 5)) {
+        const dx = target.position.x - enemy.position.x;
+        const dy = target.position.y - enemy.position.y;
+        if (dx * dx + dy * dy < 350 * 350) {
+          const zapDamage = 25 * this.player.stats.might;
+          target.health -= zapDamage;
+          target.hitFlash = 100;
+          this.createExplosion(target.position.x, target.position.y, '#00ffff', 3);
+          if (target.health <= 0) this.killEnemy(target);
+        }
+      }
+    }
+
     // Notify event manager of the kill
     this.eventManager.onEnemyKilled(enemy.id, enemy.position.x, enemy.position.y, this);
 
     enemy.id = 'dead';
-    this.enemies = this.enemies.filter(e => e.id !== 'dead');
   }
 
   spawnEnemies(dt: number) {
@@ -3501,16 +3829,12 @@ export class GameEngine {
     if (this.spawnTimer >= spawnRate) {
       this.spawnTimer = 0;
 
-      // Boss spawning logic
-      const minutes = Math.floor(this.gameTime / 60000);
-      const seconds = Math.floor((this.gameTime % 60000) / 1000);
-      
-      // Spawn boss at exactly 2, 5, 10, 20 minutes
-      if (seconds === 0 && [2, 5, 10, 20].includes(minutes)) {
-        const bossId = `boss_${minutes}min`;
-        const alreadySpawned = this.enemies.some(e => e.id.startsWith(bossId));
-        if (!alreadySpawned) {
-          this.spawnBoss(minutes);
+      // Boss spawning logic: reliably check milestone minutes
+      const minutes = this.gameTime / 60000;
+      for (const milestone of [2, 5, 10, 20]) {
+        if (minutes >= milestone && !this.spawnedBossMilestones.has(milestone)) {
+          this.spawnedBossMilestones.add(milestone);
+          this.spawnBoss(milestone);
           return;
         }
       }

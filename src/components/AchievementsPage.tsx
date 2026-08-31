@@ -151,16 +151,16 @@ export function AchievementsPage({ achievements, unlocks, progressSnapshot, onBa
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 z-50 overflow-y-auto"
+      className="absolute inset-0 z-50 overflow-hidden flex flex-col"
     >
       <div className="fixed inset-0 bg-black/90 backdrop-blur-xl pointer-events-none" />
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(6,182,212,0.2),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(250,204,21,0.12),transparent_35%),radial-gradient(circle_at_50%_100%,rgba(239,68,68,0.12),transparent_45%)] pointer-events-none" />
 
-      <div className="relative max-w-6xl mx-auto p-6 md:p-10">
-        <div className="flex items-center justify-between mb-6">
+      <div className="relative max-w-6xl w-full mx-auto p-4 md:p-6 h-full flex flex-col">
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <div>
-            <h2 className="text-4xl md:text-5xl font-black italic tracking-tight text-cyan-200">ACHIEVEMENTS</h2>
-            <p className="text-white/50 text-sm mt-1">Run milestones, mastery goals, and operator feats.</p>
+            <h2 className="text-3xl md:text-4xl font-black italic tracking-tight text-cyan-200">ACHIEVEMENTS</h2>
+            <p className="text-white/50 text-xs mt-0.5">Run milestones, mastery goals, and operator feats.</p>
           </div>
           <button
             onClick={onBack}
@@ -170,52 +170,52 @@ export function AchievementsPage({ achievements, unlocks, progressSnapshot, onBa
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="rounded-2xl border border-cyan-400/25 bg-cyan-950/30 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 flex-shrink-0">
+          <div className="rounded-xl border border-cyan-400/25 bg-cyan-950/30 p-3">
             <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-100/60">Progress</div>
-            <div className="mt-2 text-3xl font-black text-cyan-200">{unlockedCount} / {total}</div>
-            <div className="mt-3 h-2 rounded-full bg-white/10 overflow-hidden border border-white/10">
+            <div className="mt-1 text-2xl font-black text-cyan-200">{unlockedCount} / {total}</div>
+            <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden border border-white/10">
               <div className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-200" style={{ width: `${completion}%` }} />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-yellow-400/25 bg-yellow-900/20 p-4">
+          <div className="rounded-xl border border-yellow-400/25 bg-yellow-900/20 p-3">
             <div className="text-[10px] uppercase tracking-[0.2em] text-yellow-100/70">Completion</div>
-            <div className="mt-2 text-3xl font-black text-yellow-300">{completion}%</div>
-            <div className="mt-2 text-xs text-yellow-100/60">Unlock all to complete the archive.</div>
+            <div className="mt-1 text-2xl font-black text-yellow-300">{completion}%</div>
+            <div className="mt-1 text-xs text-yellow-100/60">Unlock all to complete the archive.</div>
           </div>
 
-          <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
+          <div className="rounded-xl border border-white/15 bg-white/5 p-3">
             <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Reward Feed</div>
-            <div className="mt-2 flex items-center gap-3 text-white/75 text-sm">
-              <Coins size={16} className="text-yellow-400" /> Instant coins during runs
+            <div className="mt-1 flex items-center gap-2 text-white/75 text-xs">
+              <Coins size={14} className="text-yellow-400" /> Instant coins during runs
             </div>
-            <div className="mt-1 flex items-center gap-3 text-white/75 text-sm">
-              <Sparkles size={16} className="text-cyan-300" /> Instant XP during runs
+            <div className="mt-0.5 flex items-center gap-2 text-white/75 text-xs">
+              <Sparkles size={14} className="text-cyan-300" /> Instant XP during runs
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-4 mb-6">
-          <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="rounded-xl border border-white/15 bg-white/[0.04] p-3 mb-3 flex-shrink-0">
+          <div className="flex flex-col xl:flex-row xl:items-center gap-2">
             <label className="relative flex-1 min-w-0">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search title, chapter, or description"
-                className="w-full rounded-xl bg-black/40 border border-white/15 pl-9 pr-3 py-2 text-sm text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+                className="w-full rounded-xl bg-black/40 border border-white/15 pl-9 pr-3 py-1.5 text-xs text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
               />
             </label>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {categories.map((category) => {
                 const active = categoryFilter === category;
                 return (
                   <button
                     key={category}
                     onClick={() => setCategoryFilter(category)}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] uppercase tracking-[0.14em] border transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-[0.14em] border transition-all cursor-pointer ${
                       active
                         ? 'bg-cyan-500/20 border-cyan-300/50 text-cyan-100'
                         : 'bg-white/5 border-white/15 text-white/60 hover:bg-white/10'
@@ -227,27 +227,19 @@ export function AchievementsPage({ achievements, unlocks, progressSnapshot, onBa
               })}
             </div>
           </div>
-          <div className="mt-3 text-xs text-white/45">
-            Showing {filteredAchievements.length.toLocaleString()} of {total.toLocaleString()} achievements.
-          </div>
-          <div className="mt-1 text-[11px] text-white/35">
-            Rendering {visibleAchievements.length.toLocaleString()} cards at once for smooth scrolling.
-          </div>
         </div>
 
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-950/20 p-4 mb-6">
-          <div className="flex items-center gap-2 text-amber-200 text-xs uppercase tracking-[0.2em] font-bold mb-3">
-            <Target size={14} /> Near Unlock Targets
-          </div>
-          {nearUnlock.length === 0 ? (
-            <div className="text-xs text-amber-100/65">Play a run to generate near-unlock progress highlights.</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {nearUnlock.length > 0 && (
+          <div className="rounded-xl border border-amber-400/20 bg-amber-950/20 p-3 mb-3 flex-shrink-0">
+            <div className="flex items-center gap-2 text-amber-200 text-[11px] uppercase tracking-[0.2em] font-bold mb-2">
+              <Target size={12} /> Near Unlock Targets
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
               {nearUnlock.map(({ achievement, progress }) => (
-                <div key={achievement.id} className="rounded-xl border border-amber-300/30 bg-black/25 p-3">
-                  <div className="text-[9px] uppercase tracking-[0.18em] text-amber-100/70 mb-1">{achievement.chapter}</div>
-                  <div className="text-xs font-bold text-amber-100 leading-snug">{achievement.title}</div>
-                  <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden border border-white/10">
+                <div key={achievement.id} className="rounded-lg border border-amber-300/30 bg-black/25 p-2">
+                  <div className="text-[9px] uppercase tracking-[0.18em] text-amber-100/70">{achievement.chapter}</div>
+                  <div className="text-xs font-bold text-amber-100 truncate">{achievement.title}</div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-white/10 overflow-hidden border border-white/10">
                     <div className="h-full bg-gradient-to-r from-amber-400 to-yellow-200" style={{ width: `${Math.round(progress.ratio * 100)}%` }} />
                   </div>
                   <div className="mt-1 text-[10px] text-amber-100/80 font-mono">
@@ -256,13 +248,13 @@ export function AchievementsPage({ achievements, unlocks, progressSnapshot, onBa
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div
           ref={virtualScrollerRef}
           onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-          className="max-h-[58vh] overflow-y-auto pr-1 pb-8"
+          className="flex-1 min-h-0 overflow-y-auto pr-1 pb-6"
         >
           {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} />}
 

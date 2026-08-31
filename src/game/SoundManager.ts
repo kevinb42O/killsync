@@ -8,16 +8,37 @@ export class SoundManager {
     // We'll initialize on first user interaction to comply with browser policies
   }
 
+  private noiseBuffer: AudioBuffer | null = null;
+
   private init() {
-    if (this.ctx) return;
-    this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      return;
+    }
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    this.ctx = new AudioCtx();
     this.masterGain = this.ctx.createGain();
     this.masterGain.connect(this.ctx.destination);
     this.masterGain.gain.value = 0.3;
     this.enabled = true;
+    this.noiseBuffer = this.createNoiseBuffer();
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
   }
 
-  private createNoiseBuffer() {
+  private ensureRunning() {
+    if (!this.enabled || !this.ctx) {
+      this.init();
+    } else if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
+  private createNoiseBuffer(): AudioBuffer | null {
     if (!this.ctx) return null;
     const bufferSize = this.ctx.sampleRate * 2;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -29,7 +50,7 @@ export class SoundManager {
   }
 
   private playTone(freq: number, type: OscillatorType, duration: number, volume: number = 1, slide: number = 0, attack: number = 0.01) {
-    if (!this.enabled) this.init();
+    this.ensureRunning();
     if (!this.ctx || !this.masterGain) return;
 
     const osc = this.ctx.createOscillator();
@@ -53,14 +74,16 @@ export class SoundManager {
   }
 
   private playNoise(duration: number, volume: number = 1, lowPass: number = 1000) {
-    if (!this.enabled) this.init();
+    this.ensureRunning();
     if (!this.ctx || !this.masterGain) return;
 
-    const buffer = this.createNoiseBuffer();
-    if (!buffer) return;
+    if (!this.noiseBuffer) {
+      this.noiseBuffer = this.createNoiseBuffer();
+    }
+    if (!this.noiseBuffer) return;
 
     const source = this.ctx.createBufferSource();
-    source.buffer = buffer;
+    source.buffer = this.noiseBuffer;
 
     const gain = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
@@ -81,7 +104,7 @@ export class SoundManager {
   }
 
   private playKick(duration: number, volume: number = 1) {
-    if (!this.enabled) this.init();
+    this.ensureRunning();
     if (!this.ctx || !this.masterGain) return;
 
     const osc = this.ctx.createOscillator();
@@ -164,7 +187,7 @@ export class SoundManager {
 
   playTreasureSpawn() {
     // High-pitched sparkly sound
-    if (!this.ctx) this.init();
+    this.ensureRunning();
     [1200, 1500, 1800, 2100].forEach((f, i) => {
       setTimeout(() => this.playTone(f, 'sine', 0.15, 0.04, 200, 0.01), i * 50);
     });

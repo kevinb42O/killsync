@@ -7,7 +7,7 @@ import { MenuEffects, triggerMenuEffect } from './components/MenuEffects';
 import { IntelArchive } from './components/IntelArchive';
 import { AchievementsPage } from './components/AchievementsPage';
 import { ShopMenu } from './components/ShopMenu';
-import { GameState, Inventory } from './types';
+import { GameState, Inventory, ViewMode } from './types';
 import { soundManager } from './game/SoundManager';
 import { PERMANENT_UPGRADES, OPERATOR_DEFINITIONS, WEAPON_DEFINITIONS } from './constants';
 import {
@@ -70,9 +70,12 @@ const ACHIEVEMENTS_STORAGE_KEY = 'achievementsUnlocked';
 export default function App() {
   const appRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const threeContainerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const exfillCarryoverRef = useRef<any>(null);
   const [gameState, setGameState] = useState<GameState>('MENU');
+  const [viewMode, setViewMode] = useState<ViewMode>('TOPDOWN_2D');
+
   const [levelUpOptions, setLevelUpOptions] = useState<any[]>([]);
   const [upgradeScreenContext, setUpgradeScreenContext] = useState<'first' | 'wave'>('wave');
   const [treasureReward, setTreasureReward] = useState<any>(null);
@@ -638,7 +641,12 @@ export default function App() {
         }
       );
       engine.setBalanceTuning(adminBalance);
+      if (threeContainerRef.current) {
+        engine.initRenderer3D(threeContainerRef.current);
+      }
+      engine.onViewModeChange = (mode) => setViewMode(mode);
       engineRef.current = engine;
+
       
       const resize = () => {
         if (canvasRef.current) {
@@ -648,6 +656,14 @@ export default function App() {
       };
       window.addEventListener('resize', resize);
       resize();
+
+      return () => {
+        window.removeEventListener('resize', resize);
+        if (engineRef.current) {
+          engineRef.current.destroy();
+          engineRef.current = null;
+        }
+      };
     }
   }, []);
 
@@ -1359,10 +1375,23 @@ export default function App() {
   return (
     <div ref={appRef} className="relative w-full h-screen bg-[#0a0a0a] overflow-hidden text-white font-sans">
       {gameState === 'MENU' && <MenuEffects />}
+      {/* 2D Canvas for Topdown Mode */}
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
+        className={`absolute inset-0 w-full h-full ${viewMode !== 'TOPDOWN_2D' ? 'hidden' : 'block'}`}
       />
+
+      {/* 3D WebGL Canvas Container for First-Person / Third-Person Mode */}
+      <div
+        ref={threeContainerRef}
+        className={`absolute inset-0 w-full h-full ${viewMode === 'TOPDOWN_2D' ? 'hidden pointer-events-none' : 'block pointer-events-auto cursor-crosshair'}`}
+        onClick={() => {
+          if (viewMode === 'FIRST_PERSON' && engineRef.current?.renderer3D) {
+            engineRef.current.renderer3D.requestPointerLock();
+          }
+        }}
+      />
+
 
       {/* Post-processing effects */}
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]" />

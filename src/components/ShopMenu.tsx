@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Shield, ShieldAlert, ShieldCheck, HeartPulse, Bomb, X, Coins } from 'lucide-react';
 import { soundManager } from '../game/SoundManager';
 import { Inventory } from '../types';
