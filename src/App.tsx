@@ -42,6 +42,11 @@ type KnobDef = {
   step: number;
 };
 
+type CheatFeedback = {
+  id: number;
+  message: string;
+};
+
 const ADMIN_KNOBS: KnobDef[] = [
   { key: 'weaponSpawnStep', label: 'Weapon Spawn Step', description: 'Extra spawn multiplier added per weapon above 1. Example: 0.5 gives 1.0x, 1.5x, 2.0x, 2.5x.', min: 0, max: 2, step: 0.05 },
   { key: 'spawnBaseIntervalMs', label: 'Base Spawn Interval (ms)', description: 'Base delay between spawn ticks before difficulty scaling. Lower value means faster spawning.', min: 100, max: 1200, step: 10 },
@@ -121,7 +126,7 @@ export default function App() {
 
   const requestGameplayPointerLock = useCallback(() => {
     const engine = engineRef.current;
-    if (engine?.viewMode === 'FIRST_PERSON') {
+    if (engine?.viewMode === 'FIRST_PERSON' || engine?.viewMode === 'THIRD_PERSON') {
       engine.renderer3D?.requestPointerLock();
     }
   }, []);
@@ -139,6 +144,8 @@ export default function App() {
   const [hasExfillCarryover, setHasExfillCarryover] = useState(false);
   const [startWaveOverride, setStartWaveOverride] = useState<number | null>(null);
   const [startWithEverything, setStartWithEverything] = useState(false);
+  const [activeCheatFeedback, setActiveCheatFeedback] = useState<CheatFeedback | null>(null);
+  const cheatFeedbackTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [resumeWaveBanner, setResumeWaveBanner] = useState<number | null>(null);
   const [playerCoins, setPlayerCoins] = useState(() => {
     const saved = localStorage.getItem('playerCoins');
@@ -180,6 +187,26 @@ export default function App() {
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const ADMIN_DASHBOARD_PASSWORD = 'pinakaaz420';
+
+  const showCheatFeedback = useCallback((message: string) => {
+    if (cheatFeedbackTimerRef.current !== null) {
+      window.clearTimeout(cheatFeedbackTimerRef.current);
+    }
+
+    setActiveCheatFeedback({ id: Date.now(), message });
+    cheatFeedbackTimerRef.current = window.setTimeout(() => {
+      setActiveCheatFeedback(null);
+      cheatFeedbackTimerRef.current = null;
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cheatFeedbackTimerRef.current !== null) {
+        window.clearTimeout(cheatFeedbackTimerRef.current);
+      }
+    };
+  }, []);
 
   const resetRunAchievementTracking = useCallback((engine: GameEngine) => {
     totalCoinsCollectedRef.current = 0;
@@ -691,11 +718,13 @@ export default function App() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const activateStartWaveCheat = (wave: number) => {
-        setStartWaveOverride(Math.max(1, wave));
+        const startWave = Math.max(1, wave);
+        setStartWaveOverride(startWave);
         setStartWithEverything(false);
         exfillCarryoverRef.current = null;
         setHasExfillCarryover(false);
         soundManager.playLevelUp();
+        showCheatFeedback(`Next run will begin at wave ${startWave}.`);
         cheatBuffer = '';
       };
 
@@ -767,6 +796,7 @@ export default function App() {
       if (cheatBuffer.endsWith('gimmecash')) {
         setPlayerCoins(9999999);
         soundManager.playLevelUp();
+        showCheatFeedback('9,999,999 credits added to your account.');
         cheatBuffer = '';
       } else if (cheatBuffer.endsWith('reset')) {
         setPlayerCoins(0);
@@ -786,10 +816,12 @@ export default function App() {
         setAchievementQueue([]);
         setActiveAchievementBanner(null);
         soundManager.playUIClick();
+        showCheatFeedback('Profile reset to factory defaults.');
         cheatBuffer = '';
       } else if (cheatBuffer.endsWith('unlockall')) {
         setUnlockedOperators(OPERATOR_DEFINITIONS.map(o => o.id));
         soundManager.playLevelUp();
+        showCheatFeedback('Every operator is now unlocked.');
         cheatBuffer = '';
       } else if (cheatBuffer.endsWith('iamgod')) {
         const maxUpgrades: Record<string, number> = {};
@@ -798,6 +830,7 @@ export default function App() {
         });
         setPermanentUpgrades(maxUpgrades);
         soundManager.playLevelUp();
+        showCheatFeedback('All Neural Lab upgrades are maximized.');
         cheatBuffer = '';
       } else if (cheatBuffer.endsWith('waveten')) {
         activateStartWaveCheat(10);
@@ -836,13 +869,14 @@ export default function App() {
         setHasExfillCarryover(false);
         setStartWithEverything(true);
         soundManager.playLevelUp();
+        showCheatFeedback('Full loadout, resources, and progression armed for your next run.');
         cheatBuffer = '';
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState]);
+  }, [gameState, showCheatFeedback]);
 
   const startGame = () => {
     soundManager.playUIClick();
@@ -1423,6 +1457,50 @@ export default function App() {
       {gameState === 'PLAYING' && <GameHUD engine={engineRef.current} />}
 
       <AnimatePresence>
+        {gameState === 'MENU' && activeCheatFeedback && (
+          <motion.div
+            key={`cheat-pulse-${activeCheatFeedback.id}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.65, 0.14, 0.36, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.9, times: [0, 0.16, 0.42, 0.68, 1] }}
+            className="absolute inset-0 z-[80] pointer-events-none bg-cyan-300/30 mix-blend-screen"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.82 }}
+              animate={{ opacity: [0, 0.9, 0], scale: [0.82, 1.18, 1.42] }}
+              transition={{ duration: 0.9, ease: 'easeOut' }}
+              className="absolute inset-0 m-auto h-[min(88vw,88vh)] w-[min(88vw,88vh)] rounded-full border-2 border-cyan-100/70 shadow-[0_0_120px_45px_rgba(34,211,238,0.45)]"
+            />
+          </motion.div>
+        )}
+        {gameState === 'MENU' && activeCheatFeedback && (
+          <motion.div
+            key={`cheat-toast-${activeCheatFeedback.id}`}
+            initial={{ opacity: 0, y: -28, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -18, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 24, mass: 0.75 }}
+            className="absolute top-7 left-1/2 z-[90] w-[min(440px,calc(100vw-2rem))] -translate-x-1/2 pointer-events-none"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="relative overflow-hidden border border-cyan-200/70 bg-slate-950/90 px-5 py-3.5 backdrop-blur-md shadow-[0_0_32px_rgba(34,211,238,0.48)]"
+              style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}
+            >
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent" />
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-cyan-200/60 bg-cyan-400/15 text-cyan-100 shadow-[0_0_18px_rgba(34,211,238,0.35)]">
+                  <Zap size={19} fill="currentColor" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-200">Cheat activated</div>
+                  <div className="mt-0.5 text-sm font-bold leading-snug text-white">{activeCheatFeedback.message}</div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
         {gameState === 'PLAYING' && resumeWaveBanner !== null && (
           <motion.div
             initial={{ opacity: 0, y: -20, scale: 0.96 }}
