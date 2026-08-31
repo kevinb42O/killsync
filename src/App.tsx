@@ -118,6 +118,13 @@ export default function App() {
   const totalCoinsCollectedRef = useRef(0);
   const currentWaveKillCountRef = useRef(0);
   const currentWaveLevelUpsRef = useRef(0);
+
+  const requestGameplayPointerLock = useCallback(() => {
+    const engine = engineRef.current;
+    if (engine?.viewMode === 'FIRST_PERSON') {
+      engine.renderer3D?.requestPointerLock();
+    }
+  }, []);
   const lastWaveSeenRef = useRef(1);
   const prevKillCountRef = useRef(0);
   const prevLevelRef = useRef(1);
@@ -667,6 +674,18 @@ export default function App() {
     }
   }, []);
 
+  // Pointer lock belongs exclusively to active first-person gameplay. Any
+  // modal or menu must immediately return the cursor so its controls remain
+  // clickable. Resume/selection actions re-capture from their user gesture
+  // when possible; otherwise the player can click the world once.
+  useEffect(() => {
+    const renderer3D = engineRef.current?.renderer3D;
+    if (!renderer3D) return;
+    if (gameState !== 'PLAYING' || viewMode !== 'FIRST_PERSON') {
+      renderer3D.exitPointerLock();
+    }
+  }, [gameState, viewMode]);
+
   useEffect(() => {
     let cheatBuffer = '';
 
@@ -685,6 +704,7 @@ export default function App() {
         if (gameState === 'SHOP') {
           setGameState('PLAYING');
           if (engineRef.current) engineRef.current.exitShop();
+          requestGameplayPointerLock();
           soundManager.playUIClick();
         } else if (gameState === 'PLAYING') {
           setGameState('PAUSED');
@@ -693,6 +713,7 @@ export default function App() {
         } else if (gameState === 'PAUSED') {
           setGameState('PLAYING');
           if (engineRef.current) engineRef.current.paused = false;
+          requestGameplayPointerLock();
           soundManager.playUIClick();
         }
         return;
@@ -965,6 +986,7 @@ export default function App() {
     if (engineRef.current) {
       engineRef.current.applyUpgrade(upgrade);
       setGameState('PLAYING');
+      requestGameplayPointerLock();
     }
   };
 
@@ -1386,7 +1408,7 @@ export default function App() {
         ref={threeContainerRef}
         className={`absolute inset-0 w-full h-full ${viewMode === 'TOPDOWN_2D' ? 'hidden pointer-events-none' : 'block pointer-events-auto cursor-crosshair'}`}
         onClick={() => {
-          if (viewMode === 'FIRST_PERSON' && engineRef.current?.renderer3D) {
+          if (gameState === 'PLAYING' && viewMode === 'FIRST_PERSON' && engineRef.current?.renderer3D) {
             engineRef.current.renderer3D.requestPointerLock();
           }
         }}
@@ -2098,6 +2120,7 @@ export default function App() {
                   onClick={() => {
                     setGameState('PLAYING');
                     if (engineRef.current) engineRef.current.paused = false;
+                    requestGameplayPointerLock();
                     soundManager.playUIClick();
                   }}
                   className="w-full py-4 bg-cyan-500 text-black font-bold uppercase tracking-widest rounded-xl hover:bg-white transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)]"
@@ -2595,6 +2618,7 @@ export default function App() {
                       onClick={() => {
                         if (engineRef.current?.skipUpgrades()) {
                           setGameState('PLAYING');
+                          requestGameplayPointerLock();
                         }
                       }}
                       onMouseEnter={() => soundManager.playUIHover()}
@@ -2807,6 +2831,7 @@ export default function App() {
                       engineRef.current.applyUpgrade(treasureReward);
                     }
                     setGameState('PLAYING');
+                    requestGameplayPointerLock();
                   }}
                   onMouseEnter={() => soundManager.playUIHover()}
                   className={`px-14 py-4 font-bold uppercase tracking-widest rounded-full transition-all shadow-lg ${
@@ -3216,6 +3241,7 @@ export default function App() {
               if (engineRef.current) {
                 engineRef.current.exitShop();
               }
+              requestGameplayPointerLock();
             }}
           />
         )}

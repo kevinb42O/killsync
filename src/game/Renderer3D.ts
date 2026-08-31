@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { GameEngine } from './Engine';
 import { Enemy, Projectile, ExperienceGem, WorldItem, Treasure, OperatorDefinition, Weapon } from '../types';
 import { OPERATOR_DEFINITIONS } from '../constants';
+import { FireSolution, solveMuzzleConvergence } from './aiming';
 
 const COLOR_CACHE = new Map<string, THREE.Color>();
 
@@ -34,6 +36,14 @@ export class Renderer3D {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
+  viewmodelScene: THREE.Scene;
+  viewmodelCamera: THREE.PerspectiveCamera;
+
+  private readonly WORLD_FOV = 130;
+  private readonly WORLD_DASH_FOV = 138;
+  private readonly ADS_FOV = 72;
+  private readonly VIEWMODEL_FOV = 98;
+  private readonly VIEWMODEL_ADS_FOV = 68;
   
   // Camera & View State (High FOV + ADS)
   yaw: number = 0;
@@ -70,6 +80,11 @@ export class Renderer3D {
   
   // High-End FPS Viewmodel Rig
   fpsWeaponGroup!: THREE.Group;
+  weaponRoot!: THREE.Group;
+  barrelRoot!: THREE.Group;
+  rightArmRoot!: THREE.Group;
+  handRoot!: THREE.Group;
+  opticSocket!: THREE.Object3D;
   weaponChassis!: THREE.Mesh;
   weaponTopPlate!: THREE.Mesh;
   weaponGrip!: THREE.Mesh;
@@ -111,6 +126,9 @@ export class Renderer3D {
   armHoloLines!: THREE.Mesh;
 
   muzzleFlashMesh!: THREE.Mesh;
+  muzzleFlashCone!: THREE.Mesh;
+  muzzleFlashRing!: THREE.Mesh;
+  muzzleFlashLight!: THREE.PointLight;
   muzzleFlashTimer: number = 0;
   recoilOffset: number = 0;
   recoilRotOffset: number = 0;
@@ -158,6 +176,21 @@ export class Renderer3D {
   // Cached vector math objects for zero per-frame garbage collection
   private tempMuzzlePos = new THREE.Vector3();
   private tempMuzzleFwd = new THREE.Vector3();
+  private tempMuzzleNdc = new THREE.Vector3();
+  private tempMuzzleQuat = new THREE.Quaternion();
+  private tempCameraPos = new THREE.Vector3();
+  private tempCameraFwd = new THREE.Vector3();
+  private tempAimPoint = new THREE.Vector3();
+  private tempRaycaster = new THREE.Raycaster();
+  private centerNdc = new THREE.Vector2(0, 0);
+  private tempMuzzleNdc2 = new THREE.Vector2();
+  private lastFireSolution: FireSolution | null = null;
+  private debugAimGroup!: THREE.Group;
+  private debugCameraLine!: THREE.Line;
+  private debugMuzzleLine!: THREE.Line;
+  private debugMuzzlePoint!: THREE.Mesh;
+  private debugAimPoint!: THREE.Mesh;
+  debugAim: boolean = false;
 
   constructor() {
     // 1. Initialize Three.js Scene
@@ -165,9 +198,13 @@ export class Renderer3D {
     this.scene.background = new THREE.Color(0x060914);
     this.scene.fog = new THREE.FogExp2(0x060914, 0.0012);
 
-    // 2. Initialize Camera (Ultra-wide High FOV 100° standard, near 0.05 for high precision viewmodel)
-    this.camera = new THREE.PerspectiveCamera(100, window.innerWidth / window.innerHeight, 0.05, 10000);
+    // 2. World camera stays deliberately extreme; the viewmodel gets its own
+    // projection so it remains readable at a 130° world FOV.
+    this.camera = new THREE.PerspectiveCamera(this.WORLD_FOV, window.innerWidth / window.innerHeight, 0.05, 10000);
     this.scene.add(this.camera);
+    this.viewmodelScene = new THREE.Scene();
+    this.viewmodelCamera = new THREE.PerspectiveCamera(this.VIEWMODEL_FOV, window.innerWidth / window.innerHeight, 0.025, 1000);
+    this.viewmodelScene.add(this.viewmodelCamera);
 
     // 3. Initialize WebGL Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -188,6 +225,7 @@ export class Renderer3D {
 
     // 6. Setup High-End FPS Viewmodel (Production Cyber Arm & Blaster)
     this.setupFPSViewmodel();
+    this.setupAimDebug();
 
     // 7. Setup Third-Person Character
     this.setupThirdPersonCharacter();
@@ -218,6 +256,8 @@ export class Renderer3D {
     const height = window.innerHeight;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.viewmodelCamera.aspect = width / height;
+    this.viewmodelCamera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
   };
 
@@ -286,13 +326,24 @@ export class Renderer3D {
 
   private setupFPSViewmodel() {
     this.fpsWeaponGroup = new THREE.Group();
+    this.weaponRoot = new THREE.Group();
+    this.weaponRoot.name = 'weaponRoot';
+    this.barrelRoot = new THREE.Group();
+    this.barrelRoot.name = 'barrelRoot';
+    this.rightArmRoot = new THREE.Group();
+    this.rightArmRoot.name = 'rightArmRoot';
+    this.handRoot = new THREE.Group();
+    this.handRoot.name = 'handRoot';
+    this.weaponRoot.add(this.barrelRoot);
+    this.rightArmRoot.add(this.handRoot);
+    this.fpsWeaponGroup.add(this.weaponRoot, this.rightArmRoot);
 
     // 1. DEDICATED VIEWMODEL LIGHTS (Attached directly to viewmodel group)
-    this.vmFillLight = new THREE.PointLight(0xffffff, 4.5, 40, 1.0);
+    this.vmFillLight = new THREE.PointLight(0xffffff, 2.6, 40, 1.0);
     this.vmFillLight.position.set(1.5, 1.5, -2.0);
     this.fpsWeaponGroup.add(this.vmFillLight);
 
-    this.vmGlowLight = new THREE.PointLight(0x00f0ff, 4.0, 30, 1.0);
+    this.vmGlowLight = new THREE.PointLight(0x00f0ff, 2.2, 30, 1.0);
     this.vmGlowLight.position.set(2.4, -0.8, -4.5);
     this.fpsWeaponGroup.add(this.vmGlowLight);
 
@@ -300,48 +351,49 @@ export class Renderer3D {
     // 2. HEAVY PLASMA ACCELERATOR CANNON & OPTIC
     // ==========================================
 
-    // Main Receiver Body (Angular carbon-titanium receiver, forward-anchored from Z=0.0 to Z=-5.0)
-    const chassisGeo = new THREE.BoxGeometry(1.8, 2.2, 5.0);
+    // Compact beveled receiver: readable at extreme FOV without becoming a slab.
+    const chassisGeo = new RoundedBoxGeometry(1.45, 1.45, 4.6, 3, 0.14);
     const chassisMat = new THREE.MeshStandardMaterial({
       color: 0x243248,
       emissive: 0x0c1626,
       emissiveIntensity: 0.6,
       metalness: 0.7,
-      roughness: 0.25
+      roughness: 0.34
     });
     this.weaponChassis = new THREE.Mesh(chassisGeo, chassisMat);
-    this.weaponChassis.position.set(0, 0, -2.5);
-    this.fpsWeaponGroup.add(this.weaponChassis);
+    this.weaponChassis.position.set(0, 0.05, -2.65);
+    this.weaponRoot.add(this.weaponChassis);
 
     // Top Receiver Armor Plate with Neon Rail
-    const topPlateGeo = new THREE.BoxGeometry(1.6, 0.35, 5.2);
+    const topPlateGeo = new RoundedBoxGeometry(1.25, 0.18, 4.5, 2, 0.07);
     const topPlateMat = new THREE.MeshStandardMaterial({
       color: 0x00f0ff,
       emissive: 0x00f0ff,
-      emissiveIntensity: 1.4,
-      metalness: 0.3
+      emissiveIntensity: 0.55,
+      metalness: 0.55,
+      roughness: 0.25
     });
     this.weaponTopPlate = new THREE.Mesh(topPlateGeo, topPlateMat);
-    this.weaponTopPlate.position.set(0, 1.2, -2.5);
-    this.fpsWeaponGroup.add(this.weaponTopPlate);
+    this.weaponTopPlate.position.set(0, 0.88, -2.65);
+    this.weaponRoot.add(this.weaponTopPlate);
 
     // Ergonomic Combat Pistol Grip
-    const gripGeo = new THREE.BoxGeometry(1.1, 2.4, 1.3);
+    const gripGeo = new RoundedBoxGeometry(0.82, 1.9, 1.05, 3, 0.12);
     const gripMat = new THREE.MeshStandardMaterial({
       color: 0x141c28,
       metalness: 0.8,
       roughness: 0.35
     });
     this.weaponGrip = new THREE.Mesh(gripGeo, gripMat);
-    this.weaponGrip.position.set(0, -1.4, -0.6);
-    this.weaponGrip.rotation.x = -0.32;
-    this.fpsWeaponGroup.add(this.weaponGrip);
+    this.weaponGrip.position.set(0, -1.08, -0.72);
+    this.weaponGrip.rotation.x = -0.28;
+    this.weaponRoot.add(this.weaponGrip);
 
     // ----------------------------------------------------
     // HOLOGRAPHIC REFLEX OPTIC (Sits at Optical Eye Height Y = 1.95)
     // ----------------------------------------------------
     // Optic Cantilever Mount Base
-    const mountGeo = new THREE.BoxGeometry(1.0, 0.4, 1.6);
+    const mountGeo = new RoundedBoxGeometry(0.88, 0.22, 1.15, 2, 0.07);
     const mountMat = new THREE.MeshStandardMaterial({
       color: 0x1a2638,
       emissive: 0x0a1422,
@@ -350,8 +402,11 @@ export class Renderer3D {
       roughness: 0.2
     });
     this.weaponSightMount = new THREE.Mesh(mountGeo, mountMat);
-    this.weaponSightMount.position.set(0, 1.55, -2.2);
-    this.fpsWeaponGroup.add(this.weaponSightMount);
+    this.weaponSightMount.position.set(0, 1.02, -2.3);
+    this.weaponRoot.add(this.weaponSightMount);
+    this.opticSocket = new THREE.Object3D();
+    this.opticSocket.position.set(0, 1.48, -2.3);
+    this.weaponRoot.add(this.opticSocket);
 
     // Optic Housing Hood Group
     this.weaponSightHousing = new THREE.Group();
@@ -363,21 +418,21 @@ export class Renderer3D {
       roughness: 0.15
     });
 
-    const topHood = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 1.2), shroudMat);
-    topHood.position.set(0, 2.4, -2.2);
+    const topHood = new THREE.Mesh(new RoundedBoxGeometry(0.95, 0.12, 0.85, 2, 0.04), shroudMat);
+    topHood.position.set(0, 1.78, -2.3);
     this.weaponSightHousing.add(topHood);
 
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.75, 1.2), shroudMat);
-    leftWall.position.set(-0.55, 1.95, -2.2);
+    const leftWall = new THREE.Mesh(new RoundedBoxGeometry(0.12, 0.58, 0.85, 2, 0.035), shroudMat);
+    leftWall.position.set(-0.42, 1.48, -2.3);
     this.weaponSightHousing.add(leftWall);
 
-    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.75, 1.2), shroudMat);
-    rightWall.position.set(0.55, 1.95, -2.2);
+    const rightWall = new THREE.Mesh(new RoundedBoxGeometry(0.12, 0.58, 0.85, 2, 0.035), shroudMat);
+    rightWall.position.set(0.42, 1.48, -2.3);
     this.weaponSightHousing.add(rightWall);
-    this.fpsWeaponGroup.add(this.weaponSightHousing);
+    this.weaponRoot.add(this.weaponSightHousing);
 
     // Holographic Anti-Glare Glass Lens (Optical Center at Y = 1.95, Z = -2.2)
-    const glassGeo = new THREE.PlaneGeometry(0.9, 0.7);
+    const glassGeo = new THREE.PlaneGeometry(0.68, 0.48);
     const glassMat = new THREE.MeshStandardMaterial({
       color: 0x00f0ff,
       transparent: true,
@@ -388,8 +443,8 @@ export class Renderer3D {
       depthWrite: false
     });
     this.weaponSightGlass = new THREE.Mesh(glassGeo, glassMat);
-    this.weaponSightGlass.position.set(0, 1.95, -2.2);
-    this.fpsWeaponGroup.add(this.weaponSightGlass);
+    this.weaponSightGlass.position.set(0, 1.48, -2.32);
+    this.weaponRoot.add(this.weaponSightGlass);
 
     // Floating 3D Holographic Reticle (Center Dot + Outer Bracket Ring)
     const reticleDotGeo = new THREE.RingGeometry(0.018, 0.055, 16);
@@ -401,10 +456,10 @@ export class Renderer3D {
       depthWrite: false
     });
     this.weaponSightReticleDot = new THREE.Mesh(reticleDotGeo, reticleDotMat);
-    this.weaponSightReticleDot.position.set(0, 1.95, -2.22);
-    this.fpsWeaponGroup.add(this.weaponSightReticleDot);
+    this.weaponSightReticleDot.position.set(0, 1.48, -2.34);
+    this.weaponRoot.add(this.weaponSightReticleDot);
 
-    const reticleRingGeo = new THREE.RingGeometry(0.20, 0.23, 24);
+    const reticleRingGeo = new THREE.RingGeometry(0.13, 0.15, 24);
     const reticleRingMat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
       transparent: true,
@@ -413,25 +468,25 @@ export class Renderer3D {
       depthWrite: false
     });
     this.weaponSightReticleRing = new THREE.Mesh(reticleRingGeo, reticleRingMat);
-    this.weaponSightReticleRing.position.set(0, 1.95, -2.22);
-    this.fpsWeaponGroup.add(this.weaponSightReticleRing);
+    this.weaponSightReticleRing.position.set(0, 1.48, -2.34);
+    this.weaponRoot.add(this.weaponSightReticleRing);
 
     // Front Co-Witness Sight Blade & Glowing Fiber Bead
     const frontPostGeo = new THREE.BoxGeometry(0.08, 0.45, 0.08);
     const frontPostMat = new THREE.MeshStandardMaterial({ color: 0x182436, metalness: 0.9 });
     this.weaponSightFrontPost = new THREE.Mesh(frontPostGeo, frontPostMat);
-    this.weaponSightFrontPost.position.set(0, 1.15, -8.0);
-    this.fpsWeaponGroup.add(this.weaponSightFrontPost);
+    this.weaponSightFrontPost.position.set(0, 0.83, -7.25);
+    this.barrelRoot.add(this.weaponSightFrontPost);
 
     const frontBeadGeo = new THREE.SphereGeometry(0.065, 8, 8);
     const frontBeadMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
     this.weaponSightFrontBead = new THREE.Mesh(frontBeadGeo, frontBeadMat);
-    this.weaponSightFrontBead.position.set(0, 1.4, -8.0);
-    this.fpsWeaponGroup.add(this.weaponSightFrontBead);
+    this.weaponSightFrontBead.position.set(0, 1.05, -7.25);
+    this.barrelRoot.add(this.weaponSightFrontBead);
 
     // Lateral Cooling Radiator Fins (3 pairs)
     for (let f = 0; f < 3; f++) {
-      const finGeo = new THREE.BoxGeometry(0.25, 1.2, 0.35);
+      const finGeo = new RoundedBoxGeometry(0.16, 0.72, 0.28, 2, 0.04);
       const finMat = new THREE.MeshStandardMaterial({
         color: 0x00f0ff,
         emissive: 0x00f0ff,
@@ -439,19 +494,19 @@ export class Renderer3D {
       });
       // Left fin
       const finLeft = new THREE.Mesh(finGeo, finMat);
-      finLeft.position.set(-1.05, 0.25, -1.2 - f * 1.3);
-      this.fpsWeaponGroup.add(finLeft);
+      finLeft.position.set(-0.82, 0.15, -1.5 - f * 1.05);
+      this.weaponRoot.add(finLeft);
       this.weaponCoolingFins.push(finLeft);
 
       // Right fin
       const finRight = new THREE.Mesh(finGeo, finMat);
-      finRight.position.set(1.05, 0.25, -1.2 - f * 1.3);
-      this.fpsWeaponGroup.add(finRight);
+      finRight.position.set(0.82, 0.15, -1.5 - f * 1.05);
+      this.weaponRoot.add(finRight);
       this.weaponCoolingFins.push(finRight);
     }
 
     // Twin Heavy Magnetic Accelerator Rails
-    const railUpperGeo = new THREE.BoxGeometry(0.55, 0.55, 4.2);
+    const railUpperGeo = new RoundedBoxGeometry(0.34, 0.28, 3.8, 2, 0.06);
     const railMat = new THREE.MeshStandardMaterial({
       color: 0x3d4f6c,
       emissive: 0x00f0ff,
@@ -460,29 +515,29 @@ export class Renderer3D {
       roughness: 0.15
     });
     this.weaponRailUpper = new THREE.Mesh(railUpperGeo, railMat);
-    this.weaponRailUpper.position.set(0, 0.45, -6.5);
-    this.fpsWeaponGroup.add(this.weaponRailUpper);
+    this.weaponRailUpper.position.set(0, 0.26, -6.25);
+    this.barrelRoot.add(this.weaponRailUpper);
 
     this.weaponRailLower = new THREE.Mesh(railUpperGeo, railMat);
-    this.weaponRailLower.position.set(0, -0.45, -6.5);
-    this.fpsWeaponGroup.add(this.weaponRailLower);
+    this.weaponRailLower.position.set(0, -0.26, -6.25);
+    this.barrelRoot.add(this.weaponRailLower);
 
     // 3 Magnetic Accelerator Coil Rings around the twin rails
     for (let c = 0; c < 3; c++) {
-      const coilGeo = new THREE.TorusGeometry(0.85, 0.14, 8, 20);
+      const coilGeo = new THREE.TorusGeometry(0.55, 0.075, 8, 18);
       const coilMat = new THREE.MeshStandardMaterial({
         color: 0x00f0ff,
         emissive: 0x00f0ff,
         emissiveIntensity: 2.0
       });
       const coil = new THREE.Mesh(coilGeo, coilMat);
-      coil.position.set(0, 0, -5.2 - c * 1.2);
-      this.fpsWeaponGroup.add(coil);
+      coil.position.set(0, 0, -5.15 - c * 1.0);
+      this.barrelRoot.add(coil);
       this.weaponMagCoils.push(coil);
     }
 
     // Heavy Front Muzzle Brake / Focus Aperture
-    const muzzleGeo = new THREE.BoxGeometry(1.3, 1.8, 0.7);
+    const muzzleGeo = new THREE.CylinderGeometry(0.62, 0.52, 0.72, 10);
     const muzzleMat = new THREE.MeshStandardMaterial({
       color: 0x182436,
       emissive: 0x00f0ff,
@@ -490,13 +545,22 @@ export class Renderer3D {
       metalness: 0.85
     });
     this.weaponMuzzleBrake = new THREE.Mesh(muzzleGeo, muzzleMat);
-    this.weaponMuzzleBrake.position.set(0, 0, -8.8);
-    this.fpsWeaponGroup.add(this.weaponMuzzleBrake);
+    this.weaponMuzzleBrake.rotation.x = Math.PI / 2;
+    this.weaponMuzzleBrake.position.set(0, 0, -8.25);
+    this.barrelRoot.add(this.weaponMuzzleBrake);
+
+    const bore = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.24, 0.76, 16),
+      new THREE.MeshStandardMaterial({ color: 0x020408, roughness: 0.65, metalness: 0.7 })
+    );
+    bore.rotation.x = Math.PI / 2;
+    bore.position.set(0, 0, -8.3);
+    this.barrelRoot.add(bore);
 
     // Physical Barrel Bore Point (Inside the center of the barrel exit)
     this.weaponMuzzlePoint = new THREE.Object3D();
-    this.weaponMuzzlePoint.position.set(0, 0, -9.2);
-    this.fpsWeaponGroup.add(this.weaponMuzzlePoint);
+    this.weaponMuzzlePoint.position.set(0, 0, -8.72);
+    this.barrelRoot.add(this.weaponMuzzlePoint);
 
     // Quantum Core Chamber (Top observation glass port)
     const chamberGeo = new THREE.CylinderGeometry(0.6, 0.6, 1.6, 16);
@@ -510,54 +574,80 @@ export class Renderer3D {
     this.weaponCoreChamber = new THREE.Mesh(chamberGeo, chamberMat);
     this.weaponCoreChamber.rotation.x = Math.PI / 2;
     this.weaponCoreChamber.position.set(0, 0.55, -1.6);
-    this.fpsWeaponGroup.add(this.weaponCoreChamber);
+    this.weaponRoot.add(this.weaponCoreChamber);
 
     // Glowing Rotating Quantum Core Crystal
     const coreGeo = new THREE.OctahedronGeometry(0.42, 0);
     const coreMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
     this.weaponQuantumCore = new THREE.Mesh(coreGeo, coreMat);
-    this.weaponQuantumCore.position.set(0, 0.55, -1.6);
-    this.fpsWeaponGroup.add(this.weaponQuantumCore);
+    this.weaponQuantumCore.scale.setScalar(0.72);
+    this.weaponQuantumCore.position.set(0, 0.48, -1.7);
+    this.weaponRoot.add(this.weaponQuantumCore);
 
     // Heavy Tactical E-Battery Cell Magazine
-    const batteryGeo = new THREE.BoxGeometry(1.2, 2.0, 1.6);
+    const batteryGeo = new RoundedBoxGeometry(0.9, 1.55, 1.15, 3, 0.12);
     const batteryMat = new THREE.MeshStandardMaterial({
       color: 0x141c28,
       metalness: 0.8,
       roughness: 0.3
     });
     this.weaponBatteryCell = new THREE.Mesh(batteryGeo, batteryMat);
-    this.weaponBatteryCell.position.set(0, -1.6, -2.4);
-    this.fpsWeaponGroup.add(this.weaponBatteryCell);
+    this.weaponBatteryCell.position.set(0, -1.0, -2.35);
+    this.weaponBatteryCell.rotation.x = 0.1;
+    this.weaponRoot.add(this.weaponBatteryCell);
 
     // 4 Glowing Battery Level LEDs
     for (let b = 0; b < 4; b++) {
       const ledGeo = new THREE.BoxGeometry(0.08, 0.22, 0.22);
       const ledMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
       const led = new THREE.Mesh(ledGeo, ledMat);
-      led.position.set(0.62, -1.0 - b * 0.4, -2.4);
-      this.fpsWeaponGroup.add(led);
+      led.position.set(0.47, -0.55 - b * 0.28, -2.35);
+      this.weaponRoot.add(led);
       this.weaponBatteryLEDs.push(led);
     }
 
     // Muzzle Flash Effect
-    const flashGeo = new THREE.SphereGeometry(1.6, 12, 12);
+    const flashGeo = new THREE.SphereGeometry(0.46, 10, 8);
     const flashMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
       opacity: 0
     });
     this.muzzleFlashMesh = new THREE.Mesh(flashGeo, flashMat);
-    this.muzzleFlashMesh.position.set(0, 0, -9.2);
-    this.fpsWeaponGroup.add(this.muzzleFlashMesh);
+    this.muzzleFlashMesh.position.set(0, 0, -8.78);
+    this.barrelRoot.add(this.muzzleFlashMesh);
+
+    const flashConeMat = new THREE.MeshBasicMaterial({
+      color: 0x8fffff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    this.muzzleFlashCone = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.4, 8, 1, true), flashConeMat);
+    this.muzzleFlashCone.rotation.x = -Math.PI / 2;
+    this.muzzleFlashCone.position.set(0, 0, -9.85);
+    this.barrelRoot.add(this.muzzleFlashCone);
+
+    this.muzzleFlashRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.28, 0.62, 16),
+      flashConeMat.clone()
+    );
+    this.muzzleFlashRing.position.set(0, 0, -8.82);
+    this.barrelRoot.add(this.muzzleFlashRing);
+
+    this.muzzleFlashLight = new THREE.PointLight(0x8fffff, 0, 12, 2);
+    this.muzzleFlashLight.position.set(0, 0, -8.5);
+    this.barrelRoot.add(this.muzzleFlashLight);
 
 
     // ==========================================
     // 3. CYBERNETIC FOREARM & ARTICULATED HAND
     // ==========================================
 
-    // Main Forearm Chassis (Hexagonal cyber sleeve angled from below-right)
-    const forearmGeo = new THREE.CylinderGeometry(1.2, 1.5, 7.0, 6);
+    // Tapered forearm armor with a human-readable wrist silhouette.
+    const forearmGeo = new THREE.CylinderGeometry(0.58, 0.8, 4.4, 8);
     const forearmMat = new THREE.MeshStandardMaterial({
       color: 0x1c2b40,
       emissive: 0x0a1422,
@@ -566,71 +656,72 @@ export class Renderer3D {
       roughness: 0.3
     });
     this.armForearmMain = new THREE.Mesh(forearmGeo, forearmMat);
-    this.armForearmMain.rotation.x = Math.PI / 2 + 0.22;
-    this.armForearmMain.position.set(1.3, -2.4, 2.5);
-    this.fpsWeaponGroup.add(this.armForearmMain);
+    this.armForearmMain.rotation.x = Math.PI / 2 + 0.17;
+    this.armForearmMain.position.set(1.1, -1.95, 1.62);
+    this.rightArmRoot.add(this.armForearmMain);
 
     // Beveled Carbon Armor Plate over forearm
-    const armPlateGeo = new THREE.BoxGeometry(1.8, 0.35, 5.0);
+    const armPlateGeo = new RoundedBoxGeometry(0.78, 0.16, 2.35, 3, 0.065);
     const armPlateMat = new THREE.MeshStandardMaterial({
       color: 0x283a54,
       metalness: 0.8,
       roughness: 0.2
     });
     this.armCarbonPlate = new THREE.Mesh(armPlateGeo, armPlateMat);
-    this.armCarbonPlate.position.set(1.3, -1.5, 2.4);
-    this.armCarbonPlate.rotation.x = 0.22;
-    this.fpsWeaponGroup.add(this.armCarbonPlate);
+    this.armCarbonPlate.position.set(1.1, -1.36, 1.55);
+    this.armCarbonPlate.rotation.x = 0.17;
+    this.rightArmRoot.add(this.armCarbonPlate);
 
     // Glowing Chevron Inlay Trim on Forearm
-    const chevronGeo = new THREE.BoxGeometry(1.0, 0.08, 2.8);
+    const chevronGeo = new RoundedBoxGeometry(0.16, 0.045, 1.55, 2, 0.02);
     const chevronMat = new THREE.MeshStandardMaterial({
       color: 0x00f0ff,
       emissive: 0x00f0ff,
-      emissiveIntensity: 1.5
+      emissiveIntensity: 0.85
     });
     this.armChevronTrim = new THREE.Mesh(chevronGeo, chevronMat);
-    this.armChevronTrim.position.set(1.3, -1.3, 2.4);
-    this.armChevronTrim.rotation.x = 0.22;
-    this.fpsWeaponGroup.add(this.armChevronTrim);
+    this.armChevronTrim.position.set(1.1, -1.245, 1.4);
+    this.armChevronTrim.rotation.x = 0.17;
+    this.rightArmRoot.add(this.armChevronTrim);
 
     // Hydraulic Recoil Cylinder & Piston (Lateral exoskeleton)
-    const cylinderGeo = new THREE.CylinderGeometry(0.3, 0.3, 4.5, 12);
+    const cylinderGeo = new THREE.CylinderGeometry(0.14, 0.14, 3.3, 10);
     const cylinderMat = new THREE.MeshStandardMaterial({ color: 0x182436, metalness: 0.9, roughness: 0.1 });
     this.armHydraulicCylinder = new THREE.Mesh(cylinderGeo, cylinderMat);
-    this.armHydraulicCylinder.rotation.x = Math.PI / 2 + 0.22;
-    this.armHydraulicCylinder.position.set(2.2, -2.0, 2.2);
-    this.fpsWeaponGroup.add(this.armHydraulicCylinder);
+    this.armHydraulicCylinder.rotation.x = Math.PI / 2 + 0.17;
+    this.armHydraulicCylinder.position.set(1.78, -1.72, 1.85);
+    this.rightArmRoot.add(this.armHydraulicCylinder);
 
-    const pistonGeo = new THREE.CylinderGeometry(0.18, 0.18, 3.2, 12);
+    const pistonGeo = new THREE.CylinderGeometry(0.09, 0.09, 2.3, 10);
     const pistonMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.95, roughness: 0.05 });
     this.armHydraulicPiston = new THREE.Mesh(pistonGeo, pistonMat);
-    this.armHydraulicPiston.rotation.x = Math.PI / 2 + 0.22;
-    this.armHydraulicPiston.position.set(2.2, -2.0, 0.6);
-    this.fpsWeaponGroup.add(this.armHydraulicPiston);
+    this.armHydraulicPiston.rotation.x = Math.PI / 2 + 0.17;
+    this.armHydraulicPiston.position.set(1.78, -1.72, 0.65);
+    this.rightArmRoot.add(this.armHydraulicPiston);
 
     // Coiled Neon Power Conduits along the arm
-    const conduitGeo = new THREE.TorusGeometry(1.3, 0.08, 6, 24);
+    const conduitGeo = new THREE.TorusGeometry(0.78, 0.045, 6, 20);
     const conduitMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
     this.armPowerConduit1 = new THREE.Mesh(conduitGeo, conduitMat);
-    this.armPowerConduit1.rotation.x = Math.PI / 2 + 0.22;
-    this.armPowerConduit1.position.set(1.3, -1.9, 1.4);
-    this.fpsWeaponGroup.add(this.armPowerConduit1);
+    this.armPowerConduit1.rotation.x = Math.PI / 2 + 0.17;
+    this.armPowerConduit1.position.set(1.1, -1.72, 1.15);
+    this.rightArmRoot.add(this.armPowerConduit1);
 
     this.armPowerConduit2 = new THREE.Mesh(conduitGeo, conduitMat);
-    this.armPowerConduit2.rotation.x = Math.PI / 2 + 0.22;
-    this.armPowerConduit2.position.set(1.3, -2.5, 3.4);
-    this.fpsWeaponGroup.add(this.armPowerConduit2);
+    this.armPowerConduit2.rotation.x = Math.PI / 2 + 0.17;
+    this.armPowerConduit2.position.set(1.1, -2.0, 2.75);
+    this.rightArmRoot.add(this.armPowerConduit2);
 
     // Mechanical Wrist Joint
-    const wristGeo = new THREE.SphereGeometry(0.9, 12, 12);
+    const wristGeo = new THREE.CylinderGeometry(0.48, 0.58, 0.55, 10);
     const wristMat = new THREE.MeshStandardMaterial({ color: 0x162030, metalness: 0.85 });
     this.armWristJoint = new THREE.Mesh(wristGeo, wristMat);
-    this.armWristJoint.position.set(0.7, -1.4, 0.4);
-    this.fpsWeaponGroup.add(this.armWristJoint);
+    this.armWristJoint.rotation.x = Math.PI / 2;
+    this.armWristJoint.position.set(0.7, -1.0, 0.12);
+    this.rightArmRoot.add(this.armWristJoint);
 
     // Armored Palm & Hand Base
-    const palmGeo = new THREE.BoxGeometry(1.2, 1.0, 1.4);
+    const palmGeo = new RoundedBoxGeometry(0.82, 0.72, 1.12, 3, 0.12);
     const palmMat = new THREE.MeshStandardMaterial({
       color: 0x1f2e46,
       emissive: 0x0c1626,
@@ -638,67 +729,124 @@ export class Renderer3D {
       metalness: 0.7
     });
     this.armPalm = new THREE.Mesh(palmGeo, palmMat);
-    this.armPalm.position.set(0.4, -1.1, -0.4);
-    this.fpsWeaponGroup.add(this.armPalm);
+    this.armPalm.position.set(0.38, -0.88, -0.48);
+    this.handRoot.add(this.armPalm);
 
-    // 4 Articulated Fingers wrapping weapon grip
+    // Four articulated fingers. Two short phalanges per finger curve around
+    // the grip; the index finger rests higher as a trigger finger.
     for (let i = 0; i < 4; i++) {
-      const fingerGeo = new THREE.BoxGeometry(0.26, 0.32, 1.2);
+      const fingerGeo = new RoundedBoxGeometry(0.18, 0.22, 0.64, 2, 0.07);
       const fingerMat = new THREE.MeshStandardMaterial({
         color: 0x2a3d5a,
         metalness: 0.8,
         roughness: 0.2
       });
       const finger = new THREE.Mesh(fingerGeo, fingerMat);
-      finger.position.set(-0.55, -0.6 - i * 0.38, -0.5);
-      finger.rotation.y = 0.45;
-      finger.rotation.z = 0.15;
-      this.fpsWeaponGroup.add(finger);
+      const fingerY = i === 0 ? -0.58 : -0.73 - (i - 1) * 0.22;
+      finger.position.set(-0.42, fingerY, -0.54 - i * 0.03);
+      finger.rotation.y = 0.72;
+      finger.rotation.z = i === 0 ? -0.08 : 0.1;
+      this.handRoot.add(finger);
       this.armFingers.push(finger);
+
+      const fingerTip = new THREE.Mesh(fingerGeo, fingerMat.clone());
+      fingerTip.scale.set(0.92, 0.92, 0.72);
+      fingerTip.position.set(-0.57, fingerY - 0.02, -0.94 - i * 0.03);
+      fingerTip.rotation.y = 1.12;
+      fingerTip.rotation.z = i === 0 ? -0.08 : 0.12;
+      this.handRoot.add(fingerTip);
+      this.armFingers.push(fingerTip);
 
       // Glowing Knuckle Ring on each finger
       const knuckleGeo = new THREE.SphereGeometry(0.14, 8, 8);
       const knuckleMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
       const knuckle = new THREE.Mesh(knuckleGeo, knuckleMat);
-      knuckle.position.set(-0.7, -0.6 - i * 0.38, -0.1);
-      this.fpsWeaponGroup.add(knuckle);
+      knuckle.position.set(-0.47, fingerY, -0.2);
+      this.handRoot.add(knuckle);
       this.armFingerKnuckles.push(knuckle);
     }
 
     // Articulated Thumb wrapping top
-    const thumbGeo = new THREE.BoxGeometry(0.32, 0.32, 1.1);
+    const thumbGeo = new RoundedBoxGeometry(0.24, 0.25, 0.78, 2, 0.08);
     const thumbMat = new THREE.MeshStandardMaterial({ color: 0x2a3d5a, metalness: 0.8 });
     this.armThumb = new THREE.Mesh(thumbGeo, thumbMat);
-    this.armThumb.position.set(0.65, -0.4, -0.2);
-    this.armThumb.rotation.y = -0.5;
-    this.fpsWeaponGroup.add(this.armThumb);
+    this.armThumb.position.set(0.62, -0.55, -0.48);
+    this.armThumb.rotation.y = -0.82;
+    this.armThumb.rotation.z = -0.18;
+    this.handRoot.add(this.armThumb);
 
     // Holographic 3D Wrist Display HUD Plate
-    const holoGeo = new THREE.PlaneGeometry(1.8, 1.2);
+    const holoGeo = new THREE.PlaneGeometry(1.15, 0.62);
     const holoMat = new THREE.MeshBasicMaterial({
       color: 0x00ffff,
       transparent: true,
-      opacity: 0.8,
-      side: THREE.DoubleSide
+      opacity: 0.2,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
     });
     this.armWristHoloDisplay = new THREE.Mesh(holoGeo, holoMat);
-    this.armWristHoloDisplay.position.set(1.3, -0.6, 1.5);
+    this.armWristHoloDisplay.position.set(1.1, -0.72, 1.55);
     this.armWristHoloDisplay.rotation.x = -Math.PI / 3;
     this.armWristHoloDisplay.rotation.y = -0.15;
-    this.fpsWeaponGroup.add(this.armWristHoloDisplay);
+    this.rightArmRoot.add(this.armWristHoloDisplay);
 
     // Holo Grid border lines
-    const holoBorderGeo = new THREE.BoxGeometry(1.9, 0.04, 1.3);
-    const holoBorderMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const holoBorderGeo = new RoundedBoxGeometry(1.22, 0.035, 0.69, 2, 0.015);
+    const holoBorderMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.55
+    });
     this.armHoloLines = new THREE.Mesh(holoBorderGeo, holoBorderMat);
-    this.armHoloLines.position.set(1.3, -0.6, 1.5);
+    this.armHoloLines.position.set(1.1, -0.72, 1.55);
     this.armHoloLines.rotation.x = -Math.PI / 3;
     this.armHoloLines.rotation.y = -0.15;
-    this.fpsWeaponGroup.add(this.armHoloLines);
+    this.rightArmRoot.add(this.armHoloLines);
 
     // Optimized High-FOV viewmodel positioning (placed in the lower right foreground)
-    this.fpsWeaponGroup.position.set(2.05, -2.45, -5.0);
-    this.camera.add(this.fpsWeaponGroup);
+    this.fpsWeaponGroup.position.set(1.65, -1.85, -4.8);
+    this.viewmodelCamera.add(this.fpsWeaponGroup);
+  }
+
+  private setupAimDebug() {
+    this.debugAimGroup = new THREE.Group();
+    this.debugAimGroup.visible = false;
+
+    const makeLine = (color: number) => new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 })
+    );
+    this.debugCameraLine = makeLine(0xff3355);
+    this.debugMuzzleLine = makeLine(0x00f0ff);
+    this.debugMuzzlePoint = new THREE.Mesh(
+      new THREE.SphereGeometry(0.8, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x00f0ff, depthTest: false })
+    );
+    this.debugAimPoint = new THREE.Mesh(
+      new THREE.SphereGeometry(1.2, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffdd33, depthTest: false })
+    );
+    this.debugAimGroup.add(this.debugCameraLine, this.debugMuzzleLine, this.debugMuzzlePoint, this.debugAimPoint);
+    this.scene.add(this.debugAimGroup);
+  }
+
+  private updateAimDebug(solution: FireSolution) {
+    if (!this.debugAim) return;
+    const cameraStart = this.camera.position;
+    const aim = solution.aimPoint3D;
+    const muzzle = solution.muzzlePosition3D;
+    const cameraPositions = this.debugCameraLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+    cameraPositions.setXYZ(0, cameraStart.x, cameraStart.y, cameraStart.z);
+    cameraPositions.setXYZ(1, aim.x, aim.y, aim.z);
+    cameraPositions.needsUpdate = true;
+    const muzzlePositions = this.debugMuzzleLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+    muzzlePositions.setXYZ(0, muzzle.x, muzzle.y, muzzle.z);
+    muzzlePositions.setXYZ(1, aim.x, aim.y, aim.z);
+    muzzlePositions.needsUpdate = true;
+    this.debugMuzzlePoint.position.set(muzzle.x, muzzle.y, muzzle.z);
+    this.debugAimPoint.position.set(aim.x, aim.y, aim.z);
   }
 
   private setupThirdPersonCharacter() {
@@ -883,6 +1031,13 @@ export class Renderer3D {
     }
   };
 
+  private onDebugKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'F8') {
+      this.debugAim = !this.debugAim;
+      if (this.debugAimGroup) this.debugAimGroup.visible = this.debugAim;
+    }
+  };
+
   private onPointerLockChange = () => {
     this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
     if (!this.isPointerLocked) {
@@ -896,12 +1051,22 @@ export class Renderer3D {
     window.addEventListener('mousedown', this.onMouseDown);
     window.addEventListener('mouseup', this.onMouseUp);
     window.addEventListener('contextmenu', this.onContextMenu);
+    window.addEventListener('keydown', this.onDebugKeyDown);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
   }
 
   requestPointerLock() {
     if (this.renderer.domElement && document.pointerLockElement !== this.renderer.domElement) {
-      this.renderer.domElement.requestPointerLock();
+      try {
+        const request = this.renderer.domElement.requestPointerLock();
+        request?.catch(() => {
+          this.isShooting = false;
+          this.isAimingDownSights = false;
+        });
+      } catch {
+        this.isShooting = false;
+        this.isAimingDownSights = false;
+      }
     }
   }
 
@@ -912,13 +1077,21 @@ export class Renderer3D {
   }
 
   triggerMuzzleFlash(color: string = '#00f0ff') {
-    this.muzzleFlashTimer = 65; // ms
-    this.recoilOffset = this.isAimingDownSights ? 0.28 : 0.48;
-    this.recoilRotOffset = this.isAimingDownSights ? 0.04 : 0.09;
-    this.heatVentIntensity = 1.0;
+    this.muzzleFlashTimer = 48;
+    this.recoilOffset = Math.min(0.72, this.recoilOffset + (this.isAimingDownSights ? 0.18 : 0.34));
+    this.recoilRotOffset = Math.min(0.15, this.recoilRotOffset + (this.isAimingDownSights ? 0.025 : 0.06));
+    this.heatVentIntensity = Math.min(1.5, this.heatVentIntensity + 0.7);
     const c = parseHexColor(color, 0x00f0ff);
     (this.muzzleFlashMesh.material as THREE.MeshBasicMaterial).color.copy(c);
     (this.muzzleFlashMesh.material as THREE.MeshBasicMaterial).opacity = 1;
+    (this.muzzleFlashCone.material as THREE.MeshBasicMaterial).color.copy(c);
+    (this.muzzleFlashCone.material as THREE.MeshBasicMaterial).opacity = 0.82;
+    (this.muzzleFlashRing.material as THREE.MeshBasicMaterial).color.copy(c);
+    (this.muzzleFlashRing.material as THREE.MeshBasicMaterial).opacity = 0.72;
+    this.muzzleFlashCone.rotation.z = Math.random() * Math.PI;
+    this.muzzleFlashRing.rotation.z = Math.random() * Math.PI;
+    this.muzzleFlashLight.color.copy(c);
+    this.muzzleFlashLight.intensity = 5.5;
   }
 
   // Calculates the EXACT real-time 3D world coordinate and direction of the gun barrel bore
@@ -928,11 +1101,11 @@ export class Renderer3D {
     forward2D: { x: number; y: number };
   } {
     if (this.weaponMuzzlePoint && this.fpsWeaponGroup) {
-      this.fpsWeaponGroup.updateMatrixWorld(true);
+      this.viewmodelCamera.updateMatrixWorld(true);
       this.weaponMuzzlePoint.getWorldPosition(this.tempMuzzlePos);
 
-      this.tempMuzzleFwd.set(0, 0, -1);
-      this.tempMuzzleFwd.transformDirection(this.camera.matrixWorld);
+      this.weaponMuzzlePoint.getWorldQuaternion(this.tempMuzzleQuat);
+      this.tempMuzzleFwd.set(0, 0, -1).applyQuaternion(this.tempMuzzleQuat).normalize();
 
       const fwd2DLen = Math.hypot(this.tempMuzzleFwd.x, this.tempMuzzleFwd.z);
       const fwd2D = fwd2DLen > 0.0001
@@ -953,6 +1126,164 @@ export class Renderer3D {
       forward: { x: forwardX, y: 0, z: forwardY },
       forward2D: { x: forwardX, y: forwardY }
     };
+  }
+
+  /**
+   * Projects the separately-rendered viewmodel muzzle back into the world
+   * camera. This preserves exact on-screen barrel alignment even though the
+   * world and weapon deliberately use different FOV values.
+   */
+  private getProjectedMuzzleWorldPosition(): THREE.Vector3 {
+    this.camera.updateMatrixWorld(true);
+    this.viewmodelCamera.updateMatrixWorld(true);
+    this.weaponMuzzlePoint.getWorldPosition(this.tempMuzzlePos);
+    const muzzleDepth = THREE.MathUtils.clamp(
+      this.tempMuzzlePos.distanceTo(this.viewmodelCamera.position),
+      6,
+      32
+    );
+    this.tempMuzzleNdc.copy(this.tempMuzzlePos).project(this.viewmodelCamera);
+    this.tempMuzzleNdc2.set(this.tempMuzzleNdc.x, this.tempMuzzleNdc.y);
+    this.tempRaycaster.setFromCamera(this.tempMuzzleNdc2, this.camera);
+    this.tempRaycaster.ray.at(muzzleDepth, this.tempMuzzlePos);
+    return this.tempMuzzlePos;
+  }
+
+  getFireSolution(enemies: Enemy[] = []): FireSolution {
+    this.camera.updateMatrixWorld(true);
+    this.camera.getWorldPosition(this.tempCameraPos);
+    this.camera.getWorldDirection(this.tempCameraFwd);
+    this.tempRaycaster.setFromCamera(this.centerNdc, this.camera);
+
+    let aimPoint: THREE.Vector3 | undefined;
+    if (enemies.length > 0 && this.enemyMeshes.size > 0) {
+      const candidates = enemies
+        .map(enemy => this.enemyMeshes.get(enemy.id))
+        .filter((mesh): mesh is THREE.Object3D => Boolean(mesh));
+      const hit = this.tempRaycaster.intersectObjects(candidates, true)[0];
+      if (hit) {
+        this.tempAimPoint.copy(hit.point);
+        aimPoint = this.tempAimPoint;
+      }
+    }
+
+    const muzzle = this.getProjectedMuzzleWorldPosition();
+    const solution = solveMuzzleConvergence(
+      this.tempCameraPos,
+      this.tempCameraFwd,
+      muzzle,
+      aimPoint,
+      2600,
+      false
+    );
+    this.lastFireSolution = solution;
+    this.updateAimDebug(solution);
+    return solution;
+  }
+
+  private damp(current: number, target: number, sharpness: number, deltaTime: number): number {
+    return THREE.MathUtils.lerp(current, target, 1 - Math.exp(-sharpness * deltaTime / 1000));
+  }
+
+  /**
+   * Runs before weapon simulation so muzzle sampling and the rendered pose are
+   * from the same frame. This removes the subtle one-frame barrel lag.
+   */
+  prepareFrame(engine: GameEngine, deltaTime: number) {
+    if (engine.viewMode !== 'FIRST_PERSON') return;
+    const player = engine.player;
+    const targetAds = this.isAimingDownSights ? 1 : 0;
+    this.adsProgress = this.damp(this.adsProgress, targetAds, 17, deltaTime);
+
+    this.idleBreathTimer += deltaTime * 0.002;
+    const isMoving = Math.abs(player.velocity.x) > 0.1 || Math.abs(player.velocity.y) > 0.1;
+    if (isMoving) this.walkBobTimer += deltaTime * 0.012;
+
+    const adsDamp = 1 - this.adsProgress * 0.88;
+    const breathX = Math.sin(this.idleBreathTimer) * 0.14 * adsDamp;
+    const breathY = Math.cos(this.idleBreathTimer * 2) * 0.08 * adsDamp;
+    const bobY = (isMoving ? Math.sin(this.walkBobTimer) * 0.55 : breathY) * adsDamp;
+    const bobX = (isMoving ? Math.cos(this.walkBobTimer * 0.5) * 0.3 : breathX) * adsDamp;
+
+    const baseFov = engine.isDashing ? this.WORLD_DASH_FOV : this.WORLD_FOV;
+    const targetWorldFov = THREE.MathUtils.lerp(baseFov, this.ADS_FOV, this.adsProgress);
+    const targetViewmodelFov = THREE.MathUtils.lerp(this.VIEWMODEL_FOV, this.VIEWMODEL_ADS_FOV, this.adsProgress);
+    this.camera.fov = this.damp(this.camera.fov, targetWorldFov, 13, deltaTime);
+    this.viewmodelCamera.fov = this.damp(this.viewmodelCamera.fov, targetViewmodelFov, 15, deltaTime);
+    this.camera.updateProjectionMatrix();
+    this.viewmodelCamera.updateProjectionMatrix();
+    this.sensitivity = THREE.MathUtils.lerp(0.0022, 0.00105, this.adsProgress);
+
+    const shakeMult = 1 - this.adsProgress * 0.7;
+    const shakeX = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
+    const shakeY = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
+    this.camera.position.set(
+      player.position.x + bobX * 0.2 + shakeX,
+      26 + bobY * 0.2 + shakeY,
+      player.position.y
+    );
+    this.camera.rotation.order = 'YXZ';
+    this.camera.rotation.set(this.pitch, this.yaw, 0);
+
+    // The viewmodel camera follows the world camera pose but owns its projection.
+    this.viewmodelCamera.position.copy(this.camera.position);
+    this.viewmodelCamera.quaternion.copy(this.camera.quaternion);
+
+    const targetSwayX = THREE.MathUtils.clamp(-this.lastMouseDeltaX * 0.0017, -0.22, 0.22);
+    const targetSwayY = THREE.MathUtils.clamp(this.lastMouseDeltaY * 0.0017, -0.16, 0.16);
+    const targetSwayTilt = THREE.MathUtils.clamp(-this.lastMouseDeltaX * 0.003, -0.12, 0.12);
+    const inputDecay = Math.exp(-12 * deltaTime / 1000);
+    this.lastMouseDeltaX *= inputDecay;
+    this.lastMouseDeltaY *= inputDecay;
+    this.swayX = this.damp(this.swayX, targetSwayX, 14, deltaTime);
+    this.swayY = this.damp(this.swayY, targetSwayY, 14, deltaTime);
+    this.swayTilt = this.damp(this.swayTilt, targetSwayTilt, 12, deltaTime);
+
+    this.recoilOffset *= Math.exp(-15 * deltaTime / 1000);
+    this.recoilRotOffset *= Math.exp(-18 * deltaTime / 1000);
+    this.heatVentIntensity *= Math.exp(-2.8 * deltaTime / 1000);
+    this.armHydraulicPiston.position.z = 0.65 + this.recoilOffset * 0.32;
+    this.barrelRoot.position.z = this.recoilOffset * 0.24;
+
+    if (this.muzzleFlashTimer > 0) {
+      this.muzzleFlashTimer -= deltaTime;
+      const flashLife = THREE.MathUtils.clamp(this.muzzleFlashTimer / 48, 0, 1);
+      (this.muzzleFlashMesh.material as THREE.MeshBasicMaterial).opacity = flashLife;
+      (this.muzzleFlashCone.material as THREE.MeshBasicMaterial).opacity = flashLife * 0.82;
+      (this.muzzleFlashRing.material as THREE.MeshBasicMaterial).opacity = flashLife * 0.72;
+      this.muzzleFlashLight.intensity = flashLife * 5.5;
+    } else {
+      (this.muzzleFlashMesh.material as THREE.MeshBasicMaterial).opacity = 0;
+      (this.muzzleFlashCone.material as THREE.MeshBasicMaterial).opacity = 0;
+      (this.muzzleFlashRing.material as THREE.MeshBasicMaterial).opacity = 0;
+      this.muzzleFlashLight.intensity = 0;
+    }
+
+    const dashPullback = engine.isDashing ? 0.65 : 0;
+    const hipX = 1.85 + bobX * 0.16 + this.swayX * adsDamp;
+    const hipY = -2.08 + bobY * 0.2 + this.swayY * adsDamp - dashPullback * 0.22;
+    const hipZ = -6.05 + this.recoilOffset * 0.55 + dashPullback * 0.5;
+
+    // Optic center is local Y=1.48, so -1.48 aligns it to camera center.
+    const adsX = this.swayX * 0.035;
+    const adsY = -1.48 + this.swayY * 0.035;
+    const adsZ = -6.05 + this.recoilOffset * 0.18;
+    this.fpsWeaponGroup.position.set(
+      THREE.MathUtils.lerp(hipX, adsX, this.adsProgress),
+      THREE.MathUtils.lerp(hipY, adsY, this.adsProgress),
+      THREE.MathUtils.lerp(hipZ, adsZ, this.adsProgress)
+    );
+
+    const hipRotX = bobY * 0.025 - this.recoilRotOffset * 0.6 + this.swayY * 0.24 + dashPullback * 0.1;
+    const hipRotY = bobX * 0.025 + this.swayX * 0.24 - 0.035;
+    const hipRotZ = this.swayTilt - dashPullback * 0.07;
+    this.fpsWeaponGroup.rotation.set(
+      THREE.MathUtils.lerp(hipRotX, -this.recoilRotOffset * 0.2, this.adsProgress),
+      THREE.MathUtils.lerp(hipRotY, this.swayX * 0.03, this.adsProgress),
+      THREE.MathUtils.lerp(hipRotZ, 0, this.adsProgress)
+    );
+    this.camera.updateMatrixWorld(true);
+    this.viewmodelCamera.updateMatrixWorld(true);
   }
 
   // Render loop called once per frame from GameEngine
@@ -978,8 +1309,8 @@ export class Renderer3D {
     // 2. Update First-Person Viewmodel Materials with Operator Palette
     (this.weaponChassis.material as THREE.MeshStandardMaterial).color.copy(secondaryColor);
     (this.weaponChassis.material as THREE.MeshStandardMaterial).emissive.copy(darkColor);
-    (this.weaponTopPlate.material as THREE.MeshStandardMaterial).color.copy(primaryColor);
-    (this.weaponTopPlate.material as THREE.MeshStandardMaterial).emissive.copy(primaryColor);
+    (this.weaponTopPlate.material as THREE.MeshStandardMaterial).color.copy(primaryColor).multiplyScalar(0.48);
+    (this.weaponTopPlate.material as THREE.MeshStandardMaterial).emissive.copy(primaryColor).multiplyScalar(0.42);
     (this.weaponGrip.material as THREE.MeshStandardMaterial).color.copy(darkColor);
     (this.weaponSightMount.material as THREE.MeshStandardMaterial).color.copy(secondaryColor);
     (this.weaponSightMount.material as THREE.MeshStandardMaterial).emissive.copy(darkColor);
@@ -1016,23 +1347,23 @@ export class Renderer3D {
     }
 
     // Arm & Gauntlet Colors
-    (this.armForearmMain.material as THREE.MeshStandardMaterial).color.copy(limbsColor);
+    (this.armForearmMain.material as THREE.MeshStandardMaterial).color.copy(darkColor);
     (this.armForearmMain.material as THREE.MeshStandardMaterial).emissive.copy(darkColor);
-    (this.armCarbonPlate.material as THREE.MeshStandardMaterial).color.copy(secondaryColor);
-    (this.armChevronTrim.material as THREE.MeshStandardMaterial).color.copy(primaryColor);
-    (this.armChevronTrim.material as THREE.MeshStandardMaterial).emissive.copy(primaryColor);
+    (this.armCarbonPlate.material as THREE.MeshStandardMaterial).color.copy(secondaryColor).multiplyScalar(0.3);
+    (this.armChevronTrim.material as THREE.MeshStandardMaterial).color.copy(primaryColor).multiplyScalar(0.6);
+    (this.armChevronTrim.material as THREE.MeshStandardMaterial).emissive.copy(primaryColor).multiplyScalar(0.55);
     (this.armPowerConduit1.material as THREE.MeshBasicMaterial).color.copy(primaryColor);
     (this.armPowerConduit2.material as THREE.MeshBasicMaterial).color.copy(primaryColor);
-    (this.armPalm.material as THREE.MeshStandardMaterial).color.copy(limbsColor);
-    (this.armThumb.material as THREE.MeshStandardMaterial).color.copy(limbsColor);
+    (this.armPalm.material as THREE.MeshStandardMaterial).color.copy(secondaryColor);
+    (this.armThumb.material as THREE.MeshStandardMaterial).color.copy(secondaryColor).multiplyScalar(0.42);
     for (const f of this.armFingers) {
-      (f.material as THREE.MeshStandardMaterial).color.copy(limbsColor);
+      (f.material as THREE.MeshStandardMaterial).color.copy(secondaryColor).multiplyScalar(0.42);
     }
     for (const k of this.armFingerKnuckles) {
       (k.material as THREE.MeshBasicMaterial).color.copy(primaryColor);
     }
     (this.armWristHoloDisplay.material as THREE.MeshBasicMaterial).color.copy(visorColor);
-    (this.armHoloLines.material as THREE.MeshBasicMaterial).color.copy(visorColor);
+    (this.armHoloLines.material as THREE.MeshBasicMaterial).color.copy(visorColor).multiplyScalar(0.65);
 
     // Rotate quantum core crystal inside chamber
     this.weaponQuantumCore.rotation.x += deltaTime * 0.004;
@@ -1064,111 +1395,6 @@ export class Renderer3D {
     if (viewMode === 'FIRST_PERSON') {
       this.fpsWeaponGroup.visible = true;
       this.thirdPersonPlayerGroup.visible = false;
-
-      // Smooth ADS Interpolation (0.0 hipfire to 1.0 full ADS)
-      const targetAds = this.isAimingDownSights ? 1.0 : 0.0;
-      this.adsProgress += (targetAds - this.adsProgress) * 0.22;
-
-      // Organic Idle Breathing & Fluid Movement Stride Sway (dampened in ADS)
-      this.idleBreathTimer += deltaTime * 0.002;
-      const isMoving = Math.abs(player.velocity.x) > 0.1 || Math.abs(player.velocity.y) > 0.1;
-      if (isMoving) {
-        this.walkBobTimer += deltaTime * 0.012;
-      }
-      
-      const adsDamp = 1.0 - this.adsProgress * 0.85;
-      const breathX = Math.sin(this.idleBreathTimer) * 0.2 * adsDamp;
-      const breathY = Math.cos(this.idleBreathTimer * 2) * 0.12 * adsDamp;
-      const bobY = (isMoving ? Math.sin(this.walkBobTimer) * 1.4 : breathY) * adsDamp;
-      const bobX = (isMoving ? Math.cos(this.walkBobTimer * 0.5) * 0.8 : breathX) * adsDamp;
-
-      // Dynamic FOV (Base 100°, ADS zooms to 64° for tactical sniper precision, Dashing expands to 122°!)
-      let targetFov = 100;
-      if (this.adsProgress > 0.01) {
-        targetFov = THREE.MathUtils.lerp(100, 64, this.adsProgress);
-      } else if (engine.isDashing) {
-        targetFov = 122;
-      }
-      this.camera.fov += (targetFov - this.camera.fov) * 0.18;
-      this.camera.updateProjectionMatrix();
-
-      // Precision sensitivity scaling in ADS
-      this.sensitivity = THREE.MathUtils.lerp(0.0022, 0.0010, this.adsProgress);
-
-      // Screen shake (dampened during ADS)
-      const shakeMult = 1.0 - this.adsProgress * 0.65;
-      const shakeX = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
-      const shakeY = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
-
-      this.camera.position.set(
-        player.position.x + bobX * 0.3 + shakeX,
-        26 + bobY * 0.3 + shakeY,
-        player.position.y
-      );
-
-      // Camera rotation from mouse pitch & yaw
-      this.camera.rotation.order = 'YXZ';
-      this.camera.rotation.y = this.yaw;
-      this.camera.rotation.x = this.pitch;
-      this.camera.rotation.z = 0;
-
-      // ==========================================
-      // FLUID WEAPON SWAY, INERTIA, ADS & RECOIL
-      // ==========================================
-      // Decay mouse delta sway
-      const targetSwayX = THREE.MathUtils.clamp(-this.lastMouseDeltaX * 0.0025, -0.35, 0.35);
-      const targetSwayY = THREE.MathUtils.clamp(this.lastMouseDeltaY * 0.0025, -0.25, 0.25);
-      const targetSwayTilt = THREE.MathUtils.clamp(-this.lastMouseDeltaX * 0.005, -0.2, 0.2);
-      this.lastMouseDeltaX *= 0.82;
-      this.lastMouseDeltaY *= 0.82;
-
-      this.swayX += (targetSwayX - this.swayX) * 0.2;
-      this.swayY += (targetSwayY - this.swayY) * 0.2;
-      this.swayTilt += (targetSwayTilt - this.swayTilt) * 0.2;
-
-      // Recoil Recovery
-      this.recoilOffset *= 0.78;
-      this.recoilRotOffset *= 0.74;
-
-      // Hydraulic piston compression response
-      this.armHydraulicPiston.position.z = 0.6 + this.recoilOffset * 0.5;
-
-      if (this.muzzleFlashTimer > 0) {
-        this.muzzleFlashTimer -= deltaTime;
-        if (this.muzzleFlashTimer <= 0) {
-          (this.muzzleFlashMesh.material as THREE.MeshBasicMaterial).opacity = 0;
-        }
-      }
-
-      // Dash Drawback Stance
-      const dashPullback = engine.isDashing ? 0.8 : 0;
-
-      // Interpolate between Hipfire & Center Aim-Down-Sights (ADS)
-      const hipX = 2.05 + bobX * 0.2 + this.swayX * adsDamp;
-      const hipY = -2.45 + bobY * 0.25 + this.swayY * adsDamp - dashPullback * 0.3;
-      const hipZ = -5.0 + this.recoilOffset * 0.8 + dashPullback * 0.6;
-
-      const adsX = 0.0 + this.swayX * 0.06;
-      const adsY = -3.20 + this.swayY * 0.06;
-      const adsZ = -5.3 + this.recoilOffset * 0.3;
-
-      const currentX = THREE.MathUtils.lerp(hipX, adsX, this.adsProgress);
-      const currentY = THREE.MathUtils.lerp(hipY, adsY, this.adsProgress);
-      const currentZ = THREE.MathUtils.lerp(hipZ, adsZ, this.adsProgress);
-
-      const hipRotX = (bobY * 0.03) - this.recoilRotOffset * 0.7 + this.swayY * 0.35 + (dashPullback * 0.12);
-      const hipRotY = bobX * 0.03 + this.swayX * 0.35 - 0.04;
-      const hipRotZ = this.swayTilt - (dashPullback * 0.08);
-
-      const adsRotX = -this.recoilRotOffset * 0.25;
-      const adsRotY = this.swayX * 0.05;
-      const adsRotZ = 0;
-
-      this.fpsWeaponGroup.position.set(currentX, currentY, currentZ);
-      this.fpsWeaponGroup.rotation.x = THREE.MathUtils.lerp(hipRotX, adsRotX, this.adsProgress);
-      this.fpsWeaponGroup.rotation.y = THREE.MathUtils.lerp(hipRotY, adsRotY, this.adsProgress);
-      this.fpsWeaponGroup.rotation.z = THREE.MathUtils.lerp(hipRotZ, adsRotZ, this.adsProgress);
-
     } else if (viewMode === 'THIRD_PERSON') {
       this.fpsWeaponGroup.visible = false;
       this.thirdPersonPlayerGroup.visible = true;
@@ -1238,8 +1464,17 @@ export class Renderer3D {
     // 7. Update 3D Particles
     this.updateParticles3D(engine.particles);
 
-    // Render the Three.js scene
+    if (this.debugAim && this.lastFireSolution) this.updateAimDebug(this.lastFireSolution);
+
+    // World and viewmodel use separate projections. clearDepth keeps the gun
+    // readable without allowing world geometry to cut through the hand.
     this.renderer.render(this.scene, this.camera);
+    if (viewMode === 'FIRST_PERSON') {
+      this.renderer.autoClear = false;
+      this.renderer.clearDepth();
+      this.renderer.render(this.viewmodelScene, this.viewmodelCamera);
+      this.renderer.autoClear = true;
+    }
   }
 
   private updateEnemies3D(enemies: Enemy[], deltaTime: number) {
@@ -1392,10 +1627,19 @@ export class Renderer3D {
 
       // Auras and player-centered abilities track the player's 3D position directly
       if (p.sourceWeaponId === 'void_aura' || p.sourceWeaponId === 'frost_aura' || p.id === 'aura') {
-        mesh.position.set(player.position.x, 20, player.position.y);
+        mesh.position.set(p.position.x, 20, p.position.y);
       } else {
         const projHeight = p.z !== undefined ? p.z : defaultHeight;
         mesh.position.set(p.position.x, projHeight, p.position.y);
+      }
+
+      // Projectiles are gameplay-sized in the 2D simulation. Ease their visual
+      // size in near the muzzle so they emerge as a tracer instead of filling
+      // the camera on their first frame.
+      if (p.sourceWeaponId === 'plasma_gun' || p.sourceWeaponId === 'neon_shards') {
+        const cameraDistance = mesh.position.distanceTo(this.camera.position);
+        const nearMuzzleScale = THREE.MathUtils.smoothstep(cameraDistance, 8, 70);
+        mesh.scale.setScalar(THREE.MathUtils.lerp(0.12, 1, nearMuzzleScale));
       }
 
       // Rotations & dynamic animations
@@ -2120,6 +2364,7 @@ export class Renderer3D {
     window.removeEventListener('mousedown', this.onMouseDown);
     window.removeEventListener('mouseup', this.onMouseUp);
     window.removeEventListener('contextmenu', this.onContextMenu);
+    window.removeEventListener('keydown', this.onDebugKeyDown);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     this.exitPointerLock();
     this.unmount();

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Skull, Coins, Flame, AlertTriangle, Shield, HeartPulse, Bomb, Navigation, Eye, Crosshair, Compass, MousePointer } from 'lucide-react';
+import { Skull, Coins, Flame, AlertTriangle, Shield, HeartPulse, Bomb, Navigation, Crosshair, Compass, MousePointer } from 'lucide-react';
 import { GameEngine } from '../game/Engine';
 import { WEAPON_DEFINITIONS } from '../constants';
 
@@ -267,23 +267,6 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
         )}
       </div>
 
-      {/* Perspective Switcher [V] */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-[95]">
-        <button
-          onClick={() => engine?.toggleViewMode()}
-          className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/70 border border-cyan-500/40 hover:border-cyan-400 hover:bg-cyan-950/60 text-cyan-300 text-[10px] font-mono uppercase tracking-widest backdrop-blur-md transition-all shadow-[0_0_15px_rgba(0,240,255,0.2)] cursor-pointer active:scale-95"
-        >
-          <Eye size={12} className="text-cyan-400 animate-pulse" />
-          <span>
-            {hudData.viewMode === 'FIRST_PERSON' ? '1ST PERSON' : hudData.viewMode === 'THIRD_PERSON' ? '3RD PERSON' : '2D TOPDOWN'}
-          </span>
-          <span className="px-1.5 py-0.5 bg-cyan-500/20 border border-cyan-400/30 text-[9px] font-bold rounded text-cyan-200">
-            V
-          </span>
-        </button>
-      </div>
-
-
       {/* CARNAGE METER (Top Right) */}
       <div className="absolute top-6 right-6 flex flex-col items-end">
         <div className={`w-48 h-4 bg-white/10 rounded-lg overflow-hidden border relative transition-colors duration-300 ${hudData.isOverdrive ? 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' : 'border-white/5'}`}>
@@ -540,11 +523,11 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
       {/* 3D First-Person Pointer Lock Reminder */}
 
       {hudData.viewMode === 'FIRST_PERSON' && !hudData.isPointerLocked && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[95] pointer-events-none">
-          <div className="flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-black/85 border border-cyan-400/60 shadow-[0_0_30px_rgba(0,240,255,0.4)] backdrop-blur-md animate-pulse">
-            <MousePointer size={14} className="text-cyan-300 animate-bounce" />
-            <span className="text-xs font-mono font-bold tracking-wider text-cyan-200 uppercase">
-              Click Anywhere To Lock Mouse Look • [ESC] to Unlock
+        <div className="absolute top-5 left-1/2 -translate-x-1/2 z-[95] pointer-events-none">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/65 border border-cyan-400/25 backdrop-blur-sm">
+            <MousePointer size={11} className="text-cyan-300/80" />
+            <span className="text-[9px] font-mono font-bold tracking-wider text-cyan-100/70 uppercase">
+              Click game to capture mouse · Esc releases
             </span>
           </div>
         </div>
@@ -553,14 +536,6 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
       {/* 3D First-Person Crosshair & Directional Threat Arcs */}
       {hudData.viewMode === 'FIRST_PERSON' && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[80]">
-          {/* Cyber Visor Corner Brackets */}
-          <div className="absolute inset-8 border border-cyan-500/10 rounded-3xl pointer-events-none">
-            <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-cyan-400/40 rounded-tl-xl" />
-            <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-cyan-400/40 rounded-tr-xl" />
-            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-cyan-400/40 rounded-bl-xl" />
-            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-cyan-400/40 rounded-br-xl" />
-          </div>
-
           {/* Central Cyber Reticle (Transforms dynamically during ADS) */}
           <div className={`relative flex items-center justify-center transition-all duration-150 ${hudData.isAimingDownSights ? 'w-8 h-8 scale-90' : 'w-12 h-12 scale-100'}`}>
             <div className={`rounded-full bg-cyan-300 shadow-[0_0_12px_#00f0ff] transition-all duration-150 ${hudData.isAimingDownSights ? 'w-2 h-2 bg-emerald-400 shadow-[0_0_15px_#10b981]' : 'w-1.5 h-1.5'}`} />
@@ -588,10 +563,6 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
             <span className="text-white/20">•</span>
             <span className="text-[10px] font-mono font-bold text-purple-300 tracking-wider flex items-center gap-1.5">
               <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-400/30">SPACE</span> DASH
-            </span>
-            <span className="text-white/20">•</span>
-            <span className="text-[10px] font-mono font-bold text-cyan-300 tracking-wider flex items-center gap-1.5">
-              <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/30">V</span> VIEW
             </span>
           </div>
 
@@ -693,4 +664,3 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
     </div>
   );
 }
-

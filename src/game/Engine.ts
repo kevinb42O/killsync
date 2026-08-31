@@ -216,10 +216,8 @@ export class GameEngine {
     if ((mode === 'FIRST_PERSON' || mode === 'THIRD_PERSON') && !this.renderer3D) {
       this.initRenderer3D();
     }
-    if (mode === 'TOPDOWN_2D') {
+    if (mode !== 'FIRST_PERSON') {
       this.renderer3D?.exitPointerLock();
-    } else if (mode === 'FIRST_PERSON') {
-      this.renderer3D?.requestPointerLock();
     }
     if (this.onViewModeChange) {
       this.onViewModeChange(mode);
@@ -1053,6 +1051,9 @@ export class GameEngine {
     this.updateParticles(deltaTime);
     this.updateDamageTexts(deltaTime);
     this.cleanupEntities();
+    if (this.renderer3D && this.viewMode === 'FIRST_PERSON') {
+      this.renderer3D.prepareFrame(this, deltaTime);
+    }
     this.updateWeapons(time);
     this.checkCollisions(deltaTime);
     this.spawnEnemies(deltaTime);
@@ -2503,12 +2504,15 @@ export class GameEngine {
     forward3D?: { x: number; y: number; z: number };
   } {
     if (this.renderer3D && this.viewMode === 'FIRST_PERSON') {
-      const transform = this.renderer3D.getMuzzleWorldTransform();
+      const solution = this.renderer3D.getFireSolution(this.enemies);
       return {
-        forward: transform.forward2D,
-        muzzle: { x: transform.position.x, y: transform.position.z },
-        muzzle3D: transform.position,
-        forward3D: transform.forward
+        forward: solution.direction2D,
+        muzzle: {
+          x: solution.muzzlePosition3D.x,
+          y: solution.muzzlePosition3D.z
+        },
+        muzzle3D: solution.muzzlePosition3D,
+        forward3D: solution.direction3D
       };
     }
 
