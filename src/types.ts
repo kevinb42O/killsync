@@ -187,7 +187,7 @@ export interface OperatorDefinition {
   colorBoots: string;
 }
 
-export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'TREASURE' | 'PERMANENT_UPGRADES' | 'OPERATOR_SELECT' | 'PAUSED' | 'INTEL_ARCHIVE' | 'EXFILL_SUMMARY' | 'ADMIN_DASHBOARD' | 'WAVE_UPGRADE' | 'SHOP' | 'ACHIEVEMENTS';
+export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'TREASURE' | 'PERMANENT_UPGRADES' | 'OPERATOR_SELECT' | 'PAUSED' | 'INTEL_ARCHIVE' | 'EXFILL_SUMMARY' | 'ADMIN_DASHBOARD' | 'WAVE_UPGRADE' | 'SHOP' | 'ACHIEVEMENTS' | 'SETTINGS';
 
 export interface Inventory {
   armorTier: number; // 0=none, 1=tier1, 2=tier2, 3=tier3

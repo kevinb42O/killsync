@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind } from 'lucide-react';
+import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2 } from 'lucide-react';
 import { GameEngine, BalanceTuning, DEFAULT_BALANCE_TUNING } from './game/Engine';
 import { GameHUD } from './components/GameHUD';
 import { MenuEffects, triggerMenuEffect } from './components/MenuEffects';
@@ -30,6 +30,7 @@ import {
   createExfillXPBreakdown,
   getAccountXPRequired
 } from './game/xpProgression';
+import { CONTROL_SCHEME_DETAILS, ControlScheme, getMovementBindings, parseControlScheme } from './game/controls';
 
 const EMPTY_INVENTORY: Inventory = { armorTier: 0, hasRevive: false, nukeCount: 0 };
 
@@ -171,6 +172,9 @@ export default function App() {
   const [nightmareMode, setNightmareMode] = useState(() => {
     return localStorage.getItem('nightmareMode') === 'true';
   });
+  const [controlScheme, setControlScheme] = useState<ControlScheme>(() =>
+    parseControlScheme(localStorage.getItem('controlScheme'))
+  );
   const [adminBalance, setAdminBalance] = useState<BalanceTuning>(() => {
     const raw = localStorage.getItem('adminBalanceTuning');
     if (!raw) return { ...DEFAULT_BALANCE_TUNING };
@@ -369,7 +373,8 @@ export default function App() {
     localStorage.setItem('accountLevel', accountLevel.toString());
     localStorage.setItem('accountXP', accountXP.toString());
     localStorage.setItem('adminBalanceTuning', JSON.stringify(adminBalance));
-  }, [playerLevel, playerCoins, permanentUpgrades, selectedOperator, unlockedOperators, savedDataCores, nightmareMode, accountLevel, accountXP, adminBalance]);
+    localStorage.setItem('controlScheme', controlScheme);
+  }, [playerLevel, playerCoins, permanentUpgrades, selectedOperator, unlockedOperators, savedDataCores, nightmareMode, accountLevel, accountXP, adminBalance, controlScheme]);
 
   useEffect(() => {
     localStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(achievementUnlocks));
@@ -418,6 +423,10 @@ export default function App() {
       engineRef.current.setBalanceTuning(adminBalance);
     }
   }, [adminBalance]);
+
+  useEffect(() => {
+    engineRef.current?.setControlScheme(controlScheme);
+  }, [controlScheme]);
 
   useEffect(() => {
     if (xpAnimationActive) return;
@@ -675,6 +684,7 @@ export default function App() {
         }
       );
       engine.setBalanceTuning(adminBalance);
+      engine.setControlScheme(controlScheme);
       if (threeContainerRef.current) {
         engine.initRenderer3D(threeContainerRef.current);
       }
@@ -1812,6 +1822,35 @@ export default function App() {
                     </div>
                   </motion.button>
 
+                  {/* ▸ CONTROLS */}
+                  <motion.button
+                    initial={{ x: -40, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.35, type: 'spring', damping: 20 }}
+                    onClick={(e) => {
+                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
+                      soundManager.playUIClick();
+                      setTimeout(() => setGameState('SETTINGS'), 250);
+                    }}
+                    onMouseEnter={() => soundManager.playUIHover()}
+                    className="group relative flex items-center h-12 cursor-pointer overflow-hidden"
+                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
+                  >
+                    <div className="absolute inset-0 bg-white/[0.03] border border-white/[0.06] group-hover:bg-white/[0.08] group-hover:border-white/15 transition-all duration-300" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-violet-500/30" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-center bg-violet-400" />
+                    <div className="relative z-10 flex items-center w-full px-6">
+                      <div className="w-8 h-8 rounded-sm bg-violet-500/10 flex items-center justify-center mr-4 group-hover:bg-violet-500/20 transition-colors">
+                        <Keyboard size={15} className="text-violet-300/80 group-hover:text-violet-200 transition-colors" />
+                      </div>
+                      <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Controls</span>
+                      <div className="ml-auto flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-violet-300/90">{controlScheme}</span>
+                        <ChevronRight size={16} className="text-white/20 group-hover:text-violet-200 group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </div>
+                  </motion.button>
+
                   {/* ▸ NIGHTMARE MODE TOGGLE */}
                   <motion.button
                     initial={{ x: -40, opacity: 0 }}
@@ -2220,6 +2259,132 @@ export default function App() {
                 >
                   Terminate Run
                 </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {gameState === 'SETTINGS' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[70] overflow-y-auto bg-[#05070d]"
+          >
+            <div className="absolute inset-0 pointer-events-none opacity-40" style={{ backgroundImage: 'linear-gradient(rgba(139,92,246,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.08) 1px, transparent 1px)', backgroundSize: '36px 36px' }} />
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(139,92,246,0.18),transparent_42%),radial-gradient(circle_at_85%_85%,rgba(6,182,212,0.10),transparent_34%)]" />
+
+            <div className="relative mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 py-5 sm:px-8 sm:py-8">
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+                <button
+                  onClick={() => { soundManager.playUIClick(); setGameState('MENU'); }}
+                  onMouseEnter={() => soundManager.playUIHover()}
+                  className="group flex items-center gap-2 border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/60 transition-all hover:border-violet-300/60 hover:bg-violet-400/10 hover:text-white"
+                  style={{ clipPath: 'polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px))' }}
+                >
+                  <ArrowLeft size={15} className="transition-transform group-hover:-translate-x-0.5" /> Back to menu
+                </button>
+                <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.18em] text-violet-300/70">
+                  <Settings2 size={14} /> System settings
+                </div>
+              </div>
+
+              <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col py-8 sm:py-12">
+                <div className="mb-7">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center border border-violet-300/40 bg-violet-400/10 text-violet-200 shadow-[0_0_24px_rgba(139,92,246,0.22)]">
+                      <Keyboard size={20} />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.28em] text-violet-300">Input profile</div>
+                      <h2 className="text-3xl font-black italic tracking-tight text-white sm:text-4xl">CONTROL SETTINGS</h2>
+                    </div>
+                  </div>
+                  <p className="max-w-2xl text-sm leading-relaxed text-white/50">Choose the movement cluster that matches your keyboard. Your choice is saved automatically and applies to every game mode.</p>
+                </div>
+
+                <div className="mb-6 flex w-fit border border-white/10 bg-black/30 p-1" role="tablist" aria-label="Settings categories">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected="true"
+                    className="flex items-center gap-2 bg-violet-400/15 px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-violet-100 shadow-[0_0_18px_rgba(139,92,246,0.12)]"
+                  >
+                    <Keyboard size={14} /> Controls
+                  </button>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {(Object.entries(CONTROL_SCHEME_DETAILS) as [ControlScheme, typeof CONTROL_SCHEME_DETAILS[ControlScheme]][]).map(([scheme, details]) => {
+                    const isActive = controlScheme === scheme;
+                    const bindings = getMovementBindings(scheme);
+                    const keyRows: Array<{ label: string; key: string }> = [
+                      { label: 'Forward', key: bindings.up[0].toUpperCase() },
+                      { label: 'Left', key: bindings.left[0].toUpperCase() },
+                      { label: 'Back', key: bindings.down[0].toUpperCase() },
+                      { label: 'Right', key: bindings.right[0].toUpperCase() },
+                    ];
+
+                    return (
+                      <button
+                        key={scheme}
+                        type="button"
+                        onClick={() => {
+                          setControlScheme(scheme);
+                          soundManager.playUIClick();
+                        }}
+                        onMouseEnter={() => soundManager.playUIHover()}
+                        aria-pressed={isActive}
+                        className={`group relative overflow-hidden border p-5 text-left transition-all duration-300 ${isActive ? 'border-violet-300/80 bg-violet-400/[0.10] shadow-[0_0_30px_rgba(139,92,246,0.18)]' : 'border-white/10 bg-black/30 hover:border-violet-300/40 hover:bg-violet-400/[0.05]'}`}
+                        style={{ clipPath: 'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px))' }}
+                      >
+                        <div className={`absolute left-0 top-0 h-full w-1 transition-colors ${isActive ? 'bg-violet-300' : 'bg-white/10 group-hover:bg-violet-400/60'}`} />
+                        <div className="mb-5 flex items-start justify-between gap-4">
+                          <div>
+                            <div className="text-lg font-black italic tracking-wide text-white">{details.label}</div>
+                            <div className="mt-1 text-[10px] font-mono uppercase tracking-[0.12em] text-white/40">{details.description}</div>
+                          </div>
+                          <div className={`flex h-6 w-6 items-center justify-center border transition-all ${isActive ? 'border-violet-200 bg-violet-300 text-slate-950' : 'border-white/15 text-transparent'}`} aria-hidden="true">
+                            <CheckCircle2 size={15} strokeWidth={3} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {keyRows.map((item) => (
+                            <div key={item.label} className="rounded-sm border border-white/10 bg-black/35 px-2 py-2 text-center">
+                              <div className="font-mono text-base font-black text-cyan-100">{item.key}</div>
+                              <div className="mt-1 text-[8px] font-bold uppercase tracking-wider text-white/35">{item.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className={`mt-4 text-[10px] font-black uppercase tracking-[0.16em] transition-colors ${isActive ? 'text-violet-200' : 'text-white/30 group-hover:text-violet-200/80'}`}>
+                          {isActive ? 'Active profile' : 'Select profile'}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="relative overflow-hidden border border-cyan-300/25 bg-cyan-400/[0.05] p-5" style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}>
+                    <div className="absolute right-0 top-0 h-1 w-24 bg-cyan-300/80" />
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200"><Keyboard size={14} /> Always available</div>
+                    <div className="mt-2 text-sm font-bold text-white">Arrow keys stay enabled in every profile.</div>
+                    <p className="mt-1 text-xs leading-relaxed text-white/45">Use ↑ ↓ ← → whenever you prefer — changing keyboard layout never removes them.</p>
+                    <div className="mt-4 flex gap-1.5" aria-label="Arrow key movement is always available">
+                      {['↑', '↓', '←', '→'].map((key) => <span key={key} className="flex h-8 w-8 items-center justify-center border border-cyan-200/30 bg-black/35 font-mono text-sm font-black text-cyan-100">{key}</span>)}
+                    </div>
+                  </div>
+
+                  <div className="border border-white/10 bg-black/25 p-5">
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">Other controls</div>
+                    <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-3 text-xs">
+                      <div className="flex items-center justify-between gap-3"><span className="text-white/50">Dash</span><kbd className="border border-white/15 bg-white/[0.06] px-2 py-1 font-mono text-white">SPACE</kbd></div>
+                      <div className="flex items-center justify-between gap-3"><span className="text-white/50">Pause</span><kbd className="border border-white/15 bg-white/[0.06] px-2 py-1 font-mono text-white">ESC</kbd></div>
+                      <div className="flex items-center justify-between gap-3"><span className="text-white/50">View mode</span><kbd className="border border-white/15 bg-white/[0.06] px-2 py-1 font-mono text-white">V</kbd></div>
+                      <div className="flex items-center justify-between gap-3"><span className="text-white/50">Nuke</span><kbd className="border border-white/15 bg-white/[0.06] px-2 py-1 font-mono text-white">N</kbd></div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>

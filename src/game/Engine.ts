@@ -108,6 +108,7 @@ export class GameEngine {
   camera: Vector2D = { x: 0, y: 0 };
   cameraZoom: number = 1;
   keys: Set<string> = new Set();
+  controlScheme: ControlScheme = DEFAULT_CONTROL_SCHEME;
   dashSpaceWasDown: boolean = false;
   
   lastTime: number = 0;
@@ -222,6 +223,13 @@ export class GameEngine {
     if (this.onViewModeChange) {
       this.onViewModeChange(mode);
     }
+  }
+
+  setControlScheme(scheme: ControlScheme) {
+    this.controlScheme = scheme;
+    // Releasing held state prevents a key that belonged to the old layout
+    // continuing to move the operator after the player switches preset.
+    this.keys.clear();
   }
 
   toggleViewMode() {
@@ -1408,13 +1416,16 @@ export class GameEngine {
 
   handleInput() {
     let move = { x: 0, y: 0 };
+    const isPressed = (direction: 'up' | 'down' | 'left' | 'right') =>
+      isMovementDirectionPressed(this.keys, this.controlScheme, direction);
+
     if (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') {
       let forward = 0;
       let strafe = 0;
-      if (this.keys.has('w') || this.keys.has('arrowup')) forward += 1;
-      if (this.keys.has('s') || this.keys.has('arrowdown')) forward -= 1;
-      if (this.keys.has('d') || this.keys.has('arrowright')) strafe += 1;
-      if (this.keys.has('a') || this.keys.has('arrowleft')) strafe -= 1;
+      if (isPressed('up')) forward += 1;
+      if (isPressed('down')) forward -= 1;
+      if (isPressed('right')) strafe += 1;
+      if (isPressed('left')) strafe -= 1;
 
       if (this.renderer3D) {
         const yaw = this.renderer3D.yaw;
@@ -1426,16 +1437,16 @@ export class GameEngine {
         move.x = forward * forwardX + strafe * rightX;
         move.y = forward * forwardY + strafe * rightY;
       } else {
-        if (this.keys.has('w') || this.keys.has('arrowup')) move.y -= 1;
-        if (this.keys.has('s') || this.keys.has('arrowdown')) move.y += 1;
-        if (this.keys.has('a') || this.keys.has('arrowleft')) move.x -= 1;
-        if (this.keys.has('d') || this.keys.has('arrowright')) move.x += 1;
+        if (isPressed('up')) move.y -= 1;
+        if (isPressed('down')) move.y += 1;
+        if (isPressed('left')) move.x -= 1;
+        if (isPressed('right')) move.x += 1;
       }
     } else {
-      if (this.keys.has('w') || this.keys.has('arrowup')) move.y -= 1;
-      if (this.keys.has('s') || this.keys.has('arrowdown')) move.y += 1;
-      if (this.keys.has('a') || this.keys.has('arrowleft')) move.x -= 1;
-      if (this.keys.has('d') || this.keys.has('arrowright')) move.x += 1;
+      if (isPressed('up')) move.y -= 1;
+      if (isPressed('down')) move.y += 1;
+      if (isPressed('left')) move.x -= 1;
+      if (isPressed('right')) move.x += 1;
     }
 
 
@@ -6516,3 +6527,4 @@ export class GameEngine {
     }
   }
 }
+import { ControlScheme, DEFAULT_CONTROL_SCHEME, isMovementDirectionPressed } from './controls';
