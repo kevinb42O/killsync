@@ -325,9 +325,11 @@ export class Renderer3D {
     // fwidth keeps the lines anti-aliased while the player moves.
     const floorMat = new THREE.ShaderMaterial({
       uniforms: {
-        baseColor: { value: new THREE.Color(0x07101f) },
-        fineGridColor: { value: new THREE.Color(0x13243a) },
-        majorGridColor: { value: new THREE.Color(0x256a82) },
+        baseColor: { value: new THREE.Color(0x09182c) },
+        plazaGlowColor: { value: new THREE.Color(0x0d4260) },
+        fineGridColor: { value: new THREE.Color(0x1b5f80) },
+        majorGridColor: { value: new THREE.Color(0x46d8ff) },
+        worldCenter: { value: new THREE.Vector2(GAME_WIDTH / 2, GAME_HEIGHT / 2) },
       },
       vertexShader: `
         varying vec2 vWorldGrid;
@@ -339,8 +341,10 @@ export class Renderer3D {
       `,
       fragmentShader: `
         uniform vec3 baseColor;
+        uniform vec3 plazaGlowColor;
         uniform vec3 fineGridColor;
         uniform vec3 majorGridColor;
+        uniform vec2 worldCenter;
         varying vec2 vWorldGrid;
 
         float gridLine(vec2 coordinate, float spacing) {
@@ -352,8 +356,12 @@ export class Renderer3D {
         void main() {
           float fine = gridLine(vWorldGrid, 125.0);
           float major = gridLine(vWorldGrid, 500.0);
-          vec3 color = mix(baseColor, fineGridColor, fine * 0.72);
-          color = mix(color, majorGridColor, major * 0.88);
+          // A stable city-power glow gives the floor readable light without
+          // sampling any dynamic point lights or reflective screen effects.
+          float plazaGlow = 1.0 - smoothstep(900.0, 7600.0, length(vWorldGrid - worldCenter));
+          vec3 color = mix(baseColor, plazaGlowColor, plazaGlow * 0.62);
+          color = mix(color, fineGridColor, fine * 0.82);
+          color = mix(color, majorGridColor, major * 0.94);
           gl_FragColor = vec4(color, 1.0);
         }
       `,
