@@ -1,5 +1,9 @@
-export const GAME_WIDTH = 4000;
-export const GAME_HEIGHT = 4000;
+// This is the real playable arena, not merely a renderer backdrop. The
+// previous 4 km square put an invisible edge only a few sprinting seconds from
+// the spawn. A 12 km arena provides long routes, room for landmarks, and keeps
+// the outer boundary well outside normal first/third-person play.
+export const GAME_WIDTH = 12000;
+export const GAME_HEIGHT = 12000;
 
 export const INITIAL_PLAYER_STATS = {
   might: 1,

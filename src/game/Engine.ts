@@ -3,6 +3,19 @@ import { GAME_WIDTH, GAME_HEIGHT, INITIAL_PLAYER_STATS, ENEMY_TYPES, WEAPON_DEFI
 import { soundManager } from './SoundManager';
 import { EventManager } from './EventManager';
 import { Renderer3D } from './Renderer3D';
+import { beamIntersectsCircle, sanitizeProjectileRadius } from './projectilePresentation';
+import { getEvolutionProfile } from './evolutions';
+import { getWorldObstacles, isWorldPositionClear, resolveWorldCollisions, WORLD_DISTRICTS } from './world/WorldLayout';
+import { ControlScheme, DEFAULT_CONTROL_SCHEME, isMovementDirectionPressed } from './controls';
+
+const MANUAL_FIRST_PERSON_WEAPONS = new Set([
+  'plasma_gun',
+  'neon_shards',
+  'cyber_blade',
+  'sonic_boom',
+  'solar_flare',
+  'spectral_helix',
+]);
 
 
 export interface BalanceTuning {
@@ -92,6 +105,9 @@ export class GameEngine {
   treasures: Treasure[] = [];
   portals: { position: Vector2D; radius: number; active: boolean }[] = [];
   activePortalIndex: number = -1;
+  /** A player-authored extraction site. It is kept separate from event portals
+   * so System Breach spawning can never treat exfill as an enemy source. */
+  exfillPortal: { position: Vector2D; radius: number; active: boolean } | null = null;
   shops: Shop[] = [];
   nearbyShop: Shop | null = null;
   reviveInvulnTimer: number = 0;
@@ -114,6 +130,8 @@ export class GameEngine {
   lastTime: number = 0;
   spawnTimer: number = 0;
   gameTime: number = 0;
+  /** Fixed-rate movement tape for replay abilities; bounded below in samplePlayerPath. */
+  private playerPathHistory: Array<{ x: number; y: number; time: number }> = [];
   killCount: number = 0;
   difficultyMultiplier: number = 1;
   dashCooldown: number = 2400;
@@ -503,6 +521,7 @@ export class GameEngine {
     this.items = [];
     this.particles = [];
     this.gameTime = 0;
+    this.playerPathHistory = [];
     this.killCount = 0;
     this.waveTimer = 0;
     this.goldRushTimer = 0;
@@ -511,6 +530,7 @@ export class GameEngine {
     this.difficultyMultiplier = 1;
     // Reset exfill state
     this.activePortalIndex = -1;
+    this.exfillPortal = null;
     // Shop setup: always place shops away from spawn so the run starts clean.
     this.shops = this.generateShops();
     // Reset event system
@@ -570,17 +590,58 @@ export class GameEngine {
         distance = this.SHOP_MIN_DISTANCE_FROM_SPAWN;
       }
 
+      const desired = {
+        x: spawn.x + Math.cos(angle) * distance,
+        y: spawn.y + Math.sin(angle) * distance,
+      };
+      const position = this.findClearWorldPosition(desired, 142, shops);
       shops.push({
         id: i === 0 ? 'shopA' : 'shopB',
-        position: {
-          x: spawn.x + Math.cos(angle) * distance,
-          y: spawn.y + Math.sin(angle) * distance,
-        },
+        position,
         radius: 120,
       });
     }
 
     return shops;
+  }
+
+  /** Finds a valid visible street position before spawning an objective or
+   * enemy. The same obstacle model later blocks movement, so rewards and
+   * spawns can never be placed inside a rendered building. */
+  private findClearWorldPosition(desired: Vector2D, radius: number, extraShops: Shop[] = this.shops): Vector2D {
+    const offsets = [
+      [0, 0], [150, 0], [-150, 0], [0, 150], [0, -150],
+      [220, 150], [-220, 150], [220, -150], [-220, -150],
+      [330, 0], [-330, 0], [0, 330], [0, -330],
+    ];
+    for (const [offsetX, offsetY] of offsets) {
+      const x = Math.max(radius + 8, Math.min(GAME_WIDTH - radius - 8, desired.x + offsetX));
+      const y = Math.max(radius + 8, Math.min(GAME_HEIGHT - radius - 8, desired.y + offsetY));
+      const clearOfShop = extraShops.every((shop) => Math.hypot(x - shop.position.x, y - shop.position.y) > radius + shop.radius + 36);
+      if (clearOfShop && isWorldPositionClear(x, y, radius)) return { x, y };
+    }
+    return { ...desired };
+  }
+
+  private resolveEntityWorldCollision(position: Vector2D, radius: number) {
+    const result = resolveWorldCollisions(position, radius);
+    // Shop terminals are physically present, not merely holograms. Keeping
+    // their collision separate permits the broad shop interaction ring.
+    for (const shop of this.shops) {
+      const dx = position.x - shop.position.x;
+      const dy = position.y - shop.position.y;
+      const distance = Math.hypot(dx, dy);
+      const terminalRadius = 34 + radius;
+      if (distance >= terminalRadius) continue;
+      const nx = distance > 0.001 ? dx / distance : 1;
+      const ny = distance > 0.001 ? dy / distance : 0;
+      position.x = shop.position.x + nx * (terminalRadius + 0.05);
+      position.y = shop.position.y + ny * (terminalRadius + 0.05);
+      result.collided = true;
+      result.blockedX ||= Math.abs(nx) > 0.35;
+      result.blockedY ||= Math.abs(ny) > 0.35;
+    }
+    return result;
   }
 
   private getViewportWorldHeight(): number {
@@ -608,33 +669,13 @@ export class GameEngine {
     return position.x >= left && position.x <= right && position.y >= top && position.y <= bottom;
   }
 
-  private getProjectileRadiusCap(id: string): number {
-    switch (id) {
-      case 'aura': return 120;
-      case 'pulse': return 150;
-      case 'orbit': return 15;
-      case 'scythe': return 20;
-      case 'sonic': return 80;
-      case 'nano': return 10;
-      case 'mirror_shard': return 10;
-      case 'helix': return 8;
-      case 'tendril': return 12;
-      case 'flare': return 25;
-      case 'echo': return 22;
-      case 'frost_aura': return 200;
-      case 'stardust': return 15;
-      case 'blade': return 100;
-      case 'gravity_well': return 200;
-      case 'arc_zap': return 25;
-      case 'chain_bolt': return Number.POSITIVE_INFINITY;
-      case 'arc_web': return Number.POSITIVE_INFINITY;
-      default: return 12;
-    }
-  }
-
   private clampProjectileRadius(projectile: Projectile) {
-    const cap = this.getProjectileRadiusCap(projectile.id);
-    if (projectile.radius > cap) projectile.radius = cap;
+    // `radius` is the authoritative gameplay collision radius. The former
+    // weapon-specific caps silently cancelled Area upgrades and weapon-level
+    // growth (for example, a level-two Aura was forced back to its level-one
+    // radius). Keep only a broad corruption guard here; visual LOD belongs to
+    // the renderer and must never rewrite combat range.
+    projectile.radius = sanitizeProjectileRadius(projectile.radius);
   }
 
   private cellKey(x: number, y: number): string {
@@ -1050,7 +1091,10 @@ export class GameEngine {
 
     this.handleInput();
     this.updatePlayer(deltaTime);
+    this.samplePlayerPath();
     this.updatePortal(deltaTime);
+    this.updateExfillPortal();
+    if (this.gameState !== 'PLAYING') return;
     this.updateEnemies(deltaTime);
     this.updateProjectiles(deltaTime);
     this.updateGems(deltaTime);
@@ -1059,7 +1103,7 @@ export class GameEngine {
     this.updateParticles(deltaTime);
     this.updateDamageTexts(deltaTime);
     this.cleanupEntities();
-    if (this.renderer3D && this.viewMode === 'FIRST_PERSON') {
+    if (this.renderer3D && this.viewMode !== 'TOPDOWN_2D') {
       this.renderer3D.prepareFrame(this, deltaTime);
     }
     this.updateWeapons(time);
@@ -1656,14 +1700,47 @@ export class GameEngine {
       this.player.position.y += this.player.velocity.y * dtFactor;
     }
 
-    // EXFILL IS NOW HANDLED IN UI between waves
+    const collision = this.resolveEntityWorldCollision(this.player.position, this.player.radius);
+    if (collision.collided) {
+      if (collision.blockedX) this.player.velocity.x = 0;
+      if (collision.blockedY) this.player.velocity.y = 0;
+      // A dash impacts solid architecture instead of tunnelling through it.
+      if (this.isDashing) {
+        this.isDashing = false;
+        this.dashRemainingDuration = 0;
+        this.createExplosion(this.player.position.x, this.player.position.y, '#38bdf8', 5);
+      }
+    }
 
     this.updateCameraPosition();
   }
 
   triggerExfill() {
-    this.gameState = 'MENU';
-    this.onExfill(this.player.coins, this.player.level);
+    if (this.exfillPortal) return;
+    const yaw = this.renderer3D?.yaw ?? 0;
+    const forwardX = -Math.sin(yaw);
+    const forwardY = -Math.cos(yaw);
+    const distance = 360;
+    const margin = 170;
+    const desiredPosition = {
+        x: Math.max(margin, Math.min(GAME_WIDTH - margin, this.player.position.x + forwardX * distance)),
+        y: Math.max(margin, Math.min(GAME_HEIGHT - margin, this.player.position.y + forwardY * distance)),
+    };
+    this.exfillPortal = {
+      position: this.findClearWorldPosition(desiredPosition, 120),
+      radius: 92,
+      active: true,
+    };
+    this.gameState = 'PLAYING';
+    this.paused = false;
+    this.keys.clear();
+    this.lastTime = performance.now();
+    this.recentSystemNotice = {
+      text: 'EXFILL BEACON DEPLOYED — REACH THE UPLINK',
+      color: '#fbbf24',
+      expiresAt: this.gameTime + 5000,
+    };
+    this.requestUpdate();
   }
 
   exitShop() {
@@ -1683,6 +1760,18 @@ export class GameEngine {
     // Portal is permanent, no need to spawn it
   }
 
+  private updateExfillPortal() {
+    if (!this.exfillPortal?.active) return;
+    const dx = this.player.position.x - this.exfillPortal.position.x;
+    const dy = this.player.position.y - this.exfillPortal.position.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > this.exfillPortal.radius + this.player.radius) return;
+
+    this.exfillPortal = null;
+    this.gameState = 'MENU';
+    this.onExfill(this.player.coins, this.player.level);
+  }
+
   updateEnemies(dt: number) {
     const dtFactor = dt / 16.67; // Normalize to ~60fps
     for (const enemy of this.enemies) {
@@ -1694,6 +1783,7 @@ export class GameEngine {
         enemy.velocity.y *= 0.9;
         enemy.position.x += enemy.velocity.x * dtFactor;
         enemy.position.y += enemy.velocity.y * dtFactor;
+        this.resolveEntityWorldCollision(enemy.position, enemy.radius);
         continue;
       }
       
@@ -1735,6 +1825,13 @@ export class GameEngine {
       
       enemy.position.x += enemy.velocity.x * dtFactor;
       enemy.position.y += enemy.velocity.y * dtFactor;
+      const collision = this.resolveEntityWorldCollision(enemy.position, enemy.radius);
+      if (collision.collided) {
+        // Preserve the free axis so enemies naturally slide around corners
+        // rather than jittering or passing through the rendered buildings.
+        if (collision.blockedX) enemy.velocity.x = 0;
+        if (collision.blockedY) enemy.velocity.y = 0;
+      }
     }
   }
 
@@ -1796,12 +1893,13 @@ export class GameEngine {
       // Mirror Shard Ricochet (bounce off visible screen edges + margin)
       if (p.id === 'mirror_shard' && p.penetration > 0) {
         const screenMargin = 100;
+        const useArenaBounds = this.viewMode !== 'TOPDOWN_2D';
         const viewportWidth = this.getViewportWorldWidth();
         const viewportHeight = this.getViewportWorldHeight();
-        const left = this.camera.x - screenMargin;
-        const right = this.camera.x + viewportWidth + screenMargin;
-        const top = this.camera.y - screenMargin;
-        const bottom = this.camera.y + viewportHeight + screenMargin;
+        const left = useArenaBounds ? screenMargin : this.camera.x - screenMargin;
+        const right = useArenaBounds ? GAME_WIDTH - screenMargin : this.camera.x + viewportWidth + screenMargin;
+        const top = useArenaBounds ? screenMargin : this.camera.y - screenMargin;
+        const bottom = useArenaBounds ? GAME_HEIGHT - screenMargin : this.camera.y + viewportHeight + screenMargin;
         
         let bounced = false;
         if (p.position.x < left) { p.position.x = left; p.velocity.x *= -1; p.rotation = Math.atan2(p.velocity.y, p.velocity.x); bounced = true; }
@@ -1810,11 +1908,28 @@ export class GameEngine {
         if (p.position.y < top) { p.position.y = top; p.velocity.y *= -1; p.rotation = Math.atan2(p.velocity.y, p.velocity.x); bounced = true; }
         else if (p.position.y > bottom) { p.position.y = bottom; p.velocity.y *= -1; p.rotation = Math.atan2(p.velocity.y, p.velocity.x); bounced = true; }
         
-        if (bounced) p.penetration--;
+        if (bounced) {
+          p.penetration--;
+          p.ricochetCount = (p.ricochetCount || 0) + 1;
+          p.ricochetFlash = 150;
+          this.createExplosion(p.position.x, p.position.y, p.color, 4);
+        }
       }
       
+      // Replay projectiles follow the recorded path directly. This is kept in
+      // simulation space so collision and rendering agree in every camera mode.
+      if (p.replayPath && p.replayPath.length > 1 && p.replayDuration) {
+        const progress = Math.max(0, Math.min(1, 1 - p.duration / p.replayDuration));
+        const pointAt = progress * (p.replayPath.length - 1);
+        const index = Math.min(p.replayPath.length - 2, Math.floor(pointAt));
+        const localProgress = pointAt - index;
+        const from = p.replayPath[index];
+        const to = p.replayPath[index + 1];
+        p.position.x = from.x + (to.x - from.x) * localProgress;
+        p.position.y = from.y + (to.y - from.y) * localProgress;
+        p.rotation = Math.atan2(to.y - from.y, to.x - from.x);
       // Dynamic player tracking for auras and player-locked abilities
-      if (p.id === 'aura' || p.id === 'frost_aura' || p.sourceWeaponId === 'void_aura' || p.sourceWeaponId === 'frost_aura') {
+      } else if (p.id === 'aura' || p.id === 'frost_aura' || p.sourceWeaponId === 'void_aura' || p.sourceWeaponId === 'frost_aura') {
         p.position.x = this.player.position.x;
         p.position.y = this.player.position.y;
       } else if (p.id === 'blade') {
@@ -1827,9 +1942,36 @@ export class GameEngine {
       }
 
       this.clampProjectileRadius(p);
+      if (p.ricochetFlash !== undefined) p.ricochetFlash = Math.max(0, p.ricochetFlash - dt);
       p.duration -= dt;
       return p.duration > 0;
     });
+  }
+
+  private samplePlayerPath() {
+    const last = this.playerPathHistory[this.playerPathHistory.length - 1];
+    const dx = last ? this.player.position.x - last.x : Infinity;
+    const dy = last ? this.player.position.y - last.y : Infinity;
+    // Time spacing avoids a frame-rate dependent tape, while the distance
+    // threshold preserves sharp dashes and changes of direction.
+    if (!last || this.gameTime - last.time >= 72 || dx * dx + dy * dy >= 64) {
+      this.playerPathHistory.push({ x: this.player.position.x, y: this.player.position.y, time: this.gameTime });
+    }
+    const oldestAllowed = this.gameTime - 5600;
+    while (this.playerPathHistory.length > 0 && this.playerPathHistory[0].time < oldestAllowed) {
+      this.playerPathHistory.shift();
+    }
+  }
+
+  private getRecordedPlayerPath(windowMs: number): Vector2D[] {
+    const earliest = this.gameTime - windowMs;
+    const path = this.playerPathHistory
+      .filter((sample) => sample.time >= earliest)
+      .map(({ x, y }) => ({ x, y }));
+    // Include the current point so the replay always concludes where the
+    // player actually is now, even between sample ticks.
+    path.push({ x: this.player.position.x, y: this.player.position.y });
+    return path;
   }
 
   updateGems(dt: number) {
@@ -2311,7 +2453,8 @@ export class GameEngine {
       // Evolve weapon at max level
       if (weapon.level >= weapon.maxLevel) {
         const def = WEAPON_DEFINITIONS.find(d => d.id === weapon.id);
-        if (def?.evolution) {
+        if (def?.evolution && !weapon.evolutionId) {
+          weapon.evolutionId = def.evolution;
           weapon.name = def.evolution.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
           weapon.cooldown *= 0.6;
         }
@@ -2464,9 +2607,12 @@ export class GameEngine {
     for (let idx = 0; idx < this.player.weapons.length; idx++) {
       const weapon = this.player.weapons[idx];
       const isPrimaryWeapon = idx === 0;
+      const effectiveCooldown = this.getEffectiveWeaponCooldown(weapon);
 
-      // In First-Person Mode, the primary weapon ONLY shoots manually when holding/clicking LMB!
-      if (this.viewMode === 'FIRST_PERSON' && isPrimaryWeapon) {
+      // First person only turns genuinely directed weapons into manual fire.
+      // Passive fields, orbitals and target-seeking powers must remain active;
+      // otherwise operators that start with an Aura or drones appear broken.
+      if (this.viewMode === 'FIRST_PERSON' && isPrimaryWeapon && this.isManualFirstPersonWeapon(weapon)) {
         const isShooting = this.renderer3D?.isShooting ?? false;
 
         // Handle active burst in progress
@@ -2475,7 +2621,7 @@ export class GameEngine {
             this.fireWeapon(weapon, time, true);
             weapon.burstRemaining--;
           }
-        } else if (isShooting && (time - weapon.lastFired >= weapon.cooldown * this.player.stats.cooldown * (this.isOverdrive ? 0.4 : 1))) {
+        } else if (isShooting && (time - weapon.lastFired >= effectiveCooldown)) {
           if (weapon.id === 'plasma_gun') {
             weapon.burstCount = 2 + (this.player.stats.amount || 0);
             weapon.burstDelay = 120;
@@ -2494,7 +2640,7 @@ export class GameEngine {
           this.fireWeapon(weapon, time, true);
           weapon.burstRemaining--;
         }
-      } else if (time - weapon.lastFired >= weapon.cooldown * this.player.stats.cooldown * (this.isOverdrive ? 0.4 : 1)) {
+      } else if (time - weapon.lastFired >= effectiveCooldown) {
         if (weapon.id === 'plasma_gun') {
           weapon.burstCount = 2 + (this.player.stats.amount || 0);
           weapon.burstDelay = 120;
@@ -2506,6 +2652,18 @@ export class GameEngine {
         }
       }
     }
+  }
+
+  private isManualFirstPersonWeapon(weapon: Weapon): boolean {
+    return MANUAL_FIRST_PERSON_WEAPONS.has(weapon.id);
+  }
+
+  private getEffectiveWeaponCooldown(weapon: Weapon): number {
+    // Orbit weapons used `baseCooldown: 0`, which meant a full set of drones
+    // or scythes spawned every animation frame. Their 50ms lifetime concealed
+    // the issue until the renderer began drawing all instances independently.
+    const baseCooldown = weapon.type === 'orbit' ? 100 : weapon.cooldown;
+    return baseCooldown * this.player.stats.cooldown * (this.isOverdrive ? 0.4 : 1);
   }
 
   getAimVectorAndMuzzle(): {
@@ -2524,6 +2682,20 @@ export class GameEngine {
         },
         muzzle3D: solution.muzzlePosition3D,
         forward3D: solution.direction3D
+      };
+    }
+
+    if (this.renderer3D && this.viewMode === 'THIRD_PERSON') {
+      const muzzle = this.renderer3D.getThirdPersonMuzzleTransform();
+      const forwardLength = Math.hypot(muzzle.forward.x, muzzle.forward.z);
+      const forward = forwardLength > 0.0001
+        ? { x: muzzle.forward.x / forwardLength, y: muzzle.forward.z / forwardLength }
+        : { x: -Math.sin(this.renderer3D.yaw), y: -Math.cos(this.renderer3D.yaw) };
+      return {
+        forward,
+        muzzle: { x: muzzle.position.x, y: muzzle.position.z },
+        muzzle3D: muzzle.position,
+        forward3D: muzzle.forward
       };
     }
 
@@ -2553,14 +2725,17 @@ export class GameEngine {
 
   fireWeapon(weapon: Weapon, time: number, isBurst: boolean = false) {
     weapon.lastFired = time;
-    const count = 1 + (isBurst ? 0 : this.player.stats.amount);
-    const levelMult = 1 + (weapon.level - 1) * 0.2;
+    const evolution = getEvolutionProfile(weapon.evolutionId);
+    // This is final-form gameplay state, not a display-only flag. Each profile
+    // modifies its original weapon cast with its own bounded tuning values.
+    const count = 1 + (isBurst ? 0 : this.player.stats.amount) + (isBurst ? 0 : evolution?.amountBonus || 0);
+    const levelMult = (1 + (weapon.level - 1) * 0.2) * (evolution?.damageMultiplier || 1);
     
-    // ONLY trigger weapon viewmodel recoil and muzzle flash when the player's primary held weapon fires!
+    // The held primary emits feedback in both camera modes. Third person uses
+    // its own barrel-attached flash, while first person drives the viewmodel.
     const isPrimaryWeapon = weapon === this.player.weapons[0];
-    if (this.renderer3D && this.viewMode === 'FIRST_PERSON' && isPrimaryWeapon) {
-      const wColor = weapon.id === 'neon_shards' ? '#ff0055' : (weapon.id === 'plasma_gun' ? '#00f0ff' : '#00ffcc');
-      this.renderer3D.triggerMuzzleFlash(wColor);
+    if (this.renderer3D && (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') && isPrimaryWeapon && this.isManualFirstPersonWeapon(weapon)) {
+      this.renderer3D.triggerMuzzleFlash(this.getWeaponVfxColor(weapon.id));
     }
 
     const initialProjectileCount = this.projectiles.length;
@@ -2751,6 +2926,7 @@ export class GameEngine {
         damage: 12 * this.player.stats.might * levelMult,
         duration: 100,
         ownerId: 'player',
+        sourceWeaponId: 'void_aura',
         penetration: 999,
         hitEnemies: new Set<string>()
       });
@@ -2892,6 +3068,7 @@ export class GameEngine {
       });
     } else if (weapon.id === 'nano_swarm') {
       soundManager.playShoot();
+      const nanoVisualGroupId = `nano:${this.gameTime}:${Math.random().toString(36).slice(2, 7)}`;
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         this.projectiles.push({
@@ -2905,7 +3082,9 @@ export class GameEngine {
           damage: 10 * this.player.stats.might * levelMult,
           duration: 3000,
           ownerId: 'player',
-          penetration: 1
+          penetration: 1,
+          visualGroupId: nanoVisualGroupId,
+          visualClusterIndex: i
         });
       }
     } else if (weapon.id === 'phantom_chain') {
@@ -3079,6 +3258,7 @@ export class GameEngine {
       }
 
       const helixCount = 12 + this.player.stats.amount * 4;
+      const helixVisualGroupId = `helix:${this.gameTime}:${Math.random().toString(36).slice(2, 7)}`;
       for (let i = 0; i < helixCount; i++) {
         const t = i / helixCount;
         const helixAngle = t * Math.PI * 4; // 2 full twists
@@ -3106,7 +3286,10 @@ export class GameEngine {
           sourceWeaponId: 'spectral_helix',
           penetration: 999,
           hitEnemies: new Set<string>(),
-          rotation: baseAngle
+          rotation: baseAngle,
+          visualGroupId: helixVisualGroupId,
+          visualSegmentIndex: i,
+          visualStrand: 0
         });
 
         // Strand 2
@@ -3129,7 +3312,10 @@ export class GameEngine {
           sourceWeaponId: 'spectral_helix',
           penetration: 999,
           hitEnemies: new Set<string>(),
-          rotation: baseAngle
+          rotation: baseAngle,
+          visualGroupId: helixVisualGroupId,
+          visualSegmentIndex: i,
+          visualStrand: 1
         });
       }
     } else if (weapon.id === 'void_tendrils') {
@@ -3146,6 +3332,7 @@ export class GameEngine {
 
       for (const { enemy } of sortedEnemies) {
         const segmentCount = 8;
+        const tendrilVisualGroupId = `tendril:${this.gameTime}:${enemy.id}:${Math.random().toString(36).slice(2, 7)}`;
         const dx = enemy.position.x - this.player.position.x;
         const dy = enemy.position.y - this.player.position.y;
 
@@ -3168,7 +3355,9 @@ export class GameEngine {
             duration: 300 + s * 40,
             ownerId: 'player',
             penetration: 999,
-            hitEnemies: new Set<string>()
+            hitEnemies: new Set<string>(),
+            visualGroupId: tendrilVisualGroupId,
+            visualSegmentIndex: s
           });
         }
 
@@ -3213,6 +3402,7 @@ export class GameEngine {
       const coneAngle = Math.PI / 3; // 60 degree cone
       const coneLength = 250 * this.player.stats.area * levelMult;
       const rayCount = 12 + Math.floor(this.player.stats.amount) * 3;
+      const solarVisualGroupId = `solar:${this.gameTime}:${Math.random().toString(36).slice(2, 7)}`;
 
       for (let i = 0; i < rayCount; i++) {
         const t = i / rayCount;
@@ -3237,7 +3427,11 @@ export class GameEngine {
           ownerId: 'player',
           sourceWeaponId: 'solar_flare',
           penetration: 3,
-          rotation: angle
+          rotation: angle,
+          visualGroupId: solarVisualGroupId,
+          visualSegmentIndex: i,
+          visualOrigin: { ...this.player.position },
+          visualLength: coneLength
         });
       }
 
@@ -3251,37 +3445,45 @@ export class GameEngine {
         size: 20
       });
     } else if (weapon.id === 'quantum_echo') {
-      // Ghost afterimages
+      // Parallel selves now replay the real, sampled movement tape rather than
+      // being placed in a decorative ring around the player.
       soundManager.playShoot();
-      const echoCount = 3 + Math.floor(this.player.stats.amount);
+      const echoCount = 3 + Math.floor(this.player.stats.amount) + (evolution?.amountBonus || 0);
+      const history = this.getRecordedPlayerPath(2200);
+      const fallback = { x: this.player.position.x, y: this.player.position.y };
       for (let i = 0; i < echoCount; i++) {
-        const angle = (i / echoCount) * Math.PI * 2;
-        const echoDist = 80 + i * 30;
-        const echoX = this.player.position.x + Math.cos(angle) * echoDist;
-        const echoY = this.player.position.y + Math.sin(angle) * echoDist;
-
-        // Echo projectile at offset
+        const range = Math.max(1, history.length - 1);
+        // Each self replays a trailing portion of the same real route. The
+        // staggered starts create parallel timelines while every segment still
+        // belongs to the player's actual past movement.
+        const sliceStart = Math.floor((i / Math.max(1, echoCount - 1)) * Math.min(range - 1, Math.floor(range * 0.45)));
+        const replayPath = history.slice(sliceStart);
+        if (replayPath.length < 2) replayPath.push({ ...fallback }, { ...fallback });
+        const replayDuration = 1250 + i * 120;
+        const start = replayPath[0];
         this.projectiles.push({
           id: 'echo',
-          position: { x: echoX, y: echoY },
-          velocity: {
-            x: Math.cos(angle + Math.PI / 2) * 3,
-            y: Math.sin(angle + Math.PI / 2) * 3
-          },
+          position: { x: start.x, y: start.y },
+          velocity: { x: 0, y: 0 },
           radius: 22 * this.player.stats.area * levelMult,
           health: 1, maxHealth: 1,
-          color: `rgba(100, 200, 255, ${0.4 - i * 0.05})`,
+          color: `rgba(100, 200, 255, ${Math.max(0.16, 0.42 - i * 0.045)})`,
           damage: 26 * this.player.stats.might * levelMult,
-          duration: 1500 + i * 200,
+          duration: replayDuration,
+          replayDuration,
+          replayPath,
           ownerId: 'player',
+          sourceWeaponId: 'quantum_echo',
           penetration: 4
         });
 
-        // Trail particles for each echo
-        for (let p = 0; p < 5; p++) {
+        // Sparse samples are readable without making a bright ribbon at the
+        // camera when a high-wave cast begins.
+        for (let p = 0; p < 3; p++) {
+          const point = replayPath[Math.floor((p / 3) * (replayPath.length - 1))] || start;
           this.particles.push({
-            x: echoX + (Math.random() - 0.5) * 15,
-            y: echoY + (Math.random() - 0.5) * 15,
+            x: point.x + (Math.random() - 0.5) * 10,
+            y: point.y + (Math.random() - 0.5) * 10,
             vx: (Math.random() - 0.5) * 0.05,
             vy: (Math.random() - 0.5) * 0.05,
             life: 800, maxLife: 800,
@@ -3355,7 +3557,8 @@ export class GameEngine {
           damage: 100 * this.player.stats.might * levelMult,
           duration: lifeTime,
           ownerId: 'player',
-          penetration: 2
+          penetration: 2,
+          visualTarget: { x: this.player.position.x + offsetX, y: destY }
         });
       }
     } else if (weapon.id === 'arc_weaver') {
@@ -3467,12 +3670,31 @@ export class GameEngine {
       const sourceId = weapon.id;
       const nonArcComp = sourceId === 'arc_weaver' ? 1 : this.NON_ARC_WEAPON_COMPENSATION_MULTIPLIER;
       this.projectiles[i].damage *= this.DEFAULT_WEAPON_DAMAGE_MULTIPLIER * waveDamageMult * nonArcComp;
-        this.projectiles[i].sourceWeaponId = weapon.id;
-        this.clampProjectileRadius(this.projectiles[i]);
+      this.projectiles[i].sourceWeaponId = weapon.id;
+      this.projectiles[i].evolutionId = weapon.evolutionId;
+      // This is deliberately cast-local: a final form extends or accelerates
+      // its own existing mechanic, rather than adding a global visual aura.
+      if (evolution) {
+        this.projectiles[i].duration *= evolution.durationMultiplier;
+        if (this.projectiles[i].replayDuration) this.projectiles[i].replayDuration *= evolution.durationMultiplier;
+      }
+      this.clampProjectileRadius(this.projectiles[i]);
     }
 
     if (this.projectiles.length > this.MAX_PROJECTILES) {
       this.projectiles.splice(0, this.projectiles.length - this.MAX_PROJECTILES);
+    }
+  }
+
+  private getWeaponVfxColor(weaponId: string): string {
+    switch (weaponId) {
+      case 'neon_shards': return '#ffe600';
+      case 'solar_flare': return '#ff8a1f';
+      case 'sonic_boom': return '#e8f7ff';
+      case 'spectral_helix': return '#c084fc';
+      case 'cyber_blade': return '#33f6ff';
+      case 'plasma_gun':
+      default: return '#00f0ff';
     }
   }
 
@@ -3496,9 +3718,11 @@ export class GameEngine {
         const dx = projectile.position.x - enemy.position.x;
         const dy = projectile.position.y - enemy.position.y;
         const distSq = dx * dx + dy * dy;
-        const radiusSum = projectile.radius + enemy.radius;
-        if (distSq < radiusSum * radiusSum) {
-          if (this.isScreenBoundAOEProjectile(projectile.id) && !this.isInView(enemy.position, enemy.radius, 0)) {
+        if (this.projectileHitsEnemy(projectile, enemy)) {
+          // The top-down mode deliberately limits these screen-space AOE
+          // sources. Perspective cameras have a different frustum, so using
+          // the hidden orthographic canvas here made visible enemies immune.
+          if (this.viewMode === 'TOPDOWN_2D' && this.isScreenBoundAOEProjectile(projectile.id) && !this.isInView(enemy.position, enemy.radius, 0)) {
             continue;
           }
           if (projectile.id === 'frost_aura') {
@@ -3557,9 +3781,7 @@ export class GameEngine {
             this.orbitDamageCooldowns.set(`${projectile.id}:${enemy.id}`, this.gameTime);
           }
           projectile.penetration--;
-          if (Math.random() < 0.3) {
-            this.createExplosion(enemy.position.x, enemy.position.y, '#00ffff', 1);
-          }
+          this.emitCombatImpact(projectile, enemy);
           if (this.gameTime - this.lastHitSoundAt > 35) {
             soundManager.playHit();
             this.lastHitSoundAt = this.gameTime;
@@ -3650,6 +3872,48 @@ export class GameEngine {
         }
       }
     }
+  }
+
+  /** Creates readable hit feedback in perspective views without turning every
+   * top-down hit into particle noise. */
+  private emitCombatImpact(projectile: Projectile, enemy: Enemy) {
+    const perspective = this.viewMode !== 'TOPDOWN_2D';
+    if (!perspective && Math.random() >= 0.3) return;
+
+    const weaponId = projectile.sourceWeaponId || projectile.id;
+    const highImpact = weaponId === 'cyber_blade' || weaponId === 'solar_flare' || weaponId === 'stardust' || weaponId === 'gravity_well';
+    const electric = weaponId === 'phantom_chain' || weaponId === 'arc_weaver' || projectile.id === 'chain_bolt' || projectile.id === 'arc_web';
+    const color = electric ? '#9cf7ff' : (projectile.color || '#00f0ff');
+    this.createExplosion(enemy.position.x, enemy.position.y, color, highImpact ? 5 : electric ? 4 : 2);
+
+    if (!perspective) return;
+    if (highImpact) this.screenShake = Math.max(this.screenShake, 7);
+    else if (MANUAL_FIRST_PERSON_WEAPONS.has(weaponId)) this.screenShake = Math.max(this.screenShake, 2.5);
+  }
+
+  /**
+   * Chain lightning and arc web are line effects, but their old collision
+   * model was a giant circle centred on the line midpoint. That made enemies
+   * beside a beam take damage while visible endpoints could miss. Keep other
+   * projectile types radial and test these two against their actual segment.
+   */
+  private projectileHitsEnemy(projectile: Projectile, enemy: Enemy): boolean {
+    if (projectile.id === 'chain_bolt' || projectile.id === 'arc_web') {
+      const halfLength = Math.max(1, projectile.radius);
+      const angle = projectile.rotation || 0;
+      const ax = projectile.position.x - Math.cos(angle) * halfLength;
+      const ay = projectile.position.y - Math.sin(angle) * halfLength;
+      const bx = projectile.position.x + Math.cos(angle) * halfLength;
+      const by = projectile.position.y + Math.sin(angle) * halfLength;
+      const beamThickness = projectile.id === 'chain_bolt' ? 7 : 5;
+      const hitRadius = enemy.radius + beamThickness;
+      return beamIntersectsCircle({ x: ax, y: ay }, { x: bx, y: by }, enemy.position, hitRadius);
+    }
+
+    const dx = projectile.position.x - enemy.position.x;
+    const dy = projectile.position.y - enemy.position.y;
+    const radiusSum = projectile.radius + enemy.radius;
+    return dx * dx + dy * dy < radiusSum * radiusSum;
   }
 
   getMaxArmorHp(): number {
@@ -3803,12 +4067,13 @@ export class GameEngine {
       const tier = tierRoll < legendaryChance ? 'legendary' :
                    tierRoll < legendaryChance + epicChance ? 'epic' : 'rare';
       const tierColors = { rare: '#ffd700', epic: '#a855f7', legendary: '#ff6600' };
+      const desiredPosition = {
+        x: this.player.position.x + Math.cos(angle) * dist,
+        y: this.player.position.y + Math.sin(angle) * dist,
+      };
       this.treasures.push({
         id: Math.random().toString(),
-        position: {
-          x: this.player.position.x + Math.cos(angle) * dist,
-          y: this.player.position.y + Math.sin(angle) * dist
-        },
+        position: this.findClearWorldPosition(desiredPosition, 46),
         color: tierColors[tier],
         spawnTime: performance.now(),
         tier
@@ -3946,6 +4211,7 @@ export class GameEngine {
         }
 
         const config = ENEMY_TYPES[type as keyof typeof ENEMY_TYPES] || ENEMY_TYPES.basic;
+        spawnPos = this.findClearWorldPosition(spawnPos, isHolder ? 25 : config.radius);
         if (isHolder) {
           soundManager.playTreasureSpawn();
         }
@@ -4086,6 +4352,7 @@ export class GameEngine {
     this.ctx.scale(this.cameraZoom, this.cameraZoom);
     this.ctx.translate(-this.player.position.x, -this.player.position.y);
 
+    this.drawWorldArchitecture();
     this.drawShops();
 
     // Draw Items
@@ -6455,6 +6722,29 @@ export class GameEngine {
     }
   }
 
+  /** The same blocks that resolve player/enemy collisions are visible in the
+   * legacy top-down renderer too; collision is never an invisible surprise. */
+  drawWorldArchitecture() {
+    const ctx = this.ctx;
+    for (const obstacle of getWorldObstacles()) {
+      const center = { x: obstacle.x + obstacle.width / 2, y: obstacle.y + obstacle.height / 2 };
+      const radius = Math.hypot(obstacle.width, obstacle.height) / 2;
+      if (!this.isInView(center, radius, 100)) continue;
+      const district = WORLD_DISTRICTS[obstacle.district];
+      ctx.save();
+      ctx.fillStyle = `#${district.buildingColor.toString(16).padStart(6, '0')}`;
+      ctx.strokeStyle = `#${district.emissiveColor.toString(16).padStart(6, '0')}`;
+      ctx.globalAlpha = 0.92;
+      ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      ctx.globalAlpha = 0.68;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      ctx.fillStyle = `#${district.floorColor.toString(16).padStart(6, '0')}`;
+      ctx.fillRect(obstacle.x + 7, obstacle.y + 7, Math.max(0, obstacle.width - 14), 4);
+      ctx.restore();
+    }
+  }
+
   drawShops() {
     const ctx = this.ctx;
     const time = performance.now() / 1000;
@@ -6527,4 +6817,3 @@ export class GameEngine {
     }
   }
 }
-import { ControlScheme, DEFAULT_CONTROL_SCHEME, isMovementDirectionPressed } from './controls';

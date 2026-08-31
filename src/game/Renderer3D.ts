@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { GameEngine } from './Engine';
-import { Enemy, Projectile, ExperienceGem, WorldItem, Treasure, OperatorDefinition, Weapon } from '../types';
+import { Enemy, Projectile, ExperienceGem, WorldItem, Treasure, OperatorDefinition, Weapon, Shop } from '../types';
 import { OPERATOR_DEFINITIONS } from '../constants';
 import { FireSolution, solveMuzzleConvergence } from './aiming';
+import { compressVisualRadius, getProjectileVisualId } from './projectilePresentation';
+import { EvolutionProfile, getEvolutionProfile } from './evolutions';
+import { getWorldDistrictAt, getWorldObstacles, WORLD_DISTRICTS, WORLD_TRANSIT_LINES } from './world/WorldLayout';
+import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 
 const COLOR_CACHE = new Map<string, THREE.Color>();
 
@@ -39,9 +43,9 @@ export class Renderer3D {
   viewmodelScene: THREE.Scene;
   viewmodelCamera: THREE.PerspectiveCamera;
 
-  private readonly WORLD_FOV = 130;
-  private readonly WORLD_DASH_FOV = 138;
-  private readonly ADS_FOV = 72;
+  private readonly WORLD_FOV = 108;
+  private readonly WORLD_DASH_FOV = 118;
+  private readonly ADS_FOV = 68;
   private readonly VIEWMODEL_FOV = 98;
   private readonly VIEWMODEL_ADS_FOV = 68;
   
@@ -52,6 +56,7 @@ export class Renderer3D {
   targetPitch: number = 0;
   isPointerLocked: boolean = false;
   sensitivity: number = 0.0022;
+  private activeViewMode: 'TOPDOWN_2D' | 'FIRST_PERSON' | 'THIRD_PERSON' = 'TOPDOWN_2D';
 
   // Manual Shooting & ADS States
   isShooting: boolean = false;
@@ -153,13 +158,29 @@ export class Renderer3D {
   tpThrusterRight!: THREE.Mesh;
   tpGroundRingMesh!: THREE.Mesh;
   tpBlasterMesh!: THREE.Mesh;
+  tpMuzzlePoint!: THREE.Object3D;
+  tpMuzzleFlash!: THREE.Mesh;
+  tpMuzzleLight!: THREE.PointLight;
   
   // Object pools & 3D caches
   private enemyMeshes = new Map<string, THREE.Object3D>();
   private gemMeshes = new Map<string, THREE.Mesh>();
-  private itemMeshes = new Map<string, THREE.Mesh>();
+  private itemMeshes = new Map<string, THREE.Object3D>();
+  private itemTemplates = new Map<WorldItem['type'], THREE.Object3D>();
   private treasureMeshes = new Map<string, THREE.Group>();
+  private shopMeshes = new Map<string, THREE.Group>();
+  private exfillPortalMesh: THREE.Group | null = null;
   private projectileMeshes = new Map<string, THREE.Object3D>();
+  private projectileVisualCounts = new Map<string, number>();
+  private persistentAuraMeshes = new Map<'void_aura' | 'frost_aura', THREE.Group>();
+  private persistentOrbitMeshes = new Map<'orbit_drones' | 'data_scythe', THREE.Group>();
+  private tendrilStrikeMeshes = new Map<string, THREE.Group>();
+  private helixStrikeMeshes = new Map<string, THREE.Group>();
+  private solarStrikeMeshes = new Map<string, THREE.Group>();
+  private nanoSwarmMeshes = new Map<string, THREE.Group>();
+  /** Base weapon id -> final-form profile, refreshed from live weapon state. */
+  private activeEvolutionProfiles = new Map<string, EvolutionProfile>();
+  private evolutionCrestCounts = new Map<string, number>();
   private portalMesh: THREE.Group | null = null;
   
   // Particles
@@ -167,7 +188,12 @@ export class Renderer3D {
   private particleGeo!: THREE.BufferGeometry;
   private particlePositions!: Float32Array;
   private particleColors!: Float32Array;
-  private readonly MAX_3D_PARTICLES = 1200;
+  private particleSizes!: Float32Array;
+  private particleAlphas!: Float32Array;
+  // A dense end-game combat field needs room for enemies. Recent impact
+  // particles are favoured below, so a smaller hard cap reads better than a
+  // wall of 1,200 additive sprites.
+  private readonly MAX_3D_PARTICLES = 720;
 
   // Shared reusable geometries and materials for maximum performance
   private gemGeometry = new THREE.OctahedronGeometry(6, 0);
@@ -175,6 +201,7 @@ export class Renderer3D {
 
   // Cached vector math objects for zero per-frame garbage collection
   private tempMuzzlePos = new THREE.Vector3();
+  private tempInstanceObject = new THREE.Object3D();
   private tempMuzzleFwd = new THREE.Vector3();
   private tempMuzzleNdc = new THREE.Vector3();
   private tempMuzzleQuat = new THREE.Quaternion();
@@ -195,12 +222,14 @@ export class Renderer3D {
   constructor() {
     // 1. Initialize Three.js Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x060914);
-    this.scene.fog = new THREE.FogExp2(0x060914, 0.0012);
+    this.scene.background = new THREE.Color(0x0b1830);
+    // Keep a sense of scale instead of fogging the new long-distance city into
+    // a solid wall only a few blocks from the player.
+    this.scene.fog = new THREE.FogExp2(0x0b1830, 0.00018);
 
     // 2. World camera stays deliberately extreme; the viewmodel gets its own
     // projection so it remains readable at a 130° world FOV.
-    this.camera = new THREE.PerspectiveCamera(this.WORLD_FOV, window.innerWidth / window.innerHeight, 0.05, 10000);
+    this.camera = new THREE.PerspectiveCamera(this.WORLD_FOV, window.innerWidth / window.innerHeight, 0.05, 32000);
     this.scene.add(this.camera);
     this.viewmodelScene = new THREE.Scene();
     this.viewmodelCamera = new THREE.PerspectiveCamera(this.VIEWMODEL_FOV, window.innerWidth / window.innerHeight, 0.025, 1000);
@@ -287,41 +316,255 @@ export class Renderer3D {
   }
 
   private setupEnvironment() {
+    this.setupSkyDome();
     // Cyber Neon Floor Grid
-    const floorSize = 12000;
+    const floorSize = Math.max(GAME_WIDTH, GAME_HEIGHT) * 2.5;
     const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize, 1, 1);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x090e1c,
-      roughness: 0.22,
-      metalness: 0.8
+    // Floors intentionally use an unlit material. Dynamic weapon, pickup and
+    // enemy lights must never turn the whole ground into a strobing mirror.
+    const floorMat = new THREE.MeshBasicMaterial({
+      color: 0x07101f,
     });
     this.floorMesh = new THREE.Mesh(floorGeo, floorMat);
     this.floorMesh.rotation.x = -Math.PI / 2;
     this.floorMesh.position.y = 0;
     this.scene.add(this.floorMesh);
 
-    // Glowing Grid overlay
-    this.gridHelper = new THREE.GridHelper(floorSize, 300, 0x00f0ff, 0x182845);
-    this.gridHelper.position.y = 0.5;
+    // One wire grid, one base floor: no translucent panels and no stacked road
+    // surfaces. Lines are deliberately kept just above the floor so they read
+    // cleanly in perspective without creating a second reflective ground.
+    this.gridHelper = new THREE.GridHelper(floorSize, 240, 0x256a82, 0x13243a);
+    this.gridHelper.position.y = 0.025;
     this.scene.add(this.gridHelper);
+
+    // Collidable architecture comes from the same deterministic layout used by
+    // Engine movement. These are real city blocks, not decorative ghosts.
+    this.setupDistrictCity();
+    this.setupDistantSkyline();
 
     // Distant Cyber Pillars / Horizon Monoliths
     const pillarGeo = new THREE.BoxGeometry(40, 750, 40);
     const pillarColors = [0x00f0ff, 0xff0077, 0x7928ca, 0x00ffcc];
     
-    for (let i = 0; i < 40; i++) {
-      const angle = (i / 40) * Math.PI * 2;
-      const dist = 3400 + Math.sin(i * 3) * 400;
+    for (let i = 0; i < 18; i++) {
+      const angle = (i / 18) * Math.PI * 2;
+      const dist = Math.max(GAME_WIDTH, GAME_HEIGHT) * 0.67 + Math.sin(i * 3) * 400;
       const color = pillarColors[i % pillarColors.length];
       const mat = new THREE.MeshBasicMaterial({
         color,
-        wireframe: true
+        wireframe: true,
+        transparent: true,
+        opacity: 0.24,
+        depthWrite: false,
       });
       const pillar = new THREE.Mesh(pillarGeo, mat);
-      pillar.position.set(Math.cos(angle) * dist, 320, Math.sin(angle) * dist);
+      pillar.position.set(GAME_WIDTH / 2 + Math.cos(angle) * dist, 320, GAME_HEIGHT / 2 + Math.sin(angle) * dist);
       this.scene.add(pillar);
       this.boundaryPillars.push(pillar);
     }
+  }
+
+  private setupSkyDome() {
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(24000, 40, 24),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        uniforms: {
+          zenith: { value: new THREE.Color(0x0b1640) },
+          horizon: { value: new THREE.Color(0x2a6b99) },
+          underglow: { value: new THREE.Color(0x6b2458) },
+        },
+        vertexShader: `varying vec3 vPosition; void main() { vPosition = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `
+          uniform vec3 zenith; uniform vec3 horizon; uniform vec3 underglow; varying vec3 vPosition;
+          void main() {
+            float h = normalize(vPosition).y * 0.5 + 0.5;
+            vec3 color = mix(underglow, horizon, smoothstep(0.12, 0.5, h));
+            color = mix(color, zenith, smoothstep(0.48, 1.0, h));
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `,
+      })
+    );
+    this.scene.add(sky);
+
+    const moon = new THREE.Mesh(
+      new THREE.CircleGeometry(410, 40),
+      new THREE.MeshBasicMaterial({ color: 0x9ae8ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
+    );
+    moon.position.set(GAME_WIDTH / 2 - 7200, 3200, GAME_HEIGHT / 2 - 9800);
+    moon.lookAt(GAME_WIDTH / 2, 600, GAME_HEIGHT / 2);
+    this.scene.add(moon);
+
+    const stormRing = new THREE.Group();
+    for (let i = 0; i < 18; i++) {
+      const angle = i / 18 * Math.PI * 2;
+      const cloud = new THREE.Mesh(
+        new THREE.SphereGeometry(130 + (i % 3) * 50, 10, 6),
+        new THREE.MeshBasicMaterial({ color: i % 2 ? 0x1b1d4a : 0x1e3550, transparent: true, opacity: 0.11, depthWrite: false })
+      );
+      cloud.position.set(GAME_WIDTH / 2 + Math.cos(angle) * 8400, 720 + (i % 4) * 80, GAME_HEIGHT / 2 + Math.sin(angle) * 8400);
+      cloud.scale.set(2.8, 0.42, 1.2);
+      stormRing.add(cloud);
+    }
+    stormRing.name = 'storm-cloud-ring';
+    this.scene.add(stormRing);
+  }
+
+  private setupDistrictCity() {
+    const obstacles = getWorldObstacles();
+    const buildingObstacles = obstacles.filter((obstacle) =>
+      obstacle.kind === 'tower' || obstacle.kind === 'arcade' || obstacle.kind === 'service_block'
+    );
+    const transitPylons = obstacles.filter((obstacle) => obstacle.kind === 'transit_pylon');
+    const bridgePylons = obstacles.filter((obstacle) => obstacle.kind === 'bridge_pylon');
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const roofGeo = new THREE.BoxGeometry(1, 1, 1);
+    const facadeGeo = new THREE.BoxGeometry(1, 1, 1);
+    const temp = new THREE.Object3D();
+
+    for (const district of Object.values(WORLD_DISTRICTS)) {
+      const districtObstacles = buildingObstacles.filter((obstacle) => obstacle.district === district.id);
+      if (districtObstacles.length) {
+        const buildingMat = new THREE.MeshStandardMaterial({ color: district.buildingColor, emissive: district.floorColor, emissiveIntensity: 0.18, metalness: 0.78, roughness: 0.38 });
+        const roofMat = new THREE.MeshBasicMaterial({ color: district.emissiveColor, depthWrite: true });
+        const facadeMat = new THREE.MeshBasicMaterial({ color: district.emissiveColor, depthWrite: true });
+        const buildings = new THREE.InstancedMesh(boxGeo, buildingMat, districtObstacles.length);
+        const roofLines = new THREE.InstancedMesh(roofGeo, roofMat, districtObstacles.length);
+        const facadeBands = new THREE.InstancedMesh(facadeGeo, facadeMat, districtObstacles.length * 2);
+        let facadeIndex = 0;
+        districtObstacles.forEach((obstacle, index) => {
+          temp.rotation.set(0, 0, 0);
+          temp.position.set(obstacle.x + obstacle.width / 2, obstacle.elevation / 2, obstacle.y + obstacle.height / 2);
+          temp.scale.set(obstacle.width, obstacle.elevation, obstacle.height);
+          temp.updateMatrix();
+          buildings.setMatrixAt(index, temp.matrix);
+          temp.position.set(obstacle.x + obstacle.width / 2, obstacle.elevation + 2.5, obstacle.y + obstacle.height / 2);
+          temp.scale.set(Math.max(16, obstacle.width * 0.78), 3.5, Math.max(16, obstacle.height * 0.78));
+          temp.updateMatrix();
+          roofLines.setMatrixAt(index, temp.matrix);
+          // Two narrow vertical light mullions read as deliberate façade design
+          // instead of the old noisy, screen-filling horizontal light bands.
+          for (const fraction of [0.2, 0.8]) {
+            temp.position.set(obstacle.x + obstacle.width * fraction, obstacle.elevation * 0.48, obstacle.y + obstacle.height + 0.8);
+            temp.scale.set(2.1, Math.max(18, obstacle.elevation * 0.42), 1.4);
+            temp.updateMatrix();
+            facadeBands.setMatrixAt(facadeIndex++, temp.matrix);
+          }
+        });
+        buildings.instanceMatrix.needsUpdate = true;
+        roofLines.instanceMatrix.needsUpdate = true;
+        facadeBands.instanceMatrix.needsUpdate = true;
+        this.scene.add(buildings, roofLines, facadeBands);
+      }
+
+    }
+
+    this.setupTransitInfrastructure(transitPylons, bridgePylons);
+  }
+
+  /** Elevated landmarks give the arena a long-distance silhouette. Their only
+   * ground-level geometry is built from the shared pylon obstacles, so both
+   * enemies and the player collide with exactly what they see. */
+  private setupTransitInfrastructure(
+    transitPylons: ReturnType<typeof getWorldObstacles>,
+    bridgePylons: ReturnType<typeof getWorldObstacles>,
+  ) {
+    const steelMat = new THREE.MeshStandardMaterial({ color: 0x111d2d, emissive: 0x08111d, emissiveIntensity: 0.45, metalness: 0.92, roughness: 0.25 });
+    const concreteMat = new THREE.MeshStandardMaterial({ color: 0x26364a, metalness: 0.68, roughness: 0.42 });
+    const pylonGeo = new THREE.CylinderGeometry(12, 20, 1, 10);
+    const capGeo = new THREE.CylinderGeometry(24, 16, 8, 10);
+
+    for (const line of WORLD_TRANSIT_LINES) {
+      const span = line.end - line.start;
+      const alongX = line.axis === 'x';
+      const railGroup = new THREE.Group();
+      const railGeo = new THREE.BoxGeometry(alongX ? span : 13, 9, alongX ? 13 : span);
+      const guideGeo = new THREE.BoxGeometry(alongX ? span : 3, 3, alongX ? 3 : span);
+      const glowMat = new THREE.MeshStandardMaterial({ color: line.color, emissive: line.color, emissiveIntensity: 1.35, metalness: 0.35, roughness: 0.28 });
+      const center = (line.start + line.end) / 2;
+
+      for (const offset of [-17, 17]) {
+        const rail = new THREE.Mesh(railGeo, steelMat);
+        rail.position.set(alongX ? center : line.coordinate + offset, line.elevation, alongX ? line.coordinate + offset : center);
+        railGroup.add(rail);
+      }
+      const guide = new THREE.Mesh(guideGeo, glowMat);
+      guide.position.set(alongX ? center : line.coordinate, line.elevation + 7, alongX ? line.coordinate : center);
+      railGroup.add(guide);
+
+      for (const pylon of transitPylons.filter((candidate) => candidate.id.startsWith(line.id))) {
+        const support = new THREE.Mesh(pylonGeo, concreteMat);
+        support.scale.y = pylon.elevation;
+        support.position.set(pylon.x + pylon.width / 2, pylon.elevation / 2, pylon.y + pylon.height / 2);
+        railGroup.add(support);
+        const cap = new THREE.Mesh(capGeo, glowMat);
+        cap.position.set(pylon.x + pylon.width / 2, pylon.elevation - 4, pylon.y + pylon.height / 2);
+        railGroup.add(cap);
+      }
+
+      // A stationary service carriage makes the route instantly legible in
+      // both camera modes without adding a per-frame animation or physics cost.
+      const carriage = new THREE.Mesh(new RoundedBoxGeometry(alongX ? 112 : 38, 34, alongX ? 38 : 112, 4, 7), steelMat);
+      carriage.position.set(
+        alongX ? line.start + span * 0.37 : line.coordinate,
+        line.elevation + 28,
+        alongX ? line.coordinate : line.start + span * 0.63,
+      );
+      railGroup.add(carriage);
+      this.scene.add(railGroup);
+    }
+
+    // A broad skyline bridge spans the quiet centre. Its deck is high enough
+    // that ground movement remains unrestricted; its two visible foundations
+    // are collision obstacles shared with Engine.
+    const bridgeSpan = GAME_WIDTH * 0.6;
+    const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(bridgeSpan, 14, 84), steelMat);
+    bridgeDeck.position.set(GAME_WIDTH / 2, 150, GAME_HEIGHT / 2);
+    this.scene.add(bridgeDeck);
+    const bridgeGlow = new THREE.Mesh(new THREE.BoxGeometry(bridgeSpan - 20, 3, 3), new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 1.1 }));
+    bridgeGlow.position.set(GAME_WIDTH / 2, 160, GAME_HEIGHT / 2 - 42);
+    this.scene.add(bridgeGlow);
+    for (const pylon of bridgePylons) {
+      const support = new THREE.Mesh(pylonGeo, concreteMat);
+      support.scale.y = pylon.elevation;
+      support.position.set(pylon.x + pylon.width / 2, pylon.elevation / 2, pylon.y + pylon.height / 2);
+      this.scene.add(support);
+      const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.8 }));
+      cap.position.set(pylon.x + pylon.width / 2, pylon.elevation - 4, pylon.y + pylon.height / 2);
+      this.scene.add(cap);
+    }
+  }
+
+  private setupDistantSkyline() {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({ color: 0x14243b, emissive: 0x0c1d36, emissiveIntensity: 0.65, metalness: 0.8, roughness: 0.34 });
+    const skyline = new THREE.InstancedMesh(geometry, material, 30);
+    const temp = new THREE.Object3D();
+    for (let i = 0; i < 30; i++) {
+      const angle = (i / 30) * Math.PI * 2;
+      const radius = Math.max(GAME_WIDTH, GAME_HEIGHT) * 0.58 + (i % 5) * 180;
+      const height = 340 + ((i * 137) % 760);
+      temp.position.set(GAME_WIDTH / 2 + Math.cos(angle) * radius, height / 2, GAME_HEIGHT / 2 + Math.sin(angle) * radius);
+      temp.rotation.set(0, angle * 0.35, 0);
+      temp.scale.set(90 + (i % 4) * 38, height, 90 + ((i + 2) % 4) * 42);
+      temp.updateMatrix();
+      skyline.setMatrixAt(i, temp.matrix);
+    }
+    skyline.instanceMatrix.needsUpdate = true;
+    this.scene.add(skyline);
+  }
+
+  private updateWorldAtmosphere(position: { x: number; y: number }, deltaTime: number) {
+    const district = getWorldDistrictAt(position.x, position.y);
+    const fog = this.scene.fog as THREE.FogExp2;
+    const targetFog = new THREE.Color(district.skyColor);
+    fog.color.lerp(targetFog, 1 - Math.exp(-deltaTime * 0.00055));
+    this.ambientLight.color.lerp(targetFog, 1 - Math.exp(-deltaTime * 0.00032));
+    this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, 2.35, 1 - Math.exp(-deltaTime * 0.0007));
+    const storm = this.scene.getObjectByName('storm-cloud-ring');
+    if (storm) storm.rotation.y += deltaTime * 0.000015;
   }
 
   private setupFPSViewmodel() {
@@ -949,16 +1192,68 @@ export class Renderer3D {
     this.tpRightLeg.position.set(5.5, 8.5, 0);
     this.thirdPersonPlayerGroup.add(this.tpRightLeg);
 
-    // Blaster in hand
-    const blasterGeo = new THREE.BoxGeometry(3, 4, 12);
+    // Third-person weapon: it deliberately sits at shoulder/hand height and
+    // has a readable silhouette from the chase camera. The old low, plain box
+    // disappeared into the torso, which made firing feel detached from the rig.
+    const blasterGeo = new RoundedBoxGeometry(4.2, 3.4, 15, 3, 0.62);
     const blasterMat = new THREE.MeshStandardMaterial({
       color: 0x223048,
       emissive: 0x00f0ff,
-      emissiveIntensity: 0.6
+      emissiveIntensity: 0.85,
+      metalness: 0.82,
+      roughness: 0.27
     });
     this.tpBlasterMesh = new THREE.Mesh(blasterGeo, blasterMat);
-    this.tpBlasterMesh.position.set(13, 16, 6);
+    this.tpBlasterMesh.position.set(15, 23, 6.8);
+    this.tpBlasterMesh.rotation.x = -0.08;
     this.thirdPersonPlayerGroup.add(this.tpBlasterMesh);
+
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.25, 1.55, 7.5, 12),
+      blasterMat
+    );
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.z = 9.8;
+    this.tpBlasterMesh.add(barrel);
+
+    const weaponGlowMat = new THREE.MeshBasicMaterial({
+      color: 0x00f0ff,
+      transparent: true,
+      opacity: 0.92,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    for (const side of [-1, 1]) {
+      const coil = new THREE.Mesh(new THREE.TorusGeometry(1.38, 0.18, 8, 16), weaponGlowMat);
+      coil.position.set(side * 1.8, 0, 5.8);
+      coil.rotation.y = Math.PI / 2;
+      this.tpBlasterMesh.add(coil);
+    }
+    const powerCell = new THREE.Mesh(new RoundedBoxGeometry(1.3, 1.1, 5.2, 2, 0.24), weaponGlowMat);
+    powerCell.position.set(0, 0.15, 1.6);
+    this.tpBlasterMesh.add(powerCell);
+
+    // This is the authoritative third-person firing origin. It is attached to
+    // the visible weapon, so every directed effect can emerge from the barrel
+    // instead of from an arbitrary offset near the character.
+    this.tpMuzzlePoint = new THREE.Object3D();
+    this.tpMuzzlePoint.position.set(0, 0, 13.65);
+    this.tpBlasterMesh.add(this.tpMuzzlePoint);
+    this.tpMuzzleFlash = new THREE.Mesh(
+      new THREE.SphereGeometry(2.8, 10, 8),
+      new THREE.MeshBasicMaterial({
+        color: 0x00f0ff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      })
+    );
+    this.tpMuzzleFlash.position.z = 13.95;
+    this.tpBlasterMesh.add(this.tpMuzzleFlash);
+    this.tpMuzzleLight = new THREE.PointLight(0x00f0ff, 0, 90, 2);
+    this.tpMuzzleLight.position.z = 13.5;
+    this.tpBlasterMesh.add(this.tpMuzzleLight);
 
     // Glowing Holographic Ground Halo Ring
     const groundRingGeo = new THREE.RingGeometry(24, 28, 32);
@@ -979,24 +1274,54 @@ export class Renderer3D {
   private setupParticleSystem() {
     this.particlePositions = new Float32Array(this.MAX_3D_PARTICLES * 3);
     this.particleColors = new Float32Array(this.MAX_3D_PARTICLES * 3);
+    this.particleSizes = new Float32Array(this.MAX_3D_PARTICLES);
+    this.particleAlphas = new Float32Array(this.MAX_3D_PARTICLES);
 
     this.particleGeo = new THREE.BufferGeometry();
     this.particleGeo.setAttribute('position', new THREE.BufferAttribute(this.particlePositions, 3));
     this.particleGeo.setAttribute('color', new THREE.BufferAttribute(this.particleColors, 3));
+    this.particleGeo.setAttribute('size', new THREE.BufferAttribute(this.particleSizes, 1));
+    this.particleGeo.setAttribute('alpha', new THREE.BufferAttribute(this.particleAlphas, 1));
 
-    const particleMat = new THREE.PointsMaterial({
-      size: 6,
-      vertexColors: true,
+    // Soft, per-particle additive sprites retain gameplay VFX size and fade
+    // instead of reducing every hit, trail and explosion to one hard 6px dot.
+    const particleMat = new THREE.ShaderMaterial({
       transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending
+      depthWrite: false,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      vertexShader: `
+        attribute float size;
+        attribute float alpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          vColor = color;
+          vAlpha = alpha;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = clamp(size * (300.0 / max(1.0, -mvPosition.z)), 2.0, 48.0);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          vec2 centered = gl_PointCoord - vec2(0.5);
+          float falloff = smoothstep(0.5, 0.0, length(centered));
+          gl_FragColor = vec4(vColor, vAlpha * falloff);
+        }
+      `
     });
 
     this.particleSystem = new THREE.Points(this.particleGeo, particleMat);
+    this.particleSystem.frustumCulled = false;
     this.scene.add(this.particleSystem);
   }
 
   private onMouseMove = (e: MouseEvent) => {
+    // First and third person share the same locked-mouse look contract. A
+    // third-person camera must never require holding a mouse button to orbit.
     if (!this.isPointerLocked) return;
     this.yaw -= e.movementX * this.sensitivity;
     this.pitch -= e.movementY * this.sensitivity;
@@ -1092,6 +1417,29 @@ export class Renderer3D {
     this.muzzleFlashRing.rotation.z = Math.random() * Math.PI;
     this.muzzleFlashLight.color.copy(c);
     this.muzzleFlashLight.intensity = 5.5;
+    if (this.tpMuzzleFlash && this.tpMuzzleLight) {
+      const tpFlashMat = this.tpMuzzleFlash.material as THREE.MeshBasicMaterial;
+      tpFlashMat.color.copy(c);
+      tpFlashMat.opacity = 1;
+      this.tpMuzzleFlash.scale.setScalar(1 + Math.random() * 0.45);
+      this.tpMuzzleLight.color.copy(c);
+      this.tpMuzzleLight.intensity = 8;
+    }
+  }
+
+  getThirdPersonMuzzleTransform(): {
+    position: { x: number; y: number; z: number };
+    forward: { x: number; y: number; z: number };
+  } {
+    this.thirdPersonPlayerGroup.updateMatrixWorld(true);
+    this.tpMuzzlePoint.getWorldPosition(this.tempMuzzlePos);
+    this.tpMuzzlePoint.getWorldQuaternion(this.tempMuzzleQuat);
+    // The third-person blaster is authored along local +Z, toward the visor.
+    this.tempMuzzleFwd.set(0, 0, 1).applyQuaternion(this.tempMuzzleQuat).normalize();
+    return {
+      position: { x: this.tempMuzzlePos.x, y: this.tempMuzzlePos.y, z: this.tempMuzzlePos.z },
+      forward: { x: this.tempMuzzleFwd.x, y: this.tempMuzzleFwd.y, z: this.tempMuzzleFwd.z }
+    };
   }
 
   // Calculates the EXACT real-time 3D world coordinate and direction of the gun barrel bore
@@ -1190,6 +1538,13 @@ export class Renderer3D {
    * from the same frame. This removes the subtle one-frame barrel lag.
    */
   prepareFrame(engine: GameEngine, deltaTime: number) {
+    this.activeViewMode = engine.viewMode;
+    if (engine.viewMode === 'THIRD_PERSON') {
+      this.thirdPersonPlayerGroup.position.set(engine.player.position.x, 0, engine.player.position.y);
+      this.thirdPersonPlayerGroup.rotation.y = this.yaw + Math.PI;
+      this.thirdPersonPlayerGroup.updateMatrixWorld(true);
+      return;
+    }
     if (engine.viewMode !== 'FIRST_PERSON') return;
     const player = engine.player;
     const targetAds = this.isAimingDownSights ? 1 : 0;
@@ -1290,7 +1645,15 @@ export class Renderer3D {
   render(engine: GameEngine, deltaTime: number) {
     const player = engine.player;
     const viewMode = engine.viewMode;
+    this.activeViewMode = viewMode;
+    this.activeEvolutionProfiles.clear();
+    this.evolutionCrestCounts.clear();
+    for (const weapon of engine.player.weapons) {
+      const profile = getEvolutionProfile(weapon.evolutionId);
+      if (profile) this.activeEvolutionProfiles.set(weapon.id, profile);
+    }
     const op = OPERATOR_DEFINITIONS.find(o => o.id === player.operatorId) || OPERATOR_DEFINITIONS[0];
+    this.updateWorldAtmosphere(player.position, deltaTime);
 
     // Safely parse Operator Colors with cached lookup
     const primaryColor = parseHexColor(op.color, 0x00f0ff);
@@ -1400,7 +1763,7 @@ export class Renderer3D {
       this.thirdPersonPlayerGroup.visible = true;
 
       // Third Person High FOV (92° standard, 108° dash)
-      const targetFov = engine.isDashing ? 108 : 92;
+      const targetFov = engine.isDashing ? 94 : 78;
       this.camera.fov += (targetFov - this.camera.fov) * 0.14;
       this.camera.updateProjectionMatrix();
 
@@ -1411,13 +1774,19 @@ export class Renderer3D {
       const camOffsetX = Math.sin(this.yaw) * Math.cos(this.pitch) * chaseDist;
       const camOffsetZ = Math.cos(this.yaw) * Math.cos(this.pitch) * chaseDist;
       const camOffsetY = Math.sin(this.pitch) * chaseDist + camHeight;
+      const shoulderOffset = 52;
+      const shoulderX = Math.cos(this.yaw) * shoulderOffset;
+      const shoulderZ = -Math.sin(this.yaw) * shoulderOffset;
+      const focusX = player.position.x - Math.sin(this.yaw) * 26;
+      const focusZ = player.position.y - Math.cos(this.yaw) * 26;
 
+      const thirdShake = engine.screenShake * 0.32;
       this.camera.position.set(
-        player.position.x + camOffsetX,
-        Math.max(20, camOffsetY),
-        player.position.y + camOffsetZ
+        player.position.x + camOffsetX + shoulderX,
+        Math.max(20, camOffsetY) + (Math.random() - 0.5) * thirdShake,
+        player.position.y + camOffsetZ + shoulderZ + (Math.random() - 0.5) * thirdShake
       );
-      this.camera.lookAt(player.position.x, 26, player.position.y);
+      this.camera.lookAt(focusX, 30, focusZ);
 
       // Position Third-Person Character
       this.thirdPersonPlayerGroup.position.set(player.position.x, 0, player.position.y);
@@ -1425,6 +1794,17 @@ export class Renderer3D {
 
       // Halo ring rotation & pulse
       this.tpGroundRingMesh.rotation.z += deltaTime * 0.002;
+      if (this.muzzleFlashTimer > 0) {
+        this.muzzleFlashTimer -= deltaTime;
+        const flashLife = THREE.MathUtils.clamp(this.muzzleFlashTimer / 48, 0, 1);
+        (this.tpMuzzleFlash.material as THREE.MeshBasicMaterial).opacity = flashLife;
+        this.tpMuzzleLight.intensity = flashLife * 8;
+        this.tpBlasterMesh.position.z = 6.8 - (1 - flashLife) * 1.6;
+      } else {
+        (this.tpMuzzleFlash.material as THREE.MeshBasicMaterial).opacity = 0;
+        this.tpMuzzleLight.intensity = 0;
+        this.tpBlasterMesh.position.z = 6.8;
+      }
 
       // Leg & arm walk swing
       const isMoving = Math.abs(player.velocity.x) > 0.1 || Math.abs(player.velocity.y) > 0.1;
@@ -1446,22 +1826,48 @@ export class Renderer3D {
     // 1. Render Enemies in 3D
     this.updateEnemies3D(engine.enemies, deltaTime);
 
-    // 2. Render Projectiles in 3D
+    // 2. Persistent equipment VFX (auras never blink with their damage tick)
+    this.updatePersistentAuras(engine, deltaTime);
+
+    // 3. Persistent orbiting equipment (the collision tick remains in Engine)
+    this.updatePersistentOrbitWeapons(engine, deltaTime);
+
+    // 4. Render Projectiles in 3D
     this.updateProjectiles3D(engine.projectiles, deltaTime);
 
-    // 3. Render Gems in 3D
+    // 5. Aggregate multi-sample tendril collisions into one readable strike.
+    this.updateTendrilStrikes3D(engine.projectiles, deltaTime);
+
+    // 6. Render each Spectral Helix cast as two continuous strands.
+    this.updateHelixStrikes3D(engine.projectiles, deltaTime);
+
+    // 7. Render each Solar Flare cast as one controlled plasma cone.
+    this.updateSolarFlareStrikes3D(engine.projectiles, deltaTime);
+
+    // 8. Render Nano Swarm casts through compact instanced nanites.
+    this.updateNanoSwarms3D(engine.projectiles);
+
+    // 9. Render Gems in 3D
     this.updateGems3D(engine.gems, deltaTime);
 
-    // 4. Render World Items in 3D
+    // 10. Render World Items in 3D
     this.updateItems3D(engine.items, deltaTime);
 
-    // 5. Render Treasures in 3D
+    // 10. Shops used to exist only on the hidden top-down canvas. Keep them in
+    // the same authoritative world-object lifecycle as all other 3D props.
+    this.updateShops3D(engine.shops, player, deltaTime);
+
+    // 11. Render Treasures in 3D
     this.updateTreasures3D(engine.treasures, deltaTime);
 
-    // 6. Render Portal in 3D
+    // 12. Render Portal in 3D
     this.updatePortal3D(engine.portals, engine.activePortalIndex, deltaTime);
 
-    // 7. Update 3D Particles
+    // 13. Exfill is a destination, not an event-spawn portal. Render it as a
+    // dedicated high-visibility landing site in every perspective mode.
+    this.updateExfillPortal3D(engine.exfillPortal, deltaTime);
+
+    // 14. Update 3D Particles
     this.updateParticles3D(engine.particles);
 
     if (this.debugAim && this.lastFireSolution) this.updateAimDebug(this.lastFireSolution);
@@ -1521,6 +1927,418 @@ export class Renderer3D {
         this.scene.remove(mesh);
         this.enemyMeshes.delete(id);
       }
+    }
+  }
+
+  /** Keep equipped aura visuals alive between their discrete gameplay damage
+   * ticks. The tick is now an accent pulse, never the existence of the aura. */
+  private updatePersistentAuras(engine: GameEngine, deltaTime: number) {
+    const equipped = new Set(engine.player.weapons
+      .filter((weapon) => weapon.id === 'void_aura' || weapon.id === 'frost_aura')
+      .map((weapon) => weapon.id as 'void_aura' | 'frost_aura'));
+    const now = Date.now() * 0.001;
+
+    for (const weaponId of equipped) {
+      const weapon = engine.player.weapons.find((candidate) => candidate.id === weaponId)!;
+      const levelMult = 1 + (weapon.level - 1) * 0.2;
+      const gameplayRadius = (weaponId === 'void_aura' ? 120 : 200) * engine.player.stats.area * levelMult;
+      const visualRadius = weaponId === 'void_aura'
+        ? compressVisualRadius(gameplayRadius, 105, 155)
+        : compressVisualRadius(gameplayRadius, 105, 155);
+      let aura = this.persistentAuraMeshes.get(weaponId);
+      if (!aura) {
+        aura = this.createAuraVisual(weaponId, visualRadius);
+        this.persistentAuraMeshes.set(weaponId, aura);
+        this.scene.add(aura);
+      }
+      const auraEvolution = getEvolutionProfile(weapon.evolutionId);
+      if (auraEvolution && aura.userData.evolutionId !== auraEvolution.id) {
+        this.attachEvolutionCrest(aura, auraEvolution, Math.min(28, visualRadius * 0.16));
+        aura.userData.evolutionId = auraEvolution.id;
+      }
+
+      aura.position.set(engine.player.position.x, 20, engine.player.position.y);
+      const baseRadius = aura.userData.baseVisualRadius as number;
+      const targetAreaScale = visualRadius / baseRadius;
+      const currentAreaScale = aura.userData.currentAreaScale as number;
+      const nextAreaScale = THREE.MathUtils.lerp(currentAreaScale, targetAreaScale, 1 - Math.exp(-deltaTime * 0.006));
+      aura.userData.currentAreaScale = nextAreaScale;
+
+      const pulseActive = engine.projectiles.some((projectile) => projectile.sourceWeaponId === weaponId || projectile.id === weaponId);
+      const idleBreath = 0.985 + Math.sin(now * (weaponId === 'frost_aura' ? 2.8 : 3.6)) * 0.015;
+      const damagePulse = pulseActive ? 1.13 + Math.sin(now * 17) * 0.045 : 1;
+      aura.scale.setScalar(nextAreaScale * idleBreath * damagePulse);
+      aura.rotation.y += deltaTime * (weaponId === 'frost_aura' ? 0.00038 : -0.00058);
+      this.pulseTransparentMaterials(aura, pulseActive ? 1 : 0.43);
+      aura.traverse((node) => {
+        if (!node.userData.auraGlyph) return;
+        node.position.y = (node.userData.baseAuraY as number) + Math.sin(now * 3.5 + node.position.x * 0.08) * (pulseActive ? 2.3 : 0.85);
+        node.rotation.y += deltaTime * (pulseActive ? 0.003 : 0.0009);
+      });
+    }
+
+    for (const [weaponId, aura] of this.persistentAuraMeshes) {
+      if (equipped.has(weaponId)) continue;
+      this.scene.remove(aura);
+      this.disposeEffectMesh(aura);
+      this.persistentAuraMeshes.delete(weaponId);
+    }
+  }
+
+  /** Drones and scythes are equipment with continuous motion. Gameplay still
+   * emits tiny contact projectiles, but their rendered body is a stable pooled
+   * rig so it never flickers at the 50ms collision cadence. */
+  private updatePersistentOrbitWeapons(engine: GameEngine, deltaTime: number) {
+    const equipped = new Set(engine.player.weapons
+      .filter((weapon) => weapon.id === 'orbit_drones' || weapon.id === 'data_scythe')
+      .map((weapon) => weapon.id as 'orbit_drones' | 'data_scythe'));
+
+    for (const weaponId of equipped) {
+      const weapon = engine.player.weapons.find((candidate) => candidate.id === weaponId)!;
+      const isDrone = weaponId === 'orbit_drones';
+      const evolution = getEvolutionProfile(weapon.evolutionId);
+      const desiredCount = (isDrone ? 2 : 1) + Math.floor(engine.player.stats.amount) + (evolution?.amountBonus || 0);
+      const levelMult = 1 + (weapon.level - 1) * 0.2;
+      const gameplayOrbit = (isDrone ? 100 : 150) * engine.player.stats.area;
+      const visualOrbit = compressVisualRadius(gameplayOrbit, isDrone ? 125 : 150, isDrone ? 185 : 215);
+      const visualSize = this.getCompressedVisualRadius({
+        id: isDrone ? 'orbit' : 'scythe',
+        sourceWeaponId: weaponId,
+        radius: (isDrone ? 15 : 20) * engine.player.stats.area * levelMult,
+      } as Projectile);
+      let root = this.persistentOrbitMeshes.get(weaponId);
+      if (!root) {
+        root = new THREE.Group();
+        root.userData.currentOrbitScale = 1;
+        this.persistentOrbitMeshes.set(weaponId, root);
+        this.scene.add(root);
+      }
+
+      while (root.children.length < desiredCount) {
+        const member = this.createProjectileMesh({
+          id: isDrone ? 'orbit' : 'scythe',
+          sourceWeaponId: weaponId,
+          radius: visualSize,
+          color: isDrone ? '#ff00ff' : '#ff0044',
+        } as Projectile);
+        if (evolution) this.attachEvolutionCrest(member, evolution, Math.max(4, visualSize));
+        root.add(member);
+      }
+      while (root.children.length > desiredCount) {
+        const member = root.children[root.children.length - 1];
+        root.remove(member);
+        this.disposeEffectMesh(member);
+      }
+      if (evolution && root.userData.evolutionId !== evolution.id && root.children[0]) {
+        this.attachEvolutionCrest(root.children[0], evolution, Math.max(5, visualSize * 0.72));
+        root.userData.evolutionId = evolution.id;
+      }
+
+      root.position.set(engine.player.position.x, 0, engine.player.position.y);
+      const currentOrbitScale = root.userData.currentOrbitScale as number;
+      const targetOrbitScale = visualOrbit / Math.max(1, root.userData.baseOrbitRadius || visualOrbit);
+      if (!root.userData.baseOrbitRadius) root.userData.baseOrbitRadius = visualOrbit;
+      root.userData.currentOrbitScale = THREE.MathUtils.lerp(currentOrbitScale, targetOrbitScale, 1 - Math.exp(-deltaTime * 0.006));
+      const orbitRadius = (root.userData.baseOrbitRadius as number) * (root.userData.currentOrbitScale as number);
+      const speed = isDrone ? 0.002 : 0.00333;
+
+      root.children.forEach((member, index) => {
+        const angle = engine.gameTime * speed + index * Math.PI * 2 / desiredCount;
+        member.position.set(Math.cos(angle) * orbitRadius, 22 + Math.sin(engine.gameTime * 0.006 + index) * (isDrone ? 3 : 1.5), Math.sin(angle) * orbitRadius);
+        member.rotation.y += deltaTime * (isDrone ? 0.007 : 0.016);
+        if (!isDrone) member.rotation.z += deltaTime * 0.006;
+      });
+    }
+
+    for (const [weaponId, root] of this.persistentOrbitMeshes) {
+      if (equipped.has(weaponId)) continue;
+      this.scene.remove(root);
+      this.disposeEffectMesh(root);
+      this.persistentOrbitMeshes.delete(weaponId);
+    }
+  }
+
+  /** Eight gameplay collision samples become a single cinematic tendril. It
+   * keeps the exact damage path but removes the former 24-tube visual clutter
+   * per target. Geometry is built once at strike creation, not every frame. */
+  private updateTendrilStrikes3D(projectiles: Projectile[], deltaTime: number) {
+    const tendrilGroups = new Map<string, Projectile[]>();
+    for (const projectile of projectiles) {
+      if (projectile.sourceWeaponId !== 'void_tendrils' && projectile.id !== 'tendril') continue;
+      const groupId = projectile.visualGroupId || `single:${getProjectileVisualId(projectile)}`;
+      const group = tendrilGroups.get(groupId) || [];
+      group.push(projectile);
+      tendrilGroups.set(groupId, group);
+    }
+
+    for (const [groupId, segments] of tendrilGroups) {
+      let strike = this.tendrilStrikeMeshes.get(groupId);
+      if (!strike) {
+        const ordered = [...segments].sort((a, b) => (a.visualSegmentIndex || 0) - (b.visualSegmentIndex || 0));
+        const origin = ordered[0].position;
+        const points = [new THREE.Vector3(0, 0, 0), ...ordered.map((segment, index) => new THREE.Vector3(
+          segment.position.x - origin.x,
+          6 + index * 1.8,
+          segment.position.y - origin.y,
+        ))];
+        const curve = new THREE.CatmullRomCurve3(points);
+        strike = new THREE.Group();
+        strike.position.set(origin.x, 4, origin.y);
+        strike.userData.maxDuration = Math.max(...ordered.map((segment) => segment.duration));
+        strike.userData.baseScaleY = 1;
+
+        const outer = new THREE.Mesh(
+          new THREE.TubeGeometry(curve, 24, 3.5, 7, false),
+          new THREE.MeshStandardMaterial({ color: 0x260944, emissive: 0x7c3aed, emissiveIntensity: 1.15, metalness: 0.38, roughness: 0.3, transparent: true, opacity: 0.78, depthWrite: false })
+        );
+        strike.add(outer);
+        const core = new THREE.Mesh(
+          new THREE.TubeGeometry(curve, 24, 1.05, 6, false),
+          new THREE.MeshBasicMaterial({ color: 0xe9d5ff, transparent: true, opacity: 0.86, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        strike.add(core);
+        const root = new THREE.Mesh(
+          new THREE.RingGeometry(13, 20, 20),
+          new THREE.MeshBasicMaterial({ color: 0xa855f7, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
+        );
+        root.rotation.x = -Math.PI / 2;
+        strike.add(root);
+        const tip = new THREE.Mesh(
+          new THREE.SphereGeometry(6, 9, 8),
+          new THREE.MeshBasicMaterial({ color: 0xf1d5ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        tip.position.copy(points[points.length - 1]);
+        strike.add(tip);
+        this.tendrilStrikeMeshes.set(groupId, strike);
+        this.scene.add(strike);
+      }
+
+      const remaining = Math.max(...segments.map((segment) => segment.duration));
+      const phase = 1 - remaining / Math.max(1, strike.userData.maxDuration as number);
+      strike.scale.y = 0.16 + Math.min(0.84, phase * 2.4);
+      strike.rotation.y = Math.sin(Date.now() * 0.011 + strike.position.x * 0.02) * 0.11;
+      this.pulseTransparentMaterials(strike, 0.82 - phase * 0.42);
+    }
+
+    for (const [groupId, strike] of this.tendrilStrikeMeshes) {
+      if (tendrilGroups.has(groupId)) continue;
+      this.scene.remove(strike);
+      this.disposeEffectMesh(strike);
+      this.tendrilStrikeMeshes.delete(groupId);
+    }
+  }
+
+  /** The simulation samples a helix with many projectile beads for collision.
+   * Present it as two continuous strands instead of dozens of overlapping
+   * meshes, preserving its path while making its DNA silhouette unmistakable. */
+  private updateHelixStrikes3D(projectiles: Projectile[], deltaTime: number) {
+    const casts = new Map<string, Projectile[]>();
+    for (const projectile of projectiles) {
+      if (projectile.sourceWeaponId !== 'spectral_helix' && projectile.id !== 'helix') continue;
+      const groupId = projectile.visualGroupId || `single:${getProjectileVisualId(projectile)}`;
+      const cast = casts.get(groupId) || [];
+      cast.push(projectile);
+      casts.set(groupId, cast);
+    }
+
+    for (const [groupId, samples] of casts) {
+      let helix = this.helixStrikeMeshes.get(groupId);
+      if (!helix) {
+        const strandA = samples.filter((sample) => (sample.visualStrand ?? 0) === 0)
+          .sort((a, b) => (a.visualSegmentIndex || 0) - (b.visualSegmentIndex || 0));
+        const strandB = samples.filter((sample) => (sample.visualStrand ?? 1) === 1)
+          .sort((a, b) => (a.visualSegmentIndex || 0) - (b.visualSegmentIndex || 0));
+        const origin = (strandA[0] || samples[0]).position;
+        helix = new THREE.Group();
+        helix.position.set(origin.x, 24, origin.y);
+        helix.userData.initialOrigin = { ...origin };
+        helix.userData.maxDuration = Math.max(...samples.map((sample) => sample.duration));
+
+        const createStrand = (strand: Projectile[], color: number) => {
+          const points = strand.map((sample, index) => new THREE.Vector3(
+            sample.position.x - origin.x,
+            Math.sin(index * Math.PI * 0.65) * 8,
+            sample.position.y - origin.y,
+          ));
+          if (points.length < 2) return;
+          const curve = new THREE.CatmullRomCurve3(points);
+          const glow = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 28, 2.05, 6, false),
+            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false })
+          );
+          helix!.add(glow);
+          const core = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 28, 0.58, 5, false),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
+          );
+          helix!.add(core);
+        };
+        createStrand(strandA, 0x42f5ff);
+        createStrand(strandB, 0xff78df);
+
+        // Sparse rungs sell the double-helix without adding another cloud of
+        // projectile meshes.
+        for (let i = 1; i < Math.min(strandA.length, strandB.length); i += 3) {
+          const a = new THREE.Vector3(strandA[i].position.x - origin.x, Math.sin(i * Math.PI * 0.65) * 8, strandA[i].position.y - origin.y);
+          const b = new THREE.Vector3(strandB[i].position.x - origin.x, Math.sin(i * Math.PI * 0.65) * 8, strandB[i].position.y - origin.y);
+          helix.add(new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([a, b]),
+            new THREE.LineBasicMaterial({ color: 0xf1d5ff, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending, depthWrite: false })
+          ));
+        }
+        this.helixStrikeMeshes.set(groupId, helix);
+        this.scene.add(helix);
+      }
+
+      const anchor = samples.find((sample) => (sample.visualStrand ?? 0) === 0) || samples[0];
+      const initialOrigin = helix.userData.initialOrigin as { x: number; y: number };
+      helix.position.x = anchor.position.x - initialOrigin.x + initialOrigin.x;
+      helix.position.z = anchor.position.y - initialOrigin.y + initialOrigin.y;
+      helix.rotation.z += deltaTime * 0.0014;
+      const remaining = Math.max(...samples.map((sample) => sample.duration));
+      this.pulseTransparentMaterials(helix, 0.5 + remaining / Math.max(1, helix.userData.maxDuration as number) * 0.45);
+    }
+
+    for (const [groupId, helix] of this.helixStrikeMeshes) {
+      if (casts.has(groupId)) continue;
+      this.scene.remove(helix);
+      this.disposeEffectMesh(helix);
+      this.helixStrikeMeshes.delete(groupId);
+    }
+  }
+
+  /** Solar's collision model uses many rays, but its presentation is one
+   * coherent fire sweep. This avoids high-Amount cone confetti and keeps the
+   * whole visual safely in front of a first-person camera. */
+  private updateSolarFlareStrikes3D(projectiles: Projectile[], deltaTime: number) {
+    const casts = new Map<string, Projectile[]>();
+    for (const projectile of projectiles) {
+      if (projectile.sourceWeaponId !== 'solar_flare' && projectile.id !== 'flare') continue;
+      const groupId = projectile.visualGroupId || `single:${getProjectileVisualId(projectile)}`;
+      const cast = casts.get(groupId) || [];
+      cast.push(projectile);
+      casts.set(groupId, cast);
+    }
+
+    for (const [groupId, rays] of casts) {
+      let flare = this.solarStrikeMeshes.get(groupId);
+      if (!flare) {
+        const source = rays[0];
+        const origin = source.visualOrigin || source.position;
+        const length = Math.min(240, Math.max(70, source.visualLength || 150));
+        const direction = source.rotation || 0;
+        flare = new THREE.Group();
+        // Push the apex beyond the FP lens; collision rays themselves retain
+        // their original player-origin position in Engine.
+        flare.position.set(origin.x + Math.cos(direction) * 34, 22, origin.y + Math.sin(direction) * 34);
+        flare.rotation.y = -direction + Math.PI / 2;
+        flare.userData.maxDuration = Math.max(...rays.map((ray) => ray.duration));
+
+        const outer = new THREE.Mesh(
+          new THREE.ConeGeometry(length * 0.34, length, 16, 1, true),
+          new THREE.MeshBasicMaterial({ color: 0xff5a1f, transparent: true, opacity: 0.24, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        outer.rotation.x = Math.PI / 2;
+        outer.position.z = length * 0.46;
+        flare.add(outer);
+        const core = new THREE.Mesh(
+          new THREE.ConeGeometry(length * 0.14, length * 0.92, 12, 1, true),
+          new THREE.MeshBasicMaterial({ color: 0xfff3bf, transparent: true, opacity: 0.58, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        core.rotation.x = Math.PI / 2;
+        core.position.z = length * 0.42;
+        flare.add(core);
+        for (const fraction of [0.38, 0.68, 0.94]) {
+          const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(length * fraction * 0.28, 0.9, 6, 20),
+            new THREE.MeshBasicMaterial({ color: fraction > 0.8 ? 0xffe29a : 0xff8a1f, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending, depthWrite: false })
+          );
+          ring.position.z = length * fraction;
+          flare.add(ring);
+        }
+        this.solarStrikeMeshes.set(groupId, flare);
+        this.scene.add(flare);
+      }
+      const remaining = Math.max(...rays.map((ray) => ray.duration));
+      const phase = remaining / Math.max(1, flare.userData.maxDuration as number);
+      flare.scale.setScalar(0.78 + phase * 0.22);
+      this.pulseTransparentMaterials(flare, 0.55 + phase * 0.45);
+    }
+
+    for (const [groupId, flare] of this.solarStrikeMeshes) {
+      if (casts.has(groupId)) continue;
+      this.scene.remove(flare);
+      this.disposeEffectMesh(flare);
+      this.solarStrikeMeshes.delete(groupId);
+    }
+  }
+
+  /** A swarm should read as one intelligent cloud, not a handful of large
+   * tetrahedra emitted into the camera. One instanced mesh covers an entire
+   * cast, so high Amount barely changes draw calls or allocation pressure. */
+  private updateNanoSwarms3D(projectiles: Projectile[]) {
+    const casts = new Map<string, Projectile[]>();
+    for (const projectile of projectiles) {
+      if (projectile.sourceWeaponId !== 'nano_swarm' && projectile.id !== 'nano') continue;
+      const groupId = projectile.visualGroupId || `single:${getProjectileVisualId(projectile)}`;
+      const cast = casts.get(groupId) || [];
+      cast.push(projectile);
+      casts.set(groupId, cast);
+    }
+
+    for (const [groupId, samples] of casts) {
+      let swarm = this.nanoSwarmMeshes.get(groupId);
+      const instanceCount = Math.min(36, Math.max(8, samples.length * 6));
+      if (!swarm) {
+        swarm = new THREE.Group();
+        const nanites = new THREE.InstancedMesh(
+          new THREE.TetrahedronGeometry(3.2, 0),
+          new THREE.MeshBasicMaterial({ color: 0x5cffb3, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false }),
+          instanceCount
+        );
+        nanites.userData.nanoInstances = true;
+        nanites.userData.instanceCount = instanceCount;
+        swarm.add(nanites);
+        const field = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(13, 1),
+          new THREE.MeshBasicMaterial({ color: 0x41f7a0, wireframe: true, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        field.userData.nanoField = true;
+        swarm.add(field);
+        this.nanoSwarmMeshes.set(groupId, swarm);
+        this.scene.add(swarm);
+      }
+
+      const nanites = swarm.children.find((child) => child.userData.nanoInstances) as THREE.InstancedMesh;
+      const now = Date.now() * 0.001;
+      for (let i = 0; i < (nanites.userData.instanceCount as number); i++) {
+        const sample = samples[i % samples.length];
+        const ring = Math.floor(i / samples.length) + 1;
+        const phase = now * (2.8 + ring * 0.35) + i * 2.399;
+        const spread = 4.5 + ring * 3.4;
+        this.tempInstanceObject.position.set(
+          sample.position.x + Math.cos(phase) * spread,
+          24 + Math.sin(phase * 1.7) * (2 + ring * 0.7),
+          sample.position.y + Math.sin(phase) * spread,
+        );
+        this.tempInstanceObject.rotation.set(phase * 1.2, phase * 1.8, phase * 0.7);
+        const scale = 0.48 + (i % 3) * 0.13;
+        this.tempInstanceObject.scale.setScalar(scale);
+        this.tempInstanceObject.updateMatrix();
+        nanites.setMatrixAt(i, this.tempInstanceObject.matrix);
+      }
+      nanites.instanceMatrix.needsUpdate = true;
+      const field = swarm.children.find((child) => child.userData.nanoField)!;
+      const centroid = samples.reduce((sum, sample) => ({ x: sum.x + sample.position.x, y: sum.y + sample.position.y }), { x: 0, y: 0 });
+      field.position.set(centroid.x / samples.length, 24, centroid.y / samples.length);
+      field.rotation.y += 0.035;
+    }
+
+    for (const [groupId, swarm] of this.nanoSwarmMeshes) {
+      if (casts.has(groupId)) continue;
+      this.scene.remove(swarm);
+      this.disposeEffectMesh(swarm);
+      this.nanoSwarmMeshes.delete(groupId);
     }
   }
 
@@ -1591,16 +2409,37 @@ export class Renderer3D {
 
   private updateProjectiles3D(projectiles: Projectile[], deltaTime: number) {
     const activeProjIds = new Set<string>();
-    const now = Date.now();
 
     for (const p of projectiles) {
-      activeProjIds.add(p.id);
-      let mesh = this.projectileMeshes.get(p.id);
+      // Gameplay ids are deliberately shared by classes of projectiles (all
+      // tendril segments are `tendril`, for example). Rendering needs a unique
+      // instance key or the last loop iteration overwrites every earlier mesh.
+      const visualKind = p.sourceWeaponId || p.id;
+      // Damage-tick projectiles are represented by their persistent equipment
+      // aura above; rendering them here would reintroduce the old blink.
+      if (visualKind === 'void_aura' || visualKind === 'frost_aura'
+        || visualKind === 'orbit_drones' || visualKind === 'orbit'
+        || visualKind === 'data_scythe' || visualKind === 'scythe'
+        || visualKind === 'void_tendrils' || visualKind === 'tendril'
+        || visualKind === 'spectral_helix' || visualKind === 'helix'
+        || visualKind === 'solar_flare' || visualKind === 'flare'
+        || visualKind === 'nano_swarm' || visualKind === 'nano') continue;
+      const visualId = getProjectileVisualId(p);
+      activeProjIds.add(visualId);
+      let mesh = this.projectileMeshes.get(visualId);
 
       if (!mesh) {
+        if (!this.canCreateProjectileVisual(visualKind)) continue;
         mesh = this.createProjectileMesh(p);
+        const evolution = getEvolutionProfile(p.evolutionId) || this.getEvolutionForVisualKind(visualKind);
+        // At most two compact final-form crests per weapon are admitted in a
+        // frame. This preserves an unmistakable evolution signature without
+        // reintroducing the high-wave "wall of glow" failure mode.
+        if (evolution) this.attachEvolutionCrest(mesh, evolution, Math.max(4, this.getCompressedVisualRadius(p)));
+        mesh.userData.projectileVisualKind = visualKind;
         this.scene.add(mesh);
-        this.projectileMeshes.set(p.id, mesh);
+        this.projectileMeshes.set(visualId, mesh);
+        this.projectileVisualCounts.set(visualKind, (this.projectileVisualCounts.get(visualKind) || 0) + 1);
       }
 
       // Real-time 3D vertical elevation and pitch tracking
@@ -1610,28 +2449,34 @@ export class Renderer3D {
 
       // Height determination based on weapon type
       let defaultHeight = 24;
-      if (p.sourceWeaponId === 'void_aura' || p.sourceWeaponId === 'frost_aura') {
+      if (visualKind === 'void_aura' || visualKind === 'frost_aura' || visualKind === 'aura') {
         defaultHeight = 20;
-      } else if (p.sourceWeaponId === 'gravity_well') {
+      } else if (visualKind === 'gravity_well') {
         defaultHeight = 16;
-      } else if (p.sourceWeaponId === 'orbit_drones' || p.sourceWeaponId === 'data_scythe') {
+      } else if (visualKind === 'orbit_drones' || visualKind === 'data_scythe' || visualKind === 'orbit' || visualKind === 'scythe') {
         defaultHeight = 22;
-      } else if (p.sourceWeaponId === 'void_tendrils') {
+      } else if (visualKind === 'void_tendrils' || visualKind === 'tendril') {
         defaultHeight = 8;
-      } else if (p.sourceWeaponId === 'arc_weaver' || p.id === 'arc_web' || p.id === 'arc_zap') {
+      } else if (visualKind === 'arc_weaver' || visualKind === 'arc_web' || visualKind === 'arc_zap') {
         defaultHeight = 18;
-      } else if (p.sourceWeaponId === 'stardust') {
+      } else if (visualKind === 'stardust') {
         // Meteors fall from sky toward ground
         p.z = Math.max(2, (p.z ?? 140) - deltaTime * 0.25);
       }
 
       // Auras and player-centered abilities track the player's 3D position directly
-      if (p.sourceWeaponId === 'void_aura' || p.sourceWeaponId === 'frost_aura' || p.id === 'aura') {
+      if (visualKind === 'void_aura' || visualKind === 'frost_aura' || visualKind === 'aura') {
         mesh.position.set(p.position.x, 20, p.position.y);
       } else {
         const projHeight = p.z !== undefined ? p.z : defaultHeight;
         mesh.position.set(p.position.x, projHeight, p.position.y);
       }
+
+      // Animation below writes fresh values every frame. Resetting the scale
+      // first lets the near-camera safety factor recover smoothly as a swarm
+      // leaves the player instead of retaining a tiny spawn scale forever.
+      mesh.scale.set(1, 1, 1);
+      mesh.visible = true;
 
       // Projectiles are gameplay-sized in the 2D simulation. Ease their visual
       // size in near the muzzle so they emerge as a tracer instead of filling
@@ -1642,91 +2487,563 @@ export class Renderer3D {
         mesh.scale.setScalar(THREE.MathUtils.lerp(0.12, 1, nearMuzzleScale));
       }
 
+      const animationTime = Date.now() * 0.001;
+      if (visualKind === 'quantum_echo' || visualKind === 'echo') {
+        const pulse = 0.92 + Math.sin(Date.now() * 0.012 + p.position.x * 0.03) * 0.08;
+        mesh.scale.setScalar(pulse);
+        mesh.position.y += Math.sin(Date.now() * 0.008 + p.position.y) * 2.4;
+      } else if (visualKind === 'neural_pulse' || visualKind === 'pulse') {
+        const phase = THREE.MathUtils.clamp(1 - p.duration / 300, 0, 1);
+        mesh.scale.setScalar(0.35 + phase * 0.65);
+        this.pulseTransparentMaterials(mesh, 0.45 + (1 - phase) * 0.4);
+      } else if (visualKind === 'sonic_boom' || visualKind === 'sonic') {
+        const phase = THREE.MathUtils.clamp(1 - p.duration / 500, 0, 1);
+        mesh.scale.setScalar(0.5 + phase * 0.65);
+        this.pulseTransparentMaterials(mesh, 0.95 - phase * 0.62);
+      } else if (visualKind === 'void_aura' || visualKind === 'frost_aura' || visualKind === 'aura') {
+        const phase = visualKind === 'frost_aura' ? 1 - p.duration / 800 : 1 - p.duration / 100;
+        const pulse = 0.96 + Math.sin(animationTime * 5 + p.position.x * 0.01) * 0.045 + phase * 0.04;
+        mesh.scale.setScalar(pulse);
+        mesh.rotation.y += deltaTime * (visualKind === 'frost_aura' ? 0.00045 : -0.0007);
+        this.pulseTransparentMaterials(mesh, 0.72 + Math.sin(animationTime * 4) * 0.1);
+        mesh.traverse((node) => {
+          if (!node.userData.auraGlyph) return;
+          node.position.y = (node.userData.baseAuraY as number) + Math.sin(animationTime * 4 + node.position.x * 0.08) * 1.3;
+          node.rotation.y += deltaTime * 0.0014;
+        });
+      } else if (visualKind === 'arc_zap') {
+        const pulse = 0.72 + Math.sin(animationTime * 22 + p.position.x) * 0.22;
+        mesh.scale.setScalar(pulse);
+        this.pulseTransparentMaterials(mesh, 0.72 + Math.sin(animationTime * 18) * 0.2);
+      } else if (visualKind === 'void_tendrils' || visualKind === 'tendril') {
+        const phase = THREE.MathUtils.clamp(1 - p.duration / 580, 0, 1);
+        mesh.scale.y = 0.2 + Math.min(1, phase * 2.3);
+        mesh.rotation.y = Math.sin(animationTime * 8 + p.position.x * 0.02) * 0.16;
+      } else if (visualKind === 'stardust') {
+        mesh.scale.setScalar(0.8 + Math.sin(animationTime * 13 + p.position.y) * 0.12);
+        mesh.rotation.z += deltaTime * 0.01;
+        mesh.traverse((node) => {
+          if (!node.userData.stardustMarker) return;
+          node.position.set(
+            (node.userData.targetX as number) - p.position.x,
+            1 - (p.z ?? 24),
+            (node.userData.targetY as number) - p.position.y,
+          );
+          const imminence = THREE.MathUtils.clamp(1 - (p.z ?? 140) / 140, 0, 1);
+          node.scale.setScalar(0.65 + imminence * 0.7);
+          const markerMat = (node as THREE.Mesh).material as THREE.MeshBasicMaterial;
+          markerMat.opacity = 0.28 + imminence * 0.65;
+        });
+      }
+
       // Rotations & dynamic animations
-      if (p.sourceWeaponId === 'gravity_well') {
+      if (visualKind === 'gravity_well') {
         // Accretion disk spinning
         mesh.rotation.y += deltaTime * 0.006;
-      } else if (p.sourceWeaponId === 'orbit_drones') {
+        this.pulseTransparentMaterials(mesh, 0.62 + Math.sin(animationTime * 6) * 0.14);
+      } else if (visualKind === 'orbit_drones' || visualKind === 'orbit') {
         mesh.rotation.y += deltaTime * 0.008;
-      } else if (p.sourceWeaponId === 'mirror_shards' || p.sourceWeaponId === 'nano_swarm') {
+      } else if (visualKind === 'data_scythe' || visualKind === 'scythe') {
+        mesh.rotation.y += deltaTime * 0.016;
+        mesh.rotation.z += deltaTime * 0.006;
+      } else if (visualKind === 'mirror_shards' || visualKind === 'mirror_shard' || visualKind === 'nano_swarm' || visualKind === 'nano') {
         mesh.rotation.y += deltaTime * 0.007;
         mesh.rotation.x += deltaTime * 0.005;
-      } else if (p.sourceWeaponId === 'phantom_chain' || p.id === 'arc_web') {
-        // High-frequency electric jitter
-        if (p.rotation !== undefined) {
-          mesh.rotation.y = -p.rotation + Math.PI / 2 + (Math.random() - 0.5) * 0.08;
+        if (visualKind === 'mirror_shards' || visualKind === 'mirror_shard') {
+          const flash = THREE.MathUtils.clamp((p.ricochetFlash || 0) / 150, 0, 1);
+          if (flash > 0) {
+            mesh.scale.multiplyScalar(1 + flash * 0.45);
+            this.pulseTransparentMaterials(mesh, 1 + flash * 0.4);
+          }
         }
+      } else if (visualKind === 'phantom_chain' || visualKind === 'chain_bolt' || visualKind === 'arc_web') {
+        // High-frequency electric jitter plus charges that race across the
+        // line. The mesh itself stays static, so this costs transforms only.
+        if (p.rotation !== undefined) {
+          mesh.rotation.y = -p.rotation + Math.PI / 2 + (Math.random() - 0.5) * 0.05;
+        }
+        this.pulseTransparentMaterials(mesh, 0.76 + Math.sin(animationTime * 30) * 0.16);
+        mesh.traverse((node) => {
+          if (!node.userData.lightningCharge) return;
+          const chargeLength = node.userData.chargeLength as number;
+          const phase = node.userData.chargePhase as number;
+          const travel = (phase + animationTime * 2.8) % 1;
+          node.position.z = -chargeLength / 2 + travel * chargeLength;
+          node.position.x = Math.sin(animationTime * 30 + phase * 12) * 1.4;
+          node.position.y = Math.cos(animationTime * 25 + phase * 9) * 1.4;
+          const chargeScale = 0.75 + Math.sin(animationTime * 36 + phase * 15) * 0.25;
+          node.scale.setScalar(chargeScale);
+        });
       } else if (p.rotation !== undefined) {
         mesh.rotation.y = -p.rotation + Math.PI / 2;
         if (p.vz !== undefined) {
           mesh.rotation.x = Math.atan2(p.vz, 18);
         }
       }
+
+      // A projectile can be perfectly valid in gameplay while spawning inside
+      // the first-person camera. Fade/scale it in only after it clears a small
+      // protected bubble around the lens. This fixes Nano, Mirror, Helix,
+      // Sonic and other player-origin effects without moving their hitboxes.
+      const cameraSafety = this.getNearCameraVisualSafety(mesh, visualKind);
+      mesh.visible = cameraSafety > 0.015;
+      if (mesh.visible && cameraSafety < 1) mesh.scale.multiplyScalar(cameraSafety);
     }
 
     // Cleanup dead projectiles
     for (const [id, mesh] of this.projectileMeshes.entries()) {
       if (!activeProjIds.has(id)) {
         this.scene.remove(mesh);
+        this.disposeEffectMesh(mesh);
         this.projectileMeshes.delete(id);
+        const visualKind = mesh.userData.projectileVisualKind as string | undefined;
+        if (visualKind) {
+          const nextCount = Math.max(0, (this.projectileVisualCounts.get(visualKind) || 1) - 1);
+          if (nextCount === 0) this.projectileVisualCounts.delete(visualKind);
+          else this.projectileVisualCounts.set(visualKind, nextCount);
+        }
       }
     }
   }
 
+  private getNearCameraVisualSafety(mesh: THREE.Object3D, visualKind: string): number {
+    if (this.activeViewMode !== 'FIRST_PERSON') return 1;
+    // Persistent ground/world-space abilities are already authored to be
+    // readable at the player's feet. A projectile leaving the player is not.
+    if (visualKind === 'void_aura' || visualKind === 'frost_aura' || visualKind === 'aura'
+      || visualKind === 'gravity_well' || visualKind === 'arc_web' || visualKind === 'chain_bolt'
+      || visualKind === 'phantom_chain' || visualKind === 'arc_zap') return 1;
+
+    const distance = mesh.position.distanceTo(this.camera.position);
+    const wideStart = visualKind === 'sonic' || visualKind === 'sonic_boom'
+      || visualKind === 'blade' || visualKind === 'cyber_blade'
+      || visualKind === 'flare' || visualKind === 'solar_flare';
+    const clearStart = wideStart ? 32 : 18;
+    const clearEnd = wideStart ? 105 : 78;
+    return THREE.MathUtils.smoothstep(distance, clearStart, clearEnd);
+  }
+
+  /** Visual effects have a separate population budget from gameplay. High
+   * waves can simulate hundreds of valid projectiles, but rendering every
+   * helix bead/tendril link at once hides the enemies the player must read. */
+  private canCreateProjectileVisual(visualKind: string): boolean {
+    const current = this.projectileVisualCounts.get(visualKind) || 0;
+    const limits: Record<string, number> = {
+      void_aura: 1,
+      frost_aura: 1,
+      aura: 1,
+      gravity_well: 2,
+      neural_pulse: 2,
+      pulse: 2,
+      orbit_drones: 12,
+      orbit: 12,
+      data_scythe: 10,
+      scythe: 10,
+      quantum_echo: 8,
+      echo: 8,
+      arc_web: 18,
+      chain_bolt: 18,
+      phantom_chain: 18,
+      arc_zap: 18,
+      spectral_helix: 40,
+      helix: 40,
+      void_tendrils: 24,
+      tendril: 24,
+      nano_swarm: 28,
+      nano: 28,
+      mirror_shards: 24,
+      mirror_shard: 24,
+      stardust: 16,
+      solar_flare: 22,
+      flare: 22,
+    };
+    return current < (limits[visualKind] ?? 40);
+  }
+
+  /**
+   * Area still controls hitboxes, duration and damage exactly as before. Only
+   * mesh dimensions are soft-compressed, per family, to leave a legible combat
+   * lane at absurd end-game upgrade values.
+   */
+  private getCompressedVisualRadius(p: Projectile): number {
+    const visualKind = p.sourceWeaponId || p.id;
+    const radius = p.radius || 6;
+    switch (visualKind) {
+      case 'void_aura':
+      case 'frost_aura':
+      case 'aura': return compressVisualRadius(radius, 105, 155);
+      case 'neural_pulse':
+      case 'pulse': return compressVisualRadius(radius, 115, 160);
+      case 'gravity_well': return compressVisualRadius(radius, 68, 94);
+      case 'cyber_blade':
+      case 'blade': return compressVisualRadius(radius, 76, 112);
+      case 'sonic_boom':
+      case 'sonic': return compressVisualRadius(radius, 65, 96);
+      case 'orbit_drones':
+      case 'orbit': return compressVisualRadius(radius, 20, 30);
+      case 'data_scythe':
+      case 'scythe': return compressVisualRadius(radius, 24, 36);
+      case 'solar_flare':
+      case 'flare': return compressVisualRadius(radius, 22, 34);
+      case 'void_tendrils':
+      case 'tendril': return compressVisualRadius(radius, 18, 28);
+      case 'stardust': return compressVisualRadius(radius, 16, 25);
+      case 'spectral_helix':
+      case 'helix': return compressVisualRadius(radius, 11, 18);
+      case 'nano_swarm':
+      case 'nano': return compressVisualRadius(radius, 10, 16);
+      case 'mirror_shards':
+      case 'mirror_shard': return compressVisualRadius(radius, 11, 19);
+      case 'plasma_gun':
+      case 'neon_shards': return compressVisualRadius(radius, 14, 22);
+      case 'arc_zap': return compressVisualRadius(radius, 18, 26);
+      default: return compressVisualRadius(radius, 22, 34);
+    }
+  }
+
+  /** Preserve authored material opacity while giving persistent effects a
+   * subtle living pulse. Materials are tagged lazily, so this works for every
+   * bespoke projectile group without hard-coded child ordering. */
+  private pulseTransparentMaterials(root: THREE.Object3D, multiplier: number) {
+    root.traverse((node) => {
+      const mesh = node as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        if (!material.transparent) continue;
+        const baseOpacity = material.userData.fxBaseOpacity ?? material.opacity;
+        material.userData.fxBaseOpacity = baseOpacity;
+        material.opacity = THREE.MathUtils.clamp(baseOpacity * multiplier, 0, 1);
+      }
+    });
+  }
+
+  /** Projectile effects allocate bespoke geometry; dispose on expiry so long
+   * survivor runs do not accumulate GPU buffers after instance rendering. */
+  private disposeEffectMesh(root: THREE.Object3D) {
+    root.traverse((node) => {
+      const renderable = node as THREE.Mesh | THREE.Line;
+      if (!(renderable as any).geometry || !(renderable as any).material) return;
+      renderable.geometry.dispose();
+      const materials = Array.isArray(renderable.material) ? renderable.material : [renderable.material];
+      for (const material of materials) material.dispose();
+    });
+  }
+
+  /**
+   * A premium lightning strike is built from two inexpensive tube passes,
+   * lightweight branch lines and a handful of animated charge nodes. This is
+   * far cheaper than per-frame geometry regeneration or bloom-heavy sprites.
+   */
+  private createLightningArc(p: Projectile, visualRadius: number, isWeb: boolean): THREE.Group {
+    const group = new THREE.Group();
+    group.userData.lightningArc = true;
+    const length = Math.max(20, (p.radius || visualRadius) * 2);
+    const jitter = isWeb ? 5 : 9;
+    const segments = isWeb ? 6 : 8;
+    const points: THREE.Vector3[] = [new THREE.Vector3(0, 0, -length / 2)];
+    for (let s = 1; s < segments; s++) {
+      const t = s / segments - 0.5;
+      points.push(new THREE.Vector3((Math.random() - 0.5) * jitter, (Math.random() - 0.5) * jitter, t * length));
+    }
+    points.push(new THREE.Vector3(0, 0, length / 2));
+    const curve = new THREE.CatmullRomCurve3(points);
+
+    const aura = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, isWeb ? 12 : 16, isWeb ? 1.35 : 2.05, 6, false),
+      new THREE.MeshBasicMaterial({ color: isWeb ? 0x30dfff : 0x00aaff, transparent: true, opacity: 0.46, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    group.add(aura);
+    const core = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, isWeb ? 12 : 16, isWeb ? 0.42 : 0.7, 5, false),
+      new THREE.MeshBasicMaterial({ color: 0xf3fdff, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    group.add(core);
+
+    // Two thin forks create the recognizable violent lightning silhouette at
+    // essentially no fill-rate cost.
+    const branchMat = new THREE.LineBasicMaterial({ color: isWeb ? 0x6ff6ff : 0x63c9ff, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (const fraction of [0.29, 0.68]) {
+      const start = curve.getPoint(fraction);
+      const direction = new THREE.Vector3((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * length * 0.14);
+      const mid = start.clone().addScaledVector(direction, 0.5);
+      const end = start.clone().add(direction);
+      const branch = new THREE.Line(new THREE.BufferGeometry().setFromPoints([start, mid, end]), branchMat.clone());
+      group.add(branch);
+    }
+
+    const endpointGeo = new THREE.SphereGeometry(isWeb ? 2.4 : 3.3, 8, 8);
+    const endpointMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (const z of [-length / 2, length / 2]) {
+      const endpoint = new THREE.Mesh(endpointGeo, endpointMat.clone());
+      endpoint.position.z = z;
+      group.add(endpoint);
+    }
+
+    // Charges travel along the local beam axis in the animation step below.
+    const chargeGeo = new THREE.SphereGeometry(isWeb ? 1.45 : 1.9, 7, 7);
+    for (let i = 0; i < 3; i++) {
+      const charge = new THREE.Mesh(chargeGeo, new THREE.MeshBasicMaterial({ color: i === 1 ? 0xffffff : 0x9df9ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      charge.userData.lightningCharge = true;
+      charge.userData.chargePhase = i / 3;
+      charge.userData.chargeLength = length;
+      group.add(charge);
+    }
+    return group;
+  }
+
+  /** Auras are persistent operator equipment, not short-lived projectiles.
+   * This factory creates a low-profile ritual that can idle continuously and
+   * only brighten when its gameplay damage pulse happens. */
+  private createAuraVisual(weaponId: 'void_aura' | 'frost_aura', radius: number): THREE.Group {
+    const group = new THREE.Group();
+    const isFrost = weaponId === 'frost_aura';
+    const auraColor = isFrost ? 0x38bdf8 : 0x8b5cf6;
+    const glowMat = new THREE.MeshBasicMaterial({ color: auraColor, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false });
+    const paleGlowMat = new THREE.MeshBasicMaterial({ color: isFrost ? 0xe0f7ff : 0xf1d5ff, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false });
+
+    const field = new THREE.Mesh(
+      new THREE.CircleGeometry(radius * 0.94, 40),
+      new THREE.MeshBasicMaterial({ color: auraColor, transparent: true, opacity: 0.075, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
+    );
+    field.rotation.x = -Math.PI / 2;
+    field.position.y = -17.5;
+    group.add(field);
+
+    for (const [fraction, tube, tilt] of [[1, 1.4, 0], [0.72, 0.82, 0.16], [0.42, 0.55, -0.12]] as const) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * fraction, tube, 6, 40), glowMat);
+      ring.rotation.set(Math.PI / 2 + tilt, 0, 0);
+      ring.position.y = -16 + fraction * 2.4;
+      group.add(ring);
+    }
+
+    const glyphCount = isFrost ? 12 : 9;
+    const glyphGeo = isFrost
+      ? new THREE.OctahedronGeometry(Math.max(2.4, radius * 0.055), 0)
+      : new THREE.TetrahedronGeometry(Math.max(2.8, radius * 0.065), 0);
+    for (let i = 0; i < glyphCount; i++) {
+      const angle = (i / glyphCount) * Math.PI * 2;
+      const glyph = new THREE.Mesh(glyphGeo, i % 3 === 0 ? paleGlowMat : glowMat);
+      glyph.position.set(Math.cos(angle) * radius * 0.86, isFrost ? -7 : -10, Math.sin(angle) * radius * 0.86);
+      glyph.rotation.set(0.35 + (i % 2) * 0.4, angle, 0);
+      glyph.userData.auraGlyph = true;
+      glyph.userData.baseAuraY = glyph.position.y;
+      group.add(glyph);
+    }
+
+    if (isFrost) {
+      const shardGeo = new THREE.ConeGeometry(Math.max(1.7, radius * 0.035), Math.max(7, radius * 0.16), 5);
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + 0.2;
+        const shard = new THREE.Mesh(shardGeo, paleGlowMat);
+        shard.position.set(Math.cos(angle) * radius * 0.56, -10, Math.sin(angle) * radius * 0.56);
+        shard.rotation.z = (Math.random() - 0.5) * 0.35;
+        group.add(shard);
+      }
+    } else {
+      const sigilGeo = new THREE.TorusGeometry(Math.max(3, radius * 0.075), 0.65, 5, 14);
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2 + 0.4;
+        const sigil = new THREE.Mesh(sigilGeo, paleGlowMat);
+        sigil.position.set(Math.cos(angle) * radius * 0.53, 5, Math.sin(angle) * radius * 0.53);
+        sigil.rotation.set(Math.PI / 2, 0, angle);
+        group.add(sigil);
+      }
+    }
+
+    group.userData.baseVisualRadius = radius;
+    group.userData.currentAreaScale = 1;
+    return group;
+  }
+
+  private getEvolutionForVisualKind(visualKind: string): EvolutionProfile | undefined {
+    const aliases: Record<string, string> = {
+      orbit: 'orbit_drones', scythe: 'data_scythe', blade: 'cyber_blade',
+      sonic: 'sonic_boom', nano: 'nano_swarm', chain_bolt: 'phantom_chain',
+      gravity_well: 'gravity_well', mirror_shard: 'mirror_shards', helix: 'spectral_helix',
+      tendril: 'void_tendrils', flare: 'solar_flare', echo: 'quantum_echo',
+      frost_aura: 'frost_aura', pulse: 'neural_pulse', arc_web: 'arc_weaver',
+      arc_zap: 'arc_weaver', stardust: 'stardust', aura: 'void_aura',
+    };
+    const baseWeaponId = aliases[visualKind] || visualKind;
+    return this.activeEvolutionProfiles.get(baseWeaponId);
+  }
+
+  /**
+   * A profile-specific crest is a very small layer on the existing effect—not
+   * a full-screen post effect. Motifs deliberately differ in silhouette, so a
+   * final form communicates its mechanic even in first- and third-person.
+   */
+  private attachEvolutionCrest(root: THREE.Object3D, profile: EvolutionProfile, radius: number) {
+    const count = this.evolutionCrestCounts.get(profile.weaponId) || 0;
+    if (count >= 2) return;
+    this.evolutionCrestCounts.set(profile.weaponId, count + 1);
+
+    const crest = new THREE.Group();
+    crest.userData.evolutionCrest = profile.id;
+    const color = profile.color;
+    const accent = profile.accent;
+    const lineMaterial = (hex: number, opacity = 0.72) => new THREE.MeshBasicMaterial({
+      color: hex, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const addRing = (scale: number, tilt = 0, hex = color) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * scale, Math.max(0.32, radius * 0.045), 5, 16), lineMaterial(hex));
+      ring.rotation.set(Math.PI / 2 + tilt, tilt * 0.55, 0);
+      crest.add(ring);
+    };
+    const addCore = (scale: number, hex = accent) => crest.add(new THREE.Mesh(
+      new THREE.OctahedronGeometry(radius * scale, 0), lineMaterial(hex, 0.82)
+    ));
+
+    switch (profile.motif) {
+      case 'nova':
+        addCore(0.24); addRing(0.52, 0.28); addRing(0.8, -0.35, accent); break;
+      case 'satellite':
+        addRing(0.9, 0.42); addRing(0.62, -0.42, accent);
+        for (let i = 0; i < 3; i++) {
+          const node = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.12, 6, 5), lineMaterial(accent));
+          const a = i / 3 * Math.PI * 2; node.position.set(Math.cos(a) * radius * 0.9, 0, Math.sin(a) * radius * 0.9); crest.add(node);
+        }
+        break;
+      case 'prism': case 'kaleidoscope':
+        crest.add(new THREE.Mesh(new THREE.IcosahedronGeometry(radius * 0.68, 0), new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })));
+        addCore(0.18); break;
+      case 'singularity':
+        addCore(0.28, 0x05000a); addRing(0.55, 0.24); addRing(0.82, -0.3, accent); break;
+      case 'synapse': case 'neural': case 'storm':
+        for (let i = 0; i < 3; i++) addRing(0.42 + i * 0.2, (i - 1) * 0.36, i === 1 ? accent : color);
+        break;
+      case 'reaper': case 'edge':
+        crest.add(new THREE.Mesh(new THREE.TorusGeometry(radius * 0.72, Math.max(0.4, radius * 0.075), 5, 18, Math.PI * 1.25), lineMaterial(color)));
+        addRing(0.36, 0.45, accent); break;
+      case 'sonic':
+        addRing(0.38, 0); addRing(0.64, 0, accent); addRing(0.9, 0); break;
+      case 'nanite':
+        for (let i = 0; i < 4; i++) {
+          const node = new THREE.Mesh(new THREE.TetrahedronGeometry(radius * 0.18, 0), lineMaterial(i % 2 ? accent : color));
+          const a = i / 4 * Math.PI * 2; node.position.set(Math.cos(a) * radius * 0.58, (i % 2 ? 1 : -1) * radius * 0.16, Math.sin(a) * radius * 0.58); crest.add(node);
+        }
+        break;
+      case 'genome':
+        addRing(0.52, 0.6); addRing(0.52, -0.6, accent); addCore(0.16); break;
+      case 'eldritch':
+        for (let i = 0; i < 3; i++) {
+          const spike = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.16, radius * 1.15, 5), lineMaterial(i === 1 ? accent : color));
+          spike.rotation.z = (i - 1) * 0.72; crest.add(spike);
+        }
+        break;
+      case 'parallel':
+        addRing(0.52, 0.2); addRing(0.7, -0.28, accent); addCore(0.16); break;
+      case 'cryo':
+        for (let i = 0; i < 3; i++) {
+          const spoke = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.08, radius * 1.35, radius * 0.08), lineMaterial(i === 1 ? accent : color));
+          spoke.rotation.z = i * Math.PI / 3; crest.add(spoke);
+        }
+        break;
+      case 'meteor':
+        addCore(0.34); addRing(0.72, 0.6, accent); break;
+    }
+    root.add(crest);
+  }
+
   private createProjectileMesh(p: Projectile): THREE.Object3D {
     const color = parseHexColor(p.color, 0x00f0ff);
-    const radius = Math.max(3, p.radius || 6);
+    const radius = Math.max(3, this.getCompressedVisualRadius(p));
     const weaponId = p.sourceWeaponId || p.id;
 
-    // 1. PHANTOM CHAIN / CHAIN LIGHTNING — Electrifying Jagged 3D Arc
-    if (weaponId === 'phantom_chain' || weaponId === 'chain_bolt') {
+    // PLASMA GUN — a layered, muzzle-readable bolt rather than the old shared
+    // fallback. The hot core, magnetic rings and rear ion tail make its travel
+    // direction obvious in both close FP and an over-the-shoulder camera.
+    if (weaponId === 'plasma_gun') {
       const group = new THREE.Group();
-      const length = Math.max(20, radius * 2);
-      const segments = 6;
-      
-      // Jagged zig-zag lightning beam
-      const points: THREE.Vector3[] = [];
-      points.push(new THREE.Vector3(0, 0, -length / 2));
-      for (let s = 1; s < segments; s++) {
-        const t = (s / segments) - 0.5;
-        const jx = (Math.random() - 0.5) * 8;
-        const jy = (Math.random() - 0.5) * 8;
-        points.push(new THREE.Vector3(jx, jy, t * length));
+      const outer = new THREE.Mesh(
+        new THREE.CapsuleGeometry(radius * 0.38, radius * 2.5, 4, 10),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      outer.rotation.x = Math.PI / 2;
+      group.add(outer);
+      const core = new THREE.Mesh(
+        new THREE.CapsuleGeometry(radius * 0.16, radius * 2.85, 4, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      core.rotation.x = Math.PI / 2;
+      group.add(core);
+      for (const z of [-radius * 1.15, radius * 0.8]) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(radius * 0.48, Math.max(0.35, radius * 0.055), 6, 14),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        ring.position.z = z;
+        group.add(ring);
       }
-      points.push(new THREE.Vector3(0, 0, length / 2));
-
-      // Electric glow line
-      const curve = new THREE.CatmullRomCurve3(points);
-      const tubeGeo = new THREE.TubeGeometry(curve, 16, 1.8, 6, false);
-      const tubeMat = new THREE.MeshBasicMaterial({
-        color: 0x00f0ff,
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending
-      });
-      const tube = new THREE.Mesh(tubeGeo, tubeMat);
-      group.add(tube);
-
-      // White-hot internal core
-      const coreTubeGeo = new THREE.TubeGeometry(curve, 16, 0.8, 6, false);
-      const coreTubeMat = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        blending: THREE.AdditiveBlending
-      });
-      const coreTube = new THREE.Mesh(coreTubeGeo, coreTubeMat);
-      group.add(coreTube);
-
-      // Endpoint electric discharge sparks
-      const sparkGeo = new THREE.SphereGeometry(3, 8, 8);
-      const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending });
-      const spark1 = new THREE.Mesh(sparkGeo, sparkMat);
-      spark1.position.set(0, 0, -length / 2);
-      group.add(spark1);
-      const spark2 = new THREE.Mesh(sparkGeo, sparkMat);
-      spark2.position.set(0, 0, length / 2);
-      group.add(spark2);
-
+      const exhaust = new THREE.Mesh(
+        new THREE.ConeGeometry(radius * 0.5, radius * 2.4, 8, 1, true),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      exhaust.rotation.x = -Math.PI / 2;
+      exhaust.position.z = -radius * 2.2;
+      group.add(exhaust);
       return group;
+    }
+
+    // NEON SHARDS — deliberately angular prism rounds with chromatic edge
+    // bands. This differentiates precision shard fire from plasma at a glance.
+    if (weaponId === 'neon_shards') {
+      const group = new THREE.Group();
+      const shard = new THREE.Mesh(
+        new THREE.OctahedronGeometry(radius * 0.95, 0),
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.5, metalness: 0.72, roughness: 0.14 })
+      );
+      shard.scale.set(0.55, 0.55, 1.9);
+      shard.rotation.x = Math.PI / 2;
+      group.add(shard);
+      const edge = new THREE.Mesh(
+        new THREE.OctahedronGeometry(radius * 1.18, 0),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.58, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      edge.scale.set(0.55, 0.55, 1.9);
+      edge.rotation.x = Math.PI / 2;
+      group.add(edge);
+      const flare = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.62, Math.max(0.35, radius * 0.06), 6, 14),
+        new THREE.MeshBasicMaterial({ color: 0xff4dff, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      flare.position.z = -radius * 1.4;
+      group.add(flare);
+      return group;
+    }
+
+    // QUANTUM ECHO — a readable, translucent operator afterimage. This used
+    // to fall into the generic plasma-bolt fallback, erasing the weapon's core
+    // identity outside top-down mode.
+    if (weaponId === 'quantum_echo' || weaponId === 'echo') {
+      const group = new THREE.Group();
+      const echoMat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.32,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(radius * 0.42, radius * 0.85, 4, 10), echoMat);
+      torso.position.y = radius * 0.68;
+      group.add(torso);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.34, 10, 8), echoMat);
+      head.position.y = radius * 1.55;
+      group.add(head);
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.75, Math.max(0.7, radius * 0.06), 6, 20),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      halo.rotation.x = Math.PI / 2;
+      halo.position.y = 0.7;
+      group.add(halo);
+      return group;
+    }
+
+    // 1. PHANTOM CHAIN / CHAIN LIGHTNING — articulated electric strike.
+    if (weaponId === 'phantom_chain' || weaponId === 'chain_bolt') {
+      return this.createLightningArc(p, radius, false);
     }
 
     // 2. CYBER BLADE — Curved Energy Katana Slash Crescent
@@ -1796,50 +3113,9 @@ export class Renderer3D {
       return group;
     }
 
-    // 4. VOID AURA & FROST AURA — Volumetric Protective Shield Domes
+    // Aura meshes are maintained continuously by `updatePersistentAuras`.
     if (weaponId === 'void_aura' || weaponId === 'frost_aura') {
-      const group = new THREE.Group();
-      const isFrost = weaponId === 'frost_aura';
-      const auraColor = isFrost ? 0x38bdf8 : 0x8b5cf6;
-
-      // Volumetric translucent geodesic sphere
-      const sphereGeo = new THREE.SphereGeometry(radius, 16, 12);
-      const sphereMat = new THREE.MeshBasicMaterial({
-        color: auraColor,
-        transparent: true,
-        opacity: 0.18,
-        blending: THREE.AdditiveBlending
-      });
-      const sphere = new THREE.Mesh(sphereGeo, sphereMat);
-      group.add(sphere);
-
-      // Outer glowing energy grid
-      const gridGeo = new THREE.IcosahedronGeometry(radius * 1.02, 1);
-      const gridMat = new THREE.MeshBasicMaterial({
-        color: isFrost ? 0xbae6fd : 0xd8b4fe,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.35,
-        blending: THREE.AdditiveBlending
-      });
-      const gridMesh = new THREE.Mesh(gridGeo, gridMat);
-      group.add(gridMesh);
-
-      // Perimeter floor ring
-      const ringGeo = new THREE.RingGeometry(radius * 0.92, radius, 32);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: auraColor,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.6,
-        blending: THREE.AdditiveBlending
-      });
-      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.rotation.x = -Math.PI / 2;
-      ringMesh.position.y = -18;
-      group.add(ringMesh);
-
-      return group;
+      return this.createAuraVisual(weaponId, radius);
     }
 
     // 5. NEURAL PULSE — Expanding Holographic Shockwave Dome
@@ -1859,13 +3135,15 @@ export class Renderer3D {
       ringMesh.rotation.x = -Math.PI / 2;
       group.add(ringMesh);
 
-      // Expanding energy hemisphere
+      // The expanding pulse is primarily a ground shockwave. A faint dome
+      // remains for depth, but no longer whites out a first-person camera.
       const domeGeo = new THREE.SphereGeometry(radius, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.5);
       const domeMat = new THREE.MeshBasicMaterial({
         color: 0x00f0ff,
         transparent: true,
-        opacity: 0.4,
-        blending: THREE.AdditiveBlending
+        opacity: 0.11,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
       });
       const domeMesh = new THREE.Mesh(domeGeo, domeMat);
       group.add(domeMesh);
@@ -1962,15 +3240,27 @@ export class Renderer3D {
     if (weaponId === 'spectral_helix' || weaponId === 'helix') {
       const group = new THREE.Group();
 
-      const nodeGeo = new THREE.SphereGeometry(radius * 0.6, 8, 8);
-      const nodeMat = new THREE.MeshBasicMaterial({ color, blending: THREE.AdditiveBlending });
-      const node = new THREE.Mesh(nodeGeo, nodeMat);
-      group.add(node);
-
-      const ringGeo = new THREE.TorusGeometry(radius * 1.1, 0.8, 6, 16);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      group.add(ring);
+      const nucleus = new THREE.Mesh(
+        new THREE.SphereGeometry(radius * 0.48, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      group.add(nucleus);
+      // Two counter-rotating phosphate rings sell the DNA identity even when
+      // many small helix segments are on screen at the same time.
+      for (const [phase, strandColor] of [[0, color], [Math.PI / 2, new THREE.Color(0xff70de)]] as const) {
+        const strand = new THREE.Mesh(
+          new THREE.TorusGeometry(radius * 1.08, Math.max(0.36, radius * 0.085), 6, 18),
+          new THREE.MeshBasicMaterial({ color: strandColor, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        strand.rotation.set(phase, Math.PI / 3, 0);
+        group.add(strand);
+      }
+      const bond = new THREE.Mesh(
+        new THREE.CylinderGeometry(Math.max(0.32, radius * 0.07), Math.max(0.32, radius * 0.07), radius * 2.0, 6),
+        new THREE.MeshBasicMaterial({ color: 0xe9d5ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      bond.rotation.z = Math.PI / 2;
+      group.add(bond);
 
       return group;
     }
@@ -1988,7 +3278,17 @@ export class Renderer3D {
         metalness: 0.9
       });
       const diamond = new THREE.Mesh(diamondGeo, diamondMat);
+      diamond.scale.set(0.72, 0.72, 1.65);
       group.add(diamond);
+
+      for (let i = 0; i < 2; i++) {
+        const splinter = new THREE.Mesh(
+          new THREE.TetrahedronGeometry(radius * 0.46, 0),
+          new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffffff : 0x54e8ff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        splinter.position.set((i === 0 ? -1 : 1) * radius * 0.62, radius * 0.36, -radius * 0.8);
+        group.add(splinter);
+      }
 
       return group;
     }
@@ -2005,6 +3305,12 @@ export class Renderer3D {
         nanoMesh.position.set(Math.cos(a) * radius * 0.6, Math.sin(a) * radius * 0.6, 0);
         group.add(nanoMesh);
       }
+
+      const swarmField = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(radius * 1.25, 1),
+        new THREE.MeshBasicMaterial({ color: 0x65ffba, wireframe: true, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      group.add(swarmField);
 
       return group;
     }
@@ -2038,6 +3344,12 @@ export class Renderer3D {
       const star = new THREE.Mesh(starGeo, starMat);
       group.add(star);
 
+      const corona = new THREE.Mesh(
+        new THREE.OctahedronGeometry(radius * 1.25, 0),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      group.add(corona);
+
       // Trailing incandescent comet tail
       const tailGeo = new THREE.ConeGeometry(radius * 0.6, radius * 3.0, 8);
       const tailMat = new THREE.MeshBasicMaterial({
@@ -2050,52 +3362,26 @@ export class Renderer3D {
       tail.position.y = radius * 1.5;
       group.add(tail);
 
+      // Ground telegraph lives in world space through a local counter-offset
+      // updated below. It makes incoming meteors readable before impact.
+      if (p.visualTarget) {
+        const marker = new THREE.Mesh(
+          new THREE.RingGeometry(radius * 1.25, radius * 1.8, 20),
+          new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
+        );
+        marker.rotation.x = -Math.PI / 2;
+        marker.userData.stardustMarker = true;
+        marker.userData.targetX = p.visualTarget.x;
+        marker.userData.targetY = p.visualTarget.y;
+        group.add(marker);
+      }
+
       return group;
     }
 
     // 14. ARC WEAVER — Electric Web Filaments & Zap Orbs
     if (weaponId === 'arc_web') {
-      const group = new THREE.Group();
-      const length = Math.max(20, radius * 2);
-      const segments = 6;
-      
-      const points: THREE.Vector3[] = [];
-      points.push(new THREE.Vector3(0, 0, -length / 2));
-      for (let s = 1; s < segments; s++) {
-        const t = (s / segments) - 0.5;
-        const jx = (Math.random() - 0.5) * 6;
-        const jy = (Math.random() - 0.5) * 6;
-        points.push(new THREE.Vector3(jx, jy, t * length));
-      }
-      points.push(new THREE.Vector3(0, 0, length / 2));
-
-      const curve = new THREE.CatmullRomCurve3(points);
-      const tubeGeo = new THREE.TubeGeometry(curve, 12, 1.4, 5, false);
-      const tubeMat = new THREE.MeshBasicMaterial({
-        color: 0x00f0ff,
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending
-      });
-      const tube = new THREE.Mesh(tubeGeo, tubeMat);
-      group.add(tube);
-
-      const coreGeo = new THREE.TubeGeometry(curve, 12, 0.6, 5, false);
-      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending });
-      const core = new THREE.Mesh(coreGeo, coreMat);
-      group.add(core);
-
-      // Tesla node spheres at both ends
-      const nodeGeo = new THREE.SphereGeometry(2.5, 8, 8);
-      const nodeMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, blending: THREE.AdditiveBlending });
-      const n1 = new THREE.Mesh(nodeGeo, nodeMat);
-      n1.position.set(0, 0, -length / 2);
-      group.add(n1);
-      const n2 = new THREE.Mesh(nodeGeo, nodeMat);
-      n2.position.set(0, 0, length / 2);
-      group.add(n2);
-
-      return group;
+      return this.createLightningArc(p, radius, true);
     }
 
     if (weaponId === 'arc_zap' || weaponId === 'arc_weaver') {
@@ -2131,16 +3417,34 @@ export class Renderer3D {
     if (weaponId === 'void_tendrils' || weaponId === 'tendril') {
       const group = new THREE.Group();
 
-      const spireGeo = new THREE.ConeGeometry(radius * 0.7, radius * 2.5, 6);
-      const spireMat = new THREE.MeshStandardMaterial({
-        color: 0x4c1d95,
-        emissive: 0x7c3aed,
-        emissiveIntensity: 0.9,
-        metalness: 0.6
-      });
-      const spire = new THREE.Mesh(spireGeo, spireMat);
-      spire.position.y = radius * 1.25;
-      group.add(spire);
+      const root = new THREE.Mesh(
+        new THREE.RingGeometry(radius * 0.78, radius * 1.16, 18),
+        new THREE.MeshBasicMaterial({ color: 0x9d4edd, side: THREE.DoubleSide, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      root.rotation.x = -Math.PI / 2;
+      group.add(root);
+      // Three sine-curved tube limbs read as a lashing creature, rather than a
+      // static cone popping out of the floor.
+      for (let limb = 0; limb < 3; limb++) {
+        const offset = (limb - 1) * radius * 0.26;
+        const curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(offset * 0.28, 0, 0),
+          new THREE.Vector3(offset * 0.8, radius * 0.72, offset * 0.45),
+          new THREE.Vector3(-offset * 0.4, radius * 1.55, -offset * 0.35),
+          new THREE.Vector3(offset * 0.25, radius * 2.35, offset * 0.15),
+        ]);
+        const limbMesh = new THREE.Mesh(
+          new THREE.TubeGeometry(curve, 12, Math.max(1.4, radius * 0.14), 7, false),
+          new THREE.MeshStandardMaterial({ color: 0x37105f, emissive: 0x8b5cf6, emissiveIntensity: 1.05, metalness: 0.48, roughness: 0.28 })
+        );
+        group.add(limbMesh);
+      }
+      const tip = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.max(2.2, radius * 0.28), 9, 8),
+        new THREE.MeshBasicMaterial({ color: 0xe9d5ff, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      tip.position.y = radius * 2.25;
+      group.add(tip);
 
       return group;
     }
@@ -2217,16 +3521,7 @@ export class Renderer3D {
       let mesh = this.itemMeshes.get(item.id);
 
       if (!mesh) {
-        const itemCol = parseHexColor(item.color, 0xffd700);
-        const geo = new THREE.CylinderGeometry(10, 10, 4, 16);
-        const mat = new THREE.MeshStandardMaterial({
-          color: itemCol,
-          emissive: itemCol,
-          emissiveIntensity: 1.0,
-          metalness: 0.9,
-          roughness: 0.2
-        });
-        mesh = new THREE.Mesh(geo, mat);
+        mesh = this.createItemMesh(item);
         this.scene.add(mesh);
         this.itemMeshes.set(item.id, mesh);
       }
@@ -2234,7 +3529,9 @@ export class Renderer3D {
       const floatY = 12 + Math.sin(now * 0.005 + item.position.x) * 4;
       mesh.position.set(item.position.x, floatY, item.position.y);
       mesh.rotation.y += deltaTime * 0.004;
-      mesh.rotation.z = Math.PI / 6;
+      mesh.rotation.z = item.type === 'magnet' ? Math.PI / 2 : Math.PI / 12;
+      const pulse = 1 + Math.sin(now * 0.006 + item.position.y) * 0.08;
+      mesh.scale.setScalar(pulse);
     }
 
     for (const [id, mesh] of this.itemMeshes.entries()) {
@@ -2245,53 +3542,409 @@ export class Renderer3D {
     }
   }
 
+  /** Keeps pickups recognisable at eye level instead of rendering every reward
+   * as the same coin-sized cylinder. Geometry is intentionally compact: there
+   * can be many drops in a survivor-style wave. */
+  private createItemMesh(item: WorldItem): THREE.Object3D {
+    let template = this.itemTemplates.get(item.type);
+    if (!template) {
+      template = this.createItemTemplate(item);
+      this.itemTemplates.set(item.type, template);
+    }
+    return template.clone(true);
+  }
+
+  /** Item meshes are cloned from a small immutable template set. This keeps
+   * every visual detail, but avoids allocating fresh GPU geometry/materials
+   * for a large pickup burst on every wave. */
+  private createItemTemplate(item: WorldItem): THREE.Object3D {
+    const group = new THREE.Group();
+    const color = parseHexColor(item.color, 0xffd700);
+    const metal = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 1.1,
+      metalness: 0.82,
+      roughness: 0.22,
+    });
+    const glow = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.52,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const groundHalo = new THREE.Mesh(new THREE.RingGeometry(9, 14, 18), glow);
+    groundHalo.rotation.x = -Math.PI / 2;
+    groundHalo.position.y = -10;
+    group.add(groundHalo);
+
+    if (item.type.startsWith('coin')) {
+      const coin = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 3.5, 16), metal);
+      coin.rotation.x = Math.PI / 2;
+      group.add(coin);
+      const inset = new THREE.Mesh(new THREE.CylinderGeometry(5.8, 5.8, 3.8, 12), glow);
+      inset.rotation.x = Math.PI / 2;
+      group.add(inset);
+      if (item.type === 'coin_diamond') {
+        const diamond = new THREE.Mesh(new THREE.OctahedronGeometry(8, 0), new THREE.MeshBasicMaterial({ color: 0xe8fbff }));
+        diamond.position.y = 5;
+        group.add(diamond);
+      }
+    } else if (item.type === 'hp') {
+      const vial = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 7, 17, 10), metal);
+      group.add(vial);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 4, 10), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.16 }));
+      cap.position.y = 10;
+      group.add(cap);
+      const cross = new THREE.Mesh(new THREE.BoxGeometry(11, 3, 3), glow);
+      cross.position.y = 1;
+      group.add(cross);
+      const crossVertical = cross.clone();
+      crossVertical.rotation.z = Math.PI / 2;
+      group.add(crossVertical);
+    } else if (item.type === 'magnet') {
+      const horseshoe = new THREE.Mesh(new THREE.TorusGeometry(8, 2.6, 8, 18, Math.PI * 1.45), metal);
+      horseshoe.rotation.z = Math.PI;
+      group.add(horseshoe);
+      for (const side of [-1, 1]) {
+        const pole = new THREE.Mesh(new THREE.BoxGeometry(4.5, 6, 5), new THREE.MeshStandardMaterial({ color: side < 0 ? 0xef4444 : 0x60a5fa, emissive: side < 0 ? 0x7f1d1d : 0x1e3a8a, emissiveIntensity: 1.15 }));
+        pole.position.set(side * 6.2, -7, 0);
+        group.add(pole);
+      }
+    } else if (item.type === 'bomb') {
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(9, 12, 10), new THREE.MeshStandardMaterial({ color: 0x2d3748, emissive: color, emissiveIntensity: 0.35, metalness: 0.75, roughness: 0.3 }));
+      group.add(shell);
+      const fuse = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 9, 6), glow);
+      fuse.position.set(2.5, 10, 0);
+      fuse.rotation.z = -0.45;
+      group.add(fuse);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(3.8, 8, 8), glow);
+      core.position.y = 1;
+      group.add(core);
+    } else { // data_core
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(9, 0), metal);
+      core.rotation.x = Math.PI / 4;
+      group.add(core);
+      const cage = new THREE.Mesh(new THREE.OctahedronGeometry(13, 0), new THREE.MeshBasicMaterial({ color: 0xe0f2fe, wireframe: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
+      group.add(cage);
+    }
+
+    return group;
+  }
+
+  private updateShops3D(shops: Shop[], player: { position: { x: number; y: number } }, deltaTime: number) {
+    const activeShopIds = new Set<string>();
+    const now = performance.now() * 0.001;
+
+    for (const shop of shops) {
+      activeShopIds.add(shop.id);
+      let group = this.shopMeshes.get(shop.id);
+      if (!group) {
+        group = this.createShopMesh(shop);
+        this.scene.add(group);
+        this.shopMeshes.set(shop.id, group);
+      }
+
+      group.position.set(shop.position.x, 0, shop.position.y);
+      const distance = Math.hypot(player.position.x - shop.position.x, player.position.y - shop.position.y);
+      const proximity = 1 - THREE.MathUtils.smoothstep(distance, shop.radius * 0.7, shop.radius * 1.45);
+      const pulse = 0.62 + Math.sin(now * 2.4 + shop.position.x * 0.01) * 0.18 + proximity * 0.45;
+      const data = group.userData as {
+        ring: THREE.Mesh;
+        innerRing: THREE.Mesh;
+        beacon: THREE.Mesh;
+        hologram: THREE.Mesh;
+        sign: THREE.Group;
+        light: THREE.PointLight;
+      };
+      (data.ring.material as THREE.MeshBasicMaterial).opacity = 0.35 + pulse * 0.36;
+      (data.innerRing.material as THREE.MeshBasicMaterial).opacity = 0.14 + proximity * 0.26;
+      (data.beacon.material as THREE.MeshBasicMaterial).opacity = 0.12 + pulse * 0.2;
+      data.hologram.rotation.y += deltaTime * 0.0014;
+      data.hologram.position.y = 54 + Math.sin(now * 2.2) * 3;
+      data.sign.rotation.y = Math.atan2(this.camera.position.x - shop.position.x, this.camera.position.z - shop.position.y);
+      data.light.intensity = 2.2 + proximity * 4.8 + Math.max(0, pulse - 0.62) * 2;
+    }
+
+    for (const [id, mesh] of this.shopMeshes.entries()) {
+      if (!activeShopIds.has(id)) {
+        this.scene.remove(mesh);
+        this.disposeEffectMesh(mesh);
+        this.shopMeshes.delete(id);
+      }
+    }
+  }
+
+  private createShopMesh(shop: Shop): THREE.Group {
+    const group = new THREE.Group();
+    group.name = `shop:${shop.id}`;
+    const cyan = new THREE.Color(0x22d3ee);
+    const darkMetal = new THREE.MeshStandardMaterial({ color: 0x0a1727, emissive: 0x061d2a, emissiveIntensity: 0.9, metalness: 0.9, roughness: 0.24 });
+    const panelMetal = new THREE.MeshStandardMaterial({ color: 0x173047, emissive: 0x0a5065, emissiveIntensity: 0.75, metalness: 0.82, roughness: 0.2 });
+    const emissive = new THREE.MeshBasicMaterial({ color: cyan, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false });
+    const floorGlow = new THREE.MeshBasicMaterial({ color: cyan, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+
+    const platform = new THREE.Mesh(new THREE.CylinderGeometry(shop.radius * 0.96, shop.radius, 5, 48), darkMetal);
+    platform.position.y = 2.5;
+    group.add(platform);
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(shop.radius * 0.9, shop.radius * 0.9, 0.8, 48), floorGlow);
+    deck.position.y = 5.5;
+    group.add(deck);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(shop.radius, 2.2, 8, 48), emissive);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 7;
+    group.add(ring);
+    const innerRing = new THREE.Mesh(new THREE.TorusGeometry(shop.radius * 0.63, 1.1, 6, 40), new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
+    innerRing.rotation.x = Math.PI / 2;
+    innerRing.position.y = 7.2;
+    group.add(innerRing);
+
+    const kioskBase = new THREE.Mesh(new THREE.CylinderGeometry(28, 36, 12, 12), panelMetal);
+    kioskBase.position.y = 12;
+    group.add(kioskBase);
+    const console = new THREE.Mesh(new RoundedBoxGeometry(42, 54, 26, 5, 3), darkMetal);
+    console.position.set(0, 43, 0);
+    group.add(console);
+    const screen = new THREE.Mesh(new RoundedBoxGeometry(31, 25, 1.4, 3, 2), new THREE.MeshBasicMaterial({ color: 0x8df7ff, transparent: true, opacity: 0.86, blending: THREE.AdditiveBlending, depthWrite: false }));
+    screen.position.set(0, 46, 13.8);
+    group.add(screen);
+    const scanner = new THREE.Mesh(new THREE.BoxGeometry(48, 3, 4), emissive);
+    scanner.position.set(0, 23, 15);
+    group.add(scanner);
+
+    const hologram = new THREE.Mesh(new THREE.OctahedronGeometry(17, 0), new THREE.MeshBasicMaterial({ color: 0xb9fbff, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false, wireframe: true }));
+    hologram.position.y = 54;
+    group.add(hologram);
+    const holoRing = new THREE.Mesh(new THREE.TorusGeometry(23, 1.4, 6, 28), emissive);
+    holoRing.position.y = 54;
+    holoRing.rotation.x = Math.PI / 2;
+    hologram.add(holoRing);
+
+    const sign = new THREE.Group();
+    sign.position.set(0, 83, 0);
+    const signPlate = new THREE.Mesh(new RoundedBoxGeometry(70, 22, 4, 4, 2), new THREE.MeshStandardMaterial({ color: 0x06131f, emissive: 0x073d4f, emissiveIntensity: 1.2, metalness: 0.8, roughness: 0.2 }));
+    sign.add(signPlate);
+    const signBar = new THREE.Mesh(new THREE.BoxGeometry(51, 2.2, 5), emissive);
+    signBar.position.y = -3.5;
+    sign.add(signBar);
+    for (const x of [-25, 25]) {
+      const marker = new THREE.Mesh(new THREE.OctahedronGeometry(4, 0), new THREE.MeshBasicMaterial({ color: 0xe0faff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending }));
+      marker.position.set(x, 2, 3);
+      sign.add(marker);
+    }
+    group.add(sign);
+
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const pylon = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 5.8, 58, 8), panelMetal);
+      pylon.position.set(Math.cos(angle) * 67, 34, Math.sin(angle) * 67);
+      group.add(pylon);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(5, 8, 8), emissive);
+      cap.position.set(Math.cos(angle) * 67, 64, Math.sin(angle) * 67);
+      group.add(cap);
+    }
+
+    const beacon = new THREE.Mesh(new THREE.ConeGeometry(15, 290, 20, 1, true), new THREE.MeshBasicMaterial({ color: cyan, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beacon.position.y = 150;
+    group.add(beacon);
+    const light = new THREE.PointLight(cyan, 2.4, 300, 1.7);
+    light.position.y = 36;
+    group.add(light);
+    group.userData = { ring, innerRing, beacon, hologram, sign, light };
+    return group;
+  }
+
   private updateTreasures3D(treasures: Treasure[], deltaTime: number) {
     const activeTreasureIds = new Set<string>();
-    const now = Date.now();
+    const now = performance.now() * 0.001;
 
     for (const treasure of treasures) {
       activeTreasureIds.add(treasure.id);
       let group = this.treasureMeshes.get(treasure.id);
 
       if (!group) {
-        group = new THREE.Group();
-        const trCol = parseHexColor(treasure.color, 0xffd700);
-        // Chest box
-        const chestGeo = new THREE.BoxGeometry(28, 20, 20);
-        const chestMat = new THREE.MeshStandardMaterial({
-          color: 0x1a2638,
-          emissive: trCol,
-          emissiveIntensity: 0.8,
-          metalness: 0.8
-        });
-        const chestMesh = new THREE.Mesh(chestGeo, chestMat);
-        group.add(chestMesh);
-
-        // Vertical Light Beacon shooting to sky
-        const beaconGeo = new THREE.CylinderGeometry(4, 4, 800, 12);
-        const beaconMat = new THREE.MeshBasicMaterial({
-          color: trCol,
-          transparent: true,
-          opacity: 0.5
-        });
-        const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
-        beaconMesh.position.y = 400;
-        group.add(beaconMesh);
-
+        group = this.createTreasureMesh(treasure);
         this.scene.add(group);
         this.treasureMeshes.set(treasure.id, group);
       }
 
-      group.position.set(treasure.position.x, 10, treasure.position.y);
-      group.rotation.y = Math.sin(now * 0.002) * 0.3;
+      const data = group.userData as { lid: THREE.Group; core: THREE.Mesh; rings: THREE.Mesh[]; beam: THREE.Mesh; light: THREE.PointLight; bornAt: number };
+      const spawn = THREE.MathUtils.smoothstep((performance.now() - data.bornAt) / 620, 0, 1);
+      const bob = Math.sin(now * 2 + treasure.position.x * 0.015) * 2.5;
+      const pulse = 0.76 + Math.sin(now * 4.2 + treasure.position.y * 0.012) * 0.24;
+      group.position.set(treasure.position.x, 4 + bob, treasure.position.y);
+      group.scale.setScalar(Math.max(0.01, spawn));
+      group.rotation.y = Math.sin(now * 0.8 + treasure.position.x * 0.003) * 0.08;
+      data.lid.rotation.x = -0.06 + Math.sin(now * 1.3) * 0.025;
+      data.core.rotation.y += deltaTime * 0.0035;
+      data.core.scale.setScalar(pulse);
+      data.rings.forEach((ring, index) => {
+        ring.rotation.z += deltaTime * (0.0015 + index * 0.0007);
+        ring.scale.setScalar(0.9 + pulse * (0.08 + index * 0.03));
+      });
+      (data.beam.material as THREE.MeshBasicMaterial).opacity = 0.09 + pulse * 0.16;
+      data.light.intensity = 1.5 + pulse * 2.6;
     }
 
     for (const [id, group] of this.treasureMeshes.entries()) {
       if (!activeTreasureIds.has(id)) {
         this.scene.remove(group);
+        this.disposeEffectMesh(group);
         this.treasureMeshes.delete(id);
       }
     }
+  }
+
+  private createTreasureMesh(treasure: Treasure): THREE.Group {
+    const group = new THREE.Group();
+    group.name = `treasure:${treasure.id}`;
+    const tier = treasure.tier;
+    const colors = tier === 'legendary'
+      ? { body: 0x7a2e00, trim: 0xffa21d, core: 0xff4b4b, beam: 0xff9d24 }
+      : tier === 'epic'
+        ? { body: 0x341253, trim: 0xb76cff, core: 0xe9d5ff, beam: 0xa855f7 }
+        : { body: 0x4d3910, trim: 0xe9bb40, core: 0x67e8f9, beam: 0xffd34e };
+    const body = new THREE.MeshStandardMaterial({ color: colors.body, emissive: colors.body, emissiveIntensity: 0.42, metalness: 0.78, roughness: 0.24 });
+    const trim = new THREE.MeshStandardMaterial({ color: colors.trim, emissive: colors.trim, emissiveIntensity: 0.72, metalness: 0.88, roughness: 0.16 });
+    const glow = new THREE.MeshBasicMaterial({ color: colors.core, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(37, 24), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.34, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = -3.7;
+    shadow.scale.set(1, 0.55, 1);
+    group.add(shadow);
+    const halo = new THREE.Mesh(new THREE.RingGeometry(30, tier === 'legendary' ? 51 : 45, 32), new THREE.MeshBasicMaterial({ color: colors.beam, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.y = -2.9;
+    group.add(halo);
+
+    const base = new THREE.Mesh(new RoundedBoxGeometry(54, 28, 38, 5, 3), body);
+    base.position.y = 14;
+    group.add(base);
+    const lowerTrim = new THREE.Mesh(new THREE.BoxGeometry(56, 4, 41), trim);
+    lowerTrim.position.y = 6;
+    group.add(lowerTrim);
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(57, 4.2, 42), trim);
+    seam.position.y = 28;
+    group.add(seam);
+    const lid = new THREE.Group();
+    lid.position.set(0, 30, 16);
+    const lidShell = new THREE.Mesh(new RoundedBoxGeometry(54, 21, 38, 7, 4), body);
+    lidShell.position.set(0, 10, -16);
+    lid.add(lidShell);
+    const lidTrim = new THREE.Mesh(new THREE.BoxGeometry(56, 3.6, 40), trim);
+    lidTrim.position.set(0, 4, -16);
+    lid.add(lidTrim);
+    group.add(lid);
+    for (const x of [-20, 20]) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(4, 46, 42), trim);
+      band.position.set(x, 24, 0);
+      group.add(band);
+    }
+    const lockPlate = new THREE.Mesh(new RoundedBoxGeometry(16, 18, 4, 3, 2), trim);
+    lockPlate.position.set(0, 27, 21);
+    group.add(lockPlate);
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(7.5, 0), glow);
+    core.position.set(0, 28, 24);
+    core.rotation.x = Math.PI / 4;
+    group.add(core);
+    const rings: THREE.Mesh[] = [];
+    for (let i = 0; i < (tier === 'legendary' ? 3 : 2); i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(13 + i * 5, 0.7, 6, 20), new THREE.MeshBasicMaterial({ color: colors.core, transparent: true, opacity: 0.52 - i * 0.1, blending: THREE.AdditiveBlending, depthWrite: false }));
+      ring.position.set(0, 28, 25);
+      ring.rotation.x = Math.PI / 2 + i * 0.38;
+      group.add(ring);
+      rings.push(ring);
+    }
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(tier === 'legendary' ? 13 : 9, tier === 'legendary' ? 360 : 260, 16, 1, true), new THREE.MeshBasicMaterial({ color: colors.beam, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = tier === 'legendary' ? 180 : 130;
+    group.add(beam);
+    const light = new THREE.PointLight(colors.beam, 3, 230, 1.8);
+    light.position.set(0, 36, 0);
+    group.add(light);
+    group.userData = { lid, core, rings, beam, light, bornAt: performance.now() };
+    return group;
+  }
+
+  private updateExfillPortal3D(portal: { position: { x: number; y: number }; radius: number; active: boolean } | null, deltaTime: number) {
+    if (!portal?.active) {
+      if (this.exfillPortalMesh) {
+        this.scene.remove(this.exfillPortalMesh);
+        this.disposeEffectMesh(this.exfillPortalMesh);
+        this.exfillPortalMesh = null;
+      }
+      return;
+    }
+
+    if (!this.exfillPortalMesh) {
+      this.exfillPortalMesh = this.createExfillPortalMesh(portal.radius);
+      this.scene.add(this.exfillPortalMesh);
+    }
+
+    const group = this.exfillPortalMesh;
+    const now = performance.now() * 0.001;
+    const data = group.userData as { rings: THREE.Mesh[]; beacon: THREE.Mesh; core: THREE.Mesh; light: THREE.PointLight; pylons: THREE.Mesh[] };
+    const pulse = 0.8 + Math.sin(now * 3.3) * 0.2;
+    group.position.set(portal.position.x, 0, portal.position.y);
+    data.rings.forEach((ring, index) => {
+      ring.rotation.z += deltaTime * (0.0015 + index * 0.00065) * (index % 2 === 0 ? 1 : -1);
+      ring.scale.setScalar(0.94 + pulse * (0.07 + index * 0.025));
+    });
+    data.core.rotation.y += deltaTime * 0.004;
+    data.core.scale.setScalar(pulse);
+    data.pylons.forEach((pylon, index) => {
+      pylon.position.y = 53 + Math.sin(now * 2.6 + index * 1.57) * 4;
+    });
+    (data.beacon.material as THREE.MeshBasicMaterial).opacity = 0.16 + pulse * 0.13;
+    data.light.intensity = 3.5 + pulse * 4;
+  }
+
+  private createExfillPortalMesh(radius: number): THREE.Group {
+    const group = new THREE.Group();
+    group.name = 'exfill-portal';
+    const gold = 0xfbbf24;
+    const hot = 0xfff1b5;
+    const metal = new THREE.MeshStandardMaterial({ color: 0x17130a, emissive: 0x3f2705, emissiveIntensity: 0.85, metalness: 0.88, roughness: 0.2 });
+    const glow = new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false });
+    const platform = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 1.07, 7, 48), metal);
+    platform.position.y = 3.5;
+    group.add(platform);
+    const deck = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.9, 48), new THREE.MeshBasicMaterial({ color: 0x6f4a07, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    deck.rotation.x = -Math.PI / 2;
+    deck.position.y = 7.1;
+    group.add(deck);
+
+    const rings: THREE.Mesh[] = [];
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(31 + i * 14, 1.7 - i * 0.25, 8, 32), new THREE.MeshBasicMaterial({ color: i === 1 ? hot : gold, transparent: true, opacity: 0.65 - i * 0.12, blending: THREE.AdditiveBlending, depthWrite: false }));
+      ring.position.y = 59;
+      ring.rotation.x = Math.PI / 2 + i * 0.6;
+      group.add(ring);
+      rings.push(ring);
+    }
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(15, 1), new THREE.MeshBasicMaterial({ color: hot, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+    core.position.y = 59;
+    group.add(core);
+    const beacon = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.32, 420, 24, 1, true), new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beacon.position.y = 215;
+    group.add(beacon);
+    const pylons: THREE.Mesh[] = [];
+    for (let i = 0; i < 4; i++) {
+      const angle = i * Math.PI / 2 + Math.PI / 4;
+      const pylon = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 7, 92, 8), metal);
+      pylon.position.set(Math.cos(angle) * radius * 0.72, 53, Math.sin(angle) * radius * 0.72);
+      group.add(pylon);
+      pylons.push(pylon);
+      const cap = new THREE.Mesh(new THREE.OctahedronGeometry(6, 0), glow);
+      cap.position.set(Math.cos(angle) * radius * 0.72, 100, Math.sin(angle) * radius * 0.72);
+      group.add(cap);
+    }
+    const light = new THREE.PointLight(gold, 4.5, 360, 1.7);
+    light.position.y = 64;
+    group.add(light);
+    group.userData = { rings, beacon, core, light, pylons };
+    return group;
   }
 
   private updatePortal3D(portals: { position: { x: number; y: number }; radius: number; active: boolean }[], activeIndex: number, deltaTime: number) {
@@ -2333,29 +3986,42 @@ export class Renderer3D {
   }
 
   private updateParticles3D(particles: any[]) {
+    // Engine particles are append-only within their lifetime. In heavy combat,
+    // retain the newest feedback (impacts, muzzle bursts) rather than the
+    // oldest trail noise, which would otherwise fill the entire screen.
+    const firstParticle = Math.max(0, particles.length - this.MAX_3D_PARTICLES);
     let count = Math.min(particles.length, this.MAX_3D_PARTICLES);
 
     for (let i = 0; i < count; i++) {
-      const p = particles[i];
+      const p = particles[firstParticle + i];
       const idx = i * 3;
       this.particlePositions[idx] = p.x;
-      this.particlePositions[idx + 1] = p.z || 12;
+      this.particlePositions[idx + 1] = p.z ?? (8 + Math.min(12, p.size || 2) * 0.65);
       this.particlePositions[idx + 2] = p.y;
 
       const c = parseHexColor(p.color, 0x00f0ff);
       this.particleColors[idx] = c.r;
       this.particleColors[idx + 1] = c.g;
       this.particleColors[idx + 2] = c.b;
+      // Screenspace caps prevent large upgraded explosions from becoming a
+      // white flash while still letting their color and timing read clearly.
+      this.particleSizes[i] = Math.min(32, 6 + (p.size || 2) * 3.2);
+      const lifeAlpha = (p.life || 0) / Math.max(1, p.maxLife || 1);
+      this.particleAlphas[i] = THREE.MathUtils.clamp(lifeAlpha * 0.82, 0, 0.82);
     }
 
     // Zero out unused slots
     for (let i = count; i < this.MAX_3D_PARTICLES; i++) {
       const idx = i * 3;
       this.particlePositions[idx + 1] = -9999;
+      this.particleSizes[i] = 0;
+      this.particleAlphas[i] = 0;
     }
 
     this.particleGeo.attributes.position.needsUpdate = true;
     this.particleGeo.attributes.color.needsUpdate = true;
+    this.particleGeo.attributes.size.needsUpdate = true;
+    this.particleGeo.attributes.alpha.needsUpdate = true;
   }
 
   destroy() {
@@ -2367,6 +4033,27 @@ export class Renderer3D {
     window.removeEventListener('keydown', this.onDebugKeyDown);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     this.exitPointerLock();
+    for (const aura of this.persistentAuraMeshes.values()) this.disposeEffectMesh(aura);
+    for (const orbit of this.persistentOrbitMeshes.values()) this.disposeEffectMesh(orbit);
+    for (const strike of this.tendrilStrikeMeshes.values()) this.disposeEffectMesh(strike);
+    for (const helix of this.helixStrikeMeshes.values()) this.disposeEffectMesh(helix);
+    for (const flare of this.solarStrikeMeshes.values()) this.disposeEffectMesh(flare);
+    for (const swarm of this.nanoSwarmMeshes.values()) this.disposeEffectMesh(swarm);
+    for (const treasure of this.treasureMeshes.values()) this.disposeEffectMesh(treasure);
+    for (const shop of this.shopMeshes.values()) this.disposeEffectMesh(shop);
+    for (const template of this.itemTemplates.values()) this.disposeEffectMesh(template);
+    if (this.exfillPortalMesh) this.disposeEffectMesh(this.exfillPortalMesh);
+    this.persistentAuraMeshes.clear();
+    this.persistentOrbitMeshes.clear();
+    this.tendrilStrikeMeshes.clear();
+    this.helixStrikeMeshes.clear();
+    this.solarStrikeMeshes.clear();
+    this.nanoSwarmMeshes.clear();
+    this.itemMeshes.clear();
+    this.itemTemplates.clear();
+    this.treasureMeshes.clear();
+    this.shopMeshes.clear();
+    this.exfillPortalMesh = null;
     this.unmount();
     this.renderer.dispose();
   }

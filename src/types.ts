@@ -73,11 +73,32 @@ export interface Projectile extends Entity {
   ownerId: string;
   penetration: number;
   sourceWeaponId?: string;
+  /** Final-form identity copied from the cast weapon onto its live effect. */
+  evolutionId?: string;
   hitEnemies?: Set<string>;
   damageTickInterval?: number;
   lastDamageTick?: number;
   z?: number;
   vz?: number;
+  /**
+   * Stable identity for one rendered effect instance. Gameplay ids intentionally
+   * remain semantic (for example `arc_web`) so collision code can group them.
+   */
+  visualId?: string;
+  /** Optional render-only grouping for effects made from multiple collision samples. */
+  visualGroupId?: string;
+  visualSegmentIndex?: number;
+  visualStrand?: number;
+  visualClusterIndex?: number;
+  visualOrigin?: Vector2D;
+  visualLength?: number;
+  visualTarget?: Vector2D;
+  /** Chronological positions for replay-based effects such as Quantum Echo. */
+  replayPath?: Vector2D[];
+  /** Original lifetime used to turn remaining duration into deterministic replay progress. */
+  replayDuration?: number;
+  ricochetCount?: number;
+  ricochetFlash?: number;
 }
 
 export interface Weapon {
@@ -89,6 +110,8 @@ export interface Weapon {
   cooldown: number;
   lastFired: number;
   type: 'projectile' | 'area' | 'orbit';
+  /** Set once at max rank. Keeps the evolved form distinct from its base weapon at runtime. */
+  evolutionId?: string;
   burstCount?: number;
   burstDelay?: number;
   burstRemaining?: number;
@@ -202,4 +225,3 @@ export interface Shop {
 }
 
 export type ViewMode = 'TOPDOWN_2D' | 'FIRST_PERSON' | 'THIRD_PERSON';
-

@@ -711,14 +711,14 @@ export default function App() {
     }
   }, []);
 
-  // Pointer lock belongs exclusively to active first-person gameplay. Any
+  // Pointer lock belongs exclusively to active perspective gameplay. Any
   // modal or menu must immediately return the cursor so its controls remain
   // clickable. Resume/selection actions re-capture from their user gesture
   // when possible; otherwise the player can click the world once.
   useEffect(() => {
     const renderer3D = engineRef.current?.renderer3D;
     if (!renderer3D) return;
-    if (gameState !== 'PLAYING' || viewMode !== 'FIRST_PERSON') {
+    if (gameState !== 'PLAYING' || (viewMode !== 'FIRST_PERSON' && viewMode !== 'THIRD_PERSON')) {
       renderer3D.exitPointerLock();
     }
   }, [gameState, viewMode]);
@@ -1452,7 +1452,7 @@ export default function App() {
         ref={threeContainerRef}
         className={`absolute inset-0 w-full h-full ${viewMode === 'TOPDOWN_2D' ? 'hidden pointer-events-none' : 'block pointer-events-auto cursor-crosshair'}`}
         onClick={() => {
-          if (gameState === 'PLAYING' && viewMode === 'FIRST_PERSON' && engineRef.current?.renderer3D) {
+          if (gameState === 'PLAYING' && (viewMode === 'FIRST_PERSON' || viewMode === 'THIRD_PERSON') && engineRef.current?.renderer3D) {
             engineRef.current.renderer3D.requestPointerLock();
           }
         }}
@@ -2887,6 +2887,9 @@ export default function App() {
                       soundManager.playUIClick();
                       if (engineRef.current) {
                         engineRef.current.triggerExfill();
+                        // Exfill is now a physical world objective. Closing the
+                        // wave overlay returns control so the player can reach it.
+                        setGameState('PLAYING');
                       }
                     }}
                     onMouseEnter={() => soundManager.playUIHover()}

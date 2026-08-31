@@ -64,6 +64,14 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
                 engine.portals[engine.activePortalIndex].position.y - engine.player.position.y
               )
             } : null,
+            exfillPortalRel: engine.exfillPortal?.active ? {
+              dx: engine.exfillPortal.position.x - engine.player.position.x,
+              dy: engine.exfillPortal.position.y - engine.player.position.y,
+              dist: Math.hypot(
+                engine.exfillPortal.position.x - engine.player.position.x,
+                engine.exfillPortal.position.y - engine.player.position.y
+              )
+            } : null,
             autoUpgrade: engine.recentAutoUpgrade && engine.recentAutoUpgrade.expiresAt > engine.gameTime
               ? { ...engine.recentAutoUpgrade }
               : null,
@@ -99,10 +107,22 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
               const dx = s.position.x - engine.player.position.x;
               const dy = s.position.y - engine.player.position.y;
               return {
+                id: s.id,
                 dist: Math.sqrt(dx * dx + dy * dy),
                 angle: Math.atan2(dy, dx)
               };
-            }).sort((a, b) => a.dist - b.dist)[0] || null
+            }).sort((a, b) => a.dist - b.dist)[0] || null,
+            shopTargets: engine.shops.map(s => {
+              const dx = s.position.x - engine.player.position.x;
+              const dy = s.position.y - engine.player.position.y;
+              return { id: s.id, dx, dy, dist: Math.hypot(dx, dy) };
+            }),
+            treasureTargets: engine.treasures.map(t => {
+              const dx = t.position.x - engine.player.position.x;
+              const dy = t.position.y - engine.player.position.y;
+              return { id: t.id, tier: t.tier, dx, dy, dist: Math.hypot(dx, dy) };
+            }),
+            nearbyShop: engine.nearbyShop ? { id: engine.nearbyShop.id } : null
           });
 
         }
@@ -344,7 +364,7 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
 
       {/* Shop Compass */}
       <AnimatePresence>
-        {hudData.shops && hudData.shops.dist < 1500 && hudData.shops.dist > 150 && (
+        {hudData.viewMode === 'TOPDOWN_2D' && hudData.shops && hudData.shops.dist < 1500 && hudData.shops.dist > 150 && (
           <motion.div
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 0.7, scale: 1 }}
@@ -522,12 +542,42 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
 
       {/* 3D First-Person Pointer Lock Reminder */}
 
-      {hudData.viewMode === 'FIRST_PERSON' && !hudData.isPointerLocked && (
+      {/* The former shop prompt was painted by the hidden 2D canvas. Keep the
+          interaction contract visible in both perspective modes. */}
+      {(hudData.viewMode === 'FIRST_PERSON' || hudData.viewMode === 'THIRD_PERSON') && hudData.nearbyShop && (
+        <motion.div
+          initial={{ opacity: 0, y: 12, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12, scale: 0.94 }}
+          className="absolute bottom-24 left-1/2 z-[90] -translate-x-1/2 pointer-events-none"
+        >
+          <div className="relative overflow-hidden rounded-lg border border-cyan-300/70 bg-slate-950/85 px-5 py-2.5 text-center shadow-[0_0_28px_rgba(34,211,238,0.35)] backdrop-blur-md">
+            <div className="absolute inset-x-3 top-0 h-px bg-cyan-100/80" />
+            <div className="font-mono text-[9px] font-bold tracking-[0.22em] text-cyan-200/70">TRADE TERMINAL</div>
+            <div className="mt-0.5 flex items-center justify-center gap-2 font-mono text-xs font-black tracking-wider text-cyan-50">
+              <kbd className="rounded border border-cyan-200/60 bg-cyan-100/10 px-1.5 py-0.5 text-cyan-200">ENTER</kbd>
+              <span>ACCESS SHOP</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {(hudData.viewMode === 'FIRST_PERSON' || hudData.viewMode === 'THIRD_PERSON') && hudData.exfillPortalRel && !hudData.nearbyShop && (
+        <div className="absolute top-16 left-1/2 z-[85] -translate-x-1/2 pointer-events-none">
+          <div className="rounded-full border border-amber-300/45 bg-black/65 px-3 py-1.5 font-mono text-[10px] font-bold tracking-[0.16em] text-amber-100 shadow-[0_0_20px_rgba(251,191,36,0.18)] backdrop-blur-md">
+            <span className="text-amber-300">EXFILL BEACON</span>
+            <span className="mx-2 text-white/25">•</span>
+            {Math.round(hudData.exfillPortalRel.dist)}m
+          </div>
+        </div>
+      )}
+
+      {(hudData.viewMode === 'FIRST_PERSON' || hudData.viewMode === 'THIRD_PERSON') && !hudData.isPointerLocked && (
         <div className="absolute top-5 left-1/2 -translate-x-1/2 z-[95] pointer-events-none">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/65 border border-cyan-400/25 backdrop-blur-sm">
             <MousePointer size={11} className="text-cyan-300/80" />
             <span className="text-[9px] font-mono font-bold tracking-wider text-cyan-100/70 uppercase">
-              Click game to capture mouse · Esc releases
+              Click game for mouse look · Esc releases
             </span>
           </div>
         </div>
@@ -594,6 +644,25 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
         </div>
       )}
 
+      {/* Third-person gets a quieter reticle: the player and weapon remain the
+          hero, while the camera controls and the forward combat lane stay clear. */}
+      {hudData.viewMode === 'THIRD_PERSON' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[80]">
+          <div className="relative flex h-8 w-8 items-center justify-center">
+            <div className="h-1.5 w-1.5 rotate-45 bg-cyan-200 shadow-[0_0_11px_#00f0ff]" />
+            <div className="absolute -top-2 h-1.5 w-px bg-cyan-300/80" />
+            <div className="absolute -bottom-2 h-1.5 w-px bg-cyan-300/80" />
+            <div className="absolute -left-2 h-px w-1.5 bg-cyan-300/80" />
+            <div className="absolute -right-2 h-px w-1.5 bg-cyan-300/80" />
+          </div>
+          <div className="absolute bottom-7 left-1/2 -translate-x-1/2 rounded-full border border-cyan-500/25 bg-black/55 px-4 py-1.5 font-mono text-[10px] font-bold tracking-wider text-cyan-100/75 shadow-[0_0_15px_rgba(0,240,255,0.12)] backdrop-blur-md">
+            <span className="text-cyan-300">MOUSE LOOK</span> <span className="mx-2 text-white/20">•</span>
+            <span className="text-emerald-300">AUTO-FIRE</span> <span className="mx-2 text-white/20">•</span>
+            <span className="text-purple-300">SPACE</span> DASH
+          </div>
+        </div>
+      )}
+
       {/* 360° Holographic Radar for 3D Perspectives */}
       {(hudData.viewMode === 'FIRST_PERSON' || hudData.viewMode === 'THIRD_PERSON') && (
         <div className="absolute bottom-6 right-6 z-[85] pointer-events-none">
@@ -653,6 +722,60 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
                 );
               })()
             )}
+
+            {hudData.exfillPortalRel && (
+              (() => {
+                const worldAngle = Math.atan2(hudData.exfillPortalRel.dy, hudData.exfillPortalRel.dx);
+                const camAngle = Math.atan2(-Math.cos(hudData.cameraYaw), -Math.sin(hudData.cameraYaw));
+                const relAngle = worldAngle - camAngle;
+                const distFactor = Math.min(1, hudData.exfillPortalRel.dist / 1200);
+                const radius = distFactor * 59;
+                return (
+                  <div
+                    title="Exfill beacon"
+                    className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-amber-100 bg-amber-400 shadow-[0_0_13px_#fbbf24] animate-pulse"
+                    style={{ left: `${72 + Math.sin(relAngle) * radius}px`, top: `${72 - Math.cos(relAngle) * radius}px` }}
+                  />
+                );
+              })()
+            )}
+
+            {/* Objective blips use camera-relative coordinates, so the radar
+                stays truthful while first- and third-person cameras rotate. */}
+            {hudData.shopTargets?.filter((shop: any) => shop.dist < 1800).map((shop: any) => {
+              const worldAngle = Math.atan2(shop.dy, shop.dx);
+              const camAngle = Math.atan2(-Math.cos(hudData.cameraYaw), -Math.sin(hudData.cameraYaw));
+              const relativeAngle = worldAngle - camAngle;
+              const radius = Math.min(1, shop.dist / 1500) * 60;
+              return (
+                <div
+                  key={`shop-${shop.id}`}
+                  title="Shop"
+                  className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-cyan-100 bg-cyan-400/85 shadow-[0_0_10px_#22d3ee]"
+                  style={{ left: `${72 + Math.sin(relativeAngle) * radius}px`, top: `${72 - Math.cos(relativeAngle) * radius}px` }}
+                />
+              );
+            })}
+
+            {hudData.treasureTargets?.filter((treasure: any) => treasure.dist < 1600).map((treasure: any) => {
+              const worldAngle = Math.atan2(treasure.dy, treasure.dx);
+              const camAngle = Math.atan2(-Math.cos(hudData.cameraYaw), -Math.sin(hudData.cameraYaw));
+              const relativeAngle = worldAngle - camAngle;
+              const radius = Math.min(1, treasure.dist / 1300) * 60;
+              const tone = treasure.tier === 'legendary'
+                ? 'bg-orange-400 shadow-[0_0_11px_#fb923c]'
+                : treasure.tier === 'epic'
+                  ? 'bg-purple-400 shadow-[0_0_11px_#c084fc]'
+                  : 'bg-amber-300 shadow-[0_0_11px_#fcd34d]';
+              return (
+                <div
+                  key={`treasure-${treasure.id}`}
+                  title={`${treasure.tier} treasure`}
+                  className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-white/80 ${tone}`}
+                  style={{ left: `${72 + Math.sin(relativeAngle) * radius}px`, top: `${72 - Math.cos(relativeAngle) * radius}px` }}
+                />
+              );
+            })}
 
             {/* Radar Label */}
             <div className="absolute bottom-1.5 left-0 right-0 text-center text-[8px] font-mono font-bold text-cyan-400/70 uppercase tracking-widest">
