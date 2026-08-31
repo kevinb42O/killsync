@@ -320,22 +320,53 @@ export class Renderer3D {
     // Cyber Neon Floor Grid
     const floorSize = Math.max(GAME_WIDTH, GAME_HEIGHT) * 2.5;
     const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize, 1, 1);
-    // Floors intentionally use an unlit material. Dynamic weapon, pickup and
-    // enemy lights must never turn the whole ground into a strobing mirror.
-    const floorMat = new THREE.MeshBasicMaterial({
-      color: 0x07101f,
+    // The grid is rendered inside the floor shader rather than as a separate
+    // helper mesh. That removes the final depth-buffer competition completely;
+    // fwidth keeps the lines anti-aliased while the player moves.
+    const floorMat = new THREE.ShaderMaterial({
+      uniforms: {
+        baseColor: { value: new THREE.Color(0x07101f) },
+        fineGridColor: { value: new THREE.Color(0x13243a) },
+        majorGridColor: { value: new THREE.Color(0x256a82) },
+      },
+      vertexShader: `
+        varying vec2 vWorldGrid;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldGrid = worldPosition.xz;
+          gl_Position = projectionMatrix * viewMatrix * worldPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 baseColor;
+        uniform vec3 fineGridColor;
+        uniform vec3 majorGridColor;
+        varying vec2 vWorldGrid;
+
+        float gridLine(vec2 coordinate, float spacing) {
+          vec2 cell = coordinate / spacing;
+          vec2 distanceToLine = abs(fract(cell - 0.5) - 0.5) / fwidth(cell);
+          return 1.0 - min(min(distanceToLine.x, distanceToLine.y), 1.0);
+        }
+
+        void main() {
+          float fine = gridLine(vWorldGrid, 125.0);
+          float major = gridLine(vWorldGrid, 500.0);
+          vec3 color = mix(baseColor, fineGridColor, fine * 0.72);
+          color = mix(color, majorGridColor, major * 0.88);
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
     });
     this.floorMesh = new THREE.Mesh(floorGeo, floorMat);
     this.floorMesh.rotation.x = -Math.PI / 2;
     this.floorMesh.position.y = 0;
     this.scene.add(this.floorMesh);
 
-    // One wire grid, one base floor: no translucent panels and no stacked road
-    // surfaces. Lines are deliberately kept just above the floor so they read
-    // cleanly in perspective without creating a second reflective ground.
+    // Retained only for lifecycle compatibility; the stable grid lives in the
+    // floor shader above and no second grid object enters the scene.
     this.gridHelper = new THREE.GridHelper(floorSize, 240, 0x256a82, 0x13243a);
-    this.gridHelper.position.y = 0.025;
-    this.scene.add(this.gridHelper);
+    this.gridHelper.visible = false;
 
     // Collidable architecture comes from the same deterministic layout used by
     // Engine movement. These are real city blocks, not decorative ghosts.
