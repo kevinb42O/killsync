@@ -61,6 +61,28 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     setDownedSpectatorTarget({ id: next.id, label: next.label });
   };
 
+  /** Resolve from the newest authoritative snapshot, never from an
+   * interpolated presentation frame. That makes death/revive camera handoffs
+   * instantaneous even while visual positions are being smoothed. */
+  const resolveDownedSpectatorTarget = (snapshot: CoopSnapshot | null) => {
+    const local = snapshot?.players.find(player => player.id === launch.localPlayerId);
+    if (local?.lifeState !== 'downed') {
+      if (downedSpectatorTargetRef.current !== null) {
+        downedSpectatorTargetRef.current = null;
+        setDownedSpectatorTarget(null);
+      }
+      return undefined;
+    }
+    const livingTeammates = snapshot?.players.filter(player => player.id !== launch.localPlayerId && player.lifeState === 'alive') || [];
+    const watched = livingTeammates.find(player => player.id === downedSpectatorTargetRef.current) || livingTeammates[0];
+    if (!watched) return undefined;
+    if (downedSpectatorTargetRef.current !== watched.id) {
+      downedSpectatorTargetRef.current = watched.id;
+      setDownedSpectatorTarget({ id: watched.id, label: watched.label });
+    }
+    return watched.id;
+  };
+
   const purchaseStationItem = (stationId: number, itemId: CoopShopItemId) => {
     if (launch.role === 'host') {
       const message = simulationRef.current?.purchase(launch.localPlayerId, stationId, itemId);
@@ -152,19 +174,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         spectatorTargetRef.current = local.id;
         setSpectatorTarget({ id: local.id, label: local.label });
       }
-      if (!isSpectator) {
-        const livingTeammates = snapshot.players.filter(player => player.id !== launch.localPlayerId && player.lifeState === 'alive');
-        if (local.lifeState === 'downed' && livingTeammates.length > 0) {
-          const watched = livingTeammates.find(player => player.id === downedSpectatorTargetRef.current) || livingTeammates[0];
-          if (downedSpectatorTargetRef.current !== watched.id) {
-            downedSpectatorTargetRef.current = watched.id;
-            setDownedSpectatorTarget({ id: watched.id, label: watched.label });
-          }
-        } else if (downedSpectatorTargetRef.current !== null) {
-          downedSpectatorTargetRef.current = null;
-          setDownedSpectatorTarget(null);
-        }
-      }
+      if (!isSpectator) resolveDownedSpectatorTarget(snapshot);
       setMatchSnapshot(snapshot);
       setHud({
         players: snapshot.players.length, kills: snapshot.kills, tick: snapshot.tick, connected, selectedSlot: local.selectedSlot, weaponLevel: local.selectedWeaponLevel,
@@ -457,10 +467,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         clearJumpInput();
       }
       const frameSnapshot = presentationSnapshot(now);
-      const localFramePlayer = frameSnapshot?.players.find(player => player.id === launch.localPlayerId);
+      // Camera role switches are state transitions, not presentation values.
+      // Source them from the latest network snapshot so the downed operator is
+      // never selected for even one lingering interpolation frame.
       const presentationTargetId = isSpectator
         ? spectatorTargetRef.current
-        : localFramePlayer?.lifeState === 'downed' ? downedSpectatorTargetRef.current : undefined;
+        : resolveDownedSpectatorTarget(snapshotRef.current);
       renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId);
       animationFrame = requestAnimationFrame(frame);
     };
