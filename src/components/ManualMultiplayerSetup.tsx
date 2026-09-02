@@ -32,6 +32,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
   const [lobbies, setLobbies] = useState<PublicLobby[]>([]);
   const [peers, setPeers] = useState<MultiplayerPeerInfo[]>([]);
   const [guestPlayers, setGuestPlayers] = useState<CoopPlayerSeed[]>([]);
+  const [rosterPlayers, setRosterPlayers] = useState<CoopPlayerSeed[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
@@ -107,8 +108,13 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
             : [...guestPlayersRef.current, { ...player, color: guestColor(guestPlayersRef.current.length) }];
           guestPlayersRef.current = next;
           setGuestPlayers(next);
+          session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'roster', payload: [localPlayerRef.current, ...next] });
           hostedLobbyRef.current?.update(next.length + 1, 'waiting');
           setStatus(`${player.label} joined. You can start the match.`);
+        }
+        if (event.event === 'roster' && role === 'guest') {
+          const players = parsePlayers(event.payload, 1);
+          if (players) setRosterPlayers(players);
         }
         if (event.event === 'start' && role === 'guest') {
           const players = parsePlayers(event.payload, spectatingRef.current ? 1 : 2);
@@ -121,6 +127,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
     sessionRef.current = session;
     setPeers([]);
     setGuestPlayers([]);
+    setRosterPlayers([]);
     setError(null);
     return session;
   };
@@ -285,7 +292,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
             {status && <p className="mt-5 text-xs font-medium leading-relaxed text-cyan-100/75">{status}</p>}
             {error && <p role="alert" className="mt-3 border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</p>}
           </div>
-          <aside className="border border-white/10 bg-black/25 p-4"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/50"><Users size={13} /> Players</div><div className="mt-4 text-3xl font-black text-cyan-200">{connectedPeers(peers) + (mode === 'host' ? 1 : 0)}<span className="text-base text-white/30"> / 4</span></div><div className="mt-5 space-y-2">{peers.length === 0 ? <p className="text-xs leading-relaxed text-white/40">{mode === 'host' ? 'Waiting for players.' : 'Select a server.'}</p> : peers.map((peer, index) => <div key={peer.peerId} className="flex items-center justify-between border border-white/10 bg-white/[0.03] px-2 py-2 text-[10px]"><span className="text-white/60">Player {index + 1}</span><span className={peer.state === 'connected' ? 'text-emerald-300' : 'text-amber-200'}>{playerState(peer.state)}</span></div>)}</div></aside>
+          <aside className="border border-white/10 bg-black/25 p-4"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/50"><Users size={13} /> Players</div><LobbyRoster mode={mode} peers={peers} host={localPlayerRef.current} guests={guestPlayers} roster={rosterPlayers} /></aside>
         </div>
       </section>
     </div>
@@ -293,6 +300,14 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
 }
 
 function connectedPeers(peers: MultiplayerPeerInfo[]) { return peers.filter(peer => peer.state === 'connected').length; }
+function LobbyRoster({ mode, peers, host, guests, roster }: { mode: SetupMode; peers: MultiplayerPeerInfo[]; host: CoopPlayerSeed; guests: CoopPlayerSeed[]; roster: CoopPlayerSeed[] }) {
+  const hosting = mode === 'host' || mode === 'direct_host';
+  const joining = mode === 'guest' || mode === 'direct_guest';
+  const players = hosting ? [host, ...guests] : joining ? (roster.length > 0 ? roster : [host]) : [];
+  const connected = connectedPeers(peers) + (hosting || joining ? 1 : 0);
+  const playerCount = Math.max(connected, players.length);
+  return <><div className="mt-4 text-3xl font-black text-cyan-200">{playerCount}<span className="text-base text-white/30"> / 4</span></div><div className="mt-5 space-y-2">{players.length === 0 ? <p className="text-xs leading-relaxed text-white/40">{hosting ? 'Waiting for players.' : 'Select a server.'}</p> : players.map((player, index) => <div key={player.id} className="flex items-center justify-between border border-white/10 bg-white/[0.03] px-2 py-2 text-[10px]"><span className="max-w-[125px] truncate text-white/75">{player.label}{hosting && index === 0 ? ' (Host)' : ''}</span><span className="text-emerald-300">Ready</span></div>)}</div></>;
+}
 function createLocalId() { const values = new Uint32Array(1); crypto.getRandomValues(values); return `operator-${values[0].toString(36)}`; }
 function parsePlayer(value: unknown): CoopPlayerSeed | null { if (!value || typeof value !== 'object') return null; const player = value as Partial<CoopPlayerSeed>; return typeof player.id === 'string' && typeof player.label === 'string' && typeof player.color === 'string' ? { id: player.id, label: player.label.slice(0, 24), color: player.color } : null; }
 function parsePlayers(value: unknown, minimumPlayers: number = 2): CoopPlayerSeed[] | null { if (!Array.isArray(value) || value.length < minimumPlayers || value.length > 4) return null; const players = value.map(parsePlayer); return players.every((player): player is CoopPlayerSeed => player !== null) ? players : null; }

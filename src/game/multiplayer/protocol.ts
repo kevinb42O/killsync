@@ -48,7 +48,7 @@ export interface MultiplayerStateFrame {
 export interface MultiplayerReliableEvent {
   type: 'event';
   version: number;
-  event: 'ready' | 'spectate' | 'start' | 'cast' | 'revive' | 'station_purchase' | 'leave' | 'error';
+  event: 'ready' | 'spectate' | 'roster' | 'start' | 'cast' | 'revive' | 'station_purchase' | 'leave' | 'error';
   payload?: unknown;
 }
 
