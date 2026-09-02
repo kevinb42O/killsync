@@ -312,8 +312,11 @@ export class CoopSimulation {
           player.selfReviveProgressMs = Math.min(6_000, player.selfReviveProgressMs + dt);
           if (player.selfReviveProgressMs >= 6_000) this.selfRevive(player);
         } else player.selfReviveProgressMs = 0;
+        if (player.lifeState !== 'downed') continue;
         player.downedRemainingMs = Math.max(0, player.downedRemainingMs - dt);
-        if (player.downedRemainingMs <= 0) this.eliminatePlayer(player, 'bled out');
+        // A co-op death stays recoverable for as long as any squadmate is
+        // standing. Zero ends the urgent revive window, not the body.
+        if (player.downedRemainingMs <= 0 && !this.hasLivingTeammate(player.id)) this.eliminatePlayer(player, 'bled out');
         continue;
       }
       if (player.lifeState === 'eliminated') continue;
@@ -784,6 +787,10 @@ export class CoopSimulation {
     if (reason === 'solo defeat') this.finalizeDefeatIfNeeded();
   }
 
+  private hasLivingTeammate(playerId: string) {
+    return [...this.players.values()].some(player => player.id !== playerId && player.lifeState === 'alive');
+  }
+
   private selfRevive(player: CoopPlayer) {
     if (player.lifeState !== 'downed' || player.selfRevives <= 0) return;
     player.selfRevives--;
@@ -818,6 +825,7 @@ export class CoopSimulation {
       if (target.reviveProgressMs < COOP_REVIVE_DURATION_MS) continue;
       target.lifeState = 'alive';
       target.health = target.maxHealth * COOP_REVIVE_HEALTH_RATIO;
+      const wasClutchSave = target.downedRemainingMs > 0 && target.downedRemainingMs <= 3_000;
       target.downedRemainingMs = 0;
       target.reviveProgressMs = 0;
       target.invulnerableRemainingMs = COOP_REVIVE_INVULNERABILITY_MS;
@@ -826,7 +834,7 @@ export class CoopSimulation {
       const reviverStats = revivedBy ? this.runStats.get(revivedBy) : undefined;
       if (reviverStats) {
         reviverStats.revives++;
-        if (target.downedRemainingMs <= 3_000) reviverStats.clutchSaves++;
+        if (wasClutchSave) reviverStats.clutchSaves++;
       }
       this.emitCombatEvent({ kind: 'player_revived', x: target.x, y: target.y, playerId: target.id, killedByPlayerId: revivedBy, amount: target.health, color: target.color });
     }

@@ -116,6 +116,27 @@ describe('CoopSimulation player lifecycle', () => {
     expect(revived.invulnerableRemainingMs).toBeGreaterThan(0);
   });
 
+  it('keeps a downed teammate revivable after their timer while another teammate lives', () => {
+    const simulation = new CoopSimulation([
+      { id: 'host', label: 'Host', color: '#0ff' },
+      { id: 'guest', label: 'Guest', color: '#f0f' },
+    ]);
+    const host = (simulation as any).players.get('host');
+    const guest = (simulation as any).players.get('guest');
+    (simulation as any).enemies = [];
+    guest.x = host.x + 40; guest.y = host.y;
+    (simulation as any).damagePlayer(host, 999, host.x - 20, host.y);
+    // Jump to the final authoritative countdown tick—the behaviour at zero
+    // matters here, not twenty seconds of unrelated contract simulation.
+    host.downedRemainingMs = 50;
+    simulation.tick(50);
+    const downed = simulation.createSnapshot().players.find(player => player.id === 'host')!;
+    expect(downed).toMatchObject({ lifeState: 'downed', downedRemainingMs: 0 });
+    simulation.setInput('guest', input({ reviving: true }));
+    for (let elapsed = 0; elapsed < COOP_REVIVE_DURATION_MS; elapsed += 50) simulation.tick(50);
+    expect(simulation.createSnapshot().players.find(player => player.id === 'host')).toMatchObject({ lifeState: 'alive' });
+  });
+
   it('cancels revive progress when the reviver is damaged or leaves range', () => {
     const simulation = new CoopSimulation([
       { id: 'host', label: 'Host', color: '#0ff' },

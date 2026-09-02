@@ -10,6 +10,14 @@ import type { CoopFirearmId } from '../combat/coopFirearms';
 import { COOP_PASSIVE_BY_ID, passiveRadius, type CoopPassiveModuleId } from './CoopPassiveModules';
 
 type PresentationParticle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; z?: number };
+type RemotePlayerPresentation = {
+  mesh: THREE.Group;
+  firearm: CoopFirearmVisualRig;
+  nameplate: THREE.Sprite;
+  body: THREE.Object3D;
+  visor: THREE.Object3D;
+  downedMarker: THREE.Group;
+};
 
 /**
  * Presents the network snapshot through the established production Renderer3D.
@@ -19,7 +27,7 @@ type PresentationParticle = { x: number; y: number; vx: number; vy: number; life
  */
 export class MultiplayerRendererBridge {
   private readonly renderer = new Renderer3D();
-  private readonly remotePlayers = new Map<string, { mesh: THREE.Group; firearm: CoopFirearmVisualRig; nameplate: THREE.Sprite }>();
+  private readonly remotePlayers = new Map<string, RemotePlayerPresentation>();
   private readonly passiveMeshes = new Map<string, THREE.Group>();
   private readonly localFirearm = new CoopFirearmVisualRig(true);
   private readonly seenCombatEventIds = new Map<number, number>();
@@ -275,14 +283,25 @@ export class MultiplayerRendererBridge {
         this.remotePlayers.set(player.id, remote); this.renderer.scene.add(remote.mesh);
       }
       const mesh = remote.mesh;
+      const downed = player.lifeState === 'downed';
       mesh.visible = player.lifeState !== 'eliminated';
       mesh.position.set(player.x, player.z, player.y);
-      const lowProfile = player.sliding || player.crouching || player.lifeState === 'downed';
+      const lowProfile = player.sliding || player.crouching;
       mesh.scale.set(1, lowProfile ? 0.62 : 1, lowProfile ? 1.16 : 1);
       mesh.rotation.y = Math.PI / 2 - player.angle;
-      mesh.rotation.z = player.lifeState === 'downed' ? Math.PI / 2 : 0;
+      // Rotate only the body. Tipping the whole avatar group drove its origin
+      // into the city floor, making a still-revivable teammate disappear.
+      mesh.rotation.z = 0;
+      remote.body.position.set(0, downed ? 14 : 29, 0);
+      remote.body.rotation.set(0, 0, downed ? Math.PI / 2 : 0);
+      remote.visor.position.set(downed ? 24 : 0, downed ? 14 : 43, downed ? 0 : 12);
+      remote.visor.rotation.set(0, 0, downed ? Math.PI / 2 : 0);
+      remote.firearm.group.visible = !downed;
+      remote.nameplate.position.set(0, downed ? 32 : 62, 0);
+      remote.downedMarker.visible = downed;
+      if (downed) remote.downedMarker.rotation.y = snapshot.elapsedMs * .0025;
       const state = player.weaponStates[player.selectedSlot];
-      if (state) remote.firearm.update(state, snapshot.elapsedMs, 16.666, player.isAiming);
+      if (state && !downed) remote.firearm.update(state, snapshot.elapsedMs, 16.666, player.isAiming);
     }
     for (const [id, remote] of this.remotePlayers) {
       if (active.has(id)) continue;
@@ -325,7 +344,13 @@ export class MultiplayerRendererBridge {
     const visor = new THREE.Mesh(new THREE.BoxGeometry(18, 7, 4), new THREE.MeshBasicMaterial({ color: 0x67e8f9 })); visor.position.set(0, 43, 12); group.add(visor);
     const firearm = new CoopFirearmVisualRig(false); group.add(firearm.group);
     const nameplate = createNameplate(label, color); nameplate.position.set(0, 62, 0); group.add(nameplate);
-    return { mesh: group, firearm, nameplate };
+    const downedMarker = new THREE.Group();
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: .82, blending: THREE.AdditiveBlending, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(31, 1.8, 8, 40), markerMaterial);
+    ring.rotation.x = Math.PI / 2; ring.position.y = 1.5; downedMarker.add(ring);
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(42, 1.4, 2), markerMaterial); cross.position.y = 2; downedMarker.add(cross);
+    downedMarker.visible = false; group.add(downedMarker);
+    return { mesh: group, firearm, nameplate, body, visor, downedMarker };
   }
 }
 
