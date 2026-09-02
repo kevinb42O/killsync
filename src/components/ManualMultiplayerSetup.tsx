@@ -5,7 +5,7 @@ import { HostedLobby, LobbyJoin, PublicLobby, fetchIceServers, listPublicLobbies
 import { MultiplayerPeerInfo, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
 import { CoopPlayerSeed } from '../game/multiplayer/CoopSimulation';
 
-type SetupMode = 'choose' | 'host' | 'guest';
+type SetupMode = 'choose' | 'host' | 'guest' | 'direct_host' | 'direct_guest';
 
 export interface MultiplayerLaunch {
   role: 'host' | 'guest' | 'spectator';
@@ -36,6 +36,8 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const [nickname, setNickname] = useState(localPlayerRef.current.label);
+  const [offerCode, setOfferCode] = useState('');
+  const [answerCode, setAnswerCode] = useState('');
   const nicknameValid = normalizeNickname(nickname).length >= 2;
 
   const applyNickname = () => {
@@ -51,7 +53,10 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
 
   const refreshLobbies = async () => {
     try { setLobbies(await listPublicLobbies()); setError(null); }
-    catch { setError('Servers are unavailable right now. Try again in a moment.'); }
+    // Vercel/static deployments have no stateful lobby service. Direct co-op
+    // below remains fully playable there, so an optional lobby outage should
+    // not present as a multiplayer outage.
+    catch { setLobbies([]); }
   };
 
   useEffect(() => {
@@ -70,7 +75,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
   }, []);
 
   useEffect(() => {
-    if (mode !== 'guest' || connectedPeers(peers) === 0 || readySentRef.current) return;
+    if ((mode !== 'guest' && mode !== 'direct_guest') || connectedPeers(peers) === 0 || readySentRef.current) return;
     window.clearTimeout(connectionTimeoutRef.current);
     const delivered = sessionRef.current?.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: spectatingRef.current ? 'spectate' : 'ready', payload: spectatingRef.current ? undefined : localPlayerRef.current });
     if (!delivered) return;
@@ -140,6 +145,72 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
     } finally { setLoading(false); }
   };
 
+  const createDirectOffer = async () => {
+    if (!applyNickname()) return;
+    setLoading(true);
+    setError(null);
+    setStatus('Creating a direct browser-to-browser connection…');
+    try {
+      const session = await createSession('host');
+      setOfferCode(await session.createOffer());
+      setAnswerCode('');
+      setMode('direct_host');
+      setStatus('Send this offer to one friend. When they return an answer, paste it below.');
+    } catch {
+      setError('Couldn’t create a direct connection. Refresh and try again.');
+      setStatus('');
+    } finally { setLoading(false); }
+  };
+
+  const createDirectAnswer = async () => {
+    if (!applyNickname() || !offerCode.trim()) {
+      if (!offerCode.trim()) setError('Paste the complete host offer first.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setStatus('Creating your answer…');
+    try {
+      const session = await createSession('guest');
+      setAnswerCode(await session.acceptOffer(offerCode));
+      setMode('direct_guest');
+      setStatus('Send your answer back to the host, then wait for them to start the match.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'That offer could not be used. Ask the host for a fresh one.');
+      setStatus('');
+    } finally { setLoading(false); }
+  };
+
+  const acceptDirectAnswer = async () => {
+    const session = sessionRef.current;
+    if (!session || !answerCode.trim()) {
+      setError('Paste your friend’s complete answer first.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await session.acceptAnswer(answerCode);
+      setStatus('Connecting directly to your friend…');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'That answer could not be used. Ask your friend for a fresh answer.');
+    } finally { setLoading(false); }
+  };
+
+  const createAdditionalDirectOffer = async () => {
+    const session = sessionRef.current;
+    if (!session) return;
+    setLoading(true);
+    setError(null);
+    try {
+      setOfferCode(await session.createOffer());
+      setAnswerCode('');
+      setStatus('Send the fresh offer to your next friend.');
+    } catch {
+      setError('Couldn’t create another direct offer. Refresh and try again.');
+    } finally { setLoading(false); }
+  };
+
   const joinSquad = async (room: PublicLobby) => {
     if (!applyNickname()) return;
     spectatingRef.current = room.state === 'in_game';
@@ -199,12 +270,19 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
           <div>
             {mode === 'choose' && <>
               <label className="mb-5 block border border-cyan-300/25 bg-cyan-400/[0.045] p-3"><span className="block text-[9px] font-black uppercase tracking-[0.18em] text-cyan-200">Your name</span><input value={nickname} onChange={event => { setNickname(event.target.value); setError(null); }} onBlur={() => setNickname(normalizeNickname(nickname))} maxLength={16} autoComplete="nickname" placeholder="Enter name" className="mt-2 w-full border-b border-white/15 bg-transparent pb-1 text-sm font-black uppercase tracking-wider text-white outline-none placeholder:text-white/25 focus:border-cyan-300" /></label>
-              <div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-white"><Server size={14} className="text-cyan-300" /> Servers <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[9px] tracking-wider text-emerald-200">{lobbies.length} ONLINE</span></div><button onClick={() => void refreshLobbies()} className="flex items-center gap-1 border border-white/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-200 transition hover:border-cyan-300/40 hover:text-white"><RefreshCw size={12} /> Refresh</button></div>
+              <div className="border border-cyan-300/35 bg-cyan-400/[0.08] p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200">Direct co-op · free browser-to-browser</div>
+                <p className="mt-2 text-xs leading-relaxed text-white/65">No game server or account needed. The host sends an offer; each friend sends back an answer.</p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2"><button disabled={loading || !nicknameValid} onClick={() => void createDirectOffer()} className="flex items-center justify-center gap-2 border border-cyan-300/45 bg-cyan-400/15 px-4 py-3 text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100 transition hover:bg-cyan-400/25 disabled:opacity-45"><Wifi size={14} /> Host direct match</button><button disabled={loading || !nicknameValid} onClick={() => { setOfferCode(''); setAnswerCode(''); setStatus('Paste the host offer, then create your answer.'); setError(null); setMode('direct_guest'); }} className="flex items-center justify-center gap-2 border border-fuchsia-300/45 bg-fuchsia-400/15 px-4 py-3 text-[10px] font-black uppercase tracking-[0.14em] text-fuchsia-100 transition hover:bg-fuchsia-400/25 disabled:opacity-45"><Users size={14} /> Join direct match</button></div>
+              </div>
+              <div className="mb-3 mt-5 flex items-center justify-between"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-white"><Server size={14} className="text-cyan-300" /> Hosted squads <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[9px] tracking-wider text-emerald-200">{lobbies.length} ONLINE</span></div><button onClick={() => void refreshLobbies()} className="flex items-center gap-1 border border-white/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-200 transition hover:border-cyan-300/40 hover:text-white"><RefreshCw size={12} /> Refresh</button></div>
               <div className="space-y-2">{lobbies.length === 0 ? <div className="border border-dashed border-white/15 bg-[radial-gradient(circle_at_center,rgba(34,211,238,.09),transparent_58%)] px-5 py-12 text-center"><Server size={24} className="mx-auto text-cyan-300/65" /><div className="mt-3 text-xs font-black uppercase tracking-[0.18em] text-white/70">No servers online</div></div> : lobbies.map((room, index) => <button key={room.id} disabled={loading || !nicknameValid} onClick={() => void joinSquad(room)} className="group relative flex w-full items-center gap-4 overflow-hidden border border-white/10 bg-[#0a101a] p-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/55 hover:bg-cyan-400/[0.07] hover:shadow-[0_0_24px_rgba(34,211,238,.12)] disabled:opacity-45"><div className={`absolute inset-y-0 left-0 w-1 ${room.state === 'in_game' ? 'bg-fuchsia-400' : 'bg-emerald-400'}`} /><div className="ml-1 flex h-11 w-11 shrink-0 items-center justify-center border border-white/15 bg-white/[0.04] text-sm font-black text-cyan-100">{room.hostName.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><div className="truncate text-sm font-black uppercase tracking-wider text-white">{room.hostName}</div>{index === 0 && <Crown size={13} className="shrink-0 text-amber-300" />}</div><div className={`mt-1 text-[9px] font-black uppercase tracking-[0.14em] ${room.state === 'in_game' ? 'text-fuchsia-200' : 'text-emerald-200'}`}>{room.state === 'in_game' ? '● In progress' : '● Open lobby'}</div></div><div className="text-right"><div className="font-mono text-sm font-black text-white">{room.playerCount}<span className="text-white/35">/{room.maxPlayers}</span></div><div className="mt-1 flex items-center justify-end gap-1 text-[10px] font-black uppercase tracking-wider text-cyan-200 transition group-hover:text-white">{room.state === 'in_game' ? 'Spectate' : 'Join'} <ChevronRight size={13} className="transition group-hover:translate-x-0.5" /></div></div></button>)}</div>
-              <button disabled={loading || !nicknameValid} onClick={() => void hostSquad()} className="mt-5 flex w-full items-center justify-center gap-2 border border-cyan-300/45 bg-cyan-400/15 px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-400/25 disabled:opacity-45"><Wifi size={14} /> Create server</button>
+              <button disabled={loading || !nicknameValid} onClick={() => void hostSquad()} className="mt-5 flex w-full items-center justify-center gap-2 border border-white/20 bg-white/[0.04] px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-white/70 transition hover:bg-white/[0.08] disabled:opacity-45"><Wifi size={14} /> Create hosted squad</button>
             </>}
             {mode === 'host' && <div className="border border-cyan-300/25 bg-cyan-400/[0.04] p-5"><div className="text-sm font-black uppercase tracking-wider text-white">SERVER ONLINE</div><button onClick={launchHost} className="mt-5 border border-emerald-300/45 bg-emerald-400/15 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-emerald-100 transition hover:bg-emerald-400/25">Start match · {guestPlayers.length + 1} {guestPlayers.length === 0 ? 'player' : 'players'}</button></div>}
             {mode === 'guest' && <div className="border border-fuchsia-300/25 bg-fuchsia-400/[0.04] p-5"><div className="text-sm font-black uppercase tracking-wider text-white">CONNECTING</div></div>}
+            {mode === 'direct_host' && <div className="space-y-4 border border-cyan-300/25 bg-cyan-400/[0.04] p-5"><div><div className="text-sm font-black uppercase tracking-wider text-white">HOST DIRECT MATCH</div><p className="mt-2 text-xs leading-relaxed text-white/60">Copy this offer to one friend. For another friend, create a fresh offer after connecting the first.</p></div><textarea readOnly value={offerCode} aria-label="Host offer code" className="h-24 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-cyan-100 outline-none" /><button onClick={() => void navigator.clipboard?.writeText(offerCode)} className="border border-cyan-300/45 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100">Copy offer</button><label className="block text-[10px] font-black uppercase tracking-[0.14em] text-white/60">Friend’s answer<textarea value={answerCode} onChange={event => { setAnswerCode(event.target.value); setError(null); }} aria-label="Friend answer code" className="mt-2 h-24 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] normal-case tracking-normal text-white outline-none focus:border-cyan-300" /></label><button disabled={loading || !answerCode.trim()} onClick={() => void acceptDirectAnswer()} className="border border-emerald-300/45 bg-emerald-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-100 disabled:opacity-45">Connect friend</button>{connectedPeers(peers) > 0 && <><button disabled={loading} onClick={() => void createAdditionalDirectOffer()} className="ml-2 border border-cyan-300/45 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-cyan-100 disabled:opacity-45">Add another friend</button><button onClick={launchHost} className="ml-2 border border-emerald-300/45 bg-emerald-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-100">Start match · {guestPlayers.length + 1} players</button></>}</div>}
+            {mode === 'direct_guest' && <div className="space-y-4 border border-fuchsia-300/25 bg-fuchsia-400/[0.04] p-5"><div><div className="text-sm font-black uppercase tracking-wider text-white">JOIN DIRECT MATCH</div><p className="mt-2 text-xs leading-relaxed text-white/60">Paste the host’s offer, create your answer, then send the answer back to the host.</p></div>{!answerCode && <><textarea value={offerCode} onChange={event => { setOfferCode(event.target.value); setError(null); }} aria-label="Host offer code" placeholder="Paste host offer" className="h-28 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-white outline-none focus:border-fuchsia-300" /><button disabled={loading || !offerCode.trim()} onClick={() => void createDirectAnswer()} className="border border-fuchsia-300/45 bg-fuchsia-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-fuchsia-100 disabled:opacity-45">Create answer</button></>}{answerCode && <><textarea readOnly value={answerCode} aria-label="Your answer code" className="h-28 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-fuchsia-100 outline-none" /><button onClick={() => void navigator.clipboard?.writeText(answerCode)} className="border border-fuchsia-300/45 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-fuchsia-100">Copy answer</button></>}</div>}
             {status && <p className="mt-5 text-xs font-medium leading-relaxed text-cyan-100/75">{status}</p>}
             {error && <p role="alert" className="mt-3 border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</p>}
           </div>
