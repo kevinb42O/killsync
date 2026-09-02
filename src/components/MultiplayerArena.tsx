@@ -27,6 +27,7 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
   const displayedCombatEventsRef = useRef(new Set<number>());
   const sessionCloseTimerRef = useRef(0);
   const spectatorTargetRef = useRef<string | null>(null);
+  const downedSpectatorTargetRef = useRef<string | null>(null);
   const [hud, setHud] = useState({ players: launch.players.length, kills: 0, tick: 0, connected: true, selectedSlot: 0, weaponLevel: 1, health: 100, maxHealth: 100, level: 1, experience: 0, experienceToNextLevel: 120, coins: 0, cores: 0, weapons: [] as CoopSnapshot['players'][number]['weaponStates'], isReloading: false, isAiming: false, actionEndsAt: undefined as number | undefined, lifeState: 'alive' as CoopSnapshot['players'][number]['lifeState'], downedRemainingMs: 0, reviveProgressMs: 0, reviverId: undefined as string | undefined, invulnerableRemainingMs: 0, matchState: 'active' as CoopSnapshot['matchState'], squad: [] as Array<Pick<CoopSnapshot['players'][number], 'id' | 'label' | 'color' | 'health' | 'maxHealth' | 'lifeState' | 'downedRemainingMs' | 'reviveProgressMs' | 'reviverId'>> });
   const [combatNotice, setCombatNotice] = useState<{ text: string; color: string } | null>(null);
   const [damageFlash, setDamageFlash] = useState(false);
@@ -37,6 +38,7 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
   const [stationOpen, setStationOpen] = useState(false);
   const [stationMessage, setStationMessage] = useState<string | null>(null);
   const [spectatorTarget, setSpectatorTarget] = useState<{ id: string; label: string } | null>(null);
+  const [downedSpectatorTarget, setDownedSpectatorTarget] = useState<{ id: string; label: string } | null>(null);
   const isSpectator = launch.role === 'spectator';
 
   const cycleSpectatorTarget = () => {
@@ -47,6 +49,15 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
     const next = players[(current + 1 + players.length) % players.length];
     spectatorTargetRef.current = next.id;
     setSpectatorTarget({ id: next.id, label: next.label });
+  };
+
+  const cycleDownedSpectatorTarget = () => {
+    const players = snapshotRef.current?.players.filter(player => player.id !== launch.localPlayerId && player.lifeState === 'alive') || [];
+    if (!players.length) return;
+    const current = players.findIndex(player => player.id === downedSpectatorTargetRef.current);
+    const next = players[(current + 1 + players.length) % players.length];
+    downedSpectatorTargetRef.current = next.id;
+    setDownedSpectatorTarget({ id: next.id, label: next.label });
   };
 
   const purchaseStationItem = (stationId: number, itemId: CoopShopItemId) => {
@@ -102,6 +113,19 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
       if (isSpectator && spectatorTargetRef.current !== local.id) {
         spectatorTargetRef.current = local.id;
         setSpectatorTarget({ id: local.id, label: local.label });
+      }
+      if (!isSpectator) {
+        const livingTeammates = snapshot.players.filter(player => player.id !== launch.localPlayerId && player.lifeState === 'alive');
+        if (local.lifeState === 'downed' && livingTeammates.length > 0) {
+          const watched = livingTeammates.find(player => player.id === downedSpectatorTargetRef.current) || livingTeammates[0];
+          if (downedSpectatorTargetRef.current !== watched.id) {
+            downedSpectatorTargetRef.current = watched.id;
+            setDownedSpectatorTarget({ id: watched.id, label: watched.label });
+          }
+        } else if (downedSpectatorTargetRef.current !== null) {
+          downedSpectatorTargetRef.current = null;
+          setDownedSpectatorTarget(null);
+        }
       }
       setMatchSnapshot(snapshot);
       setHud({
@@ -313,6 +337,12 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
         renderer.requestPointerLock();
         return;
       }
+      const lifeState = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState;
+      if (lifeState === 'downed') {
+        if (event.button === 0) cycleDownedSpectatorTarget();
+        renderer.requestPointerLock();
+        return;
+      }
       if (event.button === 2) { inputRef.current = { ...inputRef.current, aiming: true, sequence: ++sequence, clientTime: Math.round(performance.now()) }; return; }
       if (event.button !== 0) return;
       renderer.requestPointerLock();
@@ -321,6 +351,11 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
     };
     const onMouseUp = (event: MouseEvent) => {
       if (isSpectator) return;
+      if (snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState === 'downed') {
+        firing = false;
+        updateInput();
+        return;
+      }
       if (event.button === 2) { inputRef.current = { ...inputRef.current, aiming: false, sequence: ++sequence, clientTime: Math.round(performance.now()) }; return; }
       if (event.button !== 0) return;
       firing = false;
@@ -378,7 +413,12 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
         session.sendInput(inputRef.current);
         clearJumpInput();
       }
-      renderer.render(presentationSnapshot(now), launch.localPlayerId, elapsed, isSpectator ? spectatorTargetRef.current : undefined);
+      const frameSnapshot = presentationSnapshot(now);
+      const localFramePlayer = frameSnapshot?.players.find(player => player.id === launch.localPlayerId);
+      const presentationTargetId = isSpectator
+        ? spectatorTargetRef.current
+        : localFramePlayer?.lifeState === 'downed' ? downedSpectatorTargetRef.current : undefined;
+      renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId);
       animationFrame = requestAnimationFrame(frame);
     };
     animationFrame = requestAnimationFrame(frame);
@@ -420,6 +460,9 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
 
   const localSnapshot = matchSnapshot?.players.find(player => player.id === (isSpectator ? spectatorTargetRef.current : launch.localPlayerId));
   const nearbyStation = !isSpectator && localSnapshot && matchSnapshot?.buyStations.find(station => Math.hypot(localSnapshot.x - station.x, localSnapshot.y - station.y) <= station.radius + 48);
+  const revivingTarget = !isSpectator && localSnapshot?.lifeState === 'alive'
+    ? matchSnapshot?.players.find(player => player.lifeState === 'downed' && player.reviverId === launch.localPlayerId)
+    : undefined;
   const run = matchSnapshot?.run;
 
   return (
@@ -448,7 +491,7 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
           </div>;
         })}
       </div>
-      <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 border border-white/15 bg-black/60 px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-white/70 backdrop-blur-sm">{isSpectator ? 'Third-person spectator' : 'First-person co-op'}</div>
+      <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 border border-white/15 bg-black/60 px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-white/70 backdrop-blur-sm">{isSpectator ? 'Third-person spectator' : hud.lifeState === 'downed' ? 'Third-person revive spectator' : 'First-person co-op'}</div>
       {isSpectator && <div className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 border border-fuchsia-300/45 bg-black/75 px-4 py-2 text-center backdrop-blur-sm"><div className="text-[9px] font-black uppercase tracking-[0.25em] text-fuchsia-200">Spectating</div><div className="mt-1 text-xs font-black uppercase tracking-wider text-white">{spectatorTarget?.label || 'Acquiring target'}</div><div className="mt-1 text-[9px] uppercase tracking-wider text-white/50">Mouse to orbit · left click next player</div></div>}
       {run && <div className="pointer-events-none absolute left-1/2 top-16 w-[min(460px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/25 bg-black/70 px-4 py-3 text-center backdrop-blur-sm">
         <div className="text-[9px] font-black uppercase tracking-[0.22em] text-cyan-200">{run.phase.replace('_', ' ')}</div>
@@ -458,6 +501,7 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
         {run.exfil && <><div className="mt-2 flex justify-between text-[9px] font-mono text-amber-100"><span>EXFIL HOLD</span><span>{Math.ceil(run.exfil.remainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-amber-950/80"><div className="h-full bg-amber-300 transition-[width]" style={{ width: `${run.exfil.holdProgressMs / run.exfil.holdRequiredMs * 100}%` }} /></div></>}
       </div>}
       {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[43%] -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
+      {revivingTarget && <div className="pointer-events-none absolute left-1/2 top-[56%] z-20 w-[min(330px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/55 bg-black/80 px-4 py-3 text-center shadow-[0_0_24px_rgba(34,211,238,.18)] backdrop-blur-md"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">Hold F · Reviving {revivingTarget.label}</div><div className="mt-2 h-2 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, revivingTarget.reviveProgressMs / 3000 * 100)}%` }} /></div><div className="mt-1 text-[9px] font-mono text-cyan-100/70">{Math.round(revivingTarget.reviveProgressMs / 3000 * 100)}%</div></div>}
       {!isSpectator && (hud.selectedSlot === 3 && hud.isAiming ? <div className="pointer-events-none absolute inset-0 z-10 rounded-full border-[min(17vw,220px)] border-black/90"><div className="absolute left-1/2 top-1/2 h-[64vh] w-px -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-px w-[64vh] -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100" /></div> : <div className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2"><span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-cyan-100/80" /><span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-cyan-100/80" /></div>)}
       {!isSpectator && <div className="pointer-events-none absolute bottom-16 left-1/2 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1.5 overflow-hidden border border-white/15 bg-black/60 p-1.5 backdrop-blur-sm">
         {visibleWeaponSlots(hud.selectedSlot).map(index => {
@@ -484,7 +528,7 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
         {stationOpen && <><div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">{nearbyStation.stock.map(itemId => { const item = COOP_SHOP_ITEMS[itemId]; const passive = itemId in COOP_PASSIVE_BY_ID ? itemId as keyof typeof COOP_PASSIVE_BY_ID : undefined; const owned = passive && localSnapshot.passiveModules.find(module => module.id === passive); const cost = passive && owned ? passiveRankCost(passive, owned.rank) : item.cost; const affordable = localSnapshot.coins >= cost; return <button key={itemId} disabled={!affordable} onClick={() => purchaseStationItem(nearbyStation.id, itemId)} className="flex w-full items-center justify-between gap-3 border border-white/10 bg-white/[0.035] px-2 py-2 text-left transition hover:border-cyan-200/50 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"><span><span className="block text-[10px] font-bold text-white">{item.name}{owned ? ` · Rank ${owned.rank + 1}` : ''}</span><span className="block text-[9px] text-white/45">{item.description}</span></span><span className="shrink-0 text-[10px] font-mono text-amber-200"><Coins className="mr-1 inline" size={11} />{cost}</span></button>; })}</div>{stationMessage && <div className="mt-2 text-[10px] text-cyan-100">{stationMessage}</div>}</>}
       </div>}
       {launch.role === 'host' && <div className="absolute bottom-[164px] right-5 w-[min(310px,calc(100vw-2.5rem))] border border-fuchsia-300/30 bg-black/75 p-4 text-[10px] backdrop-blur-md"><div className="flex items-center gap-2 font-black uppercase tracking-[0.18em] text-fuchsia-200"><Users size={13} /> Match lobby · {hud.players}/4</div><p className="mt-2 leading-relaxed text-white/50">{connectionMessage}</p></div>}
-      {!isSpectator && hud.lifeState === 'downed' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/35"><div className="w-[min(420px,calc(100vw-2rem))] border border-amber-300/50 bg-black/80 p-6 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.3em] text-amber-200">You are downed</div><div className="mt-3 text-4xl font-black text-white">{hud.downedRemainingMs > 0 ? `${Math.ceil(hud.downedRemainingMs / 1000)}s` : 'REVIVABLE'}</div><div className="mt-3 text-xs text-white/60">A teammate must stand close and hold <span className="font-black text-cyan-200">F</span> for 3 seconds. Your body remains until the squad is wiped.</div>{hud.reviverId && <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-emerald-200">Revive in progress · {Math.round(hud.reviveProgressMs / 3000 * 100)}%</div>}<div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, hud.reviveProgressMs / 3000 * 100)}%` }} /></div></div></div>}
+      {!isSpectator && hud.lifeState === 'downed' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/35"><div className="w-[min(420px,calc(100vw-2rem))] border border-amber-300/50 bg-black/80 p-6 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.3em] text-amber-200">You are downed</div><div className="mt-3 text-4xl font-black text-white">{hud.downedRemainingMs > 0 ? `${Math.ceil(hud.downedRemainingMs / 1000)}s` : 'REVIVABLE'}</div><div className="mt-3 text-xs text-white/60">Watching <span className="font-black text-fuchsia-200">{downedSpectatorTarget?.label || 'your squad'}</span> in third person. Left click cycles living teammates.</div><div className="mt-2 text-xs text-white/60">A teammate must stand close and hold <span className="font-black text-cyan-200">F</span> for 3 seconds. Your body remains until the squad is wiped.</div>{hud.reviverId && <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-emerald-200">Revive in progress · {Math.round(hud.reviveProgressMs / 3000 * 100)}%</div>}<div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, hud.reviveProgressMs / 3000 * 100)}%` }} /></div></div></div>}
       {!isSpectator && hud.lifeState === 'eliminated' && hud.matchState === 'active' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/45"><div className="border border-rose-300/40 bg-black/80 px-6 py-5 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.28em] text-rose-200">Eliminated</div><div className="mt-3 text-xs text-white/60">Your squad can still finish the encounter.</div></div></div>}
       {hud.matchState !== 'active' && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="w-[min(440px,calc(100vw-2rem))] border border-rose-300/45 bg-[#10070b] p-7 text-center shadow-[0_0_60px_rgba(244,63,94,.2)]"><div className="text-[10px] font-black uppercase tracking-[0.32em] text-rose-200">{hud.matchState === 'solo_defeat' ? 'Run ended' : 'Squad wiped'}</div><h2 className="mt-3 text-3xl font-black text-white">{hud.matchState === 'solo_defeat' ? 'SYSTEM FAILURE' : 'NO OPERATIVES REMAIN'}</h2><p className="mt-3 text-xs leading-relaxed text-white/60">Kills confirmed: {hud.kills}. Return to the lobby to start a fresh co-op run.</p><button onClick={onExit} className="mt-6 border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 transition hover:bg-cyan-400/20">Return to lobby</button></div></div>}
       {matchSnapshot?.results && <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#03070c]/90 p-4 backdrop-blur-xl"><div className="w-[min(760px,calc(100vw-2rem))] border border-cyan-300/35 bg-[#07111b] p-6 shadow-[0_0_60px_rgba(34,211,238,.16)]"><div className="text-center"><div className={`text-[10px] font-black uppercase tracking-[0.32em] ${matchSnapshot.results.success ? 'text-cyan-200' : 'text-rose-200'}`}>{matchSnapshot.results.success ? 'Squad extracted' : 'Run failed'}</div><h2 className="mt-2 text-3xl font-black text-white">{matchSnapshot.results.success ? 'SECTOR BREACH COMPLETE' : 'SIGNAL LOST'}</h2><p className="mt-2 text-xs text-white/55">{Math.ceil(matchSnapshot.results.durationMs / 60000)} min · {matchSnapshot.results.contractsCompleted} contracts · {matchSnapshot.results.bossesDefeated} bosses</p></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{matchSnapshot.results.players.map(player => <div key={player.playerId} className="border border-white/10 bg-white/[.035] p-3"><div className="flex items-center justify-between"><span className="font-black text-white" style={{ color: player.color }}>{player.label}</span><span className="text-[9px] font-black uppercase tracking-wider text-amber-200">{player.medal}</span></div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]"><span><b className="block text-white">{player.kills}</b><i className="not-italic text-white/45">Kills</i></span><span><b className="block text-white">{Math.round(player.firearmDamage + player.passiveDamage)}</b><i className="not-italic text-white/45">Damage</i></span><span><b className="block text-white">{player.revives}</b><i className="not-italic text-white/45">Revives</i></span></div></div>)}</div><div className="mt-6 text-center"><button onClick={onExit} className="border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 hover:bg-cyan-400/20">Return to lobby</button></div></div></div>}
