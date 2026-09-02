@@ -1,3 +1,5 @@
+import type { EnemyType, ItemType, TreasureTier } from './game/combat/enemyDomain';
+
 export interface Vector2D {
   x: number;
   y: number;
@@ -62,7 +64,7 @@ export interface Enemy extends Entity {
   damagePercent?: number;
   speed: number;
   experienceValue: number;
-  type: 'basic' | 'fast' | 'tank' | 'ranged' | 'elite' | 'phantom' | 'titan' | 'boss';
+  type: EnemyType | 'boss';
   slowMultiplier?: number;
   hitFlash?: number;
 }
@@ -80,6 +82,8 @@ export interface Projectile extends Entity {
   lastDamageTick?: number;
   z?: number;
   vz?: number;
+  /** Renderer-only pitch for a host-authoritative 3D projectile flight path. */
+  presentationPitch?: number;
   /**
    * Stable identity for one rendered effect instance. Gameplay ids intentionally
    * remain semantic (for example `arc_web`) so collision code can group them.
@@ -129,7 +133,7 @@ export interface ExperienceGem {
 export interface WorldItem {
   id: string;
   position: Vector2D;
-  type: 'hp' | 'coin_bronze' | 'coin_silver' | 'coin_gold' | 'coin_diamond' | 'magnet' | 'bomb' | 'data_core';
+  type: ItemType;
   value: number;
   color: string;
   radius?: number;
@@ -145,7 +149,7 @@ export interface Treasure {
   position: Vector2D;
   color: string;
   spawnTime: number;
-  tier: 'rare' | 'epic' | 'legendary';
+  tier: TreasureTier;
 }
 
 export interface Upgrade {
@@ -210,7 +214,7 @@ export interface OperatorDefinition {
   colorBoots: string;
 }
 
-export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'TREASURE' | 'PERMANENT_UPGRADES' | 'OPERATOR_SELECT' | 'PAUSED' | 'INTEL_ARCHIVE' | 'EXFILL_SUMMARY' | 'ADMIN_DASHBOARD' | 'WAVE_UPGRADE' | 'SHOP' | 'ACHIEVEMENTS' | 'SETTINGS';
+export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'TREASURE' | 'PERMANENT_UPGRADES' | 'OPERATOR_SELECT' | 'PAUSED' | 'INTEL_ARCHIVE' | 'EXFILL_SUMMARY' | 'ADMIN_DASHBOARD' | 'WAVE_UPGRADE' | 'SHOP' | 'ACHIEVEMENTS' | 'SETTINGS' | 'MULTIPLAYER_SETUP' | 'MULTIPLAYER_PLAYING';
 
 export interface Inventory {
   armorTier: number; // 0=none, 1=tier1, 2=tier2, 3=tier3

@@ -7,6 +7,28 @@ import { beamIntersectsCircle, sanitizeProjectileRadius } from './projectilePres
 import { getEvolutionProfile } from './evolutions';
 import { getWorldObstacles, isWorldPositionClear, resolveWorldCollisions, WORLD_DISTRICTS } from './world/WorldLayout';
 import { ControlScheme, DEFAULT_CONTROL_SCHEME, isMovementDirectionPressed } from './controls';
+import {
+  BOSS_HIT_STOP_MS,
+  calculateDifficultyMultiplier,
+  chooseWeightedEnemy,
+  createBossStats,
+  createEnemyStats,
+  getEnemySpawnCandidates,
+  getGuaranteedEnemyDrop,
+  getNextBossMilestone,
+  getPickupEffect,
+  getRunXPRequired,
+  getSpawnAttemptCount,
+  getSpawnIntervalMs,
+  ITEM_HOLDER_CHANCE,
+  EXPERIENCE_GEM_COLOR,
+  getTreasureColor,
+  rollCoinDrop,
+  rollHolderItem,
+  rollTreasureTier,
+  shouldDropTreasure,
+  resolveEnemyDamage,
+} from './combat/enemyDomain';
 
 const MANUAL_FIRST_PERSON_WEAPONS = new Set([
   'plasma_gun',
@@ -752,7 +774,7 @@ export class GameEngine {
   }
 
   getXPRequiredForLevel(level: number): number {
-    return Math.floor(this.balanceTuning.xpBaseRequirement * Math.pow(this.balanceTuning.xpLevelScaling, level - 1));
+    return getRunXPRequired(level, this.balanceTuning.xpBaseRequirement, this.balanceTuning.xpLevelScaling);
   }
 
   private buildUpgradePool() {
@@ -1007,11 +1029,12 @@ export class GameEngine {
       return; // Wait for level up selection before continuing
     }
 
-    // Increase difficulty over time from run performance only.
-    const killBonus = Math.min(this.killCount / Math.max(1, this.balanceTuning.difficultyKillBonusDivisor), this.balanceTuning.difficultyKillBonusCap); // Capped bonus
-    // Use current wave for base pacing to create distinct difficulty steps
-    const waveBonus = Math.max(0, this.player.currentWave - 1) * this.balanceTuning.difficultyTimeScalePerMinute;
-    this.difficultyMultiplier = 1 + waveBonus + killBonus;
+    // Shared pure rule: co-op will consume this exact difficulty curve too.
+    this.difficultyMultiplier = calculateDifficultyMultiplier(this.player.currentWave, this.killCount, {
+      timeScalePerWave: this.balanceTuning.difficultyTimeScalePerMinute,
+      killBonusDivisor: this.balanceTuning.difficultyKillBonusDivisor,
+      killBonusCap: this.balanceTuning.difficultyKillBonusCap,
+    });
 
     // Handle Combo Decay
     if (this.comboCount > 0 && !this.isOverdrive) {
@@ -2055,37 +2078,31 @@ export class GameEngine {
 
   collectItem(item: WorldItem) {
     soundManager.playCollect();
-    if (item.type === 'hp') {
-      this.player.health = Math.min(this.player.maxHealth, this.player.health + item.value);
-    } else if (item.type.startsWith('coin')) {
-      this.player.coins += Math.floor(item.value * this.player.stats.greed * this.balanceTuning.goldGainMultiplier);
+    const effect = getPickupEffect(item.type, item.value);
+    if (effect.kind === 'heal') {
+      this.player.health = Math.min(this.player.maxHealth, this.player.health + effect.amount);
+    } else if (effect.kind === 'coins') {
+      const coins = Math.floor(effect.amount * this.player.stats.greed * this.balanceTuning.goldGainMultiplier);
+      this.player.coins += coins;
       this.damageTexts.push({
-        x: this.player.position.x,
-        y: this.player.position.y - 20,
-        text: `+${Math.floor(item.value * this.player.stats.greed * this.balanceTuning.goldGainMultiplier)}`,
-        life: 1000,
-        maxLife: 1000,
-        color: '#ffd700'
+        x: this.player.position.x, y: this.player.position.y - 20, text: `+${coins}`,
+        life: 1000, maxLife: 1000, color: '#ffd700'
       });
-    } else if (item.type === 'magnet') {
+    } else if (effect.kind === 'magnet') {
       this.gems.forEach(gem => {
         this.collectGem(gem);
         gem.id = 'collected';
       });
-    } else if (item.type === 'bomb') {
-      this.enemies.forEach(e => {
-        e.health -= 100;
-        if (e.health <= 0) this.killEnemy(e);
+    } else if (effect.kind === 'bomb') {
+      this.enemies.forEach(enemy => {
+        enemy.health -= effect.damage;
+        if (enemy.health <= 0) this.killEnemy(enemy);
       });
-    } else if (item.type === 'data_core') {
-      this.player.pendingDataCores += 1;
+    } else {
+      this.player.pendingDataCores += effect.amount;
       this.damageTexts.push({
-        x: this.player.position.x,
-        y: this.player.position.y - 40,
-        text: "+1 DATA CORE",
-        life: 2000,
-        maxLife: 2000,
-        color: '#fff'
+        x: this.player.position.x, y: this.player.position.y - 40, text: `+${effect.amount} DATA CORE`,
+        life: 2000, maxLife: 2000, color: '#fff'
       });
     }
   }
@@ -3736,13 +3753,21 @@ export class GameEngine {
             enemy.velocity.x -= pushX; // Move away from projectile
             enemy.velocity.y -= pushY;
           }
-          let damage = (enemy.type === 'boss' || enemy.type === 'titan') 
-            ? projectile.damage * this.player.stats.boss_damage 
-            : projectile.damage;
+          const executeUpgrade = this.player.upgrades.find(u => u.id === 'instant_kill');
+          const damageResult = resolveEnemyDamage({
+            baseDamage: projectile.damage,
+            enemyType: enemy.type,
+            bossDamageMultiplier: this.player.stats.boss_damage,
+            doubleStrike: this.player.upgrades.some(u => u.id === 'double_strike'),
+            doubleStrikeChance: 0.20,
+            executeLevel: executeUpgrade ? ((executeUpgrade as any).level || 1) : 0,
+            luck: this.player.stats.luck,
+            enemyHealth: enemy.health,
+            random: Math.random,
+          });
+          let damage = damageResult.damage;
 
-          // Double Strike Proc (20% chance for double damage)
-          if (this.player.upgrades.some(u => u.id === 'double_strike') && Math.random() < 0.20) {
-            damage *= 2;
+          if (damageResult.critical) {
             this.damageTexts.push({
               x: enemy.position.x,
               y: enemy.position.y - 35,
@@ -3753,22 +3778,15 @@ export class GameEngine {
             });
           }
             
-          // Instant Kill chance (Executioner) - doesn't work on bosses
-          const executeUpgrade = this.player.upgrades.find(u => u.id === 'instant_kill');
-          if (executeUpgrade && enemy.type !== 'boss' && enemy.type !== 'titan') {
-            const executeLevel = (executeUpgrade as any).level || 1;
-            const executeChance = 0.015 * executeLevel * this.player.stats.luck; // 1.5% base * level * luck
-            if (Math.random() < executeChance) {
-              damage = enemy.health; // Deal exact remaining health
-              this.damageTexts.push({
-                x: enemy.position.x,
-                y: enemy.position.y - 30,
-                text: "EXECUTE!",
-                life: 1000,
-                maxLife: 1000,
-                color: '#ff0000'
-              });
-            }
+          if (damageResult.executed) {
+            this.damageTexts.push({
+              x: enemy.position.x,
+              y: enemy.position.y - 30,
+              text: "EXECUTE!",
+              life: 1000,
+              maxLife: 1000,
+              color: '#ff0000'
+            });
           }
             
           enemy.health -= damage;
@@ -3970,14 +3988,14 @@ export class GameEngine {
       this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.stats.vampirism);
     }
     
-    // Data Core drops for Elites and Bosses
-    if (enemy.type === 'elite' || enemy.type === 'boss' || enemy.type === 'titan') {
+    const guaranteedDrop = getGuaranteedEnemyDrop(enemy.type);
+    if (guaranteedDrop) {
       this.items.push({
         id: Math.random().toString(),
         position: { ...enemy.position },
-        type: 'data_core',
-        value: 1,
-        color: '#ffffff'
+        type: guaranteedDrop,
+        value: ITEM_TYPES[guaranteedDrop].value,
+        color: ITEM_TYPES[guaranteedDrop].color
       });
     }
     
@@ -3997,7 +4015,7 @@ export class GameEngine {
     
     // Trigger hit stop for bosses and titans
     if (enemy.type === 'boss' || enemy.type === 'titan') {
-      this.hitStopTimer = 100; // 100ms freeze
+      this.hitStopTimer = BOSS_HIT_STOP_MS;
       this.screenShake = 20;
     }
     
@@ -4006,67 +4024,39 @@ export class GameEngine {
       id: Math.random().toString(),
       position: { ...enemy.position },
       value: enemy.experienceValue,
-      color: '#00ff00'
+      color: EXPERIENCE_GEM_COLOR
     });
 
     // Drop items for holders
     if ((enemy as any).isHolder) {
-      const types = Object.keys(ITEM_TYPES);
-      const type = types[Math.floor(Math.random() * types.length)];
+      const type = rollHolderItem(Math.random);
       this.items.push({
         id: Math.random().toString(),
         position: { ...enemy.position },
-        type: type as any,
-        value: (ITEM_TYPES as any)[type].value,
-        color: (ITEM_TYPES as any)[type].color
+        type,
+        value: ITEM_TYPES[type].value,
+        color: ITEM_TYPES[type].color
       });
     } else {
       // Regular enemy coin drops
-      let coinType: string | null = null;
-      const luck = this.player.stats.luck;
-      const dropChance = this.balanceTuning.coinDropChanceBase * luck;
-
-      if (enemy.type === 'boss') {
-        coinType = 'coin_diamond';
-      } else if (enemy.type === 'titan') {
-        coinType = 'coin_gold';
-      } else if (enemy.type === 'elite') {
-        coinType = Math.random() < 0.3 ? 'coin_gold' : 'coin_silver';
-      } else if (Math.random() < dropChance) {
-        if (enemy.type === 'tank') {
-          coinType = 'coin_silver';
-        } else if (enemy.type === 'fast' || enemy.type === 'ranged' || enemy.type === 'phantom') {
-          coinType = Math.random() < 0.2 ? 'coin_silver' : 'coin_bronze';
-        } else {
-          coinType = 'coin_bronze';
-        }
-      }
+      const coinType = rollCoinDrop(enemy.type, this.player.stats.luck, this.balanceTuning.coinDropChanceBase, Math.random);
 
       if (coinType) {
         this.items.push({
           id: Math.random().toString(),
           position: { ...enemy.position },
-          type: coinType as any,
-          value: (ITEM_TYPES as any)[coinType].value,
-          color: (ITEM_TYPES as any)[coinType].color
+          type: coinType,
+          value: ITEM_TYPES[coinType].value,
+          color: ITEM_TYPES[coinType].color
         });
       }
     }
     
     // Rare treasure spawn
-    if (
-      this.treasures.length < this.MAX_ACTIVE_TREASURES &&
-      Math.random() < this.balanceTuning.treasureDropChanceBase * this.player.stats.luck
-    ) {
+    if (shouldDropTreasure(this.treasures.length, this.MAX_ACTIVE_TREASURES, this.player.stats.luck, this.balanceTuning.treasureDropChanceBase, Math.random)) {
       const angle = Math.random() * Math.PI * 2;
       const dist = 800 + Math.random() * 400;
-      // Higher luck and more game time = better tier chances
-      const tierRoll = Math.random();
-      const legendaryChance = 0.05 + (this.gameTime / 600000) * 0.15;
-      const epicChance = 0.20 + (this.gameTime / 600000) * 0.20;
-      const tier = tierRoll < legendaryChance ? 'legendary' :
-                   tierRoll < legendaryChance + epicChance ? 'epic' : 'rare';
-      const tierColors = { rare: '#ffd700', epic: '#a855f7', legendary: '#ff6600' };
+      const tier = rollTreasureTier(this.gameTime, Math.random);
       const desiredPosition = {
         x: this.player.position.x + Math.cos(angle) * dist,
         y: this.player.position.y + Math.sin(angle) * dist,
@@ -4074,7 +4064,7 @@ export class GameEngine {
       this.treasures.push({
         id: Math.random().toString(),
         position: this.findClearWorldPosition(desiredPosition, 46),
-        color: tierColors[tier],
+        color: getTreasureColor(tier),
         spawnTime: performance.now(),
         tier
       });
@@ -4104,40 +4094,27 @@ export class GameEngine {
 
   spawnEnemies(dt: number) {
     this.spawnTimer += dt;
-    const spawnRate = Math.max(this.balanceTuning.spawnMinIntervalMs, this.balanceTuning.spawnBaseIntervalMs / this.difficultyMultiplier);
+    const spawnRate = getSpawnIntervalMs(this.difficultyMultiplier, this.balanceTuning.spawnBaseIntervalMs, this.balanceTuning.spawnMinIntervalMs);
     
     if (this.spawnTimer >= spawnRate) {
       this.spawnTimer = 0;
 
-      // Boss spawning logic: reliably check milestone minutes
-      const minutes = this.gameTime / 60000;
-      for (const milestone of [2, 5, 10, 20]) {
-        if (minutes >= milestone && !this.spawnedBossMilestones.has(milestone)) {
-          this.spawnedBossMilestones.add(milestone);
-          this.spawnBoss(milestone);
-          return;
-        }
+      const milestone = getNextBossMilestone(this.gameTime, this.spawnedBossMilestones);
+      if (milestone !== undefined) {
+        this.spawnedBossMilestones.add(milestone);
+        this.spawnBoss(milestone);
+        return;
       }
 
       if (this.enemies.length >= this.MAX_ENEMIES) return;
 
-      // Scale spawn rate with difficulty, completely ignoring weapon count
-      const spawnMultiplier = 1 + (this.difficultyMultiplier - 1) * 0.5;
-      const guaranteedSpawns = Math.floor(spawnMultiplier);
-      const extraSpawnChance = spawnMultiplier - guaranteedSpawns;
-      // Supports infinite scaling with 0.5 steps: 1x, 1.5x, 2x, 2.5x, 3x, ...
-      const spawnAttempts = Math.min(
-        this.MAX_ENEMIES - this.enemies.length,
-        guaranteedSpawns + (Math.random() < extraSpawnChance ? 1 : 0)
-      );
+      const spawnAttempts = getSpawnAttemptCount(this.difficultyMultiplier, this.MAX_ENEMIES - this.enemies.length, Math.random);
 
       if (spawnAttempts > 0 && Math.random() < 0.2) soundManager.playEnemySpawn();
-      const activeElites = this.enemies.reduce((count, enemy) => count + (enemy.type === 'elite' ? 1 : 0), 0);
-      const activePhantoms = this.enemies.reduce((count, enemy) => count + (enemy.type === 'phantom' ? 1 : 0), 0);
-      const activeTitans = this.enemies.reduce((count, enemy) => count + (enemy.type === 'titan' ? 1 : 0), 0);
-      let eliteSpawnsThisTick = 0;
-      let phantomSpawnsThisTick = 0;
-      let titanSpawnsThisTick = 0;
+      const activeCounts = this.enemies.reduce<Partial<Record<keyof typeof ENEMY_TYPES, number>>>((counts, enemy) => {
+        if (enemy.type !== 'boss') counts[enemy.type] = (counts[enemy.type] || 0) + 1;
+        return counts;
+      }, {});
 
       for (let i = 0; i < spawnAttempts; i++) {
         // System Breach: override spawn position to portals
@@ -4156,62 +4133,13 @@ export class GameEngine {
           };
         }
 
-        const rand = Math.random();
-        let type: keyof typeof ENEMY_TYPES = 'basic';
-        let isHolder = false;
-
-        if (rand > 0.98) {
-          isHolder = true;
-        } else {
-          // Time-based enemy variety — Threat Level brings enemy types in earlier
-          const minutes = this.gameTime / 60000;
-          const effectiveMinutes = minutes;
-          const availableTypes: (keyof typeof ENEMY_TYPES)[] = ['basic'];
-
-          if (effectiveMinutes >= 2) availableTypes.push('fast');
-          if (effectiveMinutes >= 5) availableTypes.push('tank');
-          if (effectiveMinutes >= 8) availableTypes.push('ranged');
-          if (effectiveMinutes >= 12 && activeElites + eliteSpawnsThisTick < this.MAX_ACTIVE_ELITES) availableTypes.push('elite');
-          if (effectiveMinutes >= 15 && activePhantoms + phantomSpawnsThisTick < this.MAX_ACTIVE_PHANTOMS) availableTypes.push('phantom');
-          if (effectiveMinutes >= 20 && activeTitans + titanSpawnsThisTick < this.MAX_ACTIVE_TITANS) availableTypes.push('titan');
-
-          const typeWeights: Record<keyof typeof ENEMY_TYPES, number> = {
-            basic: 1.2,
-            fast: 1.1,
-            tank: 0.9,
-            ranged: 0.85,
-            elite: 0.5,
-            phantom: 0.38,
-            titan: 0.14,
-          };
-
-          let totalWeight = 0;
-          for (const candidate of availableTypes) {
-            totalWeight += typeWeights[candidate] || 1;
-          }
-
-          let roll = Math.random() * totalWeight;
-          for (const candidate of availableTypes) {
-            roll -= typeWeights[candidate] || 1;
-            if (roll <= 0) {
-              type = candidate;
-              break;
-            }
-          }
-
-          if (type === 'elite') {
-            eliteSpawnsThisTick++;
-          }
-          if (type === 'phantom') {
-            phantomSpawnsThisTick++;
-          }
-          if (type === 'titan') {
-            titanSpawnsThisTick++;
-          }
-        }
-
-        const config = ENEMY_TYPES[type as keyof typeof ENEMY_TYPES] || ENEMY_TYPES.basic;
-        spawnPos = this.findClearWorldPosition(spawnPos, isHolder ? 25 : config.radius);
+        const isHolder = Math.random() > 1 - ITEM_HOLDER_CHANCE;
+        const candidates = getEnemySpawnCandidates(this.gameTime, activeCounts);
+        // Holders have no combat archetype in solo; keep their hidden type as
+        // basic so the shared rules preserve the old random-consumption order.
+        const type = isHolder ? 'basic' : chooseWeightedEnemy(Math.random, candidates);
+        const stats = createEnemyStats(type, this.difficultyMultiplier, this.balanceTuning, isHolder);
+        spawnPos = this.findClearWorldPosition(spawnPos, stats.radius);
         if (isHolder) {
           soundManager.playTreasureSpawn();
         }
@@ -4221,38 +4149,24 @@ export class GameEngine {
           position: spawnPos,
           velocity: { x: 0, y: 0 },
           rotation: 0,
-          radius: isHolder ? 25 : config.radius,
-          health: (isHolder ? 50 : config.health) * this.difficultyMultiplier * this.balanceTuning.enemyHealthMultiplier,
-          maxHealth: (isHolder ? 50 : config.health) * this.difficultyMultiplier * this.balanceTuning.enemyHealthMultiplier,
-          color: isHolder ? '#d4a373' : config.color,
-          // Damage scales half as fast as health to prevent 1-shotting at high waves
-          damage: (isHolder ? 0 : config.damage) * (1 + (this.difficultyMultiplier - 1) * 0.5) * this.balanceTuning.enemyDamageMultiplier,
-          speed: isHolder ? 0.5 : config.speed,
-          experienceValue: isHolder ? 0 : config.xp,
+          radius: stats.radius, health: stats.health, maxHealth: stats.maxHealth, color: stats.color,
+          damage: stats.damage, speed: stats.speed, experienceValue: stats.experienceValue,
           type,
           ...(isBreachSpawn ? { isEventEnemy: true } : {}),
           ...(isHolder ? { isHolder: true } : {})
         } as any);
+        if (!isHolder) activeCounts[type] = (activeCounts[type] || 0) + 1;
       }
     }
   }
 
-  spawnBoss(minutes: number) {
+  spawnBoss(minutes: 2 | 5 | 10 | 20) {
     const angle = Math.random() * Math.PI * 2;
     const distance = 800; // spawn slightly further out due to their size
     const x = this.player.position.x + Math.cos(angle) * distance;
     const y = this.player.position.y + Math.sin(angle) * distance;
 
-    let bossStats;
-    if (minutes === 2) {
-      bossStats = { health: 3000, speed: 0.12, damagePercent: 0.25, radius: 100, xp: 2000, color: '#ff0000', name: 'NEURAL OVERLORD' };
-    } else if (minutes === 5) {
-      bossStats = { health: 12000, speed: 0.10, damagePercent: 0.35, radius: 140, xp: 5000, color: '#ff00ff', name: 'VOID ARCHITECT' };
-    } else if (minutes === 10) {
-      bossStats = { health: 50000, speed: 0.08, damagePercent: 0.50, radius: 180, xp: 15000, color: '#00ffff', name: 'CYBER SENTINEL' };
-    } else {
-      bossStats = { health: 200000, speed: 0.06, damagePercent: 0.50, radius: 250, xp: 50000, color: '#ffffff', name: 'THE SINGULARITY' };
-    }
+    const bossStats = createBossStats(minutes, this.balanceTuning);
 
     this.enemies.push({
       id: `boss_${minutes}min_${Date.now()}`,
@@ -4260,12 +4174,12 @@ export class GameEngine {
       velocity: { x: 0, y: 0 },
       rotation: 0,
       radius: bossStats.radius,
-      health: bossStats.health * this.balanceTuning.bossHealthMultiplier,
-      maxHealth: bossStats.health * this.balanceTuning.bossHealthMultiplier,
+      health: bossStats.health,
+      maxHealth: bossStats.maxHealth,
       damage: 0, // Ignored since we use damagePercent
       damagePercent: bossStats.damagePercent,
       speed: bossStats.speed,
-      experienceValue: bossStats.xp * this.balanceTuning.bossXPRewardMultiplier,
+      experienceValue: bossStats.experienceValue,
       color: bossStats.color,
       type: 'boss'
     } as any);

@@ -62,6 +62,14 @@ export class Renderer3D {
   isShooting: boolean = false;
   isAimingDownSights: boolean = false;
   adsProgress: number = 0;
+  /** Optional external presentation offset used by the network snapshot bridge. */
+  presentationVerticalOffset: number = 0;
+  presentationSprinting: boolean = false;
+  presentationSliding: boolean = false;
+  /** Co-op sniper scope. World FOV and look speed remain purely presentation. */
+  presentationScoped: boolean = false;
+  /** 0–1 host-derived reload progress for the visible legacy plasma handgun. */
+  presentationHandgunReloadProgress: number = 0;
 
   // Viewmodel Sway & Inertia
   swayX: number = 0;
@@ -1579,7 +1587,8 @@ export class Renderer3D {
   prepareFrame(engine: GameEngine, deltaTime: number) {
     this.activeViewMode = engine.viewMode;
     if (engine.viewMode === 'THIRD_PERSON') {
-      this.thirdPersonPlayerGroup.position.set(engine.player.position.x, 0, engine.player.position.y);
+      this.thirdPersonPlayerGroup.position.set(engine.player.position.x, this.presentationVerticalOffset, engine.player.position.y);
+      this.thirdPersonPlayerGroup.scale.set(1, this.presentationSliding ? 0.62 : 1, this.presentationSliding ? 1.16 : 1);
       this.thirdPersonPlayerGroup.rotation.y = this.yaw + Math.PI;
       this.thirdPersonPlayerGroup.updateMatrixWorld(true);
       return;
@@ -1599,21 +1608,23 @@ export class Renderer3D {
     const bobY = (isMoving ? Math.sin(this.walkBobTimer) * 0.55 : breathY) * adsDamp;
     const bobX = (isMoving ? Math.cos(this.walkBobTimer * 0.5) * 0.3 : breathX) * adsDamp;
 
-    const baseFov = engine.isDashing ? this.WORLD_DASH_FOV : this.WORLD_FOV;
-    const targetWorldFov = THREE.MathUtils.lerp(baseFov, this.ADS_FOV, this.adsProgress);
-    const targetViewmodelFov = THREE.MathUtils.lerp(this.VIEWMODEL_FOV, this.VIEWMODEL_ADS_FOV, this.adsProgress);
+    const baseFov = engine.isDashing ? this.WORLD_DASH_FOV : (this.presentationSprinting ? this.WORLD_FOV + 7 : this.WORLD_FOV);
+    const adsWorldFov = this.presentationScoped ? 28 : this.ADS_FOV;
+    const adsViewmodelFov = this.presentationScoped ? 42 : this.VIEWMODEL_ADS_FOV;
+    const targetWorldFov = THREE.MathUtils.lerp(baseFov, adsWorldFov, this.adsProgress);
+    const targetViewmodelFov = THREE.MathUtils.lerp(this.VIEWMODEL_FOV, adsViewmodelFov, this.adsProgress);
     this.camera.fov = this.damp(this.camera.fov, targetWorldFov, 13, deltaTime);
     this.viewmodelCamera.fov = this.damp(this.viewmodelCamera.fov, targetViewmodelFov, 15, deltaTime);
     this.camera.updateProjectionMatrix();
     this.viewmodelCamera.updateProjectionMatrix();
-    this.sensitivity = THREE.MathUtils.lerp(0.0022, 0.00105, this.adsProgress);
+    this.sensitivity = THREE.MathUtils.lerp(0.0022, this.presentationScoped ? 0.00077 : 0.00105, this.adsProgress);
 
     const shakeMult = 1 - this.adsProgress * 0.7;
     const shakeX = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
     const shakeY = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
     this.camera.position.set(
       player.position.x + bobX * 0.2 + shakeX,
-      26 + bobY * 0.2 + shakeY,
+      26 + this.presentationVerticalOffset - (this.presentationSliding ? 9 : 0) + bobY * 0.2 + shakeY,
       player.position.y
     );
     this.camera.rotation.order = 'YXZ';
@@ -1638,6 +1649,13 @@ export class Renderer3D {
     this.heatVentIntensity *= Math.exp(-2.8 * deltaTime / 1000);
     this.armHydraulicPiston.position.z = 0.65 + this.recoilOffset * 0.32;
     this.barrelRoot.position.z = this.recoilOffset * 0.24;
+    // The plasma handgun is the original authored viewmodel, not the modular
+    // co-op firearm rig. Reset and animate its battery cell here so networked
+    // reloads visibly eject, present, and reseat the actual on-screen weapon.
+    const handgunReload = THREE.MathUtils.clamp(this.presentationHandgunReloadProgress, 0, 1);
+    const cellTravel = Math.sin(handgunReload * Math.PI);
+    this.weaponBatteryCell.position.set(cellTravel * .72, -1.0 - cellTravel * .78, -2.35 + cellTravel * .34);
+    this.weaponBatteryCell.rotation.set(.10 + cellTravel * .54, 0, -cellTravel * .42);
 
     if (this.muzzleFlashTimer > 0) {
       this.muzzleFlashTimer -= deltaTime;
@@ -1676,6 +1694,18 @@ export class Renderer3D {
       THREE.MathUtils.lerp(hipRotY, this.swayX * 0.03, this.adsProgress),
       THREE.MathUtils.lerp(hipRotZ, 0, this.adsProgress)
     );
+    if (handgunReload > 0) {
+      // A decisive one-handed inspection/eject pose: it drops below the
+      // reticle, rolls toward the player, then snaps naturally back on seat.
+      // The motion is applied after the base sway/ADS solve so it cannot be
+      // overwritten by the normal first-person animation on the same frame.
+      this.fpsWeaponGroup.position.x += cellTravel * .52;
+      this.fpsWeaponGroup.position.y -= cellTravel * 1.18;
+      this.fpsWeaponGroup.position.z += cellTravel * .76;
+      this.fpsWeaponGroup.rotation.x += cellTravel * .58;
+      this.fpsWeaponGroup.rotation.y += cellTravel * .14;
+      this.fpsWeaponGroup.rotation.z -= cellTravel * .27;
+    }
     this.camera.updateMatrixWorld(true);
     this.viewmodelCamera.updateMatrixWorld(true);
   }
@@ -1802,7 +1832,7 @@ export class Renderer3D {
       this.thirdPersonPlayerGroup.visible = true;
 
       // Third Person High FOV (92° standard, 108° dash)
-      const targetFov = engine.isDashing ? 94 : 78;
+      const targetFov = engine.isDashing ? 94 : (this.presentationSprinting ? 86 : 78);
       this.camera.fov += (targetFov - this.camera.fov) * 0.14;
       this.camera.updateProjectionMatrix();
 
@@ -1822,14 +1852,15 @@ export class Renderer3D {
       const thirdShake = engine.screenShake * 0.32;
       this.camera.position.set(
         player.position.x + camOffsetX + shoulderX,
-        Math.max(20, camOffsetY) + (Math.random() - 0.5) * thirdShake,
+        Math.max(20, camOffsetY) + this.presentationVerticalOffset + (Math.random() - 0.5) * thirdShake,
         player.position.y + camOffsetZ + shoulderZ + (Math.random() - 0.5) * thirdShake
       );
-      this.camera.lookAt(focusX, 30, focusZ);
+      this.camera.lookAt(focusX, 30 + this.presentationVerticalOffset, focusZ);
 
       // Position Third-Person Character
-      this.thirdPersonPlayerGroup.position.set(player.position.x, 0, player.position.y);
+      this.thirdPersonPlayerGroup.position.set(player.position.x, this.presentationVerticalOffset, player.position.y);
       this.thirdPersonPlayerGroup.rotation.y = this.yaw + Math.PI;
+      this.thirdPersonPlayerGroup.scale.set(1, this.presentationSliding ? 0.62 : 1, this.presentationSliding ? 1.16 : 1);
 
       // Halo ring rotation & pulse
       this.tpGroundRingMesh.rotation.z += deltaTime * 0.002;
@@ -1957,6 +1988,18 @@ export class Renderer3D {
           mainMat.emissive.copy(parseHexColor(enemy.color, 0xff0055));
           mainMat.emissiveIntensity = 0.8;
         }
+      }
+
+      // In perspective modes the 2D health bars are not present. Keep a
+      // compact world-space bar above damaged enemies so a co-op player can
+      // read hit confirmation and focus fire without relying on HUD text.
+      const healthBar = (mesh as any)._healthBar as THREE.Group | undefined;
+      const healthFill = (mesh as any)._healthFill as THREE.Mesh | undefined;
+      if (healthBar && healthFill) {
+        const ratio = THREE.MathUtils.clamp(enemy.health / Math.max(1, enemy.maxHealth), 0, 1);
+        healthBar.visible = enemy.health < enemy.maxHealth && enemy.health > 0;
+        healthFill.scale.x = ratio;
+        healthFill.position.x = -((1 - ratio) * (enemy.radius || 15));
       }
     }
 
@@ -2443,6 +2486,24 @@ export class Renderer3D {
     eyeMesh.position.set(0, 0, radius * 0.8);
     group.add(eyeMesh);
 
+    const healthBar = new THREE.Group();
+    const healthWidth = radius * 2;
+    const healthBackground = new THREE.Mesh(
+      new THREE.PlaneGeometry(healthWidth + 3, 5),
+      new THREE.MeshBasicMaterial({ color: 0x13040a, transparent: true, opacity: 0.9, depthWrite: false }),
+    );
+    const healthFill = new THREE.Mesh(
+      new THREE.PlaneGeometry(healthWidth, 2.4),
+      new THREE.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, opacity: 0.95, depthWrite: false }),
+    );
+    healthFill.position.z = 0.2;
+    healthBar.position.set(0, radius * 1.75, 0);
+    healthBar.visible = false;
+    healthBar.add(healthBackground, healthFill);
+    (group as any)._healthBar = healthBar;
+    (group as any)._healthFill = healthFill;
+    group.add(healthBar);
+
     return group;
   }
 
@@ -2470,6 +2531,13 @@ export class Renderer3D {
       if (!mesh) {
         if (!this.canCreateProjectileVisual(visualKind)) continue;
         mesh = this.createProjectileMesh(p);
+        // Moving co-op rounds receive a compact rear tracer in their local
+        // flight axis. Because the parent is yawed and pitched below, this is
+        // a true 3D line of travel—not a screen-facing billboard that appears
+        // horizontal when the player fires up or down.
+        if (p.presentationPitch !== undefined && Math.hypot(p.velocity.x, p.velocity.y) > 20) {
+          this.attachProjectileFlightTrail(mesh, p);
+        }
         const evolution = getEvolutionProfile(p.evolutionId) || this.getEvolutionForVisualKind(visualKind);
         // At most two compact final-form crests per weapon are admitted in a
         // frame. This preserves an unmistakable evolution signature without
@@ -2586,8 +2654,17 @@ export class Renderer3D {
         mesh.rotation.y += deltaTime * 0.016;
         mesh.rotation.z += deltaTime * 0.006;
       } else if (visualKind === 'mirror_shards' || visualKind === 'mirror_shard' || visualKind === 'nano_swarm' || visualKind === 'nano') {
-        mesh.rotation.y += deltaTime * 0.007;
-        mesh.rotation.x += deltaTime * 0.005;
+        // Co-op moving rounds already have a host-authoritative yaw/pitch.
+        // Roll around their flight axis for shimmer without turning the whole
+        // projectile away from the direction it was actually fired.
+        if (p.presentationPitch !== undefined && p.rotation !== undefined) {
+          mesh.rotation.y = -p.rotation + Math.PI / 2;
+          mesh.rotation.x = -p.presentationPitch;
+          mesh.rotation.z += deltaTime * 0.005;
+        } else {
+          mesh.rotation.y += deltaTime * 0.007;
+          mesh.rotation.x += deltaTime * 0.005;
+        }
         if (visualKind === 'mirror_shards' || visualKind === 'mirror_shard') {
           const flash = THREE.MathUtils.clamp((p.ricochetFlash || 0) / 150, 0, 1);
           if (flash > 0) {
@@ -2600,6 +2677,7 @@ export class Renderer3D {
         // line. The mesh itself stays static, so this costs transforms only.
         if (p.rotation !== undefined) {
           mesh.rotation.y = -p.rotation + Math.PI / 2 + (Math.random() - 0.5) * 0.05;
+          if (p.presentationPitch !== undefined) mesh.rotation.x = -p.presentationPitch;
         }
         this.pulseTransparentMaterials(mesh, 0.76 + Math.sin(animationTime * 30) * 0.16);
         mesh.traverse((node) => {
@@ -2615,9 +2693,19 @@ export class Renderer3D {
         });
       } else if (p.rotation !== undefined) {
         mesh.rotation.y = -p.rotation + Math.PI / 2;
-        if (p.vz !== undefined) {
+        if (p.presentationPitch !== undefined) {
+          // Projectile assets face local +Z. Rotate pitch around local X after
+          // yaw so the bolt, its core, and its rear tracer all share the exact
+          // host-authoritative 3D flight vector.
+          mesh.rotation.x = -p.presentationPitch;
+        } else if (p.vz !== undefined) {
           mesh.rotation.x = Math.atan2(p.vz, 18);
         }
+      }
+
+      if (p.rotation !== undefined && p.presentationPitch !== undefined
+        && Math.hypot(p.velocity.x, p.velocity.y) > 20) {
+        this.orientProjectileAlongFlightVector(mesh, p.rotation, p.presentationPitch);
       }
 
       // A projectile can be perfectly valid in gameplay while spawning inside
@@ -2643,6 +2731,51 @@ export class Renderer3D {
         }
       }
     }
+  }
+
+  /**
+   * Adds a deliberately narrow, physical flight trail once at projectile
+   * creation. It lives in local -Z behind the core, so parent yaw/pitch drives
+   * it through the same up/down vector as the gameplay projectile.
+   */
+  private attachProjectileFlightTrail(root: THREE.Object3D, projectile: Projectile) {
+    const radius = Math.max(2.4, Math.min(10, this.getCompressedVisualRadius(projectile) * 0.28));
+    const length = Math.max(18, Math.min(68, this.getCompressedVisualRadius(projectile) * 3.6));
+    const color = parseHexColor(projectile.color, 0x67e8f9);
+    const trail = new THREE.Group();
+    trail.name = 'projectile-flight-trail';
+
+    const glow = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.12, radius * 0.68, length, 8, 1, true),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    glow.rotation.x = Math.PI / 2;
+    glow.position.z = -length * 0.5;
+    trail.add(glow);
+
+    const core = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.045, radius * 0.19, length * 0.94, 6, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    core.rotation.x = Math.PI / 2;
+    core.position.z = -length * 0.48;
+    trail.add(core);
+
+    root.add(trail);
+  }
+
+  /** Maps the projectile asset's local +Z axis to its exact world-space
+   * velocity direction in one quaternion operation. This avoids the ambiguous
+   * Euler-order behaviour that could make an upward/downward multiplayer shot
+   * look parallel to the city floor. */
+  private orientProjectileAlongFlightVector(mesh: THREE.Object3D, yaw: number, pitch: number) {
+    const horizontal = Math.cos(pitch);
+    const direction = new THREE.Vector3(
+      Math.cos(yaw) * horizontal,
+      Math.sin(pitch),
+      Math.sin(yaw) * horizontal,
+    );
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
   }
 
   private getNearCameraVisualSafety(mesh: THREE.Object3D, visualKind: string): number {
@@ -3699,7 +3832,9 @@ export class Renderer3D {
       };
       (data.ring.material as THREE.MeshBasicMaterial).opacity = 0.35 + pulse * 0.36;
       (data.innerRing.material as THREE.MeshBasicMaterial).opacity = 0.14 + proximity * 0.26;
-      (data.beacon.material as THREE.MeshBasicMaterial).opacity = 0.12 + pulse * 0.2;
+      // Visible above the skyline, deliberately restrained near the terminal.
+      // The station mesh itself already provides close-range interaction flair.
+      (data.beacon.material as THREE.MeshBasicMaterial).opacity = 0.16 + pulse * 0.11;
       data.hologram.rotation.y += deltaTime * 0.0014;
       data.hologram.position.y = 54 + Math.sin(now * 2.2) * 3;
       data.sign.rotation.y = Math.atan2(this.camera.position.x - shop.position.x, this.camera.position.z - shop.position.y);
@@ -3784,9 +3919,15 @@ export class Renderer3D {
       group.add(cap);
     }
 
-    const beacon = new THREE.Mesh(new THREE.ConeGeometry(15, 290, 20, 1, true), new THREE.MeshBasicMaterial({ color: cyan, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-    beacon.position.y = 150;
+    // Buy Stations are strategic destinations in co-op. This column reaches
+    // practically to the sky dome, so a player can navigate to one from any
+    // district rather than hunting through the city blocks for a tiny kiosk.
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(22, 82, 10_500, 28, 1, true), new THREE.MeshBasicMaterial({ color: cyan, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beacon.position.y = 5_250;
     group.add(beacon);
+    const beaconCore = new THREE.Mesh(new THREE.CylinderGeometry(6, 13, 10_700, 18, 1, true), new THREE.MeshBasicMaterial({ color: 0xe0faff, transparent: true, opacity: 0.48, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beaconCore.position.y = 5_350;
+    group.add(beaconCore);
     const light = new THREE.PointLight(cyan, 2.4, 300, 1.7);
     light.position.y = 36;
     group.add(light);
@@ -3965,8 +4106,10 @@ export class Renderer3D {
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(15, 1), new THREE.MeshBasicMaterial({ color: hot, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
     core.position.y = 59;
     group.add(core);
-    const beacon = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.32, 420, 24, 1, true), new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-    beacon.position.y = 215;
+    // Extraction is the final, map-scale call to action. Match the station's
+    // visibility language but give it a distinct amber beam.
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(20, Math.max(80, radius), 10_500, 28, 1, true), new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.30, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beacon.position.y = 5_250;
     group.add(beacon);
     const pylons: THREE.Mesh[] = [];
     for (let i = 0; i < 4; i++) {

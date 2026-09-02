@@ -8,7 +8,14 @@
 |------|---------|
 | `src/App.tsx` | React UI: menus, HUD, level-up, game over, treasure, Neural Lab, **Operator Select** |
 | `src/game/Engine.ts` | Core game loop: rendering, physics, spawning, combat, weapons, **drawPlayer()** |
-| `src/game/SoundManager.ts` | Procedural audio via Web Audio API |
+| `src/game/multiplayer/ManualWebRTCSession.ts` | Backend-free WebRTC adapter: host creates a copyable offer for each friend, guests return matching answers, and peers exchange typed data-channel messages. |
+| `src/game/multiplayer/CoopSimulation.ts` | DOM-free, host-authoritative first co-op combat slice: squad movement, every current weapon definition, enemies, kills, and snapshots. |
+| `src/components/ManualMultiplayerSetup.tsx` | Manual co-op setup UI reachable from the main menu. It has no signaling service or account dependency. |
+| `src/components/MultiplayerArena.tsx` | Direct WebRTC arena client: input collection, host ticking/snapshots, guest rendering, and perspective camera controls. |
+| `src/game/multiplayer/MultiplayerRendererBridge.ts` | Adapter that presents the shared co-op snapshot through the existing production `Renderer3D`, retaining its FPS viewmodel, chase camera, city, and weapon VFX. |
+| `src/game/SoundManager.ts` | Web Audio API effects plus decoded co-op firearm audio |
+| `public/audio/cc0-gunfire.wav` | Bundled CC0 gunfire recording used for every host-accepted local co-op shot |
+| `public/audio/cc0-*-reload.wav` | Bundled CC0 handgun, rifle, and shotgun reload recordings |
 | `src/types.ts` | TypeScript interfaces: Entity, Player, Enemy, Projectile, Weapon, **OperatorDefinition** |
 | `src/constants.ts` | Game balance: weapons, enemies, upgrades, items, **OPERATOR_DEFINITIONS** |
 | `index.html` | Entry point, page title |
@@ -22,6 +29,8 @@ MENU → PLAYING → LEVEL_UP → PLAYING
                 → GAME_OVER → MENU or PLAYING
      → OPERATOR_SELECT → MENU
      → PERMANENT_UPGRADES → MENU
+     → MULTIPLAYER_SETUP → MENU
+     → MULTIPLAYER_PLAYING → MENU
 ```
 
 - **MENU** — Title screen with "Initialize Run", "Select Operator", & "Neural Lab". Shows active operator, coins, level.
@@ -31,6 +40,8 @@ MENU → PLAYING → LEVEL_UP → PLAYING
 - **TREASURE** — Rare treasure found.
 - **GAME_OVER** — Run stats. Two options: "Try Again" or "Back to Menu".
 - **PERMANENT_UPGRADES** — "Neural Lab" shop.
+- **MULTIPLAYER_SETUP** — Manual WebRTC offer/answer exchange for direct friends-only co-op.
+- **MULTIPLAYER_PLAYING** — Direct peer-to-peer, host-authoritative co-op arena.
 
 ## Operator System
 
@@ -132,6 +143,125 @@ Portal at (100, 100). Enter 250-unit zone → 30s timer. **Leaving cancels timer
 ## Input
 
 WASD/Arrows = move, Space = dash. DeltaTime-normalized movement.
+
+## Manual WebRTC Co-op Foundation
+
+The main menu includes **Manual Co-op**. It is deliberately backend-free:
+
+1. The host creates one WebRTC offer code for each friend.
+2. A friend pastes the offer, generates an answer code, and gives it back to the host.
+3. The host pastes the answer to complete the direct peer-to-peer connection.
+
+The adapter uses unordered/unreliable `input` and `state` data channels for
+time-sensitive payloads, plus an ordered/reliable channel for joins and other
+important match events. It uses public STUN discovery only; there is no TURN,
+signaling, or gameplay backend.
+
+**Current playable scope:** a host can launch a direct co-op arena alone or
+with friends. The host owns a fixed 20 Hz simulation; guests send input at
+20 Hz, while the host broadcasts snapshots at 10 Hz. The arena has
+host-authoritative squad movement, manual mouse-aimed fire with five firearms,
+enemy spawning/chasing, collision damage, and shared kill count. It also owns a
+full **Sector Breach** arc: an opening insertion, Uplink and Elite Hunt
+contracts, two mini-bosses, a three-phase final boss, and a timed extraction.
+Enemy snapshots use the real `ENEMY_TYPES` definitions, allowing the production
+3D renderer to keep their existing class-specific appearances as the match
+escalates.
+The host simulation also shares the production 12 km city bounds and
+`WorldLayout` collision resolver, so squads and enemies collide with the same
+buildings the existing `Renderer3D` presents.
+Use **1–5** to jump between firearms, or the mouse wheel to cycle them; every
+cast is explicit and host-authoritative. Buy Stations award personal run-credit
+choices—ammo, healing, armor, a personal self-revive, and up to two support
+modules. The initial support roster is Orbit Drones, Data Scythe, Void Aura,
+Frost Aura, and Neural Pulse; these are intentionally a safe subset of the
+single-player arsenal rather than a claim that every single-player weapon is
+already network-ready.
+
+The co-op arena is **first-person only** and reuses the production
+pointer-lock viewmodel from `Renderer3D`. There is no multiplayer chase-camera
+or **V** camera toggle. Click the arena once to lock the mouse. The camera and
+rendering are client presentation only; the host still decides movement,
+weapon casts, hits, and enemy outcomes.
+Movement is camera-relative: **Z** moves forward where you are
+looking, **S** moves back, and **Q/D** strafe left/right (with arrow keys also
+available). **W** is reserved for the slide/crouch action on the AZERTY layout.
+**Shift** is a held sprint with a replicated speed/FOV change, while **Space**
+sends a single host-validated jump pulse. Jump height and grounded state are
+part of the shared snapshot, so every peer receives the same grounded state
+and the same first-person camera lift.
+Hold the **W-labelled key** while standing still to crouch. To slide, hold
+**Shift**, supply any movement direction, then press and hold **W**. The host
+locks that direction at the instant the slide begins, makes it substantially
+faster than sprint, and keeps it going even when movement keys remain held or
+the camera turns. Releasing **W** immediately stands the player up and returns
+to the normal movement input; jumping also ends the slide.
+
+The authoritative simulation remains at 20 Hz and the network state stream at
+10 Hz, but the client interpolates snapshots on every animation frame. This
+keeps the host deterministic and low-bandwidth while avoiding visibly stepped
+10–20 FPS movement in first-person presentation.
+
+Shots use both the host-accepted camera yaw **and pitch** for their spawn
+direction and authoritative 3D velocity. You can fire at the ground, into an
+enemy's torso, or up into the sky just as the crosshair indicates. Projectile
+height is replicated and host collision checks include each enemy's vertical
+hit volume, so high shots fly over enemies and low shots hit the ground instead
+of being silently flattened to gun height. The renderer receives the yaw,
+pitch, velocity, elevation, and remaining lifetime so its existing authored
+projectile meshes visibly follow the actual flight path. Moving rounds also
+have a narrow luminous core-and-glow trail attached in local flight space, so
+the entire visual points along the same up/down/sideways 3D vector as the
+authoritative projectile rather than becoming a flat screen effect. The
+renderer applies that vector as one quaternion transform, avoiding rotation
+order issues that can make pitched shots appear parallel to the ground.
+
+The host's in-arena **Live squad lobby** remains open while playing. It can
+make a fresh offer code for a friend at any time; after their answer is pasted,
+the new guest joins the already-running squad, up to the four-player cap.
+
+### Co-op Firearm Audio
+
+Every host-accepted `weapon_fired` event for the local player plays the bundled
+`public/audio/cc0-gunfire.wav` asset. The Web Audio context is resumed from the
+first arena mouse click, avoiding autoplay-policy muting when the fire event is
+presented on a later animation frame. Handgun, rifle, shotgun, sniper rifle,
+and SMG reuse the CC0 recording with distinct gain, pitch, and tail-length
+profiles; if the asset cannot be decoded, the previous procedural shot remains
+as an audible fallback.
+
+Reloads receive the same authoritative treatment. Handgun, assault rifle/SMG,
+sniper rifle, and shotgun each select a matching CC0 recording, and the
+viewmodel lowers and rolls for the reload. Magazine weapons animate their
+magazine or energy cell out and back into the well; the shotgun cycles its pump
+for every shell and gets a replicated `reload_shell_loaded` sound event; the
+sniper works its bolt near the end of the reload.
+
+Asset: **“Random gunfire SFX” by iamoneabe**, distributed under
+[CC0](https://opengameart.org/content/random-gunfire-sfx); no attribution is
+required, but this record is retained for provenance.
+
+Reload assets: **“Gun reload sounds” by SpringySpringo**, distributed under
+[CC0](https://opengameart.org/content/gun-reload-sounds); credit is optional.
+
+### Co-op Death and Revival
+
+The host owns every player-life transition. In a solo co-op arena, reaching
+zero HP ends the run immediately. In a squad, a zero-HP operative becomes
+**downed** for 20 seconds: they cannot move, fire, collect loot, or draw enemy
+targets. A living teammate can stand within range and hold **F** for three
+seconds to revive them at 35% HP with 2.5 seconds of protection. Moving out of
+range, releasing F, or the reviver taking damage cancels the progress. If no
+operative remains alive, the host declares a squad wipe and sends the same
+result to every peer. Damage, down, revive, and defeat events are replicated
+for the HUD, incoming-hit vignette/direction text, sound, shake, and squad
+status display.
+
+**Current limitation:** co-op now owns its own first complete run loop, but it
+does not yet import every single-player evolution, event, operator, or passive
+power. Its supported modules are intentionally capped for clear visuals and
+predictable host performance. Bots, additional contract types, and the remaining
+single-player support weapons are future expansion work.
 
 ## Cheats
 Type the following codes while on the **Main Menu**:

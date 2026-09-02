@@ -1,0 +1,319 @@
+import {
+  clampInputFrame,
+  isMultiplayerWireMessage,
+  ManualSignal,
+  MultiplayerInputFrame,
+  MultiplayerPeerInfo,
+  MultiplayerReliableEvent,
+  MultiplayerRole,
+  MultiplayerStateFrame,
+  MultiplayerWireMessage,
+  MULTIPLAYER_PROTOCOL_VERSION,
+} from './protocol';
+
+const MAX_SIGNAL_BYTES = 48_000;
+const ICE_GATHER_TIMEOUT_MS = 7_000;
+
+type ManagedPeer = {
+  peerId: string;
+  connection: RTCPeerConnection;
+  inputChannel?: RTCDataChannel;
+  stateChannel?: RTCDataChannel;
+  reliableChannel?: RTCDataChannel;
+};
+
+export interface ManualWebRTCSessionOptions {
+  role: MultiplayerRole;
+  sessionId?: string;
+  iceServers?: RTCIceServer[];
+  onPeerChange?: (peers: MultiplayerPeerInfo[]) => void;
+  onInput?: (peerId: string, frame: MultiplayerInputFrame) => void;
+  onState?: (frame: MultiplayerStateFrame) => void;
+  onEvent?: (peerId: string, event: MultiplayerReliableEvent) => void;
+  onError?: (message: string) => void;
+}
+
+/**
+ * WebRTC gameplay transport. It can be driven by the public lobby signaling
+ * service or by the legacy encode/decode helpers below; gameplay traffic stays
+ * on the peer connection, with TURN used only when direct routes are blocked.
+ */
+export class ManualWebRTCSession {
+  readonly role: MultiplayerRole;
+  readonly sessionId: string;
+  private readonly iceServers: RTCIceServer[];
+  private readonly peers = new Map<string, ManagedPeer>();
+  private onPeerChange?: ManualWebRTCSessionOptions['onPeerChange'];
+  private onInput?: ManualWebRTCSessionOptions['onInput'];
+  private onState?: ManualWebRTCSessionOptions['onState'];
+  private onEvent?: ManualWebRTCSessionOptions['onEvent'];
+  private onError?: ManualWebRTCSessionOptions['onError'];
+
+  constructor(options: ManualWebRTCSessionOptions) {
+    this.role = options.role;
+    this.sessionId = options.sessionId || createId('session');
+    // The lobby service may provide short-lived TURN credentials. STUN remains
+    // a safe fallback for local/manual sessions when no service is configured.
+    this.iceServers = options.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }];
+    this.onPeerChange = options.onPeerChange;
+    this.onInput = options.onInput;
+    this.onState = options.onState;
+    this.onEvent = options.onEvent;
+    this.onError = options.onError;
+  }
+
+  get connectedPeerCount(): number {
+    return [...this.peers.values()].filter(peer => peer.connection.connectionState === 'connected').length;
+  }
+
+  get peerInfo(): MultiplayerPeerInfo[] {
+    return [...this.peers.values()].map(peer => ({
+      peerId: peer.peerId,
+      state: peer.connection.connectionState,
+    }));
+  }
+
+  /** Rebind consumers after the setup UI hands a live peer session to gameplay. */
+  setHandlers(handlers: Pick<ManualWebRTCSessionOptions, 'onPeerChange' | 'onInput' | 'onState' | 'onEvent' | 'onError'>) {
+    this.onPeerChange = handlers.onPeerChange;
+    this.onInput = handlers.onInput;
+    this.onState = handlers.onState;
+    this.onEvent = handlers.onEvent;
+    this.onError = handlers.onError;
+  }
+
+  /** Host-only: create one copyable offer for one friend. */
+  async createOffer(): Promise<string> {
+    this.assertRole('host');
+    const peerId = createId('peer');
+    const peer = this.createPeer(peerId);
+    peer.inputChannel = peer.connection.createDataChannel('input', { ordered: false, maxRetransmits: 0 });
+    peer.stateChannel = peer.connection.createDataChannel('state', { ordered: false, maxRetransmits: 0 });
+    peer.reliableChannel = peer.connection.createDataChannel('reliable', { ordered: true });
+    this.bindChannel(peer, peer.inputChannel, 'input');
+    this.bindChannel(peer, peer.stateChannel, 'state');
+    this.bindChannel(peer, peer.reliableChannel, 'reliable');
+
+    await peer.connection.setLocalDescription(await peer.connection.createOffer());
+    await waitForIceGathering(peer.connection);
+    return encodeSignal({
+      version: MULTIPLAYER_PROTOCOL_VERSION,
+      kind: 'offer',
+      sessionId: this.sessionId,
+      peerId,
+      description: peer.connection.localDescription!.toJSON(),
+    });
+  }
+
+  /** Guest-only: accept a host offer and return one copyable answer. */
+  async acceptOffer(offerCode: string): Promise<string> {
+    this.assertRole('guest');
+    const offer = decodeSignal(offerCode, 'offer');
+    const peer = this.createPeer(offer.peerId);
+    await peer.connection.setRemoteDescription(offer.description);
+    await peer.connection.setLocalDescription(await peer.connection.createAnswer());
+    await waitForIceGathering(peer.connection);
+    return encodeSignal({
+      version: MULTIPLAYER_PROTOCOL_VERSION,
+      kind: 'answer',
+      sessionId: offer.sessionId,
+      peerId: offer.peerId,
+      description: peer.connection.localDescription!.toJSON(),
+    });
+  }
+
+  /** Host-only: finish the connection after a friend returns their answer. */
+  async acceptAnswer(answerCode: string): Promise<void> {
+    this.assertRole('host');
+    const answer = decodeSignal(answerCode, 'answer');
+    if (answer.sessionId !== this.sessionId) {
+      throw new Error('This answer belongs to a different co-op session.');
+    }
+    const peer = this.peers.get(answer.peerId);
+    if (!peer) throw new Error('This answer does not match an offer created in this browser.');
+    await peer.connection.setRemoteDescription(answer.description);
+  }
+
+  sendInput(frame: MultiplayerInputFrame) {
+    const message = JSON.stringify(clampInputFrame(frame));
+    for (const peer of this.peers.values()) {
+      this.send(peer.inputChannel, message);
+    }
+  }
+
+  broadcastState(frame: MultiplayerStateFrame) {
+    const message = JSON.stringify(frame);
+    for (const peer of this.peers.values()) {
+      this.send(peer.stateChannel, message);
+    }
+  }
+
+  /** Returns whether at least one peer had its reliable channel ready. */
+  sendEvent(event: MultiplayerReliableEvent): boolean {
+    const message = JSON.stringify(event);
+    let sent = false;
+    for (const peer of this.peers.values()) {
+      sent = this.send(peer.reliableChannel, message) || sent;
+    }
+    return sent;
+  }
+
+  close() {
+    for (const peer of this.peers.values()) {
+      peer.inputChannel?.close();
+      peer.stateChannel?.close();
+      peer.reliableChannel?.close();
+      peer.connection.close();
+    }
+    this.peers.clear();
+    this.notifyPeers();
+  }
+
+  private createPeer(peerId: string): ManagedPeer {
+    const existing = this.peers.get(peerId);
+    if (existing) {
+      existing.connection.close();
+      this.peers.delete(peerId);
+    }
+    const connection = new RTCPeerConnection({ iceServers: this.iceServers });
+    const peer: ManagedPeer = { peerId, connection };
+    this.peers.set(peerId, peer);
+    connection.onconnectionstatechange = () => {
+      this.notifyPeers();
+      if (connection.connectionState === 'disconnected') this.onError?.(`Connection to ${peerId} was interrupted; attempting to reconnect.`);
+      if (connection.connectionState === 'failed') this.onError?.(`Connection to ${peerId} could not be restored.`);
+      if (connection.connectionState === 'closed') this.onError?.(`Connection to ${peerId} closed.`);
+    };
+    connection.oniceconnectionstatechange = () => {
+      if (connection.iceConnectionState === 'failed') {
+        this.onError?.(`Direct connection to ${peerId} failed. Try a different host network or reconnect.`);
+      }
+    };
+    connection.ondatachannel = (event) => {
+      if (event.channel.label === 'input') {
+        peer.inputChannel = event.channel;
+        this.bindChannel(peer, event.channel, 'input');
+      } else if (event.channel.label === 'state') {
+        peer.stateChannel = event.channel;
+        this.bindChannel(peer, event.channel, 'state');
+      } else if (event.channel.label === 'reliable') {
+        peer.reliableChannel = event.channel;
+        this.bindChannel(peer, event.channel, 'reliable');
+      } else {
+        event.channel.close();
+      }
+    };
+    this.notifyPeers();
+    return peer;
+  }
+
+  private bindChannel(peer: ManagedPeer, channel: RTCDataChannel, kind: 'input' | 'state' | 'reliable') {
+    channel.onmessage = (event) => this.receiveMessage(peer.peerId, kind, event.data);
+    channel.onopen = () => this.notifyPeers();
+    channel.onclose = () => this.notifyPeers();
+    channel.onerror = () => this.onError?.(`The ${kind} channel with ${peer.peerId} encountered an error.`);
+  }
+
+  private receiveMessage(peerId: string, kind: 'input' | 'state' | 'reliable', raw: unknown) {
+    if (typeof raw !== 'string' || raw.length > 64_000) return;
+    try {
+      const message: unknown = JSON.parse(raw);
+      if (!isMultiplayerWireMessage(message)) return;
+      if (kind === 'input' && message.type === 'input') {
+        this.onInput?.(peerId, clampInputFrame(message));
+      } else if (kind === 'state' && message.type === 'state') {
+        this.onState?.(message);
+      } else if (kind === 'reliable' && message.type === 'event') {
+        this.onEvent?.(peerId, message);
+      }
+    } catch {
+      this.onError?.('A peer sent an unreadable network message.');
+    }
+  }
+
+  private send(channel: RTCDataChannel | undefined, message: string): boolean {
+    if (channel?.readyState !== 'open') return false;
+    channel.send(message);
+    return true;
+  }
+
+  private notifyPeers() {
+    this.onPeerChange?.(this.peerInfo);
+  }
+
+  private assertRole(role: MultiplayerRole) {
+    if (this.role !== role) throw new Error(`Only the ${role} can perform this action.`);
+  }
+}
+
+export function encodeSignal(signal: ManualSignal): string {
+  const raw = JSON.stringify(signal);
+  if (new TextEncoder().encode(raw).byteLength > MAX_SIGNAL_BYTES) {
+    throw new Error('This connection code is unexpectedly large. Please create a fresh offer.');
+  }
+  const bytes = new TextEncoder().encode(raw);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+export function decodeSignal(code: string, expectedKind?: ManualSignal['kind']): ManualSignal {
+  const normalized = code.trim().replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+  let raw: string;
+  try {
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+    raw = new TextDecoder().decode(bytes);
+  } catch {
+    throw new Error('That connection code is not valid. Copy the complete code and try again.');
+  }
+  if (new TextEncoder().encode(raw).byteLength > MAX_SIGNAL_BYTES) {
+    throw new Error('That connection code is too large to accept.');
+  }
+  let signal: unknown;
+  try {
+    signal = JSON.parse(raw);
+  } catch {
+    throw new Error('That connection code could not be read.');
+  }
+  if (!isManualSignal(signal) || (expectedKind && signal.kind !== expectedKind)) {
+    throw new Error(`Expected a ${expectedKind || 'manual WebRTC'} connection code.`);
+  }
+  return signal;
+}
+
+function isManualSignal(value: unknown): value is ManualSignal {
+  if (!value || typeof value !== 'object') return false;
+  const signal = value as Partial<ManualSignal>;
+  return signal.version === MULTIPLAYER_PROTOCOL_VERSION
+    && (signal.kind === 'offer' || signal.kind === 'answer')
+    && typeof signal.sessionId === 'string'
+    && typeof signal.peerId === 'string'
+    && !!signal.description
+    && typeof signal.description.type === 'string'
+    && typeof signal.description.sdp === 'string';
+}
+
+async function waitForIceGathering(connection: RTCPeerConnection): Promise<void> {
+  if (connection.iceGatheringState === 'complete') return;
+  await new Promise<void>((resolve) => {
+    let timeout = 0;
+    const onStateChange = () => {
+      if (connection.iceGatheringState === 'complete') finish();
+    };
+    const finish = () => {
+      window.clearTimeout(timeout);
+      connection.removeEventListener('icegatheringstatechange', onStateChange);
+      resolve();
+    };
+    timeout = window.setTimeout(finish, ICE_GATHER_TIMEOUT_MS);
+    connection.addEventListener('icegatheringstatechange', onStateChange);
+  });
+}
+
+function createId(prefix: string): string {
+  const bytes = new Uint32Array(2);
+  crypto.getRandomValues(bytes);
+  return `${prefix}-${bytes[0].toString(36)}${bytes[1].toString(36)}`;
+}

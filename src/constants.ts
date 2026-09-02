@@ -1,3 +1,5 @@
+export { ENEMY_TYPES, ITEM_TYPES } from './game/combat/enemyDomain';
+
 // This is the real playable arena, not merely a renderer backdrop. The
 // previous 4 km square put an invisible edge only a few sprinting seconds from
 // the spawn. A 12 km arena provides long routes, room for landmarks, and keeps
@@ -255,90 +257,6 @@ export const DASH_UPGRADES = [
   { id: 'dash_prism_guard', name: 'Prism Guard', description: 'Dash: Gain 4 rotating shards for 2s that damage nearby enemies.', rarity: 'legendary' },
   { id: 'dash_cataclysm_brake', name: 'Cataclysm Brake', description: 'Dash: Stopping after dash creates an implosion pulling enemies inward.', rarity: 'legendary' },
 ];
-
-export const ITEM_TYPES = {
-  hp: { color: '#ff3366', value: 30, weight: 0.4, shape: 'heart' },
-  coin_bronze: { color: '#cd7f32', value: 2, weight: 0.4, shape: 'circle' },
-  coin_silver: { color: '#c0c0c0', value: 10, weight: 0.2, shape: 'circle' },
-  coin_gold: { color: '#ffd700', value: 20, weight: 0.05, shape: 'circle' },
-  coin_diamond: { color: '#b9f2ff', value: 100, weight: 0.01, shape: 'circle' },
-  magnet: { color: '#00ccff', value: 1, weight: 0.1, shape: 'magnet' },
-  bomb: { color: '#ff8800', value: 100, weight: 0.1, shape: 'bomb' },
-  data_core: { color: '#ffffff', value: 1, weight: 0.0, shape: 'star' } // Zero weight: manually spawned by elite/boss
-};
-
-export const ENEMY_TYPES = {
-  basic: {
-    health: 12,
-    speed: 1.0,
-    damage: 10,
-    radius: 15,
-    xp: 5,
-    color: '#ff4444',
-    name: 'Drone',
-    visual: 'circle'
-  },
-  fast: {
-    health: 50,
-    speed: 1.4,
-    damage: 12,
-    radius: 14,
-    xp: 12,
-    color: '#ffaa00',
-    name: 'Scout',
-    visual: 'triangle'
-  },
-  tank: {
-    health: 180,
-    speed: 0.9,
-    damage: 30,
-    radius: 25,
-    xp: 30,
-    color: '#8800ff',
-    name: 'Goliath',
-    visual: 'square'
-  },
-  ranged: {
-    health: 60,
-    speed: 1.3,
-    damage: 18,
-    radius: 18,
-    xp: 20,
-    color: '#00ff88',
-    name: 'Sniper',
-    visual: 'diamond'
-  },
-  elite: {
-    health: 500,
-    speed: 1.2,
-    damage: 45,
-    radius: 35,
-    xp: 100,
-    color: '#ff00ff',
-    name: 'Elite Guard',
-    visual: 'hexagon'
-  },
-  phantom: {
-    health: 80,
-    speed: 2.2,
-    damage: 15,
-    radius: 20,
-    xp: 50,
-    color: '#ffffff',
-    name: 'Phantom',
-    visual: 'ghost'
-  },
-  titan: {
-    health: 1200,
-    speed: 0.6,
-    damage: 55,
-    radius: 60,
-    xp: 500,
-    color: '#ff0000',
-    name: 'Titan',
-    visual: 'star'
-  }
-};
 
 export const PERMANENT_UPGRADES = [
   { id: 'perm_might', name: 'Neural Overdrive', description: 'Permanent +10% Damage', baseCost: 500, costScale: 1.5, maxLevel: 5, stat: 'might', value: 0.1 },

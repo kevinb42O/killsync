@@ -1,0 +1,252 @@
+/**
+ * Pure, renderer-free rules for the enemy loop shared by solo and co-op.
+ *
+ * Keep this file deterministic: callers provide the random number source and
+ * own entity ids, positions, UI, audio, persistence, and networking.
+ */
+
+export type EnemyType = 'basic' | 'fast' | 'tank' | 'ranged' | 'elite' | 'phantom' | 'titan';
+export type EnemyVisual = 'circle' | 'triangle' | 'square' | 'diamond' | 'hexagon' | 'ghost' | 'star';
+export type ItemType = 'hp' | 'coin_bronze' | 'coin_silver' | 'coin_gold' | 'coin_diamond' | 'magnet' | 'bomb' | 'data_core';
+export type TreasureTier = 'rare' | 'epic' | 'legendary';
+
+export interface EnemyDefinition {
+  health: number;
+  speed: number;
+  damage: number;
+  radius: number;
+  xp: number;
+  color: string;
+  name: string;
+  visual: EnemyVisual;
+}
+
+export const ENEMY_TYPES: Record<EnemyType, EnemyDefinition> = {
+  basic: { health: 12, speed: 1.0, damage: 10, radius: 15, xp: 5, color: '#ff4444', name: 'Drone', visual: 'circle' },
+  fast: { health: 50, speed: 1.4, damage: 12, radius: 14, xp: 12, color: '#ffaa00', name: 'Scout', visual: 'triangle' },
+  tank: { health: 180, speed: 0.9, damage: 30, radius: 25, xp: 30, color: '#8800ff', name: 'Goliath', visual: 'square' },
+  ranged: { health: 60, speed: 1.3, damage: 18, radius: 18, xp: 20, color: '#00ff88', name: 'Sniper', visual: 'diamond' },
+  elite: { health: 500, speed: 1.2, damage: 45, radius: 35, xp: 100, color: '#ff00ff', name: 'Elite Guard', visual: 'hexagon' },
+  phantom: { health: 80, speed: 2.2, damage: 15, radius: 20, xp: 50, color: '#ffffff', name: 'Phantom', visual: 'ghost' },
+  titan: { health: 1200, speed: 0.6, damage: 55, radius: 60, xp: 500, color: '#ff0000', name: 'Titan', visual: 'star' },
+};
+
+export const ITEM_TYPES: Record<ItemType, { color: string; value: number; weight: number; shape: string }> = {
+  hp: { color: '#ff3366', value: 30, weight: 0.4, shape: 'heart' },
+  coin_bronze: { color: '#cd7f32', value: 2, weight: 0.4, shape: 'circle' },
+  coin_silver: { color: '#c0c0c0', value: 10, weight: 0.2, shape: 'circle' },
+  coin_gold: { color: '#ffd700', value: 20, weight: 0.05, shape: 'circle' },
+  coin_diamond: { color: '#b9f2ff', value: 100, weight: 0.01, shape: 'circle' },
+  magnet: { color: '#00ccff', value: 1, weight: 0.1, shape: 'magnet' },
+  bomb: { color: '#ff8800', value: 100, weight: 0.1, shape: 'bomb' },
+  data_core: { color: '#ffffff', value: 1, weight: 0, shape: 'star' },
+};
+
+export const ENEMY_UNLOCK_MINUTES: Record<EnemyType, number> = {
+  basic: 0, fast: 2, tank: 5, ranged: 8, elite: 12, phantom: 15, titan: 20,
+};
+
+export const ENEMY_SPAWN_WEIGHTS: Record<EnemyType, number> = {
+  basic: 1.2, fast: 1.1, tank: 0.9, ranged: 0.85, elite: 0.5, phantom: 0.38, titan: 0.14,
+};
+
+export const ENEMY_ACTIVE_CAPS: Partial<Record<EnemyType, number>> = {
+  elite: 60, phantom: 45, titan: 8,
+};
+
+export const ITEM_HOLDER_CHANCE = 0.02;
+export const ITEM_HOLDER_STATS = { health: 50, speed: 0.5, damage: 0, radius: 25, xp: 0, color: '#d4a373' } as const;
+export const HIT_FLASH_MS = 100;
+export const BOSS_HIT_STOP_MS = 100;
+export const EXPERIENCE_GEM_COLOR = '#00ff00';
+export const DEFAULT_XP_BASE_REQUIREMENT = 120;
+export const DEFAULT_XP_LEVEL_SCALING = 1.32;
+
+export interface BossDefinition {
+  milestoneMinutes: 2 | 5 | 10 | 20;
+  name: string;
+  health: number;
+  speed: number;
+  damagePercent: number;
+  radius: number;
+  xp: number;
+  color: string;
+}
+
+export const BOSS_DEFINITIONS: Record<2 | 5 | 10 | 20, BossDefinition> = {
+  2: { milestoneMinutes: 2, name: 'NEURAL OVERLORD', health: 3000, speed: 0.12, damagePercent: 0.25, radius: 100, xp: 2000, color: '#ff0000' },
+  5: { milestoneMinutes: 5, name: 'VOID ARCHITECT', health: 12000, speed: 0.10, damagePercent: 0.35, radius: 140, xp: 5000, color: '#ff00ff' },
+  10: { milestoneMinutes: 10, name: 'CYBER SENTINEL', health: 50000, speed: 0.08, damagePercent: 0.50, radius: 180, xp: 15000, color: '#00ffff' },
+  20: { milestoneMinutes: 20, name: 'THE SINGULARITY', health: 200000, speed: 0.06, damagePercent: 0.50, radius: 250, xp: 50000, color: '#ffffff' },
+};
+
+export const BOSS_MILESTONES = Object.freeze([2, 5, 10, 20] as const);
+
+export interface EnemyBalanceRules {
+  enemyHealthMultiplier: number;
+  enemyDamageMultiplier: number;
+  bossHealthMultiplier: number;
+  bossXPRewardMultiplier: number;
+  coinDropChanceBase: number;
+  treasureDropChanceBase: number;
+}
+
+export interface DifficultyRules {
+  timeScalePerWave: number;
+  killBonusDivisor: number;
+  killBonusCap: number;
+}
+
+export function calculateDifficultyMultiplier(currentWave: number, killCount: number, rules: DifficultyRules): number {
+  const killBonus = Math.min(killCount / Math.max(1, rules.killBonusDivisor), rules.killBonusCap);
+  const waveBonus = Math.max(0, currentWave - 1) * rules.timeScalePerWave;
+  return 1 + waveBonus + killBonus;
+}
+
+export function getEnemySpawnCandidates(elapsedMs: number, activeCounts: Partial<Record<EnemyType, number>> = {}): EnemyType[] {
+  const minutes = elapsedMs / 60_000;
+  return (Object.keys(ENEMY_TYPES) as EnemyType[]).filter(type =>
+    minutes >= ENEMY_UNLOCK_MINUTES[type] && (ENEMY_ACTIVE_CAPS[type] === undefined || (activeCounts[type] || 0) < ENEMY_ACTIVE_CAPS[type]!),
+  );
+}
+
+export function chooseWeightedEnemy(random: () => number, candidates: readonly EnemyType[]): EnemyType {
+  if (candidates.length === 0) return 'basic';
+  const total = candidates.reduce((sum, type) => sum + ENEMY_SPAWN_WEIGHTS[type], 0);
+  let roll = random() * total;
+  for (const type of candidates) {
+    roll -= ENEMY_SPAWN_WEIGHTS[type];
+    if (roll <= 0) return type;
+  }
+  return candidates[candidates.length - 1];
+}
+
+export function getSpawnAttemptCount(difficultyMultiplier: number, capacity: number, random: () => number): number {
+  const spawnMultiplier = 1 + (difficultyMultiplier - 1) * 0.5;
+  const guaranteed = Math.floor(spawnMultiplier);
+  return Math.max(0, Math.min(capacity, guaranteed + (random() < spawnMultiplier - guaranteed ? 1 : 0)));
+}
+
+export function getSpawnIntervalMs(difficultyMultiplier: number, baseIntervalMs: number, minIntervalMs: number): number {
+  return Math.max(minIntervalMs, baseIntervalMs / Math.max(1, difficultyMultiplier));
+}
+
+export function getNextBossMilestone(elapsedMs: number, spawnedMilestones: ReadonlySet<number>): (2 | 5 | 10 | 20) | undefined {
+  const minutes = elapsedMs / 60_000;
+  return BOSS_MILESTONES.find(milestone => minutes >= milestone && !spawnedMilestones.has(milestone));
+}
+
+export interface SpawnedEnemyStats {
+  type: EnemyType;
+  isHolder: boolean;
+  radius: number;
+  health: number;
+  maxHealth: number;
+  color: string;
+  damage: number;
+  speed: number;
+  experienceValue: number;
+}
+
+export function createEnemyStats(type: EnemyType, difficultyMultiplier: number, balance: Pick<EnemyBalanceRules, 'enemyHealthMultiplier' | 'enemyDamageMultiplier'>, isHolder: boolean = false): SpawnedEnemyStats {
+  if (isHolder) {
+    const health = ITEM_HOLDER_STATS.health * difficultyMultiplier * balance.enemyHealthMultiplier;
+    return { type, isHolder: true, radius: ITEM_HOLDER_STATS.radius, health, maxHealth: health, color: ITEM_HOLDER_STATS.color, damage: 0, speed: ITEM_HOLDER_STATS.speed, experienceValue: 0 };
+  }
+  const definition = ENEMY_TYPES[type];
+  const health = definition.health * difficultyMultiplier * balance.enemyHealthMultiplier;
+  return {
+    type, isHolder: false, radius: definition.radius, health, maxHealth: health, color: definition.color,
+    damage: definition.damage * (1 + (difficultyMultiplier - 1) * 0.5) * balance.enemyDamageMultiplier,
+    speed: definition.speed, experienceValue: definition.xp,
+  };
+}
+
+export function createBossStats(milestone: 2 | 5 | 10 | 20, balance: Pick<EnemyBalanceRules, 'bossHealthMultiplier' | 'bossXPRewardMultiplier'>) {
+  const definition = BOSS_DEFINITIONS[milestone];
+  const health = definition.health * balance.bossHealthMultiplier;
+  return { ...definition, health, maxHealth: health, experienceValue: definition.xp * balance.bossXPRewardMultiplier };
+}
+
+/** The production run-level formula. Account XP is intentionally separate. */
+export function getRunXPRequired(level: number, baseRequirement: number = DEFAULT_XP_BASE_REQUIREMENT, levelScaling: number = DEFAULT_XP_LEVEL_SCALING): number {
+  return Math.floor(baseRequirement * Math.pow(levelScaling, Math.max(0, level - 1)));
+}
+
+/** Guaranteed death rewards, independent of luck and random-drop tables. */
+export function getGuaranteedEnemyDrop(type: EnemyType | 'boss'): ItemType | undefined {
+  return type === 'elite' || type === 'titan' || type === 'boss' ? 'data_core' : undefined;
+}
+
+export type CoinDropType = Extract<ItemType, `coin_${string}`>;
+
+export function rollCoinDrop(type: EnemyType | 'boss', luck: number, coinDropChanceBase: number, random: () => number): CoinDropType | undefined {
+  if (type === 'boss') return 'coin_diamond';
+  if (type === 'titan') return 'coin_gold';
+  if (type === 'elite') return random() < 0.3 ? 'coin_gold' : 'coin_silver';
+  if (random() >= coinDropChanceBase * luck) return undefined;
+  if (type === 'tank') return 'coin_silver';
+  if (type === 'fast' || type === 'ranged' || type === 'phantom') return random() < 0.2 ? 'coin_silver' : 'coin_bronze';
+  return 'coin_bronze';
+}
+
+export function rollHolderItem(random: () => number): ItemType {
+  const types = Object.keys(ITEM_TYPES) as ItemType[];
+  return types[Math.min(types.length - 1, Math.floor(random() * types.length))];
+}
+
+export function rollTreasureTier(elapsedMs: number, random: () => number): TreasureTier {
+  const legendaryChance = 0.05 + (elapsedMs / 600_000) * 0.15;
+  const epicChance = 0.20 + (elapsedMs / 600_000) * 0.20;
+  const roll = random();
+  return roll < legendaryChance ? 'legendary' : roll < legendaryChance + epicChance ? 'epic' : 'rare';
+}
+
+export function getTreasureColor(tier: TreasureTier): string {
+  return { rare: '#ffd700', epic: '#a855f7', legendary: '#ff6600' }[tier];
+}
+
+export function shouldDropTreasure(activeTreasureCount: number, maxActiveTreasures: number, luck: number, treasureDropChanceBase: number, random: () => number): boolean {
+  return activeTreasureCount < maxActiveTreasures && random() < treasureDropChanceBase * luck;
+}
+
+export interface DamageRuleInput {
+  baseDamage: number;
+  enemyType: EnemyType | 'boss';
+  bossDamageMultiplier: number;
+  doubleStrike: boolean;
+  doubleStrikeChance: number;
+  executeLevel: number;
+  luck: number;
+  enemyHealth: number;
+  random: () => number;
+}
+
+export interface DamageRuleResult { damage: number; critical: boolean; executed: boolean; }
+
+export function resolveEnemyDamage(input: DamageRuleInput): DamageRuleResult {
+  let damage = (input.enemyType === 'boss' || input.enemyType === 'titan') ? input.baseDamage * input.bossDamageMultiplier : input.baseDamage;
+  let critical = false;
+  let executed = false;
+  if (input.doubleStrike && input.random() < input.doubleStrikeChance) { damage *= 2; critical = true; }
+  if (input.executeLevel > 0 && input.enemyType !== 'boss' && input.enemyType !== 'titan' && input.random() < 0.015 * input.executeLevel * input.luck) {
+    damage = input.enemyHealth;
+    executed = true;
+  }
+  return { damage, critical, executed };
+}
+
+export type PickupEffect =
+  | { kind: 'heal'; amount: number }
+  | { kind: 'coins'; amount: number }
+  | { kind: 'magnet' }
+  | { kind: 'bomb'; damage: number }
+  | { kind: 'data_core'; amount: number };
+
+export function getPickupEffect(type: ItemType, value: number = ITEM_TYPES[type].value): PickupEffect {
+  if (type === 'hp') return { kind: 'heal', amount: value };
+  if (type.startsWith('coin_')) return { kind: 'coins', amount: value };
+  if (type === 'magnet') return { kind: 'magnet' };
+  if (type === 'bomb') return { kind: 'bomb', damage: value };
+  return { kind: 'data_core', amount: value };
+}

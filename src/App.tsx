@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2 } from 'lucide-react';
+import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2, Radio } from 'lucide-react';
 import { GameEngine, BalanceTuning, DEFAULT_BALANCE_TUNING } from './game/Engine';
 import { GameHUD } from './components/GameHUD';
 import { MenuEffects, triggerMenuEffect } from './components/MenuEffects';
 import { IntelArchive } from './components/IntelArchive';
 import { AchievementsPage } from './components/AchievementsPage';
 import { ShopMenu } from './components/ShopMenu';
+import { ManualMultiplayerSetup, MultiplayerLaunch } from './components/ManualMultiplayerSetup';
+import { MultiplayerArena } from './components/MultiplayerArena';
 import { GameState, Inventory, ViewMode } from './types';
 import { soundManager } from './game/SoundManager';
 import { PERMANENT_UPGRADES, OPERATOR_DEFINITIONS, WEAPON_DEFINITIONS } from './constants';
@@ -81,6 +83,7 @@ export default function App() {
   const exfillCarryoverRef = useRef<any>(null);
   const [gameState, setGameState] = useState<GameState>('MENU');
   const [viewMode, setViewMode] = useState<ViewMode>('TOPDOWN_2D');
+  const [multiplayerLaunch, setMultiplayerLaunch] = useState<MultiplayerLaunch | null>(null);
 
   const [levelUpOptions, setLevelUpOptions] = useState<any[]>([]);
   const [upgradeScreenContext, setUpgradeScreenContext] = useState<'first' | 'wave'>('wave');
@@ -1465,6 +1468,8 @@ export default function App() {
 
       {/* HUD */}
       {gameState === 'PLAYING' && <GameHUD engine={engineRef.current} />}
+      {gameState === 'MULTIPLAYER_SETUP' && <ManualMultiplayerSetup onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
+      {gameState === 'MULTIPLAYER_PLAYING' && multiplayerLaunch && <MultiplayerArena launch={multiplayerLaunch} onExit={() => { setMultiplayerLaunch(null); setGameState('MENU'); }} />}
 
       <AnimatePresence>
         {gameState === 'MENU' && activeCheatFeedback && (
@@ -1677,6 +1682,31 @@ export default function App() {
                     </div>
                     {/* Bottom accent line */}
                     <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full bg-black/20 transition-all duration-500" />
+                  </motion.button>
+
+                  {/* ▸ PUBLIC CO-OP — server browser and automatic signaling */}
+                  <motion.button
+                    initial={{ x: -40, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.14, type: 'spring', damping: 20 }}
+                    onClick={(e) => {
+                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
+                      soundManager.playUIClick();
+                      setGameState('MULTIPLAYER_SETUP');
+                    }}
+                    onMouseEnter={() => soundManager.playUIHover()}
+                    className="group relative flex h-12 cursor-pointer overflow-hidden"
+                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
+                  >
+                    <div className="absolute inset-0 border border-fuchsia-400/25 bg-fuchsia-500/[0.07] transition-all duration-300 group-hover:border-fuchsia-300/55 group-hover:bg-fuchsia-500/[0.14]" />
+                    <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-fuchsia-400/55" />
+                    <div className="relative z-10 flex w-full items-center px-6">
+                      <div className="mr-4 flex h-8 w-8 items-center justify-center bg-fuchsia-400/10 text-fuchsia-200 transition-colors group-hover:bg-fuchsia-400/20">
+                        <Radio size={15} />
+                      </div>
+                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-fuchsia-100">Multiplayer</span>
+                      <ChevronRight size={16} className="ml-auto text-fuchsia-200/40 transition-all group-hover:translate-x-1 group-hover:text-fuchsia-100" />
+                    </div>
                   </motion.button>
 
                   {/* ▸ OPERATOR SELECT */}
