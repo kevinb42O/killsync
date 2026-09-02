@@ -45,6 +45,10 @@ export const getMovementBindings = (scheme: ControlScheme): MovementBindings => 
   };
 };
 
+/** Co-op keeps slide/crouch off the movement cluster. On AZERTY that is W;
+ * QWERTY needs a separate key because W is forward movement. */
+export const getCoopSlideBinding = (scheme: ControlScheme) => scheme === 'AZERTY' ? 'w' : 'c';
+
 export const isMovementDirectionPressed = (
   keys: ReadonlySet<string>,
   scheme: ControlScheme,

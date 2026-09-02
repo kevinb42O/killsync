@@ -32,7 +32,7 @@ import {
   createExfillXPBreakdown,
   getAccountXPRequired
 } from './game/xpProgression';
-import { CONTROL_SCHEME_DETAILS, ControlScheme, getMovementBindings, parseControlScheme } from './game/controls';
+import { CONTROL_SCHEME_DETAILS, ControlScheme, getCoopSlideBinding, getMovementBindings, parseControlScheme } from './game/controls';
 
 const EMPTY_INVENTORY: Inventory = { armorTier: 0, hasRevive: false, nukeCount: 0 };
 
@@ -1469,7 +1469,7 @@ export default function App() {
       {/* HUD */}
       {gameState === 'PLAYING' && <GameHUD engine={engineRef.current} />}
       {gameState === 'MULTIPLAYER_SETUP' && <ManualMultiplayerSetup onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
-      {gameState === 'MULTIPLAYER_PLAYING' && multiplayerLaunch && <MultiplayerArena launch={multiplayerLaunch} onExit={() => { setMultiplayerLaunch(null); setGameState('MENU'); }} />}
+      {gameState === 'MULTIPLAYER_PLAYING' && multiplayerLaunch && <MultiplayerArena launch={multiplayerLaunch} controlScheme={controlScheme} onExit={() => { setMultiplayerLaunch(null); setGameState('MENU'); }} />}
 
       <AnimatePresence>
         {gameState === 'MENU' && activeCheatFeedback && (
@@ -2330,7 +2330,7 @@ export default function App() {
                       <h2 className="text-3xl font-black italic tracking-tight text-white sm:text-4xl">CONTROL SETTINGS</h2>
                     </div>
                   </div>
-                  <p className="max-w-2xl text-sm leading-relaxed text-white/50">Choose the movement cluster that matches your keyboard. Your choice is saved automatically and applies to every game mode.</p>
+                  <p className="max-w-2xl text-sm leading-relaxed text-white/50">Choose the movement cluster that matches your keyboard. Your choice is saved automatically and applies to solo and direct co-op.</p>
                 </div>
 
                 <div className="mb-6 flex w-fit border border-white/10 bg-black/30 p-1" role="tablist" aria-label="Settings categories">
@@ -2413,6 +2413,25 @@ export default function App() {
                       <div className="flex items-center justify-between gap-3"><span className="text-white/50">View mode</span><kbd className="border border-white/15 bg-white/[0.06] px-2 py-1 font-mono text-white">V</kbd></div>
                       <div className="flex items-center justify-between gap-3"><span className="text-white/50">Nuke</span><kbd className="border border-white/15 bg-white/[0.06] px-2 py-1 font-mono text-white">N</kbd></div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 border border-fuchsia-300/25 bg-fuchsia-400/[0.045] p-5" style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}>
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-200"><Radio size={14} /> Direct co-op controls</div>
+                  <p className="mt-2 text-xs leading-relaxed text-white/50">Movement uses the selected profile above. <span className="font-bold text-white/75">F</span> is the shared action key on both keyboard layouts: revive a nearby teammate first, otherwise interact with a Buy Station.</p>
+                  <div className="mt-4 grid gap-x-5 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+                    {[
+                      { label: 'Sprint', key: 'SHIFT' },
+                      { label: 'Slide / crouch', key: getCoopSlideBinding(controlScheme).toUpperCase() },
+                      { label: 'Jump', key: 'SPACE' },
+                      { label: 'Fire', key: 'LMB' },
+                      { label: 'Aim', key: 'RMB' },
+                      { label: 'Reload', key: 'R' },
+                      { label: 'Weapons', key: '1–5 / WHEEL' },
+                      { label: 'Revive / interact', key: 'F' },
+                      { label: 'Look', key: 'MOUSE' },
+                      { label: 'Downed spectator', key: 'LMB: CYCLE' },
+                    ].map(item => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-white/55">{item.label}</span><kbd className="shrink-0 border border-fuchsia-200/25 bg-black/35 px-2 py-1 font-mono text-[10px] font-bold text-fuchsia-100">{item.key}</kbd></div>)}
                   </div>
                 </div>
               </div>

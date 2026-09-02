@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getMovementBindings, isMovementDirectionPressed, parseControlScheme } from './controls';
+import { getCoopSlideBinding, getMovementBindings, isMovementDirectionPressed, parseControlScheme } from './controls';
 
 describe('control presets', () => {
   it('maps AZERTY movement to ZQSD while keeping the arrow keys', () => {
@@ -28,5 +28,10 @@ describe('control presets', () => {
   it('falls back safely to AZERTY for a missing saved value', () => {
     expect(parseControlScheme(null)).toBe('AZERTY');
     expect(parseControlScheme('other')).toBe('AZERTY');
+  });
+
+  it('keeps co-op slide off QWERTY forward movement', () => {
+    expect(getCoopSlideBinding('AZERTY')).toBe('w');
+    expect(getCoopSlideBinding('QWERTY')).toBe('c');
   });
 });

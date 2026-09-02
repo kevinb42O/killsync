@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Crosshair, Radio, Users, Coins, ShoppingCart, ShieldPlus } from 'lucide-react';
-import { COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, CoopPlayerSeed, CoopSimulation, CoopSnapshot, quantizeAngle, quantizePitch } from '../game/multiplayer/CoopSimulation';
+import { COOP_REVIVE_RANGE, COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, CoopPlayerSeed, CoopSimulation, CoopSnapshot, quantizeAngle, quantizePitch } from '../game/multiplayer/CoopSimulation';
 import { MultiplayerRendererBridge } from '../game/multiplayer/MultiplayerRendererBridge';
 import { interpolateCoopSnapshot } from '../game/multiplayer/snapshotInterpolation';
 import { soundManager } from '../game/SoundManager';
@@ -8,6 +8,7 @@ import { MultiplayerLaunch } from './ManualMultiplayerSetup';
 import { MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
 import { COOP_SHOP_ITEMS, type CoopShopItemId } from '../game/multiplayer/CoopBuyStation';
 import { COOP_PASSIVE_BY_ID, passiveRankCost } from '../game/multiplayer/CoopPassiveModules';
+import { getCoopSlideBinding, getMovementBindings, type ControlScheme } from '../game/controls';
 
 const INPUT_INTERVAL_MS = 50;
 const SNAPSHOT_INTERVAL_MS = 100;
@@ -17,7 +18,7 @@ const SNAPSHOT_INTERVAL_MS = 100;
  * from the legacy GameEngine while the latter is converted from a one-player
  * browser simulation into a shared squad simulation.
  */
-export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch; onExit: () => void }) {
+export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: MultiplayerLaunch; controlScheme: ControlScheme; onExit: () => void }) {
   const sceneRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<MultiplayerRendererBridge | null>(null);
   const simulationRef = useRef<CoopSimulation | null>(launch.role === 'host' ? new CoopSimulation(launch.players) : null);
@@ -246,15 +247,15 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
     });
 
     const keys = new Set<string>();
+    const movementBindings = getMovementBindings(controlScheme);
+    const slideBinding = getCoopSlideBinding(controlScheme);
     let firing = false;
     let sequence = 0;
     const updateInput = () => {
-      // AZERTY movement is ZQSD. W is deliberately reserved for the held
-      // crouch/slide action, so it can never accidentally force forward input.
-      const movement = (keys.has('z') || keys.has('arrowup') ? 1 : 0)
-        | (keys.has('s') || keys.has('arrowdown') ? 2 : 0)
-        | (keys.has('a') || keys.has('q') || keys.has('arrowleft') ? 4 : 0)
-        | (keys.has('d') || keys.has('arrowright') ? 8 : 0);
+      const movement = (movementBindings.up.some(key => keys.has(key)) ? 1 : 0)
+        | (movementBindings.down.some(key => keys.has(key)) ? 2 : 0)
+        | (movementBindings.left.some(key => keys.has(key)) ? 4 : 0)
+        | (movementBindings.right.some(key => keys.has(key)) ? 8 : 0);
       inputRef.current = {
         ...inputRef.current,
         sequence: ++sequence,
@@ -262,8 +263,8 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
         movement,
         firing,
         sprinting: keys.has('shift'),
-        // W is deliberately the crouch / slide hold key for AZERTY.
-        sliding: keys.has('w'),
+        // W is AZERTY-only. QWERTY uses C so W stays available for forward.
+        sliding: keys.has(slideBinding),
         // F is intentionally held; the host owns range checks and timing.
         reviving: keys.has('f'),
       };
@@ -285,16 +286,21 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
         return;
       }
       const key = event.key.toLowerCase();
-      if (key === 'e') {
+      if (key === 'f') {
         event.preventDefault();
-        if (event.repeat) return;
         const snapshot = snapshotRef.current;
         const local = snapshot?.players.find(player => player.id === launch.localPlayerId);
         const station = local && snapshot?.buyStations.find(candidate => candidate.active && Math.hypot(local.x - candidate.x, local.y - candidate.y) <= candidate.radius + 48);
-        if (!station) {
-          setCombatNotice({ text: 'NO BUY STATION IN RANGE', color: '#fca5a5' });
+        const revivableTeammate = local && snapshot?.players.some(player => player.id !== local.id && player.lifeState === 'downed' && Math.hypot(local.x - player.x, local.y - player.y) <= COOP_REVIVE_RANGE);
+        // Revive is deliberately first priority when both are possible. The
+        // interaction key remains held in `keys` so the host owns validation.
+        if (local?.lifeState === 'downed' || revivableTeammate || !station) {
+          keys.add(key);
+          updateInput();
+          if (local?.lifeState !== 'downed' && !revivableTeammate && !event.repeat) setCombatNotice({ text: 'NO REVIVE OR INTERACTION IN RANGE', color: '#fca5a5' });
           return;
         }
+        if (event.repeat) return;
         renderer.exitPointerLock();
         setStationMessage(null);
         setStationOpen(open => !open);
@@ -440,7 +446,7 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
         launch.lobbyJoin?.close();
       }, 0);
     };
-  }, [launch]);
+  }, [launch, controlScheme]);
 
   useEffect(() => {
     if (!combatNotice) return;
@@ -523,8 +529,8 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
       </div>}
       {matchSnapshot && localSnapshot && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} />}
       {nearbyStation && <div className="absolute bottom-5 left-5 w-[min(390px,calc(100vw-2.5rem))] border border-cyan-300/35 bg-[#07111b]/95 p-4 shadow-[0_0_28px_rgba(34,211,238,.14)] backdrop-blur-md">
-        <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200"><ShoppingCart size={14} /> Buy Station online</div><button onClick={() => { rendererRef.current?.exitPointerLock(); setStationOpen(open => !open); }} className="border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-[9px] font-black uppercase text-cyan-100 hover:bg-cyan-400/20">{stationOpen ? 'Close [E]' : 'Shop [E]'}</button></div>
-        {!stationOpen && <p className="mt-2 text-[10px] text-white/50">Press <span className="font-black text-cyan-100">E</span> to shop. Regroup, restock, and build your support loadout. Credits are personal.</p>}
+        <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200"><ShoppingCart size={14} /> Buy Station online</div><button onClick={() => { rendererRef.current?.exitPointerLock(); setStationOpen(open => !open); }} className="border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-[9px] font-black uppercase text-cyan-100 hover:bg-cyan-400/20">{stationOpen ? 'Close [F]' : 'Shop [F]'}</button></div>
+        {!stationOpen && <p className="mt-2 text-[10px] text-white/50">Press <span className="font-black text-cyan-100">F</span> to interact. It prioritizes reviving a nearby teammate.</p>}
         {stationOpen && <><div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">{nearbyStation.stock.map(itemId => { const item = COOP_SHOP_ITEMS[itemId]; const passive = itemId in COOP_PASSIVE_BY_ID ? itemId as keyof typeof COOP_PASSIVE_BY_ID : undefined; const owned = passive && localSnapshot.passiveModules.find(module => module.id === passive); const cost = passive && owned ? passiveRankCost(passive, owned.rank) : item.cost; const affordable = localSnapshot.coins >= cost; return <button key={itemId} disabled={!affordable} onClick={() => purchaseStationItem(nearbyStation.id, itemId)} className="flex w-full items-center justify-between gap-3 border border-white/10 bg-white/[0.035] px-2 py-2 text-left transition hover:border-cyan-200/50 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"><span><span className="block text-[10px] font-bold text-white">{item.name}{owned ? ` · Rank ${owned.rank + 1}` : ''}</span><span className="block text-[9px] text-white/45">{item.description}</span></span><span className="shrink-0 text-[10px] font-mono text-amber-200"><Coins className="mr-1 inline" size={11} />{cost}</span></button>; })}</div>{stationMessage && <div className="mt-2 text-[10px] text-cyan-100">{stationMessage}</div>}</>}
       </div>}
       {launch.role === 'host' && <div className="absolute bottom-[164px] right-5 w-[min(310px,calc(100vw-2.5rem))] border border-fuchsia-300/30 bg-black/75 p-4 text-[10px] backdrop-blur-md"><div className="flex items-center gap-2 font-black uppercase tracking-[0.18em] text-fuchsia-200"><Users size={13} /> Match lobby · {hud.players}/4</div><p className="mt-2 leading-relaxed text-white/50">{connectionMessage}</p></div>}
@@ -532,7 +538,7 @@ export function MultiplayerArena({ launch, onExit }: { launch: MultiplayerLaunch
       {!isSpectator && hud.lifeState === 'eliminated' && hud.matchState === 'active' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/45"><div className="border border-rose-300/40 bg-black/80 px-6 py-5 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.28em] text-rose-200">Eliminated</div><div className="mt-3 text-xs text-white/60">Your squad can still finish the encounter.</div></div></div>}
       {hud.matchState !== 'active' && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="w-[min(440px,calc(100vw-2rem))] border border-rose-300/45 bg-[#10070b] p-7 text-center shadow-[0_0_60px_rgba(244,63,94,.2)]"><div className="text-[10px] font-black uppercase tracking-[0.32em] text-rose-200">{hud.matchState === 'solo_defeat' ? 'Run ended' : 'Squad wiped'}</div><h2 className="mt-3 text-3xl font-black text-white">{hud.matchState === 'solo_defeat' ? 'SYSTEM FAILURE' : 'NO OPERATIVES REMAIN'}</h2><p className="mt-3 text-xs leading-relaxed text-white/60">Kills confirmed: {hud.kills}. Return to the lobby to start a fresh co-op run.</p><button onClick={onExit} className="mt-6 border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 transition hover:bg-cyan-400/20">Return to lobby</button></div></div>}
       {matchSnapshot?.results && <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#03070c]/90 p-4 backdrop-blur-xl"><div className="w-[min(760px,calc(100vw-2rem))] border border-cyan-300/35 bg-[#07111b] p-6 shadow-[0_0_60px_rgba(34,211,238,.16)]"><div className="text-center"><div className={`text-[10px] font-black uppercase tracking-[0.32em] ${matchSnapshot.results.success ? 'text-cyan-200' : 'text-rose-200'}`}>{matchSnapshot.results.success ? 'Squad extracted' : 'Run failed'}</div><h2 className="mt-2 text-3xl font-black text-white">{matchSnapshot.results.success ? 'SECTOR BREACH COMPLETE' : 'SIGNAL LOST'}</h2><p className="mt-2 text-xs text-white/55">{Math.ceil(matchSnapshot.results.durationMs / 60000)} min · {matchSnapshot.results.contractsCompleted} contracts · {matchSnapshot.results.bossesDefeated} bosses</p></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{matchSnapshot.results.players.map(player => <div key={player.playerId} className="border border-white/10 bg-white/[.035] p-3"><div className="flex items-center justify-between"><span className="font-black text-white" style={{ color: player.color }}>{player.label}</span><span className="text-[9px] font-black uppercase tracking-wider text-amber-200">{player.medal}</span></div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]"><span><b className="block text-white">{player.kills}</b><i className="not-italic text-white/45">Kills</i></span><span><b className="block text-white">{Math.round(player.firearmDamage + player.passiveDamage)}</b><i className="not-italic text-white/45">Damage</i></span><span><b className="block text-white">{player.revives}</b><i className="not-italic text-white/45">Revives</i></span></div></div>)}</div><div className="mt-6 text-center"><button onClick={onExit} className="border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 hover:bg-cyan-400/20">Return to lobby</button></div></div></div>}
-      <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 border border-white/15 bg-black/60 px-4 py-2 text-center text-[10px] font-mono uppercase tracking-wider text-white/60 backdrop-blur-sm">{isSpectator ? <>Mouse look · left click next player · {mouseLocked ? 'camera active' : 'click world for camera'}</> : <><Crosshair size={12} className="mr-2 inline text-cyan-300" />ZQSD move · Shift sprint · R reload · E Buy Station · F hold revive · RMB aim · 1–5 switch · {mouseLocked ? 'mouse locked · look around' : 'click world to lock mouse'} · hold LMB fire</>}</div>
+      <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 border border-white/15 bg-black/60 px-4 py-2 text-center text-[10px] font-mono uppercase tracking-wider text-white/60 backdrop-blur-sm">{isSpectator ? <>Mouse look · left click next player · {mouseLocked ? 'camera active' : 'click world for camera'}</> : <><Crosshair size={12} className="mr-2 inline text-cyan-300" />{controlScheme === 'AZERTY' ? 'ZQSD' : 'WASD'} move · {getCoopSlideBinding(controlScheme).toUpperCase()} slide · Shift sprint · R reload · F revive / interact · RMB aim · 1–5 switch · {mouseLocked ? 'mouse locked · look around' : 'click world to lock mouse'} · hold LMB fire</>}</div>
       {connectionStatus !== 'connected' && <div className={`absolute left-1/2 top-20 z-30 -translate-x-1/2 border px-4 py-3 text-center text-xs backdrop-blur-sm ${connectionStatus === 'reconnecting' ? 'border-amber-300/45 bg-amber-950/80 text-amber-100' : 'border-red-300/45 bg-red-950/80 text-red-100'}`}><div>{connectionMessage}</div>{connectionStatus === 'disconnected' && <button onClick={onExit} className="mt-2 border border-red-200/35 px-3 py-1 text-[10px] font-black uppercase tracking-wider hover:bg-red-300/10">Back to servers</button>}</div>}
       <button onClick={onExit} className="absolute right-5 top-5 flex items-center gap-2 border border-white/15 bg-black/65 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white/70 backdrop-blur-sm transition hover:border-white/35 hover:text-white"><ArrowLeft size={13} /> Leave arena</button>
     </div>
