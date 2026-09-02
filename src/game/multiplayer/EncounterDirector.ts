@@ -59,15 +59,16 @@ const THREAT_COST: Record<EnemyType, number> = {
 export class EncounterDirector {
   private randomState: number;
   private tick = 0;
-  private nextSpawnAtMs = 0;
+  private nextSpawnAtMs: number;
   private nextPacketId = 1;
   private packetsIssued = 0;
   private clusterCursor = 0;
   private desiredThreat = 0;
   private activeThreat = 0;
 
-  constructor(readonly seed: number) {
+  constructor(readonly seed: number, firstSpawnAtMs: number = 0) {
     this.randomState = (seed ^ 0x9e3779b9) >>> 0;
+    this.nextSpawnAtMs = Math.max(0, firstSpawnAtMs);
   }
 
   createOpeningOrders(players: readonly EncounterPlayer[], count: number): EncounterOrder[] {

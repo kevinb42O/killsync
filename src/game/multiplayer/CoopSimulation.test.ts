@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CoopSimulation, COOP_REVIVE_DURATION_MS, COOP_WEAPON_SLOTS, quantizeAngle, quantizePitch } from './CoopSimulation';
+import { CoopSimulation, COOP_REVIVE_DURATION_MS, COOP_SAFE_INSERTION_MS, COOP_WEAPON_SLOTS, quantizeAngle, quantizePitch } from './CoopSimulation';
 import { MULTIPLAYER_PROTOCOL_VERSION } from './protocol';
 
 let sequence = 0;
@@ -69,17 +69,27 @@ describe('CoopSimulation firearm authority', () => {
 });
 
 describe('CoopSimulation encounter authority', () => {
+  it('keeps the first fifteen seconds enemy-free, then hands off to topology-aware spawns', () => {
+    const simulation = sim();
+    const player = simulation.createSnapshot().players[0];
+    expect(simulation.createSnapshot().enemies).toHaveLength(0);
+    for (let elapsed = 0; elapsed < COOP_SAFE_INSERTION_MS - 50; elapsed += 50) simulation.tick(50);
+    expect(simulation.createSnapshot().enemies).toHaveLength(0);
+    simulation.tick(50);
+    const enemies = simulation.createSnapshot().enemies;
+    expect(enemies.length).toBeGreaterThan(0);
+    expect(enemies.every(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) >= 720)).toBe(true);
+  });
+
   it('keeps spawn cadence and composition independent from movement input', () => {
     const stationary = sim();
     const moving = sim();
-    // Isolate the director from the opening formation so this verifies the
-    // production tick path rather than a director unit-test duplicate.
-    (stationary as any).enemies = [];
-    (moving as any).enemies = [];
     stationary.setInput('host', input({ movement: 0 }));
     moving.setInput('host', input({ movement: 1, aimAngle: quantizeAngle(Math.PI / 2) }));
-    stationary.tick(50);
-    moving.tick(50);
+    for (let elapsed = 0; elapsed < COOP_SAFE_INSERTION_MS; elapsed += 50) {
+      stationary.tick(50);
+      moving.tick(50);
+    }
     const still = stationary.createSnapshot();
     const moved = moving.createSnapshot();
     expect(moved.encounter?.nextSpawnAtMs).toBe(still.encounter?.nextSpawnAtMs);

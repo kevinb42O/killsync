@@ -52,7 +52,8 @@ const GEM_MAGNET_RANGE = 200;
 const ITEM_MAGNET_RANGE = 150;
 const GEM_PICKUP_RADIUS = 10;
 const ITEM_PICKUP_RADIUS = 15;
-const INITIAL_ENEMY_BURST = 16;
+/** A calm staging window before the normal encounter director starts. */
+export const COOP_SAFE_INSERTION_MS = 15_000;
 const COOP_MAX_ENEMIES = 90;
 const WEAPON_MAX_LEVEL = 8;
 const SWITCH_MS = 280;
@@ -247,10 +248,11 @@ export class CoopSimulation {
 
   constructor(players: CoopPlayerSeed[], seed: number = 0xdecafbad) {
     this.randomState = seed >>> 0;
-    this.encounterDirector = new EncounterDirector(seed);
+    // Do not manufacture an opening ring around the squad. The normal
+    // topology-aware director begins after a brief safe insertion instead.
+    this.encounterDirector = new EncounterDirector(seed, COOP_SAFE_INSERTION_MS);
     this.runDirector = new CoopRunDirector(seed);
     players.forEach(player => this.addPlayer(player));
-    this.spawnOpeningHorde();
     // A station must exist from the first playable second. It gives friends a
     // clear rally point, lets us validate its world beacon immediately, and
     // avoids hiding the economy behind an entire contract's worth of play.
@@ -1086,19 +1088,7 @@ export class CoopSimulation {
     for (const order of orders) this.spawnEnemy(order.type, order.targetPlayerId, order.packetId);
   }
 
-  private spawnOpeningHorde() {
-    const orders = this.encounterDirector.createOpeningOrders(this.encounterPlayers(), INITIAL_ENEMY_BURST);
-    for (const order of orders) this.spawnEnemy(order.type, order.targetPlayerId, order.packetId, this.openingPosition(order.packetId));
-  }
   private encounterPlayers(): EncounterPlayer[] { return [...this.players.values()].map(({ id, x, y, angle, health }) => ({ id, x, y, angle, health })); }
-
-  private openingPosition(packetId: number) {
-    const players = this.encounterPlayers();
-    const centreX = players.reduce((sum, player) => sum + player.x, 0) / Math.max(1, players.length);
-    const centreY = players.reduce((sum, player) => sum + player.y, 0) / Math.max(1, players.length);
-    const angle = packetId * 2.399963229728653;
-    return { x: clamp(centreX + Math.cos(angle) * 480, 60, COOP_WORLD_SIZE - 60), y: clamp(centreY + Math.sin(angle) * 480, 60, COOP_WORLD_SIZE - 60) };
-  }
 
   private safeFallback(targetPlayerId: string, radius: number) {
     const target = this.players.get(targetPlayerId) || this.closestLivingPlayer(COOP_WORLD_SIZE / 2, COOP_WORLD_SIZE / 2);
