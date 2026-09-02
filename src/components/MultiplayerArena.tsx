@@ -29,6 +29,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const sessionCloseTimerRef = useRef(0);
   const spectatorTargetRef = useRef<string | null>(null);
   const downedSpectatorTargetRef = useRef<string | null>(null);
+  // Input listeners are installed once for the arena. Keep the station's
+  // focus state in a ref too, so those listeners can immediately stop sending
+  // look/fire/wheel input while the UI is open.
+  const stationOpenRef = useRef(false);
   const [hud, setHud] = useState({ players: launch.players.length, kills: 0, tick: 0, connected: true, selectedSlot: 0, weaponLevel: 1, health: 100, maxHealth: 100, level: 1, experience: 0, experienceToNextLevel: 120, coins: 0, cores: 0, weapons: [] as CoopSnapshot['players'][number]['weaponStates'], isReloading: false, isAiming: false, actionEndsAt: undefined as number | undefined, lifeState: 'alive' as CoopSnapshot['players'][number]['lifeState'], downedRemainingMs: 0, reviveProgressMs: 0, reviverId: undefined as string | undefined, invulnerableRemainingMs: 0, matchState: 'active' as CoopSnapshot['matchState'], squad: [] as Array<Pick<CoopSnapshot['players'][number], 'id' | 'label' | 'color' | 'health' | 'maxHealth' | 'lifeState' | 'downedRemainingMs' | 'reviveProgressMs' | 'reviverId'>> });
   const [combatNotice, setCombatNotice] = useState<{ text: string; color: string } | null>(null);
   const [damageFlash, setDamageFlash] = useState(false);
@@ -41,6 +45,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const [spectatorTarget, setSpectatorTarget] = useState<{ id: string; label: string } | null>(null);
   const [downedSpectatorTarget, setDownedSpectatorTarget] = useState<{ id: string; label: string } | null>(null);
   const isSpectator = launch.role === 'spectator';
+
+  const setStationPanelOpen = (next: boolean | ((current: boolean) => boolean)) => {
+    setStationOpen(current => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      stationOpenRef.current = resolved;
+      return resolved;
+    });
+  };
 
   const cycleSpectatorTarget = () => {
     if (!isSpectator) return;
@@ -109,7 +121,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     presentationRef.current = { previous: snapshot, current: snapshot, receivedAt: now, durationMs: INPUT_INTERVAL_MS };
     downedSpectatorTargetRef.current = null;
     setDownedSpectatorTarget(null);
-    setStationOpen(false);
+    setStationPanelOpen(false);
     setStationMessage(null);
     setMatchSnapshot(snapshot);
     const local = snapshot.players.find(player => player.id === launch.localPlayerId);
@@ -352,7 +364,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         if (event.repeat) return;
         renderer.exitPointerLock();
         setStationMessage(null);
-        setStationOpen(open => !open);
+        setStationPanelOpen(open => !open);
         return;
       }
       if (key === 'r') {
@@ -375,7 +387,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       updateInput();
     };
     const onMouseMove = (event: MouseEvent) => {
-      if (isSpectator) return;
+      if (stationOpenRef.current || isSpectator) return;
       inputRef.current = {
         ...inputRef.current,
         aimAngle: quantizeAngle(renderer.getAimAngle()),
@@ -383,6 +395,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       };
     };
     const onMouseDown = (event: MouseEvent) => {
+      // A Buy Station is a focused modal. Do not let a click on its buttons,
+      // list, or backdrop leak through to pointer lock, fire, or aiming.
+      if (stationOpenRef.current) return;
       // This must run inside the real user gesture. The firing event reaches
       // the renderer on a later animation frame, which is too late for strict
       // autoplay policies to resume a suspended AudioContext.
@@ -405,6 +420,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       updateInput();
     };
     const onMouseUp = (event: MouseEvent) => {
+      if (stationOpenRef.current) {
+        firing = false;
+        updateInput();
+        return;
+      }
       if (isSpectator) return;
       if (snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState === 'downed') {
         firing = false;
@@ -417,7 +437,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       updateInput();
     };
     const onWheel = (event: WheelEvent) => {
-      if (isSpectator) return;
+      // Leave the browser's normal scrolling intact for the station list.
+      // In every other state the wheel remains the weapon selector.
+      if (stationOpenRef.current || isSpectator) return;
       event.preventDefault();
       const direction = event.deltaY > 0 ? 1 : -1;
       const selectedSlot = (inputRef.current.selectedSlot + direction + COOP_WEAPON_SLOTS.length) % COOP_WEAPON_SLOTS.length;
@@ -524,6 +546,13 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const run = matchSnapshot?.run;
   const encounter = matchSnapshot?.encounter;
 
+  // The station can be disabled, or the player can leave its interaction
+  // radius, between network snapshots. Do not leave an invisible modal
+  // swallowing mouse input in that case.
+  useEffect(() => {
+    if (!nearbyStation && stationOpenRef.current) setStationPanelOpen(false);
+  }, [nearbyStation]);
+
   return (
     <div className="absolute inset-0 z-[110] bg-[#05080e]">
       <div ref={sceneRef} className="absolute inset-0 h-full w-full" />
@@ -584,10 +613,24 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         {localSnapshot.passiveModules.length > 0 && <div className="mt-1 text-white/65">{localSnapshot.passiveModules.map(module => `${COOP_SHOP_ITEMS[module.id].name} ${'I'.repeat(module.rank)}`).join(' · ')}</div>}
       </div>}
       {matchSnapshot && localSnapshot && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} />}
-      {nearbyStation && <div className="absolute bottom-5 left-5 w-[min(390px,calc(100vw-2.5rem))] border border-cyan-300/35 bg-[#07111b]/95 p-4 shadow-[0_0_28px_rgba(34,211,238,.14)] backdrop-blur-md">
-        <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200"><ShoppingCart size={14} /> Buy Station online</div><button onClick={() => { rendererRef.current?.exitPointerLock(); setStationOpen(open => !open); }} className="border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-[9px] font-black uppercase text-cyan-100 hover:bg-cyan-400/20">{stationOpen ? 'Close [F]' : 'Shop [F]'}</button></div>
-        {!stationOpen && <p className="mt-2 text-[10px] text-white/50">Press <span className="font-black text-cyan-100">F</span> to interact. It prioritizes reviving a nearby teammate.</p>}
-        {stationOpen && <><div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">{nearbyStation.stock.map(itemId => { const item = COOP_SHOP_ITEMS[itemId]; const passive = itemId in COOP_PASSIVE_BY_ID ? itemId as keyof typeof COOP_PASSIVE_BY_ID : undefined; const owned = passive && localSnapshot.passiveModules.find(module => module.id === passive); const cost = passive && owned ? passiveRankCost(passive, owned.rank) : item.cost; const affordable = localSnapshot.coins >= cost; return <button key={itemId} disabled={!affordable} onClick={() => purchaseStationItem(nearbyStation.id, itemId)} className="flex w-full items-center justify-between gap-3 border border-white/10 bg-white/[0.035] px-2 py-2 text-left transition hover:border-cyan-200/50 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"><span><span className="block text-[10px] font-bold text-white">{item.name}{owned ? ` · Rank ${owned.rank + 1}` : ''}</span><span className="block text-[9px] text-white/45">{item.description}</span></span><span className="shrink-0 text-[10px] font-mono text-amber-200"><Coins className="mr-1 inline" size={11} />{cost}</span></button>; })}</div>{stationMessage && <div className="mt-2 text-[10px] text-cyan-100">{stationMessage}</div>}</>}
+      {stationOpen && nearbyStation && <div className="absolute inset-0 z-[80] bg-black/55 backdrop-blur-[2px]" aria-hidden="true" />}
+      {nearbyStation && <div
+        role={stationOpen ? 'dialog' : undefined}
+        aria-modal={stationOpen || undefined}
+        aria-label={stationOpen ? 'Buy Station' : undefined}
+        onMouseDown={event => event.stopPropagation()}
+        onWheel={event => event.stopPropagation()}
+        className={stationOpen
+          ? 'absolute left-1/2 top-1/2 z-[90] flex h-[min(720px,calc(100vh-2rem))] w-[min(660px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden border border-cyan-200/55 bg-[#07111b]/98 p-5 shadow-[0_0_70px_rgba(34,211,238,.24)] backdrop-blur-xl'
+          : 'absolute bottom-5 left-5 z-[85] w-[min(420px,calc(100vw-2.5rem))] border border-cyan-300/35 bg-[#07111b]/95 p-4 shadow-[0_0_28px_rgba(34,211,238,.14)] backdrop-blur-md'}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-cyan-200/20 pb-3">
+          <div><div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-cyan-200"><ShoppingCart size={16} /> Buy Station online</div>{stationOpen && <div className="mt-1 text-[10px] font-mono uppercase tracking-wider text-white/45">Spend your personal credits · upgrades apply immediately</div>}</div>
+          <div className="shrink-0 text-right"><div className="text-[9px] font-black uppercase tracking-wider text-white/45">Credits</div><div className="mt-0.5 font-mono text-sm text-amber-200"><Coins className="mr-1 inline" size={13} />{localSnapshot.coins}</div></div>
+          <button onClick={() => { rendererRef.current?.exitPointerLock(); setStationPanelOpen(open => !open); }} className="border border-cyan-300/40 bg-cyan-400/10 px-3 py-1.5 text-[10px] font-black uppercase text-cyan-100 transition hover:bg-cyan-400/20">{stationOpen ? 'Close [F]' : 'Shop [F]'}</button>
+        </div>
+        {!stationOpen && <p className="mt-3 text-[10px] text-white/50">Press <span className="font-black text-cyan-100">F</span> to interact. It prioritizes reviving a nearby teammate.</p>}
+        {stationOpen && <><div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-2">{nearbyStation.stock.map(itemId => { const item = COOP_SHOP_ITEMS[itemId]; const passive = itemId in COOP_PASSIVE_BY_ID ? itemId as keyof typeof COOP_PASSIVE_BY_ID : undefined; const owned = passive && localSnapshot.passiveModules.find(module => module.id === passive); const cost = passive && owned ? passiveRankCost(passive, owned.rank) : item.cost; const affordable = localSnapshot.coins >= cost; return <button key={itemId} disabled={!affordable} onClick={() => purchaseStationItem(nearbyStation.id, itemId)} className="flex w-full items-center justify-between gap-4 border border-white/10 bg-white/[0.035] px-4 py-3 text-left transition hover:border-cyan-200/50 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"><span><span className="block text-xs font-bold text-white">{item.name}{owned ? ` · Rank ${owned.rank + 1}` : ''}</span><span className="mt-1 block text-[10px] leading-relaxed text-white/45">{item.description}</span></span><span className="shrink-0 text-xs font-mono text-amber-200"><Coins className="mr-1 inline" size={12} />{cost}</span></button>; })}</div>{stationMessage && <div className="mt-3 shrink-0 border border-cyan-200/20 bg-cyan-400/10 px-3 py-2 text-[10px] text-cyan-100">{stationMessage}</div>}<div className="mt-3 shrink-0 text-center text-[10px] text-white/40">Mouse wheel scrolls this list only · press <span className="font-black text-cyan-100">F</span> to close</div></>}
       </div>}
       {launch.role === 'host' && <div className="absolute bottom-[164px] right-5 w-[min(310px,calc(100vw-2.5rem))] border border-fuchsia-300/30 bg-black/75 p-4 text-[10px] backdrop-blur-md"><div className="flex items-center gap-2 font-black uppercase tracking-[0.18em] text-fuchsia-200"><Users size={13} /> Match lobby · {hud.players}/4</div><p className="mt-2 leading-relaxed text-white/50">{connectionMessage}</p></div>}
       {!isSpectator && hud.lifeState === 'downed' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/35"><div className="w-[min(420px,calc(100vw-2rem))] border border-amber-300/50 bg-black/80 p-6 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.3em] text-amber-200">You are downed</div><div className="mt-3 text-4xl font-black text-white">{hud.downedRemainingMs > 0 ? `${Math.ceil(hud.downedRemainingMs / 1000)}s` : 'REVIVABLE'}</div><div className="mt-3 text-xs text-white/60">Watching <span className="font-black text-fuchsia-200">{downedSpectatorTarget?.label || 'your squad'}</span> in third person. Left click cycles living teammates.</div><div className="mt-2 text-xs text-white/60">A teammate must stand close and hold <span className="font-black text-cyan-200">F</span> for 3 seconds. Your body remains until the squad is wiped.</div>{hud.reviverId && <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-emerald-200">Revive in progress · {Math.round(hud.reviveProgressMs / 3000 * 100)}%</div>}<div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, hud.reviveProgressMs / 3000 * 100)}%` }} /></div></div></div>}
