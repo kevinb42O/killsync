@@ -164,6 +164,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         else if (event.kind === 'boss_ability') setCombatNotice({ text: event.amount ? `BOSS PHASE ${event.amount}` : 'BOSS ATTACK — MOVE', color: event.color || '#fda4af' });
         else if (event.kind === 'station_online') setCombatNotice({ text: 'BUY STATION ONLINE', color: '#67e8f9' });
         else if (event.kind === 'exfil_deployed') setCombatNotice({ text: 'EXFILL BEACON DEPLOYED', color: '#fbbf24' });
+        else if (event.kind === 'round_started') setCombatNotice({ text: `ROUND ${event.amount} — HOSTILES INBOUND`, color: '#fbbf24' });
+        else if (event.kind === 'round_completed') setCombatNotice({ text: `ROUND ${event.amount} CLEAR — RESUPPLY`, color: '#5eead4' });
       }
     };
     const syncHud = (snapshot: CoopSnapshot, connected: boolean = true) => {
@@ -520,6 +522,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     ? matchSnapshot?.players.find(player => player.lifeState === 'downed' && player.reviverId === launch.localPlayerId)
     : undefined;
   const run = matchSnapshot?.run;
+  const encounter = matchSnapshot?.encounter;
 
   return (
     <div className="absolute inset-0 z-[110] bg-[#05080e]">
@@ -556,6 +559,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         {run.boss && <><div className="mt-2 flex justify-between text-[9px] font-mono text-rose-100"><span>PHASE {run.boss.phase}</span><span>{Math.ceil(run.boss.health).toLocaleString()} / {Math.ceil(run.boss.maxHealth).toLocaleString()}</span></div><div className="mt-1 h-1.5 overflow-hidden bg-rose-950/80"><div className="h-full bg-rose-400 transition-[width]" style={{ width: `${Math.max(0, run.boss.health / Math.max(1, run.boss.maxHealth) * 100)}%` }} /></div></>}
         {run.insertionRemainingMs !== undefined && run.insertionDurationMs !== undefined && <><div className="mt-2 flex justify-between text-[9px] font-mono text-cyan-100"><span>HOSTILES ARRIVE</span><span>{Math.ceil(run.insertionRemainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, 1 - run.insertionRemainingMs / Math.max(1, run.insertionDurationMs)) * 100}%` }} /></div></>}
         {run.exfil && <><div className="mt-2 flex justify-between text-[9px] font-mono text-amber-100"><span>EXFIL HOLD</span><span>{Math.ceil(run.exfil.remainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-amber-950/80"><div className="h-full bg-amber-300 transition-[width]" style={{ width: `${run.exfil.holdProgressMs / run.exfil.holdRequiredMs * 100}%` }} /></div></>}
+        {encounter?.phase === 'combat' && <><div className="mt-3 flex justify-between text-[9px] font-mono text-fuchsia-100"><span>ROUND {encounter.round} · TIER {encounter.tier}</span><span>{encounter.enemiesRemaining} HOSTILES</span></div><div className="mt-1 h-1.5 overflow-hidden bg-fuchsia-950/80"><div className="h-full bg-fuchsia-300 transition-[width]" style={{ width: `${Math.min(100, encounter.spawnedThisRound / Math.max(1, encounter.roundTotal) * 100)}%` }} /></div></>}
+        {encounter?.phase === 'intermission' && <><div className="mt-3 flex justify-between text-[9px] font-mono text-emerald-100"><span>ROUND {encounter.round} CLEAR · RESUPPLY</span><span>NEXT ROUND {encounter.round + 1}</span></div><div className="mt-1 h-1.5 overflow-hidden bg-emerald-950/80"><div className="h-full bg-emerald-300 transition-[width]" style={{ width: `${Math.max(0, encounter.intermissionRemainingMs / 20_000 * 100)}%` }} /></div><div className="mt-1 text-[9px] text-emerald-100/65">Hostiles return in {Math.ceil(encounter.intermissionRemainingMs / 1000)}s · ammo cache and credits deployed</div></>}
       </div>}
       {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[43%] -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
       {revivingTarget && <div className="pointer-events-none absolute left-1/2 top-[56%] z-20 w-[min(330px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/55 bg-black/80 px-4 py-3 text-center shadow-[0_0_24px_rgba(34,211,238,.18)] backdrop-blur-md"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">Hold F · Reviving {revivingTarget.label}</div><div className="mt-2 h-2 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, revivingTarget.reviveProgressMs / 3000 * 100)}%` }} /></div><div className="mt-1 text-[9px] font-mono text-cyan-100/70">{Math.round(revivingTarget.reviveProgressMs / 3000 * 100)}%</div></div>}

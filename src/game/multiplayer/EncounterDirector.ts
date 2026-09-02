@@ -33,14 +33,26 @@ export interface EncounterDirectorSnapshot {
   seed: number;
   tick: number;
   nextSpawnAtMs: number;
+  phase: EncounterRoundPhase;
+  round: number;
+  tier: number;
+  roundTotal: number;
+  spawnedThisRound: number;
+  enemiesRemaining: number;
+  intermissionRemainingMs: number;
   desiredThreat: number;
   activeThreat: number;
   clusterCount: number;
   packetsIssued: number;
 }
 
+export type EncounterRoundPhase = 'insertion' | 'combat' | 'intermission';
+export type EncounterRoundEvent = { kind: 'round_started' | 'round_completed'; round: number; tier: number };
+
 const CLUSTER_LINK_DISTANCE = 1_250;
-const MAX_ORDERS_PER_TICK = 4;
+const MAX_ORDERS_PER_TICK = 3;
+export const COOP_INTERMISSION_MS = 20_000;
+const ROUND_TIERS: readonly EnemyType[] = ['basic', 'fast', 'ranged', 'tank', 'phantom', 'elite'];
 const THREAT_COST: Record<EnemyType, number> = {
   basic: 1,
   fast: 1.25,
@@ -52,9 +64,9 @@ const THREAT_COST: Record<EnemyType, number> = {
 };
 
 /**
- * Deterministic host-side encounter pacing. It has no dependency on movement
- * inputs: player positions only choose a safe destination for an encounter
- * that the match clock has already scheduled.
+ * Deterministic, round-based host-side encounter pacing. A round has a finite
+ * roster, then the squad gets a real regroup window before the next tier joins
+ * the enemy pool. Player positions choose safe spawn destinations only.
  */
 export class EncounterDirector {
   private randomState: number;
@@ -65,56 +77,93 @@ export class EncounterDirector {
   private clusterCursor = 0;
   private desiredThreat = 0;
   private activeThreat = 0;
+  private activeEnemyCount = 0;
+  private lastElapsedMs = 0;
+  private phase: EncounterRoundPhase = 'insertion';
+  private round = 1;
+  private roundTotal = 0;
+  private spawnedThisRound = 0;
+  private intermissionEndsAtMs = 0;
+  private readonly roundEvents: EncounterRoundEvent[] = [];
 
   constructor(readonly seed: number, firstSpawnAtMs: number = 0) {
     this.randomState = (seed ^ 0x9e3779b9) >>> 0;
     this.nextSpawnAtMs = Math.max(0, firstSpawnAtMs);
   }
 
-  createOpeningOrders(players: readonly EncounterPlayer[], count: number): EncounterOrder[] {
-    const clusters = buildEncounterClusters(players, []);
-    if (clusters.length === 0) return [];
-    const orders: EncounterOrder[] = [];
-    for (let index = 0; index < count; index++) {
-      const cluster = clusters[index % clusters.length];
-      const targetPlayerId = cluster.playerIds[index % cluster.playerIds.length];
-      orders.push(this.order(cluster, targetPlayerId, 'basic'));
-    }
-    return orders;
-  }
-
   schedule(elapsedMs: number, activeEnemies: readonly EncounterEnemy[], players: readonly EncounterPlayer[], capacity: number): EncounterOrder[] {
     this.tick++;
+    this.lastElapsedMs = elapsedMs;
     const clusters = buildEncounterClusters(players, activeEnemies);
     this.activeThreat = activeEnemies.filter(enemy => !enemy.dying).reduce((sum, enemy) => sum + THREAT_COST[enemy.type], 0);
-    this.desiredThreat = desiredThreatFor(elapsedMs, players.length);
-    if (clusters.length === 0 || capacity <= 0 || this.activeThreat >= this.desiredThreat || elapsedMs < this.nextSpawnAtMs) return [];
+    this.activeEnemyCount = activeEnemies.filter(enemy => !enemy.dying).length;
+    if (clusters.length === 0) return [];
+
+    if (this.phase === 'insertion') {
+      if (elapsedMs < this.nextSpawnAtMs) return [];
+      this.beginRound(elapsedMs, players.length);
+    } else if (this.phase === 'intermission') {
+      if (elapsedMs < this.intermissionEndsAtMs) return [];
+      this.round++;
+      this.beginRound(elapsedMs, players.length);
+    }
+
+    if (this.spawnedThisRound >= this.roundTotal && this.activeThreat <= 0) {
+      this.phase = 'intermission';
+      this.intermissionEndsAtMs = elapsedMs + COOP_INTERMISSION_MS;
+      this.roundEvents.push({ kind: 'round_completed', round: this.round, tier: this.tier });
+      return [];
+    }
+    if (capacity <= 0 || elapsedMs < this.nextSpawnAtMs || this.spawnedThisRound >= this.roundTotal) return [];
 
     const orders: EncounterOrder[] = [];
-    while (orders.length < MAX_ORDERS_PER_TICK && orders.length < capacity && this.activeThreat < this.desiredThreat && elapsedMs >= this.nextSpawnAtMs) {
+    const batchSize = Math.min(MAX_ORDERS_PER_TICK, capacity, this.roundTotal - this.spawnedThisRound);
+    while (orders.length < batchSize) {
       const cluster = this.chooseCluster(clusters);
       if (!cluster) break;
-      const type = this.chooseEnemyType(elapsedMs, this.activeThreat);
+      // Each new round visibly introduces its new tier at the first spawn,
+      // then mixes every previously introduced tier for the rest of the wave.
+      const type = this.spawnedThisRound === 0 ? ROUND_TIERS[this.tier - 1] : this.chooseRoundEnemyType();
       const targetPlayerId = cluster.playerIds[Math.floor(this.random() * cluster.playerIds.length)];
       orders.push(this.order(cluster, targetPlayerId, type));
       this.activeThreat += THREAT_COST[type];
-      // This is solely a function of match time. Do not feed movement, kills,
-      // or packet timing into the clock; that is the anti-following guarantee.
-      this.nextSpawnAtMs += spawnCadenceMs(elapsedMs);
+      this.activeEnemyCount++;
+      this.spawnedThisRound++;
     }
+    this.nextSpawnAtMs = elapsedMs + spawnCadenceMs(this.round);
     return orders;
   }
+
+  drainRoundEvents() { return this.roundEvents.splice(0); }
 
   snapshot(clusterCount: number): EncounterDirectorSnapshot {
     return {
       seed: this.seed,
       tick: this.tick,
       nextSpawnAtMs: Math.round(this.nextSpawnAtMs),
+      phase: this.phase,
+      round: this.round,
+      tier: this.tier,
+      roundTotal: this.roundTotal,
+      spawnedThisRound: this.spawnedThisRound,
+      enemiesRemaining: Math.max(0, this.roundTotal - this.spawnedThisRound) + this.activeEnemyCount,
+      intermissionRemainingMs: this.phase === 'intermission' ? Math.max(0, Math.round(this.intermissionEndsAtMs - this.lastElapsedMs)) : 0,
       desiredThreat: round2(this.desiredThreat),
       activeThreat: round2(this.activeThreat),
       clusterCount,
       packetsIssued: this.packetsIssued,
     };
+  }
+
+  get tier() { return Math.min(this.round, ROUND_TIERS.length); }
+
+  private beginRound(elapsedMs: number, playerCount: number) {
+    this.phase = 'combat';
+    this.roundTotal = Math.min(64, 8 + this.round * 4 + Math.max(0, playerCount - 1) * 4);
+    this.spawnedThisRound = 0;
+    this.desiredThreat = this.roundTotal;
+    this.nextSpawnAtMs = elapsedMs;
+    this.roundEvents.push({ kind: 'round_started', round: this.round, tier: this.tier });
   }
 
   private order(cluster: EncounterCluster, targetPlayerId: string, type: EnemyType): EncounterOrder {
@@ -131,13 +180,9 @@ export class EncounterDirector {
     return cluster;
   }
 
-  private chooseEnemyType(elapsedMs: number, activeThreat: number): EnemyType {
-    const seconds = elapsedMs / 1000;
-    const candidates: EnemyType[] = seconds < 25 ? ['basic']
-      : seconds < 60 ? ['basic', 'basic', 'fast', 'ranged']
-        : ['basic', 'basic', 'fast', 'fast', 'ranged', 'tank', 'phantom', 'elite'];
-    if (seconds >= 20 * 60 && activeThreat < this.desiredThreat * 0.7) candidates.push('titan');
-    return candidates[Math.floor(this.random() * candidates.length)];
+  private chooseRoundEnemyType(): EnemyType {
+    const available = ROUND_TIERS.slice(0, this.tier);
+    return available[Math.floor(this.random() * available.length)];
   }
 
   private random(): number {
@@ -179,14 +224,8 @@ export function buildEncounterClusters(players: readonly EncounterPlayer[], enem
 
 export function enemyThreat(type: EnemyType) { return THREAT_COST[type]; }
 
-function desiredThreatFor(elapsedMs: number, playerCount: number) {
-  const minutes = elapsedMs / 60_000;
-  const partyMultiplier = 0.8 + Math.max(1, playerCount) * 0.52;
-  return Math.min(112, (10 + minutes * 7.5 + Math.sqrt(Math.max(0, elapsedMs) / 1000) * 0.38) * partyMultiplier);
-}
-
-function spawnCadenceMs(elapsedMs: number) {
-  return Math.max(210, 720 - elapsedMs / 320);
+function spawnCadenceMs(round: number) {
+  return Math.max(420, 1_050 - round * 55);
 }
 
 function round2(value: number) { return Math.round(value * 100) / 100; }

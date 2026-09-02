@@ -1,11 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { buildEncounterClusters, EncounterDirector, type EncounterPlayer } from './EncounterDirector';
+import { buildEncounterClusters, COOP_INTERMISSION_MS, EncounterDirector, type EncounterPlayer } from './EncounterDirector';
 import { SpawnTopology } from './SpawnTopology';
 import { isWorldPositionClear } from '../world/WorldLayout';
 
 const players = (x: number, y: number): EncounterPlayer[] => [{ id: 'host', x, y, angle: 0, health: 100 }];
 
 describe('EncounterDirector', () => {
+  it('contains each round, grants an intermission, then introduces the next enemy tier', () => {
+    const director = new EncounterDirector(0x1234, 100);
+    expect(director.schedule(99, [], players(6000, 6000), 90)).toEqual([]);
+    const roundOneOrders = [...director.schedule(100, [], players(6000, 6000), 90)];
+    while (director.snapshot(1).spawnedThisRound < director.snapshot(1).roundTotal) {
+      roundOneOrders.push(...director.schedule(director.snapshot(1).nextSpawnAtMs, [], players(6000, 6000), 90));
+    }
+    expect(roundOneOrders).not.toHaveLength(0);
+    expect(roundOneOrders.every(order => order.type === 'basic')).toBe(true);
+    const completionAtMs = director.snapshot(1).nextSpawnAtMs;
+    director.schedule(completionAtMs, [], players(6000, 6000), 90);
+    const breakSnapshot = director.snapshot(1);
+    expect(breakSnapshot).toMatchObject({ phase: 'intermission', round: 1, tier: 1, intermissionRemainingMs: COOP_INTERMISSION_MS });
+    const roundTwo = director.schedule(completionAtMs + COOP_INTERMISSION_MS, [], players(6000, 6000), 90);
+    expect(director.snapshot(1)).toMatchObject({ phase: 'combat', round: 2, tier: 2 });
+    expect(roundTwo[0]?.type).toBe('fast');
+    expect(roundTwo.every(order => order.type === 'basic' || order.type === 'fast')).toBe(true);
+  });
+
   it('schedules the same encounter timeline regardless of player movement', () => {
     const stationary = new EncounterDirector(0x1234);
     const moving = new EncounterDirector(0x1234);

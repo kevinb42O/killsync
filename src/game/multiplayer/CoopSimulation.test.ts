@@ -69,7 +69,7 @@ describe('CoopSimulation firearm authority', () => {
 });
 
 describe('CoopSimulation encounter authority', () => {
-  it('keeps the first fifteen seconds enemy-free, then hands off to topology-aware spawns', () => {
+  it('keeps the opening insertion enemy-free, then hands off to round-one topology spawns', () => {
     const simulation = sim();
     const player = simulation.createSnapshot().players[0];
     expect(simulation.createSnapshot().enemies).toHaveLength(0);

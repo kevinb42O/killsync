@@ -14,7 +14,7 @@ import {
   rollHolderItem,
 } from '../combat/enemyDomain';
 import { isWorldPositionClear, resolveWorldCollisions } from '../world/WorldLayout';
-import { buildEncounterClusters, EncounterDirector, type EncounterDirectorSnapshot, type EncounterPlayer } from './EncounterDirector';
+import { buildEncounterClusters, EncounterDirector, type EncounterDirectorSnapshot, type EncounterPlayer, type EncounterRoundEvent } from './EncounterDirector';
 import { SpawnTopology } from './SpawnTopology';
 import { COOP_INSERTION_DURATION_MS, CoopRunDirector, type CoopRunSnapshot } from './CoopRunDirector';
 import { COOP_BUY_STATION_STOCK, COOP_SHOP_ITEMS, type CoopBuyStationSnapshot, type CoopShopItemId } from './CoopBuyStation';
@@ -149,7 +149,7 @@ export interface CoopItemSnapshot {
 }
 export interface CoopAmmoCacheSnapshot { id: number; x: number; y: number; ammoType: AmmoType; amount: number; color: string; }
 
-export type CoopCombatEventKind = 'enemy_hit' | 'enemy_killed' | 'damage_number' | 'drop_spawned' | 'pickup_collected' | 'level_up' | 'weapon_upgraded' | 'weapon_fired' | 'reload_started' | 'reload_shell_loaded' | 'reload_finished' | 'empty_fire' | 'ammo_collected' | 'player_damaged' | 'player_downed' | 'player_revived' | 'player_eliminated' | 'revive_started' | 'squad_wiped' | 'solo_defeat' | 'station_online' | 'station_purchase' | 'objective_started' | 'objective_completed' | 'boss_spawned' | 'boss_defeated' | 'boss_ability' | 'exfil_deployed' | 'passive_triggered' | 'self_revived';
+export type CoopCombatEventKind = 'enemy_hit' | 'enemy_killed' | 'damage_number' | 'drop_spawned' | 'pickup_collected' | 'level_up' | 'weapon_upgraded' | 'weapon_fired' | 'reload_started' | 'reload_shell_loaded' | 'reload_finished' | 'empty_fire' | 'ammo_collected' | 'player_damaged' | 'player_downed' | 'player_revived' | 'player_eliminated' | 'revive_started' | 'squad_wiped' | 'solo_defeat' | 'station_online' | 'station_purchase' | 'objective_started' | 'objective_completed' | 'boss_spawned' | 'boss_defeated' | 'boss_ability' | 'exfil_deployed' | 'passive_triggered' | 'self_revived' | 'round_started' | 'round_completed';
 
 /** A replay-safe presentation event. It is also repeated in snapshots briefly
  * so packet loss cannot suppress feedback on a guest. */
@@ -934,14 +934,14 @@ export class CoopSimulation {
     this.emitCombatEvent({ kind: 'enemy_killed', x: enemy.x, y: enemy.y, enemyId: enemy.id, playerId, killedByPlayerId: playerId, color: enemy.color, weaponId });
     this.spawnGem(enemy.x, enemy.y, enemy.experienceValue, playerId);
     const killer = this.players.get(playerId);
-    if (killer && (enemy.type === 'elite' || enemy.type === 'titan' || this.random() < 0.20)) this.spawnAmmoCache(enemy.x, enemy.y, killer, enemy.type === 'elite' || enemy.type === 'titan', playerId);
+    if (killer && (enemy.type === 'elite' || enemy.type === 'titan' || this.random() < 0.46)) this.spawnAmmoCache(enemy.x, enemy.y, killer, enemy.type === 'elite' || enemy.type === 'titan', playerId);
 
     const guaranteedDrop = getGuaranteedEnemyDrop(enemy.type);
     if (guaranteedDrop) this.spawnItem(enemy.x, enemy.y, guaranteedDrop, playerId);
     if (enemy.isHolder) {
       this.spawnItem(enemy.x, enemy.y, rollHolderItem(() => this.random()), playerId);
     } else {
-      const coin = rollCoinDrop(enemy.type, 1, 0.15, () => this.random());
+      const coin = rollCoinDrop(enemy.type, 1, 0.48, () => this.random());
     if (coin) this.spawnItem(enemy.x, enemy.y, coin, playerId);
     }
     if (enemy.id === this.bossEnemyId) this.onBossKilled(enemy);
@@ -965,7 +965,7 @@ export class CoopSimulation {
     const selected = this.weapon(player);
     const weapon = player.weaponStates.reduce((lowest, candidate) => candidate.reserveAmmo / COOP_FIREARM_BY_ID[candidate.weaponId].maxReserve < lowest.reserveAmmo / COOP_FIREARM_BY_ID[lowest.weaponId].maxReserve ? candidate : lowest, selected);
     const definition = COOP_FIREARM_BY_ID[weapon.weaponId];
-    const cache: CoopAmmoCacheSnapshot = { id: this.nextEntityId++, x, y, ammoType: definition.ammoType, amount: elite ? Math.ceil(definition.magazineSize * 1.5) : Math.max(1, Math.ceil(definition.magazineSize * .30)), color: definition.visual.muzzleColor };
+    const cache: CoopAmmoCacheSnapshot = { id: this.nextEntityId++, x, y, ammoType: definition.ammoType, amount: elite ? Math.ceil(definition.magazineSize * 2) : Math.max(1, Math.ceil(definition.magazineSize * .60)), color: definition.visual.muzzleColor };
     this.ammoCaches.push(cache);
     this.emitCombatEvent({ kind: 'drop_spawned', x, y, playerId: killedByPlayerId, amount: cache.amount, color: cache.color, ammoType: cache.ammoType });
   }
@@ -1086,6 +1086,25 @@ export class CoopSimulation {
     const capacity = Math.max(0, COOP_MAX_ENEMIES - this.enemies.length);
     const orders = this.encounterDirector.schedule(this.elapsedMs, this.enemies, this.encounterPlayers(), capacity);
     for (const order of orders) this.spawnEnemy(order.type, order.targetPlayerId, order.packetId);
+    for (const event of this.encounterDirector.drainRoundEvents()) this.handleRoundEvent(event);
+  }
+
+  private handleRoundEvent(event: EncounterRoundEvent) {
+    const centre = this.squadCentre();
+    if (event.kind === 'round_started') {
+      this.emitCombatEvent({ kind: 'round_started', x: centre.x, y: centre.y, amount: event.round, color: '#fbbf24' });
+      return;
+    }
+    // Clearing a finite wave should feel like a payoff, not merely a pause.
+    // Credits are personal and every living operator gets a full reserve cache
+    // at their feet before the next round begins.
+    const bonus = 70 + event.round * 30;
+    this.awardCredits(bonus);
+    for (const player of this.players.values()) {
+      if (player.lifeState !== 'alive') continue;
+      this.spawnAmmoCache(player.x, player.y, player, true, player.id);
+    }
+    this.emitCombatEvent({ kind: 'round_completed', x: centre.x, y: centre.y, amount: event.round, color: '#5eead4' });
   }
 
   private encounterPlayers(): EncounterPlayer[] { return [...this.players.values()].map(({ id, x, y, angle, health }) => ({ id, x, y, angle, health })); }
