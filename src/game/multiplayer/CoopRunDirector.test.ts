@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { CoopRunDirector } from './CoopRunDirector';
+import { COOP_INSERTION_DURATION_MS, CoopRunDirector } from './CoopRunDirector';
 
 describe('CoopRunDirector', () => {
   it('moves deterministically from contracts through bosses to extraction', () => {
     const director = new CoopRunDirector(123);
     const centre = { x: 6000, y: 6000 };
-    expect(director.advanceInsertion(44_999, centre)).toBe(false);
-    expect(director.advanceInsertion(45_000, centre)).toBe(true);
+    expect(director.advanceInsertion(COOP_INSERTION_DURATION_MS - 1, centre)).toBe(false);
+    expect(director.advanceInsertion(COOP_INSERTION_DURATION_MS, centre)).toBe(true);
     expect(director.currentObjective?.kind).toBe('uplink');
     expect(director.addUplinkProgress(100)).toBe(true);
     expect(director.currentPhase).toBe('mini_boss');
@@ -29,7 +29,7 @@ describe('CoopRunDirector', () => {
   it('loses extraction when its timer expires', () => {
     const director = new CoopRunDirector(5);
     const centre = { x: 6000, y: 6000 };
-    director.advanceInsertion(45_000, centre);
+    director.advanceInsertion(COOP_INSERTION_DURATION_MS, centre);
     director.addUplinkProgress(100);
     director.activateBoss(100, 6000, 6000);
     director.completeBoss(centre);

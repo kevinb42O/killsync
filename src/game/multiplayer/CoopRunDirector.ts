@@ -48,11 +48,14 @@ export interface CoopRunSnapshot {
   objective?: CoopObjectiveSnapshot;
   boss?: CoopBossSnapshot;
   exfil?: CoopExfilSnapshot;
+  /** Safe staging window before the normal encounter director is released. */
+  insertionRemainingMs?: number;
+  insertionDurationMs?: number;
   /** Human-readable system text, rendered as a transient HUD objective. */
   notice: string;
 }
 
-const INSERTION_MS = 45_000;
+export const COOP_INSERTION_DURATION_MS = 60_000;
 const EXFIL_MS = 90_000;
 const EXFIL_HOLD_MS = 12_000;
 
@@ -76,7 +79,7 @@ export class CoopRunDirector {
 
   /** Starts the first contract after the short opening horde. */
   advanceInsertion(elapsedMs: number, centre: { x: number; y: number }) {
-    if (this.phase !== 'insertion' || elapsedMs < INSERTION_MS) return false;
+    if (this.phase !== 'insertion' || elapsedMs < COOP_INSERTION_DURATION_MS) return false;
     this.startContract(centre);
     return true;
   }
@@ -193,6 +196,8 @@ export class CoopRunDirector {
       objective: this.objective && { ...this.objective },
       boss: this.boss && { ...this.boss },
       exfil: this.exfil && { ...this.exfil }, notice: this.notice,
+      insertionRemainingMs: this.phase === 'insertion' ? Math.max(0, COOP_INSERTION_DURATION_MS - elapsedMs) : undefined,
+      insertionDurationMs: this.phase === 'insertion' ? COOP_INSERTION_DURATION_MS : undefined,
     };
   }
 

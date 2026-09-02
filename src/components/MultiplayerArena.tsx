@@ -473,7 +473,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       const presentationTargetId = isSpectator
         ? spectatorTargetRef.current
         : resolveDownedSpectatorTarget(snapshotRef.current);
-      renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId);
+      const latestLifeState = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState;
+      renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId, latestLifeState === 'alive');
       animationFrame = requestAnimationFrame(frame);
     };
     animationFrame = requestAnimationFrame(frame);
@@ -553,6 +554,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         <div className="mt-1 text-xs font-black uppercase tracking-wider text-white">{run.objective?.title || run.boss?.name || run.notice}</div>
         {run.objective && <><div className="mt-1 text-[10px] text-white/55">{run.objective.description}</div><div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.min(100, run.objective.progress / run.objective.required * 100)}%` }} /></div></>}
         {run.boss && <><div className="mt-2 flex justify-between text-[9px] font-mono text-rose-100"><span>PHASE {run.boss.phase}</span><span>{Math.ceil(run.boss.health).toLocaleString()} / {Math.ceil(run.boss.maxHealth).toLocaleString()}</span></div><div className="mt-1 h-1.5 overflow-hidden bg-rose-950/80"><div className="h-full bg-rose-400 transition-[width]" style={{ width: `${Math.max(0, run.boss.health / Math.max(1, run.boss.maxHealth) * 100)}%` }} /></div></>}
+        {run.insertionRemainingMs !== undefined && run.insertionDurationMs !== undefined && <><div className="mt-2 flex justify-between text-[9px] font-mono text-cyan-100"><span>HOSTILES ARRIVE</span><span>{Math.ceil(run.insertionRemainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, 1 - run.insertionRemainingMs / Math.max(1, run.insertionDurationMs)) * 100}%` }} /></div></>}
         {run.exfil && <><div className="mt-2 flex justify-between text-[9px] font-mono text-amber-100"><span>EXFIL HOLD</span><span>{Math.ceil(run.exfil.remainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-amber-950/80"><div className="h-full bg-amber-300 transition-[width]" style={{ width: `${run.exfil.holdProgressMs / run.exfil.holdRequiredMs * 100}%` }} /></div></>}
       </div>}
       {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[43%] -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}

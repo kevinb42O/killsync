@@ -16,7 +16,7 @@ import {
 import { isWorldPositionClear, resolveWorldCollisions } from '../world/WorldLayout';
 import { buildEncounterClusters, EncounterDirector, type EncounterDirectorSnapshot, type EncounterPlayer } from './EncounterDirector';
 import { SpawnTopology } from './SpawnTopology';
-import { CoopRunDirector, type CoopRunSnapshot } from './CoopRunDirector';
+import { COOP_INSERTION_DURATION_MS, CoopRunDirector, type CoopRunSnapshot } from './CoopRunDirector';
 import { COOP_BUY_STATION_STOCK, COOP_SHOP_ITEMS, type CoopBuyStationSnapshot, type CoopShopItemId } from './CoopBuyStation';
 import { COOP_PASSIVE_BY_ID, passiveCooldownMs, passiveDamage, passiveRadius, passiveRankCost, type CoopPassiveModuleId, type CoopPassiveRuntime, type CoopPassiveSnapshot } from './CoopPassiveModules';
 import { awardMedals, createRunStats, type CoopPlayerRunStats, type CoopRunResultsSnapshot } from './CoopResults';
@@ -53,7 +53,7 @@ const ITEM_MAGNET_RANGE = 150;
 const GEM_PICKUP_RADIUS = 10;
 const ITEM_PICKUP_RADIUS = 15;
 /** A calm staging window before the normal encounter director starts. */
-export const COOP_SAFE_INSERTION_MS = 15_000;
+export const COOP_SAFE_INSERTION_MS = COOP_INSERTION_DURATION_MS;
 const COOP_MAX_ENEMIES = 90;
 const WEAPON_MAX_LEVEL = 8;
 const SWITCH_MS = 280;

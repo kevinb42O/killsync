@@ -70,9 +70,13 @@ export class MultiplayerRendererBridge {
   getAimAngle() { return Math.atan2(-Math.cos(this.renderer.yaw), -Math.sin(this.renderer.yaw)); }
   getAimPitch() { return this.renderer.pitch; }
 
-  render(snapshot: CoopSnapshot | null, localPlayerId: string, deltaMs: number, spectatorTargetId?: string | null) {
+  render(snapshot: CoopSnapshot | null, localPlayerId: string, deltaMs: number, spectatorTargetId?: string | null, forceFirstPerson: boolean = false) {
     if (!snapshot) return;
-    const local = (spectatorTargetId ? snapshot.players.find(player => player.id === spectatorTargetId) : undefined)
+    // A revive is an authoritative life-state change. It must win over any
+    // previous spectator target in the same frame so the player cannot remain
+    // stuck in third person after standing back up.
+    const isSpectating = !forceFirstPerson && Boolean(spectatorTargetId && spectatorTargetId !== localPlayerId);
+    const local = (isSpectating ? snapshot.players.find(player => player.id === spectatorTargetId) : undefined)
       || snapshot.players.find(player => player.id === localPlayerId) || snapshot.players[0];
     if (!local) return;
     const selectedWeaponId = COOP_WEAPON_SLOTS[local.selectedSlot] || 'plasma_gun';
@@ -103,7 +107,7 @@ export class MultiplayerRendererBridge {
     this.localFirearm.matchSuitPalette(rightForearm.color, rightPalm.color, rightChevron.color);
     if (weaponState) this.localFirearm.update(weaponState, snapshot.elapsedMs, deltaMs, local.isAiming);
     player.weapons = [this.createSelectedWeapon(selectedWeaponId, local.selectedWeaponLevel)];
-    this.renderState.viewMode = spectatorTargetId ? 'THIRD_PERSON' : 'FIRST_PERSON';
+    this.renderState.viewMode = isSpectating ? 'THIRD_PERSON' : 'FIRST_PERSON';
     this.renderState.gameTime = snapshot.elapsedMs;
     this.renderState.enemies = snapshot.enemies.map(enemy => this.toEnemy(enemy));
     this.renderState.projectiles = snapshot.projectiles.map(projectile => this.toProjectile(projectile));
@@ -119,7 +123,7 @@ export class MultiplayerRendererBridge {
     this.consumeCombatEvents(snapshot.combatEvents, localPlayerId, deltaMs);
     this.renderState.particles = this.combatParticles;
     this.renderState.screenShake = this.presentationShake;
-    this.syncRemotePlayers(snapshot, spectatorTargetId || localPlayerId);
+    this.syncRemotePlayers(snapshot, isSpectating ? spectatorTargetId! : localPlayerId);
     this.syncPassiveModules(snapshot);
 
     const engine = this.renderState as unknown as GameEngine;
