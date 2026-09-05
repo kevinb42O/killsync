@@ -81,7 +81,18 @@ export default function App() {
   const threeContainerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const exfillCarryoverRef = useRef<any>(null);
-  const [gameState, setGameState] = useState<GameState>('MENU');
+  const initialRoomQuery = useRef<string | undefined>(
+    typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('room') || new URLSearchParams(window.location.search).get('join') || undefined)
+      : undefined
+  );
+  const [gameState, setGameState] = useState<GameState>(() => {
+    if (typeof window !== 'undefined') {
+      const roomParam = new URLSearchParams(window.location.search).get('room') || new URLSearchParams(window.location.search).get('join');
+      if (roomParam) return 'MULTIPLAYER_SETUP';
+    }
+    return 'MENU';
+  });
   const [viewMode, setViewMode] = useState<ViewMode>('TOPDOWN_2D');
   const [multiplayerLaunch, setMultiplayerLaunch] = useState<MultiplayerLaunch | null>(null);
 
@@ -532,6 +543,7 @@ export default function App() {
         lastWaveSeenRef.current = engine.player.currentWave;
         currentWaveKillCountRef.current = 0;
         currentWaveLevelUpsRef.current = 0;
+        soundManager.playNewRound();
       }
 
       if (engine.killCount > prevKillCountRef.current) {
@@ -1047,6 +1059,10 @@ export default function App() {
         const next = { ...prev };
         if (itemType === 'revive') next.hasRevive = true;
         if (itemType === 'nuke') next.nukeCount += 1;
+        if (itemType === 'gas_mask') {
+          next.gasMaskHp = 150;
+          next.gasMaskMaxHp = 150;
+        }
         if (itemType.startsWith('armor_')) next.armorTier = parseInt(itemType.split('_')[1]);
         if (engineRef.current) {
           engineRef.current.player.inventory = { ...next };
@@ -1468,7 +1484,7 @@ export default function App() {
 
       {/* HUD */}
       {gameState === 'PLAYING' && <GameHUD engine={engineRef.current} />}
-      {gameState === 'MULTIPLAYER_SETUP' && <ManualMultiplayerSetup onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
+      {gameState === 'MULTIPLAYER_SETUP' && <ManualMultiplayerSetup initialRoomCode={initialRoomQuery.current} onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
       {gameState === 'MULTIPLAYER_PLAYING' && multiplayerLaunch && <MultiplayerArena launch={multiplayerLaunch} controlScheme={controlScheme} onExit={() => { setMultiplayerLaunch(null); setGameState('MENU'); }} />}
 
       <AnimatePresence>

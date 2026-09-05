@@ -4,13 +4,16 @@
 }
 
 .coop-vitals {
+  position: absolute;
   left: 22px;
   top: 20px;
-  width: 228px;
+  width: 236px;
   padding: 10px 16px 11px 13px;
-  border-left: 2px solid rgba(103, 232, 249, 0.72);
-  background: linear-gradient(90deg, rgba(1, 8, 18, 0.86), rgba(1, 8, 18, 0.34) 74%, transparent);
-  filter: drop-shadow(0 5px 16px rgba(0, 0, 0, 0.32));
+  border-left: 2px solid rgba(103, 232, 249, 0.85);
+  background: linear-gradient(90deg, rgba(2, 9, 20, 0.94), rgba(2, 9, 20, 0.72) 78%, rgba(2, 9, 20, 0.25));
+  backdrop-filter: blur(8px);
+  filter: drop-shadow(0 5px 16px rgba(0, 0, 0, 0.65));
+  z-index: 60;
 }
 
 .coop-vitals__topline,
@@ -20,49 +23,96 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: rgba(226, 232, 240, 0.62);
+  color: rgba(226, 232, 240, 0.75);
   font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.coop-vitals__topline span:first-child { color: var(--hud-cyan); }
+.coop-vitals__topline span:first-child { color: var(--hud-cyan); font-weight: 800; }
 .coop-vitals__health { display: grid; grid-template-columns: 32px 1fr; align-items: center; gap: 8px; margin-top: 9px; color: #fff; font: 800 16px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.coop-meter, .coop-xp, .coop-squadmate__meter, .coop-objective__meter { display: block; overflow: hidden; background: rgba(255, 255, 255, 0.09); }
-.coop-meter { height: 4px; }
-.coop-meter i { display: block; height: 100%; background: #fb7185; box-shadow: 0 0 9px rgba(251, 113, 133, 0.7); transition: width 100ms linear; }
+.coop-meter, .coop-xp, .coop-squadmate__meter, .coop-objective__meter { display: block; overflow: hidden; background: rgba(255, 255, 255, 0.12); }
+.coop-meter { height: 5px; border-radius: 1px; }
+.coop-meter i { display: block; height: 100%; background: #fb7185; box-shadow: 0 0 10px rgba(251, 113, 133, 0.85); transition: width 100ms linear; }
 .coop-vitals__lower { justify-content: flex-start; margin-top: 7px; }
 .coop-vitals__currency { color: #fde68a; }
 .coop-xp { height: 2px; margin-top: 5px; }
 .coop-xp i { display: block; height: 100%; background: var(--hud-cyan); transition: width 100ms linear; }
-.coop-vitals__equipment, .coop-vitals__shield { display: flex; align-items: center; gap: 6px; margin-top: 7px; color: rgba(207, 250, 254, 0.68); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; }
+.coop-vitals__equipment, .coop-vitals__shield { display: flex; align-items: center; gap: 6px; margin-top: 7px; color: rgba(207, 250, 254, 0.85); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; }
 .coop-vitals__shield { color: #a7f3d0; }
 
-.coop-squad { left: 22px; top: 126px; width: 208px; }
-.coop-squadmate { position: relative; display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 7px; margin-bottom: 7px; padding: 3px 7px 6px 4px; color: rgba(255, 255, 255, 0.74); background: linear-gradient(90deg, rgba(2, 8, 18, 0.68), rgba(2, 8, 18, 0)); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.coop-squad {
+  position: absolute;
+  left: 22px;
+  top: 132px;
+  width: 208px;
+  z-index: 60;
+}
+.coop-squadmate { position: relative; display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 7px; margin-bottom: 7px; padding: 4px 8px 6px 5px; color: rgba(255, 255, 255, 0.85); background: linear-gradient(90deg, rgba(2, 9, 20, 0.88), rgba(2, 9, 20, 0.35)); backdrop-filter: blur(6px); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .coop-squadmate__signal { width: 5px; height: 5px; border-radius: 50%; box-shadow: 0 0 7px currentColor; }
 .coop-squadmate__name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.coop-squadmate__status { color: rgba(255, 255, 255, 0.48); font-size: 8px; }
+.coop-squadmate__status { color: rgba(255, 255, 255, 0.65); font-size: 8px; }
 .coop-squadmate__meter { position: absolute; right: 7px; bottom: 2px; left: 18px; height: 1px; }
 .coop-squadmate__meter i { display: block; height: 100%; transition: width 100ms linear; }
 .coop-squadmate--downed .coop-squadmate__status { color: #fde68a; }
 .coop-squadmate--eliminated { opacity: 0.42; }
 
-.coop-objective { --objective-color: #67e8f9; top: 20px; left: 50%; width: min(390px, calc(100vw - 560px)); min-width: 260px; padding: 7px 18px 10px; transform: translateX(-50%); text-align: center; background: linear-gradient(90deg, transparent, rgba(1, 8, 18, 0.6) 18%, rgba(1, 8, 18, 0.6) 82%, transparent); filter: drop-shadow(0 5px 14px rgba(0, 0, 0, 0.35)); }
+.coop-objective {
+  position: absolute;
+  --objective-color: #67e8f9;
+  top: 20px;
+  left: 50%;
+  width: min(390px, calc(100vw - 560px));
+  min-width: 260px;
+  padding: 7px 18px 10px;
+  transform: translateX(-50%);
+  text-align: center;
+  background: linear-gradient(90deg, transparent, rgba(2, 9, 20, 0.85) 18%, rgba(2, 9, 20, 0.85) 82%, transparent);
+  backdrop-filter: blur(6px);
+  filter: drop-shadow(0 5px 14px rgba(0, 0, 0, 0.5));
+  z-index: 60;
+}
 .coop-objective--rose { --objective-color: #fb7185; }
 .coop-objective--amber { --objective-color: #fbbf24; }
 .coop-objective--emerald { --objective-color: #6ee7b7; }
 .coop-objective--fuchsia { --objective-color: #e879f9; }
 .coop-objective__meta { color: var(--objective-color); }
-.coop-objective__title { overflow: hidden; margin-top: 5px; color: rgba(255, 255, 255, 0.9); font-size: 11px; font-weight: 900; letter-spacing: 0.09em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.coop-objective__title { overflow: hidden; margin-top: 5px; color: rgba(255, 255, 255, 0.95); font-size: 11px; font-weight: 900; letter-spacing: 0.09em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .coop-objective__meter { height: 2px; margin-top: 7px; }
 .coop-objective__meter i { display: block; height: 100%; background: var(--objective-color); box-shadow: 0 0 9px var(--objective-color); transition: width 100ms linear; }
 
-.coop-spectating { top: 92px; left: 50%; display: flex; align-items: baseline; gap: 8px; transform: translateX(-50%); text-shadow: 0 2px 8px #000; }
-.coop-spectating span, .coop-spectating small { color: rgba(255,255,255,.45); font: 800 8px/1 ui-monospace, monospace; letter-spacing: .12em; }
-.coop-spectating b { color: #f0abfc; font-size: 10px; text-transform: uppercase; }
+.coop-spectating {
+  position: absolute;
+  top: 86px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  background: linear-gradient(90deg, rgba(2, 9, 20, 0.9), rgba(2, 9, 20, 0.75));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  text-shadow: 0 2px 8px #000;
+  z-index: 60;
+}
+.coop-spectating span, .coop-spectating small { color: rgba(255,255,255,.7); font: 800 9px/1 ui-monospace, monospace; letter-spacing: .12em; }
+.coop-spectating b { color: #f0abfc; font-size: 11px; text-transform: uppercase; font-weight: 900; letter-spacing: .08em; }
 
-.coop-weapons { bottom: 22px; left: 22px; width: 190px; padding: 10px 13px 9px; border-left: 2px solid rgba(103, 232, 249, 0.6); background: linear-gradient(90deg, rgba(1, 8, 18, 0.82), rgba(1, 8, 18, 0.24) 82%, transparent); filter: drop-shadow(0 5px 16px rgba(0, 0, 0, 0.35)); }
+.coop-weapons {
+  position: absolute;
+  bottom: 22px;
+  left: 22px;
+  width: 190px;
+  padding: 10px 13px 9px;
+  border-left: 2px solid rgba(103, 232, 249, 0.7);
+  background: linear-gradient(90deg, rgba(2, 9, 20, 0.92), rgba(2, 9, 20, 0.55) 82%, transparent);
+  backdrop-filter: blur(8px);
+  filter: drop-shadow(0 5px 16px rgba(0, 0, 0, 0.65));
+  z-index: 60;
+}
 .coop-weapons__name { display: flex; align-items: baseline; gap: 7px; font: 900 9px/1 ui-monospace, monospace; letter-spacing: .08em; }
 .coop-weapons__name small { color: rgba(255,255,255,.42); font-size: 7px; }
 .coop-weapons__ammo { display: flex; align-items: baseline; gap: 6px; margin-top: 5px; color: #fff; font-family: ui-monospace, monospace; }
@@ -92,3 +142,290 @@
   .coop-minimap { right: 12px; bottom: 12px; }
   .coop-exit { top: 12px; right: 12px; }
 }
+
+/* ─── Tactical Gas Mask Viewport Overlay ───────────────────────── */
+.gasmask-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  overflow: hidden;
+  box-shadow: inset 0 0 50px 10px rgba(5, 10, 15, 0.65);
+}
+
+.gasmask-bezel {
+  position: absolute;
+  inset: 0;
+  border-style: solid;
+  border-color: rgba(6, 10, 15, 0.75);
+  border-width: clamp(10px, 1.6vw, 22px) clamp(12px, 2vw, 28px);
+  border-radius: 40px;
+  box-shadow: inset 0 0 16px rgba(0, 240, 255, 0.08),
+              inset 0 0 35px rgba(0, 0, 0, 0.6),
+              0 0 25px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}
+
+.gasmask-glass {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(6, 182, 212, 0.02) 0%, rgba(5, 46, 22, 0.05) 80%, rgba(2, 6, 8, 0.25) 100%);
+  mix-blend-mode: screen;
+}
+
+.gasmask-condensation {
+  position: absolute;
+  left: 25%;
+  right: 25%;
+  bottom: 0;
+  height: 18%;
+  background: radial-gradient(ellipse at 50% 100%, rgba(255, 255, 255, 0.16) 0%, rgba(200, 240, 255, 0.05) 55%, transparent 80%);
+  filter: blur(10px);
+  animation: gasmask-breath 4.2s infinite ease-in-out;
+}
+
+@keyframes gasmask-breath {
+  0%, 100% { opacity: 0.10; transform: scaleY(0.95); }
+  50% { opacity: 0.32; transform: scaleY(1.05); }
+}
+
+.gasmask-hud {
+  position: absolute;
+  bottom: 145px;
+  right: 20px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #67e8f9;
+  text-shadow: 0 0 8px rgba(103, 232, 249, 0.6);
+  padding: 6px 12px;
+  background: rgba(4, 12, 20, 0.9);
+  border-left: 2px solid #22d3ee;
+  border-radius: 2px;
+  backdrop-blur: 8px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);
+}
+
+.gasmask-hud__bar {
+  width: 140px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin-top: 3px;
+}
+
+.gasmask-hud__fill {
+  height: 100%;
+  transition: width 150ms linear, background-color 250ms ease;
+}
+
+.gasmask-crack {
+  position: absolute;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.6));
+}
+
+/* ─── In-Gas Toxic Screen Filter ──────────────────────────────── */
+.toxic-gas-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, rgba(34, 197, 94, 0.08) 0%, rgba(22, 101, 52, 0.25) 75%, rgba(5, 46, 22, 0.45) 100%);
+  animation: toxic-vapor-wave 3.5s infinite ease-in-out alternate;
+  mix-blend-mode: screen;
+}
+
+@keyframes toxic-vapor-wave {
+  0% { opacity: 0.78; transform: scale(1); }
+  100% { opacity: 0.98; transform: scale(1.02); }
+}
+
+/* ─── Center Reticle Teammate Radial Indicators ───────────── */
+.coop-reticle-compass {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120px;
+  height: 120px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 15;
+}
+
+.coop-reticle-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px dashed rgba(34, 211, 238, 0.16);
+  box-shadow: inset 0 0 12px rgba(34, 211, 238, 0.04);
+}
+
+.coop-reticle-node {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+  transition: transform 60ms linear;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.coop-reticle-chevron {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin-left: -5px;
+  margin-top: -4px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid currentColor;
+  transform-origin: 5px 4px;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.coop-reticle-badge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font: 900 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+  padding: 1.5px 3.5px;
+  border-radius: 2px;
+  background: rgba(3, 8, 16, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  white-space: nowrap;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+}
+
+.coop-reticle-node--downed .coop-reticle-chevron {
+  border-bottom-color: #fbbf24 !important;
+  border-left-width: 6px;
+  border-right-width: 6px;
+  border-bottom-width: 10px;
+  margin-left: -6px;
+  margin-top: -5px;
+  filter: drop-shadow(0 0 10px #f59e0b) !important;
+  animation: coop-reticle-glow-pulse 0.5s infinite alternate ease-in-out;
+}
+
+.coop-reticle-node--downed .coop-reticle-badge {
+  border-color: #fbbf24;
+  color: #fde68a;
+  background: rgba(45, 20, 5, 0.95);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+  animation: coop-reticle-glow-pulse 0.5s infinite alternate ease-in-out;
+}
+
+/* Glow pulse that NEVER overwrites transform positioning */
+@keyframes coop-reticle-glow-pulse {
+  0% { opacity: 0.85; filter: drop-shadow(0 0 6px #f59e0b); }
+  100% { opacity: 1; filter: drop-shadow(0 0 16px #fbbf24); }
+}
+
+@keyframes coop-reticle-danger-glow {
+  0% { opacity: 0.85; filter: drop-shadow(0 0 6px #ef4444); }
+  100% { opacity: 1; filter: drop-shadow(0 0 16px #ff3344); }
+}
+
+/* ─── Tactical Ping Reticle Compass Visuals ──────────────── */
+.coop-reticle-ping {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+}
+
+.coop-reticle-ping-diamond {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  margin-top: -4.5px;
+  background: currentColor;
+  border: 1.5px solid #ffffff;
+  border-radius: 1.5px;
+  transform-origin: center center;
+  box-shadow: 0 0 8px currentColor;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.coop-reticle-ping--danger .coop-reticle-ping-diamond {
+  background: #ef4444 !important;
+  color: #ef4444 !important;
+  border-color: #ffffff !important;
+  animation: coop-reticle-danger-glow 0.4s infinite alternate ease-in-out;
+}
+
+.coop-reticle-ping-badge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font: 900 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+  padding: 1.5px 4px;
+  border-radius: 2px;
+  background: rgba(3, 8, 16, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  white-space: nowrap;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.85);
+}
+
+.coop-reticle-ping--danger .coop-reticle-ping-badge {
+  border-color: #ef4444;
+  background: rgba(45, 10, 10, 0.95);
+  color: #fca5a5;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+  animation: coop-reticle-danger-glow 0.4s infinite alternate ease-in-out;
+}
+
+/* ─── Tactical Ping Animations ───────────────────────────── */
+@keyframes coop-ping-pulse {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+}
+
+/* ─── Damage Hit Flash Overlay ───────────────────────────── */
+@keyframes coop-damage-flash-fade {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  25% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+.coop-damage-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+  box-shadow: inset 0 0 60px rgba(244, 63, 94, 0.45), inset 0 0 120px rgba(225, 29, 72, 0.25);
+  border: min(6vw, 56px) solid rgba(244, 63, 94, 0.35);
+  background: radial-gradient(ellipse at center, transparent 58%, rgba(244, 63, 94, 0.16) 100%);
+  animation: coop-damage-flash-fade 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

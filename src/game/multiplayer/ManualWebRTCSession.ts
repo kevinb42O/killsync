@@ -15,6 +15,19 @@ import { encodeSnapshotPackets, MAX_SNAPSHOT_BYTES, SnapshotAssembler } from './
 const MAX_SIGNAL_BYTES = 48_000;
 const ICE_GATHER_TIMEOUT_MS = 7_000;
 
+export const DEFAULT_PUBLIC_STUN_SERVERS: RTCIceServer[] = [
+  {
+    urls: [
+      'stun:stun.l.google.com:19302',
+      'stun:stun1.l.google.com:19302',
+      'stun:stun2.l.google.com:19302',
+      'stun:stun3.l.google.com:19302',
+      'stun:stun4.l.google.com:19302',
+      'stun:stun.cloudflare.com:3478',
+    ],
+  },
+];
+
 type ManagedPeer = {
   peerId: string;
   connection: RTCPeerConnection;
@@ -57,9 +70,9 @@ export class ManualWebRTCSession {
   constructor(options: ManualWebRTCSessionOptions) {
     this.role = options.role;
     this.sessionId = options.sessionId || createId('session');
-    // The lobby service may provide short-lived TURN credentials. STUN remains
-    // a safe fallback for local/manual sessions when no service is configured.
-    this.iceServers = options.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }];
+    // The lobby service may provide short-lived TURN credentials. Redundant STUN
+    // ensures WAN traversal succeeds without requiring a private server.
+    this.iceServers = options.iceServers || DEFAULT_PUBLIC_STUN_SERVERS;
     this.onPeerChange = options.onPeerChange;
     this.onInput = options.onInput;
     this.onState = options.onState;
@@ -333,16 +346,39 @@ async function waitForIceGathering(connection: RTCPeerConnection): Promise<void>
   if (connection.iceGatheringState === 'complete') return;
   await new Promise<void>((resolve) => {
     let timeout = 0;
+    let silenceTimer = 0;
+    let hasSrflx = false;
+
+    const finish = () => {
+      window.clearTimeout(timeout);
+      window.clearTimeout(silenceTimer);
+      connection.removeEventListener('icegatheringstatechange', onStateChange);
+      connection.removeEventListener('icecandidate', onCandidate);
+      resolve();
+    };
+
     const onStateChange = () => {
       if (connection.iceGatheringState === 'complete') finish();
     };
-    const finish = () => {
-      window.clearTimeout(timeout);
-      connection.removeEventListener('icegatheringstatechange', onStateChange);
-      resolve();
+
+    const onCandidate = (event: RTCPeerConnectionIceEvent) => {
+      if (!event.candidate) {
+        finish();
+        return;
+      }
+      if (event.candidate.type === 'srflx' || event.candidate.candidate.includes('srflx')) {
+        hasSrflx = true;
+      }
+      // Once we have a public STUN server-reflexive candidate, if gathering quietens for 700ms, finish early
+      window.clearTimeout(silenceTimer);
+      if (hasSrflx) {
+        silenceTimer = window.setTimeout(finish, 700);
+      }
     };
+
     timeout = window.setTimeout(finish, ICE_GATHER_TIMEOUT_MS);
     connection.addEventListener('icegatheringstatechange', onStateChange);
+    connection.addEventListener('icecandidate', onCandidate);
   });
 }
 

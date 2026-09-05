@@ -39,5 +39,6 @@ export function createInterestSnapshot(snapshot: CoopSnapshot, playerId?: string
     ammoCaches: snapshot.ammoCaches.filter(interested).map(entity => quantizePosition(entity)),
     hazards: (snapshot.hazards || []).filter(interested).map(hazard => ({ ...quantizePosition(hazard), radius: q(hazard.radius) })),
     combatEvents: snapshot.combatEvents.filter(event => interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId),
+    pings: snapshot.pings?.map(ping => quantizePosition(ping)),
   };
 }

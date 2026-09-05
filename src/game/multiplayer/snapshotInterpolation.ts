@@ -23,7 +23,11 @@ export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSna
     x: lerp(old.x, next.x, progress), y: lerp(old.y, next.y, progress), angle: lerpAngle(old.angle, next.angle, progress),
     z: lerp(old.z, next.z, progress), pitch: lerp(old.pitch, next.pitch, progress),
   }));
-  return { ...current, players, enemies, projectiles };
+  const gasZone = current.gasZone && previous.gasZone ? {
+    ...current.gasZone,
+    radius: lerp(previous.gasZone.radius, current.gasZone.radius, progress),
+  } : current.gasZone;
+  return { ...current, players, enemies, projectiles, gasZone };
 }
 
 function interpolateEntities<T extends { id: string | number }>(previous: T[], current: T[], alpha: number, blend: (old: T, next: T) => T): T[] {

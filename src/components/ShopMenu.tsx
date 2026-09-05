@@ -50,6 +50,15 @@ export const ShopMenu: React.FC<ShopMenuProps> = ({ playerCoins, inventory, onBu
       type: 'revive'
     },
     {
+      id: 'gas_mask',
+      name: 'Tactical Gas Mask',
+      description: 'CBRN respirator with ballistic visor. Completely absorbs toxic gas damage until destroyed.',
+      cost: 800,
+      icon: <Shield size={32} className="text-emerald-400" />,
+      disabled: Boolean((inventory.gasMaskHp || 0) >= (inventory.gasMaskMaxHp || 150) && (inventory.gasMaskHp || 0) > 0),
+      type: 'gas_mask'
+    },
+    {
       id: 'nuke',
       name: 'Nuke (Hotkey: N)',
       description: 'Obliterates all enemies on screen instantly.',
@@ -106,6 +115,7 @@ export const ShopMenu: React.FC<ShopMenuProps> = ({ playerCoins, inventory, onBu
             let statusText = '';
             if (item.disabled) {
               if (item.id === 'revive') statusText = 'EQUIPPED';
+              else if (item.id === 'gas_mask') statusText = 'MAX FILTER';
               else if (item.id.startsWith('armor') && inventory.armorTier >= parseInt(item.id.replace('armor_', ''))) statusText = 'OWNED';
               else if (item.id.startsWith('armor')) statusText = 'REQUIRES PREVIOUS';
             }

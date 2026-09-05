@@ -125,7 +125,7 @@ export class GameEngine {
   private readonly MAX_ENEMIES = 500;
   private readonly MAX_STANDARD_ENEMIES = 490;
   private readonly MAX_PROJECTILES = 1400;
-  private readonly MAX_PARTICLES = 1600;
+  private readonly MAX_PARTICLES = 450;
   private readonly MAX_DAMAGE_TEXTS = 180;
   private readonly COLLISION_CELL_SIZE = 160;
   private readonly MAX_ACTIVE_TREASURES = 2;
@@ -1948,22 +1948,28 @@ export class GameEngine {
         const multiplier = attackProfile?.damageMultiplier ?? 1;
         this.applyEnemyDamage(enemy.damage * multiplier, kind === 'shockwave' ? 12 : 8);
       }
-      if (target && (kind === 'lunge' || kind === 'ambush')) {
+      if (target && kind === 'ambush') {
         const position = { ...target };
         this.resolveEntityWorldCollision(position, enemy.radius);
         enemy.position = position;
       }
-      if (target) this.createExplosion(target.x, target.y, enemy.color, kind === 'shockwave' ? 18 : 10);
+      if (target) this.createExplosion(target.x, target.y, enemy.color, kind === 'shockwave' ? 6 : 4);
       enemy.attackWindupMs = undefined; enemy.attackWindupDurationMs = undefined; enemy.attackTarget = undefined; enemy.attackKind = undefined; enemy.presentationAttackCharge = 0;
       enemy.attackCooldownMs = attackProfile?.cooldownMs || 3_800;
       return true;
     }
-    if ((enemy.attackCooldownMs || 0) > 0 || enemy.type === 'basic' || enemy.type === 'titan' || enemy.type === 'boss') return false;
+    if ((enemy.attackCooldownMs || 0) > 0 || enemy.type === 'basic' || enemy.type === 'fast' || enemy.type === 'titan' || enemy.type === 'boss') return false;
     const profile = getEnemyAttackProfile(enemy.type, distance);
-    // Relocation attacks may be fast, but they must not phase through authored
-    // cover. Only the radial Goliath shockwave intentionally ignores line of
-    // sight once the player enters its close combat band.
-    if (!profile || (profile.kind !== 'shockwave' && !hasEnemyAttackPath(enemy.position, this.player.position))) return false;
+    if (!profile) return false;
+    // Stagger and cache line-of-sight checks so dozens of ranged/elite units
+    // don't raymarch through city buildings 60 times a second per enemy.
+    if (profile.kind !== 'shockwave') {
+      if (this.gameTime < ((enemy as any).nextAttackPathCheckAtMs || 0)) return false;
+      if (!hasEnemyAttackPath(enemy.position, this.player.position)) {
+        (enemy as any).nextAttackPathCheckAtMs = this.gameTime + 180 + (numericEnemyId(enemy.id) % 5) * 20;
+        return false;
+      }
+    }
     enemy.attackKind = profile.kind; enemy.attackWindupMs = profile.windupMs; enemy.attackWindupDurationMs = profile.windupMs;
     enemy.attackTarget = { ...this.player.position }; enemy.presentationAttackCharge = 0;
     return true;
@@ -5345,7 +5351,7 @@ export class GameEngine {
       ctx.save();
       ctx.strokeStyle = enemy.color; ctx.fillStyle = `${enemy.color}22`; ctx.lineWidth = 2 + charge * 3;
       ctx.globalAlpha = .45 + charge * .5;
-      if (enemy.attackKind === 'lunge' || enemy.attackKind === 'ambush') {
+      if (enemy.attackKind === 'ambush') {
         ctx.setLineDash([10, 8]);
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(enemy.attackTarget.x, enemy.attackTarget.y); ctx.stroke();
         ctx.setLineDash([]);

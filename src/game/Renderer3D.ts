@@ -92,6 +92,10 @@ export class Renderer3D {
   gridHelper!: THREE.GridHelper;
   floorMesh!: THREE.Mesh;
   boundaryPillars: THREE.Mesh[] = [];
+  gasZoneGroup!: THREE.Group;
+  gasWallMesh!: THREE.Mesh;
+  gasWallMaterial!: THREE.ShaderMaterial;
+  gasPerimeterRing!: THREE.Mesh;
   
   // High-End FPS Viewmodel Rig
   fpsWeaponGroup!: THREE.Group;
@@ -175,6 +179,11 @@ export class Renderer3D {
   // Object pools & 3D caches
   private enemyMeshes = new Map<string, THREE.Object3D>();
   private enemyAttackTelegraphs = new Map<string, THREE.Mesh>();
+  private telegraphSharedGeometry = (() => { const g = new THREE.RingGeometry(0.82, 1, 32); g.userData.rendererEnemyShared = true; return g; })();
+  private telegraphPool: THREE.Mesh[] = [];
+  private sharedEnemyEyeMaterial = (() => { const m = new THREE.MeshBasicMaterial({ color: 0xff0033 }); m.userData.rendererMaterialShared = true; return m; })();
+  private sharedHealthBgMaterial = (() => { const m = new THREE.MeshBasicMaterial({ color: 0x13040a, transparent: true, opacity: 0.9, depthWrite: false }); m.userData.rendererMaterialShared = true; return m; })();
+  private sharedHealthFillMaterial = (() => { const m = new THREE.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, opacity: 0.95, depthWrite: false }); m.userData.rendererMaterialShared = true; return m; })();
   private enemyGeometryCache = new Map<string, THREE.BufferGeometry>();
   private gemMeshes = new Map<string, THREE.Mesh>();
   private itemMeshes = new Map<string, THREE.Object3D>();
@@ -413,6 +422,8 @@ export class Renderer3D {
       this.scene.add(pillar);
       this.boundaryPillars.push(pillar);
     }
+
+    this.setupGasZoneVisuals();
   }
 
   private setupSkyDome() {
@@ -607,13 +618,97 @@ export class Renderer3D {
     this.scene.add(skyline);
   }
 
-  private updateWorldAtmosphere(position: { x: number; y: number }, deltaTime: number) {
+  private setupGasZoneVisuals() {
+    this.gasZoneGroup = new THREE.Group();
+    this.gasZoneGroup.name = 'gasZoneGroup';
+    this.gasZoneGroup.visible = false;
+
+    // 1. Billowing cylindrical toxic cloud wall
+    const wallGeo = new THREE.CylinderGeometry(1, 1, 450, 48, 1, true);
+    this.gasWallMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.NormalBlending,
+      uniforms: {
+        time: { value: 0 },
+        gasColor: { value: new THREE.Color(0x22c55e) },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        uniform vec3 gasColor;
+        varying vec2 vUv;
+        void main() {
+          float verticalFade = sin(vUv.y * 3.14159);
+          float wave = sin(vUv.x * 24.0 + time * 1.5) * 0.25 + sin(vUv.y * 14.0 - time * 1.2) * 0.25 + 0.5;
+          float alpha = clamp(verticalFade * (0.28 + 0.32 * wave), 0.0, 0.65);
+          vec3 col = mix(gasColor, vec3(0.72, 0.95, 0.2), wave * 0.35);
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+    });
+    this.gasWallMesh = new THREE.Mesh(wallGeo, this.gasWallMaterial);
+    this.gasWallMesh.position.y = 225;
+    this.gasZoneGroup.add(this.gasWallMesh);
+
+    // 2. Ground hazard perimeter ring
+    const ringGeo = new THREE.RingGeometry(0.985, 1.015, 64);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x4ade80,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.gasPerimeterRing = new THREE.Mesh(ringGeo, ringMat);
+    this.gasPerimeterRing.rotation.x = -Math.PI / 2;
+    this.gasPerimeterRing.position.y = 1.5;
+    this.gasZoneGroup.add(this.gasPerimeterRing);
+
+    this.scene.add(this.gasZoneGroup);
+  }
+
+  private updateGasZoneVisuals(gasZone?: { x: number; y: number; radius: number }, deltaMs = 16) {
+    if (!gasZone) {
+      if (this.gasZoneGroup) this.gasZoneGroup.visible = false;
+      return;
+    }
+    this.gasZoneGroup.visible = true;
+    this.gasZoneGroup.position.set(gasZone.x, 0, gasZone.y);
+    const radius = Math.max(10, gasZone.radius);
+    this.gasWallMesh.scale.set(radius, 1, radius);
+    this.gasPerimeterRing.scale.set(radius, radius, 1);
+    this.gasWallMaterial.uniforms.time.value += (deltaMs / 1000);
+  }
+
+  private updateWorldAtmosphere(position: { x: number; y: number }, deltaTime: number, gasZone?: { x: number; y: number; radius: number }) {
     const district = getWorldDistrictAt(position.x, position.y);
     const fog = this.scene.fog as THREE.FogExp2;
-    const targetFog = new THREE.Color(district.skyColor);
-    fog.color.lerp(targetFog, 1 - Math.exp(-deltaTime * 0.00055));
-    this.ambientLight.color.lerp(targetFog, 1 - Math.exp(-deltaTime * 0.00032));
-    this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, 2.35, 1 - Math.exp(-deltaTime * 0.0007));
+    const inGas = gasZone && Math.hypot(position.x - gasZone.x, position.y - gasZone.y) <= gasZone.radius;
+
+    const targetFog = inGas ? new THREE.Color(0x1a3d12) : new THREE.Color(district.skyColor);
+    const targetDensity = inGas ? 0.0032 : 0.00018;
+    const targetAmbient = inGas ? new THREE.Color(0x284f18) : new THREE.Color(district.skyColor);
+    const targetAmbientIntensity = inGas ? 1.25 : 2.35;
+
+    fog.color.lerp(targetFog, 1 - Math.exp(-deltaTime * 0.002));
+    fog.density = THREE.MathUtils.lerp(fog.density, targetDensity, 1 - Math.exp(-deltaTime * 0.002));
+    this.ambientLight.color.lerp(targetAmbient, 1 - Math.exp(-deltaTime * 0.002));
+    this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, targetAmbientIntensity, 1 - Math.exp(-deltaTime * 0.002));
+
+    if (this.dirLight) {
+      const targetDirIntensity = inGas ? 0.45 : 1.4;
+      this.dirLight.intensity = THREE.MathUtils.lerp(this.dirLight.intensity, targetDirIntensity, 1 - Math.exp(-deltaTime * 0.002));
+    }
+
     const storm = this.scene.getObjectByName('storm-cloud-ring');
     if (storm) storm.rotation.y += deltaTime * 0.000015;
   }
@@ -1726,7 +1821,9 @@ export class Renderer3D {
       if (profile) this.activeEvolutionProfiles.set(weapon.id, profile);
     }
     const op = OPERATOR_DEFINITIONS.find(o => o.id === player.operatorId) || OPERATOR_DEFINITIONS[0];
-    this.updateWorldAtmosphere(player.position, deltaTime);
+    const gasZone = (engine as any).gasZone;
+    this.updateWorldAtmosphere(player.position, deltaTime, gasZone);
+    this.updateGasZoneVisuals(gasZone, deltaTime);
 
     // Safely parse Operator Colors with cached lookup
     const primaryColor = parseHexColor(op.color, 0x00f0ff);
@@ -1979,7 +2076,7 @@ export class Renderer3D {
 
       // Position in 3D (x = 2D.x, z = 2D.y, y = elevation)
       const baseHeight = enemy.type === 'titan' ? 36 : (enemy.type === 'phantom' ? 24 : 14);
-      const floatBob = enemy.type === 'phantom' ? Math.sin(now * 0.005 + (parseInt(enemy.id, 36) || 0)) * 8 : 0;
+      const floatBob = enemy.type === 'phantom' ? Math.sin(now * 0.005 + ((enemy.id.charCodeAt(enemy.id.length - 1) || 0) * 17)) * 8 : 0;
 
       mesh.position.set(enemy.position.x, baseHeight + floatBob, enemy.position.y);
 
@@ -1993,8 +2090,17 @@ export class Renderer3D {
         activeAttackIds.add(enemy.id);
         let telegraph = this.enemyAttackTelegraphs.get(enemy.id);
         if (!telegraph) {
-          telegraph = new THREE.Mesh(new THREE.RingGeometry(.82, 1, 32), new THREE.MeshBasicMaterial({ color: enemy.color, transparent: true, opacity: .72, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
-          telegraph.rotation.x = -Math.PI / 2; this.scene.add(telegraph); this.enemyAttackTelegraphs.set(enemy.id, telegraph);
+          telegraph = this.telegraphPool.pop();
+          if (!telegraph) {
+            telegraph = new THREE.Mesh(
+              this.telegraphSharedGeometry,
+              new THREE.MeshBasicMaterial({ color: enemy.color, transparent: true, opacity: .72, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
+            );
+            telegraph.rotation.x = -Math.PI / 2;
+            this.scene.add(telegraph);
+          }
+          telegraph.visible = true;
+          this.enemyAttackTelegraphs.set(enemy.id, telegraph);
         }
         const radius = enemy.type === 'boss' ? 150 : ENEMY_ATTACK_PROFILES[enemy.type]?.radius || 70;
         telegraph.position.set(enemy.attackTarget.x, 2.5, enemy.attackTarget.y);
@@ -2021,11 +2127,14 @@ export class Renderer3D {
       const healthBar = (mesh as any)._healthBar as THREE.Group | undefined;
       const healthFill = (mesh as any)._healthFill as THREE.Mesh | undefined;
       if (healthBar && healthFill) {
-        const ratio = THREE.MathUtils.clamp(enemy.health / Math.max(1, enemy.maxHealth), 0, 1);
-        healthBar.visible = enemy.health < enemy.maxHealth && enemy.health > 0;
-        healthBar.quaternion.copy(mesh.quaternion).invert().multiply(this.camera.quaternion);
-        healthFill.scale.x = ratio;
-        healthFill.position.x = -((1 - ratio) * (enemy.radius || 15));
+        const isDamaged = enemy.health < enemy.maxHealth && enemy.health > 0;
+        healthBar.visible = isDamaged;
+        if (isDamaged) {
+          const ratio = THREE.MathUtils.clamp(enemy.health / Math.max(1, enemy.maxHealth), 0, 1);
+          healthBar.quaternion.copy(mesh.quaternion).invert().multiply(this.camera.quaternion);
+          healthFill.scale.x = ratio;
+          healthFill.position.x = -((1 - ratio) * (enemy.radius || 15));
+        }
       }
     }
 
@@ -2040,7 +2149,9 @@ export class Renderer3D {
     }
     for (const [id, telegraph] of this.enemyAttackTelegraphs) {
       if (activeAttackIds.has(id)) continue;
-      this.scene.remove(telegraph); telegraph.geometry.dispose(); (telegraph.material as THREE.Material).dispose(); this.enemyAttackTelegraphs.delete(id);
+      telegraph.visible = false;
+      this.telegraphPool.push(telegraph);
+      this.enemyAttackTelegraphs.delete(id);
     }
   }
 
@@ -2491,11 +2602,11 @@ export class Renderer3D {
         geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.IcosahedronGeometry(radius * 1.2, 0));
         break;
       case 'phantom':
-        // Ghost wireframe sphere + core
-        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.SphereGeometry(radius * 1.1, 8, 8));
-        material.wireframe = true;
+        // Ghost sphere + core
+        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.SphereGeometry(radius * 1.1, 10, 10));
+        material.wireframe = false;
         material.transparent = true;
-        material.opacity = 0.75;
+        material.opacity = 0.85;
         break;
       case 'titan':
       case 'boss':
@@ -2512,22 +2623,21 @@ export class Renderer3D {
     const mainMesh = new THREE.Mesh(geo, material);
     group.add(mainMesh);
 
-    // Glowing red eye / core
-    const eyeGeo = new THREE.SphereGeometry(radius * 0.28, 8, 8);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
-    const eyeMesh = new THREE.Mesh(eyeGeo, eyeMat);
+    // Glowing red eye / core (cached geometry & shared material)
+    const eyeGeo = this.cachedEnemyGeometry('enemy_eye', radius * 0.28, () => new THREE.SphereGeometry(radius * 0.28, 8, 8));
+    const eyeMesh = new THREE.Mesh(eyeGeo, this.sharedEnemyEyeMaterial);
     eyeMesh.position.set(0, 0, radius * 0.8);
     group.add(eyeMesh);
 
     const healthBar = new THREE.Group();
     const healthWidth = radius * 2;
     const healthBackground = new THREE.Mesh(
-      new THREE.PlaneGeometry(healthWidth + 3, 5),
-      new THREE.MeshBasicMaterial({ color: 0x13040a, transparent: true, opacity: 0.9, depthWrite: false }),
+      this.cachedEnemyGeometry(`hb_bg:${healthWidth}`, healthWidth + 3, () => new THREE.PlaneGeometry(healthWidth + 3, 5)),
+      this.sharedHealthBgMaterial,
     );
     const healthFill = new THREE.Mesh(
-      new THREE.PlaneGeometry(healthWidth, 2.4),
-      new THREE.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, opacity: 0.95, depthWrite: false }),
+      this.cachedEnemyGeometry(`hb_fill:${healthWidth}`, healthWidth, () => new THREE.PlaneGeometry(healthWidth, 2.4)),
+      this.sharedHealthFillMaterial,
     );
     healthFill.position.z = 0.2;
     healthBar.position.set(0, radius * 1.75, 0);
@@ -2938,7 +3048,9 @@ export class Renderer3D {
       if (!(renderable as any).geometry || !(renderable as any).material) return;
       if (!renderable.geometry.userData.rendererEnemyShared) renderable.geometry.dispose();
       const materials = Array.isArray(renderable.material) ? renderable.material : [renderable.material];
-      for (const material of materials) material.dispose();
+      for (const material of materials) {
+        if (!material.userData?.rendererMaterialShared) material.dispose();
+      }
     });
   }
 
@@ -3804,17 +3916,46 @@ export class Renderer3D {
         group.add(diamond);
       }
     } else if (item.type === 'hp') {
-      const vial = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 7, 17, 10), metal);
-      group.add(vial);
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 4, 10), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.16 }));
-      cap.position.y = 10;
-      group.add(cap);
-      const cross = new THREE.Mesh(new THREE.BoxGeometry(11, 3, 3), glow);
-      cross.position.y = 1;
-      group.add(cross);
-      const crossVertical = cross.clone();
-      crossVertical.rotation.z = Math.PI / 2;
-      group.add(crossVertical);
+      const heartShape = new THREE.Shape();
+      const x = 0, y = 0;
+      heartShape.moveTo(x, y + 4);
+      heartShape.bezierCurveTo(x, y + 7, x - 5, y + 10, x - 9, y + 6);
+      heartShape.bezierCurveTo(x - 13, y + 2, x - 11, y - 4, x, y - 10);
+      heartShape.bezierCurveTo(x + 11, y - 4, x + 13, y + 2, x + 9, y + 6);
+      heartShape.bezierCurveTo(x + 5, y + 10, x, y + 7, x, y + 4);
+
+      const extrudeSettings = {
+        depth: 4.5,
+        bevelEnabled: true,
+        bevelSegments: 3,
+        steps: 1,
+        bevelSize: 1.6,
+        bevelThickness: 1.6,
+      };
+      const heartGeometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
+      heartGeometry.center();
+      const heartMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff1e56,
+        emissive: 0xff0055,
+        emissiveIntensity: 1.35,
+        metalness: 0.35,
+        roughness: 0.18,
+      });
+      const heartMesh = new THREE.Mesh(heartGeometry, heartMaterial);
+      heartMesh.scale.set(0.95, 0.95, 0.95);
+      group.add(heartMesh);
+
+      const innerGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(4.5, 12, 10),
+        new THREE.MeshBasicMaterial({
+          color: 0xff6699,
+          transparent: true,
+          opacity: 0.65,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      group.add(innerGlow);
     } else if (item.type === 'magnet') {
       const horseshoe = new THREE.Mesh(new THREE.TorusGeometry(8, 2.6, 8, 18, Math.PI * 1.45), metal);
       horseshoe.rotation.z = Math.PI;

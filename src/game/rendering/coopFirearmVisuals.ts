@@ -21,6 +21,7 @@ const WEAPON_PALETTES: Record<CoopFirearmId, { dark: number; panel: number; stee
   smg: { dark: 0x121b0d, panel: 0x385322, steel: 0x9caf8e, trim: 0xa3e635, rubber: 0x0a1007 },
 };
 const flashTexture = (() => {
+  if (typeof document === 'undefined') return new THREE.Texture();
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 32;
   const context = canvas.getContext('2d')!; const glow = context.createRadialGradient(16, 16, 1, 16, 16, 16);
   glow.addColorStop(0, '#fff'); glow.addColorStop(.2, '#fff8b3'); glow.addColorStop(1, 'rgba(255,255,255,0)'); context.fillStyle = glow; context.fillRect(0, 0, 32, 32);

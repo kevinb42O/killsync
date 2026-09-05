@@ -1,9 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, Crown, Radio, RefreshCw, Server, Users, Wifi, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Copy,
+  Crown,
+  Globe,
+  Link2,
+  Radio,
+  RefreshCw,
+  Server,
+  Shield,
+  Users,
+  Wifi,
+  X,
+} from 'lucide-react';
 import { ManualWebRTCSession } from '../game/multiplayer/ManualWebRTCSession';
-import { HostedLobby, LobbyJoin, PublicLobby, fetchIceServers, listPublicLobbies } from '../game/multiplayer/LobbySignaling';
+import {
+  HostedLobby,
+  LobbyJoin,
+  PublicLobby,
+  fetchIceServers,
+  globalLobbyDiscovery,
+  listPublicLobbies,
+} from '../game/multiplayer/LobbySignaling';
 import { MultiplayerPeerInfo, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
 import { CoopPlayerSeed } from '../game/multiplayer/CoopSimulation';
+import { generateRoomCode, normalizeRoomCode } from '../game/multiplayer/UnifiedSignaling';
 
 type SetupMode = 'choose' | 'host' | 'guest' | 'direct_host' | 'direct_guest';
 
@@ -18,7 +42,15 @@ export interface MultiplayerLaunch {
   soloTest?: boolean;
 }
 
-export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => void; onLaunch: (launch: MultiplayerLaunch) => void }) {
+export function ManualMultiplayerSetup({
+  initialRoomCode,
+  onClose,
+  onLaunch,
+}: {
+  initialRoomCode?: string;
+  onClose: () => void;
+  onLaunch: (launch: MultiplayerLaunch) => void;
+}) {
   const sessionRef = useRef<ManualWebRTCSession | null>(null);
   const hostedLobbyRef = useRef<HostedLobby | null>(null);
   const joinRef = useRef<LobbyJoin | null>(null);
@@ -29,6 +61,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
   const peerPlayerIdsRef = useRef<Record<string, string>>({});
   const guestPlayersRef = useRef<CoopPlayerSeed[]>([]);
   const spectatingRef = useRef(false);
+
   const [mode, setMode] = useState<SetupMode>('choose');
   const [lobbies, setLobbies] = useState<PublicLobby[]>([]);
   const [peers, setPeers] = useState<MultiplayerPeerInfo[]>([]);
@@ -38,34 +71,75 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const [nickname, setNickname] = useState(localPlayerRef.current.label);
+  const [codeInputValue, setCodeInputValue] = useState(initialRoomCode || '');
+  const [currentRoomCode, setCurrentRoomCode] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [showDirectFallback, setShowDirectFallback] = useState(false);
+
+  // Direct manual fallback codes
   const [offerCode, setOfferCode] = useState('');
   const [answerCode, setAnswerCode] = useState('');
+
   const nicknameValid = normalizeNickname(nickname).length >= 2;
 
   const applyNickname = () => {
     const label = normalizeNickname(nickname);
     if (label.length < 2) {
-      setError('Choose a name with at least 2 characters.');
+      setError('Choose an operative callsign with at least 2 characters.');
       return false;
     }
     localPlayerRef.current = { ...localPlayerRef.current, label };
-    try { localStorage.setItem('killsync.multiplayer.nickname', label); } catch { /* Private browsing can reject storage; the name still works for this run. */ }
+    try { localStorage.setItem('killsync.multiplayer.nickname', label); } catch { /* Storage fallback */ }
     return true;
   };
 
-  const refreshLobbies = async () => {
-    try { setLobbies(await listPublicLobbies()); setError(null); }
-    // Vercel/static deployments have no stateful lobby service. Direct co-op
-    // below remains fully playable there, so an optional lobby outage should
-    // not present as a multiplayer outage.
-    catch { setLobbies([]); }
+  const dedupeLobbies = (list: PublicLobby[]) => {
+    const seen = new Set<string>();
+    const out: PublicLobby[] = [];
+    for (const item of list) {
+      const key = normalizeRoomCode(item.code || item.id);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(item);
+      }
+    }
+    return out;
   };
 
+  const refreshLobbies = async () => {
+    try {
+      const list = await listPublicLobbies();
+      setLobbies(dedupeLobbies(list));
+    } catch {
+      setLobbies([]);
+    }
+  };
+
+  // Real-time discovery listener + periodic refresh
   useEffect(() => {
     void refreshLobbies();
+    const unsubDiscovery = globalLobbyDiscovery.onLobbiesChange((discovered) => {
+      setLobbies(dedupeLobbies(discovered));
+    });
+
     const timer = window.setInterval(() => void refreshLobbies(), 2_500);
-    return () => window.clearInterval(timer);
+    return () => {
+      unsubDiscovery();
+      window.clearInterval(timer);
+    };
   }, []);
+
+  // Handle initial room code if provided via URL
+  useEffect(() => {
+    if (initialRoomCode && initialRoomCode.trim()) {
+      setCodeInputValue(initialRoomCode.trim());
+      // If nickname is already saved, auto-join
+      if (localPlayerRef.current.label.length >= 2) {
+        void joinByCode(initialRoomCode.trim());
+      }
+    }
+  }, [initialRoomCode]);
 
   useEffect(() => () => {
     if (!handedOffRef.current) {
@@ -79,10 +153,15 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
   useEffect(() => {
     if ((mode !== 'guest' && mode !== 'direct_guest') || connectedPeers(peers) === 0 || readySentRef.current) return;
     window.clearTimeout(connectionTimeoutRef.current);
-    const delivered = sessionRef.current?.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: spectatingRef.current ? 'spectate' : 'ready', payload: spectatingRef.current ? undefined : localPlayerRef.current });
+    const delivered = sessionRef.current?.sendEvent({
+      type: 'event',
+      version: MULTIPLAYER_PROTOCOL_VERSION,
+      event: spectatingRef.current ? 'spectate' : 'ready',
+      payload: spectatingRef.current ? undefined : localPlayerRef.current,
+    });
     if (!delivered) return;
     readySentRef.current = true;
-    setStatus(spectatingRef.current ? 'Loading match…' : 'Ready — waiting for the host to start.');
+    setStatus(spectatingRef.current ? 'Spectating match…' : 'Squad link established — waiting for host deployment.');
   }, [mode, peers]);
 
   const createSession = async (role: 'host' | 'guest') => {
@@ -98,7 +177,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
         setPeers(nextPeers);
         if (role === 'host') hostedLobbyRef.current?.update(1 + connectedPeers(nextPeers), 'waiting');
       },
-      onError: () => setError('Couldn’t connect to this server. Try another one.'),
+      onError: () => setError('Squad signal was interrupted. Retrying link…'),
       onEvent: (peerId, event) => {
         if (event.event === 'ready' && role === 'host') {
           const player = parsePlayer(event.payload);
@@ -111,7 +190,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
           setGuestPlayers(next);
           session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'roster', payload: [localPlayerRef.current, ...next] });
           hostedLobbyRef.current?.update(next.length + 1, 'waiting');
-          setStatus(`${player.label} joined. You can start the match.`);
+          setStatus(`Operative ${player.label} attached to squad!`);
         }
         if (event.event === 'roster' && role === 'guest') {
           const players = parsePlayers(event.payload, 1);
@@ -138,85 +217,26 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
     spectatingRef.current = false;
     setLoading(true);
     setError(null);
-    setStatus('Creating server…');
+    setStatus('Initializing secure squad frequency…');
     try {
-      const [session, lobby] = await Promise.all([createSession('host'), HostedLobby.create(localPlayerRef.current.label)]);
+      const code = generateRoomCode();
+      const [session, lobby] = await Promise.all([
+        createSession('host'),
+        HostedLobby.create(localPlayerRef.current.label, code),
+      ]);
       hostedLobbyRef.current?.close();
       hostedLobbyRef.current = lobby;
+      setCurrentRoomCode(lobby.room.code || code);
       lobby.setStatusListener(setStatus);
       lobby.start(session);
       lobby.update(1, 'waiting');
       setMode('host');
-      setStatus('Your server is live. Waiting for players.');
-    } catch (reason) {
-      setError('Couldn’t create a server. Try again.');
-    } finally { setLoading(false); }
-  };
-
-  const createDirectOffer = async () => {
-    if (!applyNickname()) return;
-    setLoading(true);
-    setError(null);
-    setStatus('Creating a direct browser-to-browser connection…');
-    try {
-      const session = await createSession('host');
-      setOfferCode(await session.createOffer());
-      setAnswerCode('');
-      setMode('direct_host');
-      setStatus('Send this offer to one friend. When they return an answer, paste it below.');
+      setStatus('Squad frequency active. Waiting for operatives to connect.');
     } catch {
-      setError('Couldn’t create a direct connection. Refresh and try again.');
-      setStatus('');
-    } finally { setLoading(false); }
-  };
-
-  const createDirectAnswer = async () => {
-    if (!applyNickname() || !offerCode.trim()) {
-      if (!offerCode.trim()) setError('Paste the complete host offer first.');
-      return;
+      setError('Could not initialize squad frequency. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(true);
-    setError(null);
-    setStatus('Creating your answer…');
-    try {
-      const session = await createSession('guest');
-      setAnswerCode(await session.acceptOffer(offerCode));
-      setMode('direct_guest');
-      setStatus('Send your answer back to the host, then wait for them to start the match.');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'That offer could not be used. Ask the host for a fresh one.');
-      setStatus('');
-    } finally { setLoading(false); }
-  };
-
-  const acceptDirectAnswer = async () => {
-    const session = sessionRef.current;
-    if (!session || !answerCode.trim()) {
-      setError('Paste your friend’s complete answer first.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      await session.acceptAnswer(answerCode);
-      setStatus('Connecting directly to your friend…');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'That answer could not be used. Ask your friend for a fresh answer.');
-    } finally { setLoading(false); }
-  };
-
-  const createAdditionalDirectOffer = async () => {
-    const session = sessionRef.current;
-    if (!session) return;
-    setLoading(true);
-    setError(null);
-    try {
-      setOfferCode(await session.createOffer());
-      setAnswerCode('');
-      setStatus('Send the fresh offer to your next friend.');
-    } catch {
-      setError('Couldn’t create another direct offer. Refresh and try again.');
-    } finally { setLoading(false); }
   };
 
   const joinSquad = async (room: PublicLobby) => {
@@ -224,10 +244,14 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
     spectatingRef.current = room.state === 'in_game';
     setLoading(true);
     setMode('guest');
+    setCurrentRoomCode(room.code || room.id);
     setError(null);
-    setStatus(room.state === 'in_game' ? `Spectating ${room.hostName}…` : `Joining ${room.hostName}…`);
+    setStatus(room.state === 'in_game' ? `Infiltrating match as spectator…` : `Connecting to ${room.hostName}’s squad…`);
     try {
-      const [session, join] = await Promise.all([createSession('guest'), LobbyJoin.create(room.id, localPlayerRef.current.label, spectatingRef.current)]);
+      const [session, join] = await Promise.all([
+        createSession('guest'),
+        LobbyJoin.create(room.id, localPlayerRef.current.label, spectatingRef.current),
+      ]);
       joinRef.current?.close();
       joinRef.current = join;
       join.waitForHost(session, setStatus, setError, () => {
@@ -240,16 +264,68 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
         if (readySentRef.current) return;
         join.close();
         session.close();
-        setError('Couldn’t connect to this server. Try another one.');
+        setError('Connection timed out. Squad leader may be unreachable.');
         setMode('choose');
         setStatus('');
       }, 30_000);
-    } catch (reason) {
+    } catch {
       window.clearTimeout(connectionTimeoutRef.current);
-      setError('This server is no longer available. Choose another one.');
+      setError('Squad is no longer online. Choose another lobby.');
       setStatus('');
       setMode('choose');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const joinByCode = async (codeToJoin?: string) => {
+    const raw = codeToJoin || codeInputValue;
+    const targetCode = normalizeRoomCode(raw);
+    if (!targetCode) {
+      setError('Enter a valid squad code (e.g. VIPER-04).');
+      return;
+    }
+    if (!applyNickname()) return;
+
+    // Check if known in lobby list
+    const known = lobbies.find(l => normalizeRoomCode(l.code || '') === targetCode || normalizeRoomCode(l.id) === targetCode);
+    if (known) {
+      await joinSquad(known);
+      return;
+    }
+
+    // Direct room code attempt
+    await joinSquad({
+      id: targetCode,
+      code: targetCode,
+      hostName: targetCode,
+      maxPlayers: 4,
+      playerCount: 1,
+      state: 'waiting',
+    });
+  };
+
+  const copyInviteLink = async () => {
+    if (!currentRoomCode) return;
+    try {
+      const url = `${window.location.origin}${window.location.pathname}?room=${currentRoomCode}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      setError('Failed to copy link to clipboard.');
+    }
+  };
+
+  const copyRoomCode = async () => {
+    if (!currentRoomCode) return;
+    try {
+      await navigator.clipboard.writeText(currentRoomCode);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    } catch {
+      setError('Failed to copy code.');
+    }
   };
 
   const launchHost = () => {
@@ -272,60 +348,573 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
     onLaunch({ role: 'host', session: sessionRef.current, localPlayerId: localPlayerRef.current.id, players: [localPlayerRef.current], peerPlayerIds: {}, soloTest: true });
   };
 
+  // Direct manual code fallback actions
+  const createDirectOffer = async () => {
+    if (!applyNickname()) return;
+    setLoading(true);
+    setError(null);
+    setStatus('Generating offline WebRTC offer…');
+    try {
+      const session = await createSession('host');
+      setOfferCode(await session.createOffer());
+      setAnswerCode('');
+      setMode('direct_host');
+      setStatus('Copy this offer to one friend. When they return an answer, paste it below.');
+    } catch {
+      setError('Could not create direct offer.');
+      setStatus('');
+    } finally { setLoading(false); }
+  };
+
+  const createDirectAnswer = async () => {
+    if (!applyNickname() || !offerCode.trim()) {
+      if (!offerCode.trim()) setError('Paste host offer code first.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setStatus('Creating offline WebRTC answer…');
+    try {
+      const session = await createSession('guest');
+      setAnswerCode(await session.acceptOffer(offerCode));
+      setMode('direct_guest');
+      setStatus('Send your answer code back to the host.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Invalid offer code.');
+      setStatus('');
+    } finally { setLoading(false); }
+  };
+
+  const acceptDirectAnswer = async () => {
+    const session = sessionRef.current;
+    if (!session || !answerCode.trim()) {
+      setError('Paste friend’s answer code first.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await session.acceptAnswer(answerCode);
+      setStatus('Direct peer connection established!');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Invalid answer code.');
+    } finally { setLoading(false); }
+  };
+
   const close = () => {
     window.clearTimeout(connectionTimeoutRef.current);
-    sessionRef.current?.close(); hostedLobbyRef.current?.close(); joinRef.current?.close(); onClose();
+    sessionRef.current?.close();
+    hostedLobbyRef.current?.close();
+    joinRef.current?.close();
+    onClose();
   };
 
   return (
-    <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/85 p-4 backdrop-blur-xl">
-      <section className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto border border-cyan-400/35 bg-[#070c13] shadow-[0_0_70px_rgba(0,240,255,0.18)]">
-        <header className="flex items-start justify-between border-b border-cyan-400/20 bg-cyan-500/[0.06] px-6 py-5">
-          <div className="flex items-center gap-4"><div className="flex h-11 w-11 items-center justify-center border border-cyan-300/50 bg-cyan-400/10 text-cyan-200"><Radio size={21} /></div><h2 className="text-xl font-black tracking-[0.16em] text-white">MULTIPLAYER</h2></div>
-          <button onClick={close} aria-label="Close multiplayer" className="p-2 text-white/45 transition hover:bg-white/10 hover:text-white"><X size={19} /></button>
-        </header>
-        <div className="grid gap-5 p-6 md:grid-cols-[1fr_220px]">
-          <div>
-            {mode === 'choose' && <>
-              <label className="mb-5 block border border-cyan-300/25 bg-cyan-400/[0.045] p-3"><span className="block text-[9px] font-black uppercase tracking-[0.18em] text-cyan-200">Your name</span><input value={nickname} onChange={event => { setNickname(event.target.value); setError(null); }} onBlur={() => setNickname(normalizeNickname(nickname))} maxLength={16} autoComplete="nickname" placeholder="Enter name" className="mt-2 w-full border-b border-white/15 bg-transparent pb-1 text-sm font-black uppercase tracking-wider text-white outline-none placeholder:text-white/25 focus:border-cyan-300" /></label>
-              <button disabled={loading || !nicknameValid} onClick={launchSolo} className="mb-4 flex w-full items-center justify-center gap-2 border border-emerald-300/45 bg-emerald-400/15 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/25 disabled:opacity-45"><ChevronRight size={16} /> Solo test</button>
-              <button disabled={loading || !nicknameValid} onClick={() => void hostSquad()} className="mb-4 flex w-full items-center justify-center gap-2 border border-cyan-300/35 bg-cyan-400/10 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-cyan-100 hover:bg-cyan-400/20 disabled:opacity-45"><Server size={16} /> Host public squad</button>
-              <div className="border border-cyan-300/35 bg-cyan-400/[0.08] p-4">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200">Direct co-op · free browser-to-browser</div>
-                <p className="mt-2 text-xs leading-relaxed text-white/65">No game server or account needed. The host sends an offer; each friend sends back an answer.</p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2"><button disabled={loading || !nicknameValid} onClick={() => void createDirectOffer()} className="flex items-center justify-center gap-2 border border-cyan-300/45 bg-cyan-400/15 px-4 py-3 text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100 transition hover:bg-cyan-400/25 disabled:opacity-45"><Wifi size={14} /> Host direct match</button><button disabled={loading || !nicknameValid} onClick={() => { setOfferCode(''); setAnswerCode(''); setStatus('Paste the host offer, then create your answer.'); setError(null); setMode('direct_guest'); }} className="flex items-center justify-center gap-2 border border-fuchsia-300/45 bg-fuchsia-400/15 px-4 py-3 text-[10px] font-black uppercase tracking-[0.14em] text-fuchsia-100 transition hover:bg-fuchsia-400/25 disabled:opacity-45"><Users size={14} /> Join direct match</button></div>
+    <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/85 p-3 backdrop-blur-xl md:p-6">
+      <section className="relative flex max-h-[94dvh] w-full max-w-4xl flex-col border border-cyan-400/40 bg-[#060a12]/95 shadow-[0_0_80px_rgba(0,240,255,0.22)]">
+        {/* Neon scanline accent bar */}
+        <div className="h-1 w-full bg-gradient-to-r from-cyan-500 via-emerald-400 to-fuchsia-500" />
+
+        {/* Tactical Header */}
+        <header className="flex items-center justify-between border-b border-cyan-400/20 bg-cyan-950/20 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center border border-cyan-400/50 bg-cyan-500/10 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+              <Radio size={20} className="animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black tracking-[0.2em] text-white">KILLSYNC CO-OP</h2>
+                <span className="flex items-center gap-1 rounded border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  Live Matchmaking
+                </span>
               </div>
-              <div className="mb-3 mt-5 flex items-center justify-between"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-white"><Server size={14} className="text-cyan-300" /> Optional hosted squads <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[9px] tracking-wider text-emerald-200">{lobbies.length} ONLINE</span></div><button onClick={() => void refreshLobbies()} className="flex items-center gap-1 border border-white/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-200 transition hover:border-cyan-300/40 hover:text-white"><RefreshCw size={12} /> Refresh</button></div>
-              <div className="space-y-2">{lobbies.length === 0 ? <div className="border border-dashed border-white/15 bg-[radial-gradient(circle_at_center,rgba(34,211,238,.09),transparent_58%)] px-5 py-7 text-center"><Server size={20} className="mx-auto text-cyan-300/65" /><div className="mt-3 text-xs font-black uppercase tracking-[0.18em] text-white/70">No hosted squads online</div><div className="mt-2 text-[10px] leading-relaxed text-white/40">Use Direct Co-op above to play now.</div></div> : lobbies.map((room, index) => <button key={room.id} disabled={loading || !nicknameValid} onClick={() => void joinSquad(room)} className="group relative flex w-full items-center gap-4 overflow-hidden border border-white/10 bg-[#0a101a] p-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/55 hover:bg-cyan-400/[0.07] hover:shadow-[0_0_24px_rgba(34,211,238,.12)] disabled:opacity-45"><div className={`absolute inset-y-0 left-0 w-1 ${room.state === 'in_game' ? 'bg-fuchsia-400' : 'bg-emerald-400'}`} /><div className="ml-1 flex h-11 w-11 shrink-0 items-center justify-center border border-white/15 bg-white/[0.04] text-sm font-black text-cyan-100">{room.hostName.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><div className="truncate text-sm font-black uppercase tracking-wider text-white">{room.hostName}</div>{index === 0 && <Crown size={13} className="shrink-0 text-amber-300" />}</div><div className={`mt-1 text-[9px] font-black uppercase tracking-[0.14em] ${room.state === 'in_game' ? 'text-fuchsia-200' : 'text-emerald-200'}`}>{room.state === 'in_game' ? '● In progress' : '● Open lobby'}</div></div><div className="text-right"><div className="font-mono text-sm font-black text-white">{room.playerCount}<span className="text-white/35">/{room.maxPlayers}</span></div><div className="mt-1 flex items-center justify-end gap-1 text-[10px] font-black uppercase tracking-wider text-cyan-200 transition group-hover:text-white">{room.state === 'in_game' ? 'Spectate' : 'Join'} <ChevronRight size={13} className="transition group-hover:translate-x-0.5" /></div></div></button>)}</div>
-            </>}
-            {mode === 'host' && <div className="border border-cyan-300/25 bg-cyan-400/[0.04] p-5"><div className="text-sm font-black uppercase tracking-wider text-white">SERVER ONLINE</div><button onClick={launchHost} className="mt-5 border border-emerald-300/45 bg-emerald-400/15 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-emerald-100 transition hover:bg-emerald-400/25">Start match · {guestPlayers.length + 1} {guestPlayers.length === 0 ? 'player' : 'players'}</button></div>}
-            {mode === 'guest' && <div className="border border-fuchsia-300/25 bg-fuchsia-400/[0.04] p-5"><div className="text-sm font-black uppercase tracking-wider text-white">CONNECTING</div></div>}
-            {mode === 'direct_host' && <div className="space-y-4 border border-cyan-300/25 bg-cyan-400/[0.04] p-5"><div><div className="text-sm font-black uppercase tracking-wider text-white">HOST DIRECT MATCH</div><p className="mt-2 text-xs leading-relaxed text-white/60">Copy this offer to one friend. For another friend, create a fresh offer after connecting the first.</p></div><textarea readOnly value={offerCode} aria-label="Host offer code" className="h-24 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-cyan-100 outline-none" /><button onClick={() => void navigator.clipboard?.writeText(offerCode)} className="border border-cyan-300/45 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100">Copy offer</button><label className="block text-[10px] font-black uppercase tracking-[0.14em] text-white/60">Friend’s answer<textarea value={answerCode} onChange={event => { setAnswerCode(event.target.value); setError(null); }} aria-label="Friend answer code" className="mt-2 h-24 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] normal-case tracking-normal text-white outline-none focus:border-cyan-300" /></label><button disabled={loading || !answerCode.trim()} onClick={() => void acceptDirectAnswer()} className="border border-emerald-300/45 bg-emerald-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-100 disabled:opacity-45">Connect friend</button>{connectedPeers(peers) > 0 && <><button disabled={loading} onClick={() => void createAdditionalDirectOffer()} className="ml-2 border border-cyan-300/45 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-cyan-100 disabled:opacity-45">Add another friend</button><button onClick={launchHost} className="ml-2 border border-emerald-300/45 bg-emerald-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-100">Start match · {guestPlayers.length + 1} players</button></>}</div>}
-            {mode === 'direct_guest' && <div className="space-y-4 border border-fuchsia-300/25 bg-fuchsia-400/[0.04] p-5"><div><div className="text-sm font-black uppercase tracking-wider text-white">JOIN DIRECT MATCH</div><p className="mt-2 text-xs leading-relaxed text-white/60">Paste the host’s offer, create your answer, then send the answer back to the host.</p></div>{!answerCode && <><textarea value={offerCode} onChange={event => { setOfferCode(event.target.value); setError(null); }} aria-label="Host offer code" placeholder="Paste host offer" className="h-28 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-white outline-none focus:border-fuchsia-300" /><button disabled={loading || !offerCode.trim()} onClick={() => void createDirectAnswer()} className="border border-fuchsia-300/45 bg-fuchsia-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-fuchsia-100 disabled:opacity-45">Create answer</button></>}{answerCode && <><textarea readOnly value={answerCode} aria-label="Your answer code" className="h-28 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-fuchsia-100 outline-none" /><button onClick={() => void navigator.clipboard?.writeText(answerCode)} className="border border-fuchsia-300/45 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-fuchsia-100">Copy answer</button></>}</div>}
-            {mode === 'direct_host' && connectedPeers(peers) === 0 && <button disabled={loading} onClick={launchHost} className="mt-4 flex items-center gap-2 border border-emerald-300/45 bg-emerald-400/15 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/25 disabled:opacity-45"><ChevronRight size={16} /> Start match solo</button>}
-            {status && <p className="mt-5 text-xs font-medium leading-relaxed text-cyan-100/75">{status}</p>}
-            {error && <p role="alert" className="mt-3 border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</p>}
+              <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/60">
+                100% Peer-to-Peer WebRTC · Zero Server Hosting Needed
+              </p>
+            </div>
           </div>
-          <aside className="border border-white/10 bg-black/25 p-4"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/50"><Users size={13} /> Players</div><LobbyRoster mode={mode} peers={peers} host={localPlayerRef.current} guests={guestPlayers} roster={rosterPlayers} /></aside>
+          <button
+            onClick={close}
+            aria-label="Close multiplayer"
+            className="rounded p-2 text-white/40 transition hover:bg-white/10 hover:text-white"
+          >
+            <X size={20} />
+          </button>
+        </header>
+
+        {/* Content Body */}
+        <div className="flex-1 overflow-y-auto p-5 md:p-7">
+          {/* OPERATIVE CALLSIGN BAR */}
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border border-cyan-400/20 bg-cyan-500/[0.03] p-3.5">
+            <div className="flex flex-1 items-center gap-3 min-w-[240px]">
+              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300 whitespace-nowrap">
+                CALLSIGN //
+              </div>
+              <input
+                value={nickname}
+                onChange={e => { setNickname(e.target.value); setError(null); }}
+                onBlur={() => setNickname(normalizeNickname(nickname))}
+                maxLength={16}
+                placeholder="OPERATIVE NAME"
+                className="w-full border-b border-cyan-400/30 bg-transparent pb-1 font-mono text-sm font-black uppercase tracking-wider text-cyan-100 placeholder:text-white/20 focus:border-cyan-300 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={loading || !nicknameValid}
+                onClick={launchSolo}
+                className="flex items-center gap-1.5 border border-emerald-400/40 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-200 transition hover:bg-emerald-500/25 disabled:opacity-40"
+              >
+                <ChevronRight size={13} /> Solo Practice
+              </button>
+            </div>
+          </div>
+
+          {/* MAIN VIEW: CHOOSE / LOBBY BROWSER */}
+          {mode === 'choose' && (
+            <div className="space-y-6">
+              {/* PRIMARY ACTION BAR */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  disabled={loading || !nicknameValid}
+                  onClick={() => void hostSquad()}
+                  className="group relative flex items-center justify-between overflow-hidden border border-cyan-400/60 bg-gradient-to-r from-cyan-500/20 to-cyan-500/5 p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-[0_0_30px_rgba(0,240,255,0.25)] disabled:opacity-45"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-200">
+                      <Server size={15} /> Host Public Squad
+                    </div>
+                    <div className="mt-1 text-[11px] text-white/60">
+                      Create an open lobby with a room code & invite link
+                    </div>
+                  </div>
+                  <ChevronRight size={18} className="text-cyan-300 transition group-hover:translate-x-1" />
+                </button>
+
+                {/* JOIN BY CODE INPUT */}
+                <div className="flex items-center gap-2 border border-fuchsia-400/40 bg-fuchsia-500/[0.05] p-2 sm:p-3">
+                  <input
+                    value={codeInputValue}
+                    onChange={e => { setCodeInputValue(e.target.value.toUpperCase()); setError(null); }}
+                    placeholder="ENTER CODE (E.G. VIPER-04)"
+                    maxLength={16}
+                    className="w-full bg-transparent px-2 font-mono text-xs font-black uppercase tracking-wider text-fuchsia-100 placeholder:text-white/25 focus:outline-none"
+                  />
+                  <button
+                    disabled={loading || !nicknameValid || !codeInputValue.trim()}
+                    onClick={() => void joinByCode()}
+                    className="shrink-0 border border-fuchsia-400/60 bg-fuchsia-500/20 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-fuchsia-200 transition hover:bg-fuchsia-500/35 disabled:opacity-40"
+                  >
+                    Join
+                  </button>
+                </div>
+              </div>
+
+              {/* LIVE SQUAD LOBBIES LIST */}
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white">
+                    <Globe size={14} className="text-cyan-400" />
+                    Live Squad Frequencies
+                    <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[9px] font-black text-emerald-300">
+                      {lobbies.length} DETECTED
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => void refreshLobbies()}
+                    className="flex items-center gap-1.5 border border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-200 transition hover:border-cyan-400/50 hover:text-white"
+                  >
+                    <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
+                  </button>
+                </div>
+
+                {lobbies.length === 0 ? (
+                  <div className="border border-dashed border-cyan-400/20 bg-cyan-950/[0.07] px-6 py-10 text-center">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-500/5 text-cyan-300">
+                      <Radio size={24} className="opacity-60" />
+                    </div>
+                    <div className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-white/80">
+                      No Active Squads Detected
+                    </div>
+                    <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-white/45">
+                      Hit <strong className="text-cyan-200">Host Public Squad</strong> above to be the squad leader. Your lobby will appear here instantly for friends to join!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {lobbies.map((room, idx) => {
+                      const isFull = room.playerCount >= room.maxPlayers;
+                      const inGame = room.state === 'in_game';
+                      return (
+                        <div
+                          key={room.id}
+                          className="group relative flex items-center justify-between border border-cyan-400/20 bg-[#090f1a] p-3.5 transition duration-200 hover:border-cyan-400/60 hover:bg-cyan-500/[0.07]"
+                        >
+                          <div className="min-w-0 flex-1 pr-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[9px] font-bold text-cyan-400/80">
+                                #{room.code || room.id.slice(0, 8)}
+                              </span>
+                              <span className={`rounded px-1.5 py-0.2 text-[8px] font-black uppercase tracking-wider ${inGame ? 'bg-fuchsia-500/20 text-fuchsia-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                                {inGame ? 'In Combat' : 'Open Lobby'}
+                              </span>
+                            </div>
+                            <div className="mt-1 truncate text-sm font-black uppercase tracking-wider text-white">
+                              {room.hostName}’s Squad
+                            </div>
+                            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-white/50">
+                              <Users size={11} />
+                              <span className="font-mono font-bold text-white/80">{room.playerCount} / {room.maxPlayers} Operatives</span>
+                            </div>
+                          </div>
+
+                          <button
+                            disabled={loading || !nicknameValid || (isFull && !inGame)}
+                            onClick={() => void joinSquad(room)}
+                            className={`flex shrink-0 items-center gap-1.5 border px-3.5 py-2 text-[10px] font-black uppercase tracking-wider transition ${
+                              inGame
+                                ? 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-200 hover:bg-fuchsia-500/30'
+                                : isFull
+                                ? 'border-white/10 bg-white/5 text-white/30 cursor-not-allowed'
+                                : 'border-cyan-400/50 bg-cyan-500/20 text-cyan-100 hover:bg-cyan-500/35 hover:shadow-[0_0_15px_rgba(0,240,255,0.3)]'
+                            }`}
+                          >
+                            {inGame ? 'Spectate' : isFull ? 'Full' : 'Join'}
+                            <ChevronRight size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* COLLAPSED MANUAL CODE FALLBACK (FOR OFFLINE / AIRGAPPED TESTING ONLY) */}
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowDirectFallback(!showDirectFallback)}
+                  className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-white/35 transition hover:text-cyan-300"
+                >
+                  {showDirectFallback ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  Advanced: Air-gapped / Manual SDP Fallback
+                </button>
+
+                {showDirectFallback && (
+                  <div className="mt-3 border border-white/10 bg-white/[0.02] p-4 text-xs text-white/60">
+                    <p className="mb-3 text-[11px] leading-relaxed">
+                      Manual copy-paste mode is only needed if WebSockets are entirely blocked on your local network.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => void createDirectOffer()}
+                        className="border border-white/20 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-white/10"
+                      >
+                        Host Manual Match
+                      </button>
+                      <button
+                        onClick={() => { setOfferCode(''); setAnswerCode(''); setMode('direct_guest'); }}
+                        className="border border-white/20 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-white/10"
+                      >
+                        Join Manual Match
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* HOST VIEW: SQUAD READY ROOM */}
+          {mode === 'host' && (
+            <div className="space-y-6">
+              {/* CODE & SHARE HERO CARD */}
+              <div className="border border-cyan-400/40 bg-gradient-to-br from-cyan-950/40 to-black/60 p-5 shadow-[0_0_30px_rgba(0,240,255,0.15)]">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">
+                      SQUAD ROOM CODE // SHARE WITH FRIENDS
+                    </div>
+                    <div className="mt-1 flex items-center gap-3">
+                      <span className="font-mono text-3xl font-black tracking-wider text-white select-all">
+                        #{currentRoomCode}
+                      </span>
+                      <button
+                        onClick={() => void copyRoomCode()}
+                        className="flex items-center gap-1 border border-cyan-400/40 bg-cyan-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200 hover:bg-cyan-500/30"
+                      >
+                        {copiedCode ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}
+                        {copiedCode ? 'Copied' : 'Copy Code'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => void copyInviteLink()}
+                    className="flex items-center gap-2 border border-emerald-400/50 bg-emerald-500/20 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-emerald-200 transition hover:bg-emerald-500/35 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                  >
+                    {copiedLink ? <Check size={15} className="text-emerald-300" /> : <Link2 size={15} />}
+                    {copiedLink ? 'Invite Link Copied!' : 'Copy 1-Click Invite Link'}
+                  </button>
+                </div>
+                <div className="mt-3 text-[11px] text-white/50">
+                  Friends can click the link or type <span className="font-mono text-cyan-300 font-bold">#{currentRoomCode}</span> in their lobby browser to connect instantly.
+                </div>
+              </div>
+
+              {/* OPERATIVES SLOTS ROSTER */}
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-white flex items-center gap-2">
+                    <Users size={14} className="text-cyan-300" />
+                    Squad Operatives ({guestPlayers.length + 1} / 4)
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {/* Host Slot */}
+                  <div className="flex items-center gap-3 border border-cyan-400/40 bg-cyan-500/10 p-3.5">
+                    <div className="flex h-10 w-10 items-center justify-center border border-cyan-300 bg-cyan-400/20 text-cyan-200">
+                      <Crown size={18} className="text-amber-300" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-black uppercase tracking-wider text-white">
+                          {localPlayerRef.current.label}
+                        </span>
+                        <span className="rounded bg-amber-400/20 px-1.5 py-0.2 text-[8px] font-black text-amber-300 uppercase">
+                          Host
+                        </span>
+                      </div>
+                      <div className="text-[10px] font-bold text-emerald-300">Ready to Deploy</div>
+                    </div>
+                  </div>
+
+                  {/* Guest Slots */}
+                  {[0, 1, 2].map(slotIdx => {
+                    const guest = guestPlayers[slotIdx];
+                    return (
+                      <div
+                        key={slotIdx}
+                        className={`flex items-center gap-3 border p-3.5 transition ${
+                          guest
+                            ? 'border-emerald-400/40 bg-emerald-500/10'
+                            : 'border-white/10 bg-white/[0.02]'
+                        }`}
+                      >
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center border text-xs font-black uppercase ${
+                            guest
+                              ? 'border-emerald-300 bg-emerald-400/20 text-emerald-200'
+                              : 'border-white/15 bg-white/[0.03] text-white/20'
+                          }`}
+                        >
+                          {guest ? guest.label.slice(0, 2) : <Users size={15} />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          {guest ? (
+                            <>
+                              <div className="truncate font-black uppercase tracking-wider text-white">
+                                {guest.label}
+                              </div>
+                              <div className="text-[10px] font-bold text-emerald-300">Connected & Synced</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-xs font-black uppercase tracking-wider text-white/30">
+                                Open Slot {slotIdx + 2}
+                              </div>
+                              <div className="text-[10px] text-white/25">Waiting for friend…</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* LAUNCH ACTIONS */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                <button
+                  onClick={() => {
+                    hostedLobbyRef.current?.close();
+                    sessionRef.current?.close();
+                    setMode('choose');
+                    setStatus('');
+                  }}
+                  className="border border-red-400/30 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-red-300 transition hover:bg-red-500/10"
+                >
+                  Disband Squad
+                </button>
+
+                <button
+                  onClick={launchHost}
+                  className="flex items-center gap-2 border border-emerald-300 bg-emerald-400/25 px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.3)] transition hover:bg-emerald-400/40 hover:scale-[1.02]"
+                >
+                  <Shield size={16} /> Deploy Squad ({guestPlayers.length + 1} {guestPlayers.length === 0 ? 'Player' : 'Players'})
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* GUEST VIEW: CONNECTING & WAITING */}
+          {mode === 'guest' && (
+            <div className="space-y-6 py-4">
+              <div className="border border-fuchsia-400/30 bg-fuchsia-950/20 p-6 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-300 shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+                  <Wifi size={24} className="animate-pulse" />
+                </div>
+                <div className="mt-4 font-mono text-sm font-bold text-fuchsia-300">
+                  #{currentRoomCode}
+                </div>
+                <div className="mt-1 text-base font-black uppercase tracking-wider text-white">
+                  {status || 'Establishing Peer Connection…'}
+                </div>
+                <p className="mx-auto mt-2 max-w-sm text-xs text-white/50">
+                  Direct WebRTC data link is synchronizing automatically. Combat will launch as soon as the squad leader begins the mission.
+                </p>
+              </div>
+
+              {/* Roster display for guests */}
+              {rosterPlayers.length > 0 && (
+                <div>
+                  <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/60">
+                    Squad Operatives
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {rosterPlayers.map((p, idx) => (
+                      <div key={p.id} className="flex items-center justify-between border border-white/10 bg-white/[0.03] p-2.5 text-xs">
+                        <span className="font-black uppercase text-white">
+                          {p.label} {idx === 0 ? '(Leader)' : ''}
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-300">Ready</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-center">
+                <button
+                  onClick={() => {
+                    joinRef.current?.close();
+                    sessionRef.current?.close();
+                    setMode('choose');
+                    setStatus('');
+                  }}
+                  className="border border-white/20 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white/70 hover:bg-white/10 hover:text-white"
+                >
+                  Leave Squad
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* MANUAL DIRECT CO-OP SCREENS (PRESERVED FOR AIR-GAPPED ENVIRONMENTS) */}
+          {mode === 'direct_host' && (
+            <div className="space-y-4 border border-cyan-400/30 bg-cyan-950/20 p-5">
+              <div className="text-sm font-black uppercase tracking-wider text-white">
+                OFFLINE DIRECT MATCH (HOST)
+              </div>
+              <textarea readOnly value={offerCode} className="h-24 w-full border border-white/20 bg-black/40 p-2 font-mono text-[10px] text-cyan-200" />
+              <button onClick={() => void navigator.clipboard?.writeText(offerCode)} className="border border-cyan-400 px-3 py-1 text-xs text-cyan-200">
+                Copy Offer
+              </button>
+              <textarea
+                value={answerCode}
+                onChange={e => setAnswerCode(e.target.value)}
+                placeholder="Paste friend’s answer here"
+                className="h-24 w-full border border-white/20 bg-black/40 p-2 font-mono text-[10px] text-white"
+              />
+              <button onClick={() => void acceptDirectAnswer()} className="border border-emerald-400 bg-emerald-500/20 px-4 py-2 text-xs font-black text-emerald-100">
+                Connect Friend
+              </button>
+              <button onClick={launchHost} className="ml-2 border border-emerald-400 bg-emerald-500/30 px-4 py-2 text-xs font-black text-emerald-100">
+                Start Match
+              </button>
+            </div>
+          )}
+
+          {mode === 'direct_guest' && (
+            <div className="space-y-4 border border-fuchsia-400/30 bg-fuchsia-950/20 p-5">
+              <div className="text-sm font-black uppercase tracking-wider text-white">
+                OFFLINE DIRECT MATCH (GUEST)
+              </div>
+              <textarea
+                value={offerCode}
+                onChange={e => setOfferCode(e.target.value)}
+                placeholder="Paste host offer here"
+                className="h-24 w-full border border-white/20 bg-black/40 p-2 font-mono text-[10px] text-white"
+              />
+              <button onClick={() => void createDirectAnswer()} className="border border-fuchsia-400 bg-fuchsia-500/20 px-4 py-2 text-xs font-black text-fuchsia-100">
+                Create Answer
+              </button>
+              {answerCode && (
+                <>
+                  <textarea readOnly value={answerCode} className="h-24 w-full border border-white/20 bg-black/40 p-2 font-mono text-[10px] text-fuchsia-200" />
+                  <button onClick={() => void navigator.clipboard?.writeText(answerCode)} className="border border-fuchsia-400 px-3 py-1 text-xs text-fuchsia-200">
+                    Copy Answer
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* STATUS AND ERROR MESSAGES */}
+          {status && (
+            <div className="mt-4 flex items-center gap-2 text-xs font-medium text-cyan-200/85">
+              <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+              {status}
+            </div>
+          )}
+          {error && (
+            <div role="alert" className="mt-4 border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+              {error}
+            </div>
+          )}
         </div>
       </section>
     </div>
   );
 }
 
-function connectedPeers(peers: MultiplayerPeerInfo[]) { return peers.filter(peer => peer.state === 'connected').length; }
-function LobbyRoster({ mode, peers, host, guests, roster }: { mode: SetupMode; peers: MultiplayerPeerInfo[]; host: CoopPlayerSeed; guests: CoopPlayerSeed[]; roster: CoopPlayerSeed[] }) {
-  const hosting = mode === 'host' || mode === 'direct_host';
-  const joining = mode === 'guest' || mode === 'direct_guest';
-  const players = hosting ? [host, ...guests] : joining ? (roster.length > 0 ? roster : [host]) : [];
-  const connected = connectedPeers(peers) + (hosting || joining ? 1 : 0);
-  const playerCount = Math.max(connected, players.length);
-  return <><div className="mt-4 text-3xl font-black text-cyan-200">{playerCount}<span className="text-base text-white/30"> / 4</span></div><div className="mt-5 space-y-2">{players.length === 0 ? <p className="text-xs leading-relaxed text-white/40">{hosting ? 'Waiting for players.' : 'Select a server.'}</p> : players.map((player, index) => <div key={player.id} className="flex items-center justify-between border border-white/10 bg-white/[0.03] px-2 py-2 text-[10px]"><span className="max-w-[125px] truncate text-white/75">{player.label}{hosting && index === 0 ? ' (Host)' : ''}</span><span className="text-emerald-300">Ready</span></div>)}</div></>;
+function connectedPeers(peers: MultiplayerPeerInfo[]) {
+  return peers.filter(peer => peer.state === 'connected').length;
 }
-function createLocalId() { const values = new Uint32Array(1); crypto.getRandomValues(values); return `operator-${values[0].toString(36)}`; }
-function parsePlayer(value: unknown): CoopPlayerSeed | null { if (!value || typeof value !== 'object') return null; const player = value as Partial<CoopPlayerSeed>; return typeof player.id === 'string' && typeof player.label === 'string' && typeof player.color === 'string' ? { id: player.id, label: player.label.slice(0, 24), color: player.color } : null; }
-function parsePlayers(value: unknown, minimumPlayers: number = 2): CoopPlayerSeed[] | null { if (!Array.isArray(value) || value.length < minimumPlayers || value.length > 4) return null; const players = value.map(parsePlayer); return players.every((player): player is CoopPlayerSeed => player !== null) ? players : null; }
-function guestColor(index: number) { return ['#f472b6', '#a78bfa', '#fbbf24'][index % 3]; }
-function playerState(state: RTCPeerConnectionState) { return state === 'connected' ? 'Ready' : state === 'connecting' ? 'Joining' : state === 'disconnected' ? 'Reconnecting' : 'Left'; }
-function normalizeNickname(value: string) { return value.replace(/[^a-z0-9 _-]/gi, '').replace(/\s+/g, ' ').trim().slice(0, 16); }
-function savedNickname() { try { return normalizeNickname(localStorage.getItem('killsync.multiplayer.nickname') || ''); } catch { return ''; } }
+
+function createLocalId() {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return `operator-${values[0].toString(36)}`;
+}
+
+function parsePlayer(value: unknown): CoopPlayerSeed | null {
+  if (!value || typeof value !== 'object') return null;
+  const player = value as Partial<CoopPlayerSeed>;
+  return typeof player.id === 'string' && typeof player.label === 'string' && typeof player.color === 'string'
+    ? { id: player.id, label: player.label.slice(0, 24), color: player.color }
+    : null;
+}
+
+function parsePlayers(value: unknown, minimumPlayers: number = 2): CoopPlayerSeed[] | null {
+  if (!Array.isArray(value) || value.length < minimumPlayers || value.length > 4) return null;
+  const players = value.map(parsePlayer);
+  return players.every((player): player is CoopPlayerSeed => player !== null) ? players : null;
+}
+
+function guestColor(index: number) {
+  return ['#f472b6', '#a78bfa', '#fbbf24'][index % 3];
+}
+
+function normalizeNickname(value: string) {
+  return value.replace(/[^a-z0-9 _-]/gi, '').replace(/\s+/g, ' ').trim().slice(0, 16);
+}
+
+function savedNickname() {
+  try {
+    return normalizeNickname(localStorage.getItem('killsync.multiplayer.nickname') || '');
+  } catch {
+    return '';
+  }
+}

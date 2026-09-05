@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Coins, ShoppingCart, ShieldPlus } from 'lucide-react';
 import { COOP_REVIVE_RANGE, COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, CoopPlayerSeed, CoopSimulation, CoopSnapshot, quantizeAngle, quantizePitch } from '../game/multiplayer/CoopSimulation';
 import { MultiplayerRendererBridge } from '../game/multiplayer/MultiplayerRendererBridge';
 import { interpolateCoopSnapshot } from '../game/multiplayer/snapshotInterpolation';
 import { soundManager } from '../game/SoundManager';
 import { MultiplayerLaunch } from './ManualMultiplayerSetup';
-import { MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
+import { CoopPing, CoopPingKind, MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
 import { COOP_SHOP_ITEMS, type CoopShopItemId } from '../game/multiplayer/CoopBuyStation';
 import { COOP_PASSIVE_BY_ID, passiveRankCost } from '../game/multiplayer/CoopPassiveModules';
 import { getCoopSlideBinding, getMovementBindings, type ControlScheme } from '../game/controls';
@@ -35,7 +35,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const presentationRef = useRef({ previous: snapshotRef.current as CoopSnapshot | null, current: snapshotRef.current as CoopSnapshot | null, receivedAt: performance.now(), durationMs: INPUT_INTERVAL_MS });
   const inputRef = useRef<MultiplayerInputFrame>(createInput());
   const networkTickRef = useRef(0);
-  const displayedCombatEventsRef = useRef(new Set<number>());
+  const displayedCombatEventsRef = useRef(new Map<number, number>());
   const sessionCloseTimerRef = useRef(0);
   const spectatorTargetRef = useRef<string | null>(null);
   const downedSpectatorTargetRef = useRef<string | null>(null);
@@ -45,9 +45,25 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const stationOpenRef = useRef(false);
   const [hud, setHud] = useState({ players: launch.players.length, kills: 0, tick: 0, connected: true, selectedSlot: 0, weaponLevel: 1, health: 100, maxHealth: 100, level: 1, experience: 0, experienceToNextLevel: 120, coins: 0, cores: 0, weapons: [] as CoopSnapshot['players'][number]['weaponStates'], isReloading: false, isAiming: false, actionEndsAt: undefined as number | undefined, lifeState: 'alive' as CoopSnapshot['players'][number]['lifeState'], downedRemainingMs: 0, reviveProgressMs: 0, reviverId: undefined as string | undefined, invulnerableRemainingMs: 0, matchState: 'active' as CoopSnapshot['matchState'], squad: [] as Array<Pick<CoopSnapshot['players'][number], 'id' | 'label' | 'color' | 'health' | 'maxHealth' | 'lifeState' | 'downedRemainingMs' | 'reviveProgressMs' | 'reviverId'>> });
   const [combatNotice, setCombatNotice] = useState<{ text: string; color: string } | null>(null);
-  const [damageFlash, setDamageFlash] = useState(false);
+  const [damageFlashKey, setDamageFlashKey] = useState<number | null>(null);
+  const damageFlashTimerRef = useRef<number | null>(null);
+  const damageFlashExpiresAtRef = useRef(0);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
   const [connectionMessage, setConnectionMessage] = useState(launch.role === 'host' ? 'Players can join your match at any time.' : 'Connected');
+
+  const triggerDamageFlash = useCallback(() => {
+    const now = performance.now();
+    damageFlashExpiresAtRef.current = now + 240;
+    if (damageFlashTimerRef.current !== null) {
+      window.clearTimeout(damageFlashTimerRef.current);
+    }
+    setDamageFlashKey(k => (k === null ? 1 : k + 1));
+    damageFlashTimerRef.current = window.setTimeout(() => {
+      setDamageFlashKey(null);
+      damageFlashTimerRef.current = null;
+      damageFlashExpiresAtRef.current = 0;
+    }, 260);
+  }, []);
   const [mouseLocked, setMouseLocked] = useState(false);
   const [matchSnapshot, setMatchSnapshot] = useState<CoopSnapshot | null>(snapshotRef.current);
   const [stationOpen, setStationOpen] = useState(false);
@@ -88,7 +104,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
    * instantaneous even while visual positions are being smoothed. */
   const resolveDownedSpectatorTarget = (snapshot: CoopSnapshot | null) => {
     const local = snapshot?.players.find(player => player.id === launch.localPlayerId);
-    if (local?.lifeState !== 'downed') {
+    if (local?.lifeState !== 'downed' && local?.lifeState !== 'eliminated') {
       if (downedSpectatorTargetRef.current !== null) {
         downedSpectatorTargetRef.current = null;
         setDownedSpectatorTarget(null);
@@ -170,26 +186,51 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     const syncPointerLock = () => setMouseLocked(renderer.isPointerLocked);
     document.addEventListener('pointerlockchange', syncPointerLock);
     const presentCombatNotice = (snapshot: CoopSnapshot) => {
+      const now = performance.now();
+      for (const [id, seenAt] of displayedCombatEventsRef.current.entries()) {
+        if (now - seenAt > 10_000) displayedCombatEventsRef.current.delete(id);
+      }
       for (const event of snapshot.combatEvents) {
         if (displayedCombatEventsRef.current.has(event.id)) continue;
-        displayedCombatEventsRef.current.add(event.id);
-        if (displayedCombatEventsRef.current.size > 320) displayedCombatEventsRef.current.clear();
+        displayedCombatEventsRef.current.set(event.id, now);
+        if (event.kind === 'ping') {
+          const pinger = snapshot.players.find(p => p.id === event.playerId);
+          const pingerName = pinger ? pinger.label : 'SQUADMATE';
+          const isDanger = event.color === '#ef4444' || event.color === '#fb7185';
+          if (event.playerId !== launch.localPlayerId) {
+            soundManager.playTacticalPing(isDanger);
+          }
+          setCombatNotice({
+            text: isDanger ? `⚠️ ${pingerName.toUpperCase()}: DANGER ALERT` : `${pingerName.toUpperCase()} PINGED`,
+            color: event.color || '#22d3ee',
+          });
+          continue;
+        }
         if (event.playerId && event.playerId !== launch.localPlayerId && event.killedByPlayerId !== launch.localPlayerId) continue;
         if (event.kind === 'enemy_hit' && event.amount) setCombatNotice({ text: `HIT ${Math.round(event.amount)}`, color: '#f8fafc' });
         else if (event.kind === 'enemy_killed') setCombatNotice({ text: 'KILL CONFIRMED', color: event.color || '#fb7185' });
-        else if (event.kind === 'pickup_collected') setCombatNotice({ text: event.itemType ? `+ ${event.itemType.replace('_', ' ').toUpperCase()}` : `+ ${Math.round(event.amount || 0)} XP`, color: event.color || '#67e8f9' });
+        else if (event.kind === 'pickup_collected') {
+          if (event.itemType === 'hp') setCombatNotice({ text: 'FULL HEALTH RESTORED ❤️', color: '#ff3366' });
+          else setCombatNotice({ text: event.itemType ? `+ ${event.itemType.replace('_', ' ').toUpperCase()}` : `+ ${Math.round(event.amount || 0)} XP`, color: event.color || '#67e8f9' });
+        }
         else if (event.kind === 'level_up') setCombatNotice({ text: `LEVEL ${event.amount}`, color: '#fde047' });
         else if (event.kind === 'weapon_upgraded') setCombatNotice({ text: `${COOP_WEAPON_DETAILS[event.weaponId || 'plasma_gun'].name.toUpperCase()} LV ${event.amount} — DAMAGE +10%`, color: event.color || '#67e8f9' });
         else if (event.kind === 'ammo_collected') setCombatNotice({ text: `AMMO +${event.amount}`, color: event.color || '#67e8f9' });
         else if (event.kind === 'reload_started') setCombatNotice({ text: 'RELOADING', color: '#f8fafc' });
         else if (event.kind === 'empty_fire') setCombatNotice({ text: 'EMPTY — RELOAD', color: '#fca5a5' });
-        else if (event.kind === 'player_damaged' && event.playerId === launch.localPlayerId) { const local = snapshot.players.find(player => player.id === launch.localPlayerId); setCombatNotice({ text: `${incomingDirection(local, event)} HIT −${Math.max(1, Math.round(event.amount || 0))}`, color: '#fda4af' }); setDamageFlash(true); }
+        else if (event.kind === 'player_damaged' && event.playerId === launch.localPlayerId) { const local = snapshot.players.find(player => player.id === launch.localPlayerId); setCombatNotice({ text: `${incomingDirection(local, event)} HIT −${Math.max(1, Math.round(event.amount || 0))}`, color: '#fda4af' }); triggerDamageFlash(); }
         else if (event.kind === 'player_downed' && event.playerId === launch.localPlayerId) setCombatNotice({ text: 'YOU ARE DOWNED', color: '#fb7185' });
         else if (event.kind === 'player_revived' && event.playerId === launch.localPlayerId) setCombatNotice({ text: 'REVIVED — SHIELDS UP', color: '#5eead4' });
         else if (event.kind === 'revive_started' && event.playerId === launch.localPlayerId) setCombatNotice({ text: 'TEAMMATE REVIVING YOU', color: '#a5f3fc' });
         else if (event.kind === 'boss_ability') setCombatNotice({ text: event.amount ? `BOSS PHASE ${event.amount}` : 'BOSS ATTACK — MOVE', color: event.color || '#fda4af' });
         else if (event.kind === 'station_online') setCombatNotice({ text: 'BUY STATION ONLINE', color: '#67e8f9' });
         else if (event.kind === 'exfil_deployed') setCombatNotice({ text: 'EXFILL BEACON DEPLOYED', color: '#fbbf24' });
+        else if (event.kind === 'gas_warning') { setCombatNotice({ text: 'CONTAINMENT FAILING — GAS BREACH IN 30s', color: '#f59e0b' }); soundManager.playHazardKlaxon(); }
+        else if (event.kind === 'gas_spread') { setCombatNotice({ text: 'TOXIC GAS SPREADING — EQUIP GAS MASKS', color: '#4ade80' }); soundManager.playHazardKlaxon(); }
+        else if (event.kind === 'mask_broken' && event.playerId === launch.localPlayerId) { setCombatNotice({ text: 'GAS MASK DESTROYED — EXPOSURE CRITICAL', color: '#f43f5e' }); soundManager.playMaskShatter(); }
+        else if (event.kind === 'mask_damaged' && event.playerId === launch.localPlayerId) { soundManager.playFilterDegradation(); }
+        else if (event.kind === 'gas_damaged' && event.playerId === launch.localPlayerId) { setCombatNotice({ text: `GAS INHALATION −${Math.max(1, Math.round(event.amount || 0))}`, color: '#4ade80' }); }
+        else if (event.kind === 'objective_completed') setCombatNotice({ text: 'DISTRICT UPLINK SECURED', color: '#5eead4' });
         else if (event.kind === 'round_started') setCombatNotice({ text: `ROUND ${event.amount} — HOSTILES INBOUND`, color: '#fbbf24' });
         else if (event.kind === 'round_completed') setCombatNotice({ text: `ROUND ${event.amount} CLEAR — RESUPPLY`, color: '#5eead4' });
       }
@@ -221,7 +262,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     const publishSnapshot = (snapshot: CoopSnapshot, now: number) => {
       const timeline = presentationRef.current;
-      const restarted = timeline.current && snapshot.tick < timeline.current.tick;
+      const restarted = Boolean(timeline.current && snapshot.tick < 5 && timeline.current.tick > 20);
+      if (timeline.current && snapshot.tick < timeline.current.tick && !restarted) {
+        return;
+      }
       const elapsedSinceLastSnapshot = now - timeline.receivedAt;
       timeline.previous = restarted ? snapshot : timeline.current || snapshot;
       if (restarted) displayedCombatEventsRef.current.clear();
@@ -273,6 +317,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         syncHud(snapshot);
       },
       onEvent: (peerId, event) => {
+        if (event.event === 'ping' && launch.role === 'host') {
+          const playerId = launch.peerPlayerIds[peerId];
+          const payload = event.payload as { x?: number; y?: number; z?: number; kind?: CoopPingKind; label?: string } | undefined;
+          if (playerId && payload && typeof payload.x === 'number' && typeof payload.y === 'number') {
+            simulationRef.current?.addPing(playerId, payload.x, payload.y, payload.z || 0, payload.kind || 'location', payload.label || 'Waypoint');
+          }
+          return;
+        }
         if (event.event === 'station_purchase' && launch.role === 'host') {
           const request = parseStationPurchase(event.payload);
           const playerId = launch.peerPlayerIds[peerId];
@@ -355,7 +407,43 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       if (!inputRef.current.jumpPressed && !inputRef.current.reloadPressed) return;
       inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: false, reloadPressed: false };
     };
-      const onKeyDown = (event: KeyboardEvent) => {
+    let lastPingClickTime = 0;
+    const triggerPing = (forcedKind?: CoopPingKind) => {
+      if (isSpectator || stationOpenRef.current) return;
+      const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
+      if (!local || local.lifeState === 'eliminated') return;
+      const target = renderer.calculatePingTarget(snapshotRef.current, launch.localPlayerId);
+      if (!target) return;
+
+      const isDanger = forcedKind === 'enemy';
+      const kind: CoopPingKind = forcedKind || target.kind;
+      const label = isDanger ? 'Danger / Enemy Alert' : target.label;
+      const color = isDanger || kind === 'enemy' || kind === 'boss' ? '#ef4444' : kind === 'revive' ? '#fbbf24' : '#22d3ee';
+
+      soundManager.playTacticalPing(isDanger);
+      if (launch.role === 'host') {
+        simulationRef.current?.addPing(launch.localPlayerId, target.x, target.y, target.z, kind, label);
+      } else {
+        session.sendEvent({
+          type: 'event',
+          version: MULTIPLAYER_PROTOCOL_VERSION,
+          event: 'ping',
+          payload: {
+            x: target.x,
+            y: target.y,
+            z: target.z,
+            kind,
+            label,
+          },
+        });
+      }
+      setCombatNotice({
+        text: isDanger ? '⚠️ PINGED: DANGER (ENEMY ALERT)' : `PINGED: ${label}`,
+        color,
+      });
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') return;
       if (isSpectator) return;
       // Reload can be the first interaction in an arena, before the player
@@ -364,11 +452,30 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       soundManager.activate();
       if (event.code === 'Space') {
         event.preventDefault();
-        if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: true };
+        if (!event.repeat) {
+          if (rendererRef.current ? rendererRef.current.canLocalJump() : true) {
+            soundManager.playJump();
+          }
+          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: true };
+        }
         return;
       }
       const key = event.key.toLowerCase();
       if (stationOpenRef.current && key !== 'f') return;
+      if (key === 'g') {
+        event.preventDefault();
+        if (!event.repeat) {
+          const now = performance.now();
+          if (now - lastPingClickTime < 350) {
+            lastPingClickTime = 0;
+            triggerPing('enemy');
+          } else {
+            lastPingClickTime = now;
+            triggerPing();
+          }
+        }
+        return;
+      }
       if (key === 'f') {
         event.preventDefault();
         const snapshot = snapshotRef.current;
@@ -420,6 +527,19 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       // A Buy Station is a focused modal. Do not let a click on its buttons,
       // list, or backdrop leak through to pointer lock, fire, or aiming.
       if (stationOpenRef.current) return;
+      // Middle mouse button (click scroll wheel) pings
+      if (event.button === 1) {
+        event.preventDefault();
+        const now = performance.now();
+        if (now - lastPingClickTime < 350) {
+          lastPingClickTime = 0;
+          triggerPing('enemy');
+        } else {
+          lastPingClickTime = now;
+          triggerPing();
+        }
+        return;
+      }
       // This must run inside the real user gesture. The firing event reaches
       // the renderer on a later animation frame, which is too late for strict
       // autoplay policies to resume a suspended AudioContext.
@@ -430,7 +550,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         return;
       }
       const lifeState = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState;
-      if (lifeState === 'downed') {
+      if (lifeState === 'downed' || lifeState === 'eliminated') {
         if (event.button === 0) cycleDownedSpectatorTarget();
         renderer.requestPointerLock();
         return;
@@ -456,7 +576,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         return;
       }
       if (isSpectator) return;
-      if (snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState === 'downed') {
+      const currentLifeState = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState;
+      if (currentLifeState === 'downed' || currentLifeState === 'eliminated') {
         firing = false;
         updateInput();
         return;
@@ -482,6 +603,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     const onVisibilityChange = () => { if (document.hidden) clearControls(); };
     const onContextMenu = (event: MouseEvent) => event.preventDefault();
+    const onAuxClick = (event: MouseEvent) => { if (event.button === 1) event.preventDefault(); };
     window.addEventListener('blur', clearControls);
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('keydown', onKeyDown);
@@ -489,6 +611,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('auxclick', onAuxClick);
     window.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('contextmenu', onContextMenu);
 
@@ -548,22 +671,36 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         : resolveDownedSpectatorTarget(snapshotRef.current);
       const latestLifeState = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState;
       renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId, latestLifeState === 'alive');
+      if (damageFlashExpiresAtRef.current > 0 && now > damageFlashExpiresAtRef.current + 40) {
+        damageFlashExpiresAtRef.current = 0;
+        if (damageFlashTimerRef.current !== null) {
+          window.clearTimeout(damageFlashTimerRef.current);
+          damageFlashTimerRef.current = null;
+        }
+        setDamageFlashKey(null);
+      }
       animationFrame = requestAnimationFrame(frame);
     };
     animationFrame = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(animationFrame);
       hostClock?.stop();
+      if (damageFlashTimerRef.current !== null) {
+        window.clearTimeout(damageFlashTimerRef.current);
+        damageFlashTimerRef.current = null;
+      }
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('auxclick', onAuxClick);
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('blur', clearControls);
       window.removeEventListener('contextmenu', onContextMenu);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       document.removeEventListener('pointerlockchange', syncPointerLock);
+      soundManager.stopTowerCharge();
       renderer.destroy();
       rendererRef.current = null;
       sessionCloseTimerRef.current = window.setTimeout(() => {
@@ -582,16 +719,40 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   }, [combatNotice]);
 
   useEffect(() => {
-    if (!damageFlash) return;
-    const timeout = window.setTimeout(() => setDamageFlash(false), 180);
-    return () => window.clearTimeout(timeout);
-  }, [damageFlash]);
-
-  useEffect(() => {
     if (launch.role === 'host' && hud.matchState !== 'active') launch.hostedLobby?.close();
   }, [hud.matchState, launch]);
 
+  // Ambient gas and respirator breathing audio loop
+  useEffect(() => {
+    let timer: number;
+    const tickAudio = () => {
+      const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
+      const gas = snapshotRef.current?.gasZone;
+      if (local && local.lifeState === 'alive') {
+        const inGas = gas && Math.hypot(local.x - gas.x, local.y - gas.y) <= gas.radius;
+        if (local.gasMaskHp > 0) {
+          soundManager.playRespiratorBreathing();
+        } else if (inGas) {
+          soundManager.playToxicCough();
+        }
+      }
+      timer = window.setTimeout(tickAudio, 4200);
+    };
+    timer = window.setTimeout(tickAudio, 2500);
+    return () => window.clearTimeout(timer);
+  }, [launch.localPlayerId]);
+
   const localSnapshot = matchSnapshot?.players.find(player => player.id === (isSpectator ? spectatorTargetRef.current : launch.localPlayerId));
+  const gasZone = matchSnapshot?.gasZone;
+  const isLocalInGas = Boolean(
+    localSnapshot &&
+    gasZone &&
+    Math.hypot(localSnapshot.x - gasZone.x, localSnapshot.y - gasZone.y) <= gasZone.radius
+  );
+  const gasMaskHp = localSnapshot?.gasMaskHp || 0;
+  const gasMaskMaxHp = localSnapshot?.gasMaskMaxHp || 150;
+  const filterPercentage = Math.max(0, Math.min(100, Math.round((gasMaskHp / Math.max(1, gasMaskMaxHp)) * 100)));
+  const hasGasMask = gasMaskHp > 0;
   const nearbyStation = !isSpectator && localSnapshot && matchSnapshot?.buyStations.find(station => Math.hypot(localSnapshot.x - station.x, localSnapshot.y - station.y) <= station.radius + 48);
   const revivingTarget = !isSpectator && localSnapshot?.lifeState === 'alive'
     ? matchSnapshot?.players.find(player => player.lifeState === 'downed' && player.reviverId === launch.localPlayerId)
@@ -601,6 +762,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const activeWeaponId = COOP_WEAPON_SLOTS[hud.selectedSlot];
   const activeWeapon = COOP_WEAPON_DETAILS[activeWeaponId];
   const activeWeaponState = hud.weapons[hud.selectedSlot];
+  const spectatedSquadmate = matchSnapshot?.players.find(p => p.id === downedSpectatorTarget?.id);
+  const activeReviver = hud.reviverId ? matchSnapshot?.players.find(p => p.id === hud.reviverId) : undefined;
   const squadmates = hud.squad.filter(player => player.id !== launch.localPlayerId);
   const objectiveHud = run ? (() => {
     const base = {
@@ -635,16 +798,66 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   return (
     <div className="coop-arena absolute inset-0 z-[110] bg-[#05080e]">
       <div ref={sceneRef} className="absolute inset-0 h-full w-full" />
-      {damageFlash && <div className="pointer-events-none absolute inset-0 z-20 border-[min(8vw,100px)] border-rose-500/35 bg-rose-500/10 animate-pulse" />}
-      <div className="coop-vitals pointer-events-none absolute">
+      {damageFlashKey !== null && <div key={damageFlashKey} className="coop-damage-flash" aria-hidden="true" />}
+      {isLocalInGas && <div className="toxic-gas-screen" aria-hidden="true" />}
+      {!isSpectator && hasGasMask && (
+        <div className="gasmask-overlay" aria-hidden="true">
+          <div className="gasmask-bezel" />
+          <div className="gasmask-glass" />
+          <div className="gasmask-condensation" />
+
+          {/* Progressive crack decals as filter durability depletes (positioned away from HUD vitals) */}
+          {filterPercentage < 65 && (
+            <svg className="gasmask-crack absolute right-16 top-16 w-36 h-36 opacity-75 pointer-events-none" viewBox="0 0 100 100" fill="none" stroke="rgba(255,255,255,0.75)" strokeWidth="1.2">
+              <path d="M90,10 L70,25 L55,30 M70,25 L75,45 M55,30 L40,35 M70,25 L85,35" />
+            </svg>
+          )}
+          {filterPercentage < 35 && (
+            <svg className="gasmask-crack absolute left-8 top-1/2 -translate-y-1/2 w-40 h-40 opacity-80 pointer-events-none" viewBox="0 0 100 100" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="1.4">
+              <path d="M10,20 L35,35 L45,55 L35,70 M35,35 L55,30 L70,40 M45,55 L65,65 M45,55 L35,45" />
+            </svg>
+          )}
+
+          {/* Diegetic Visor HUD */}
+          <div className="gasmask-hud">
+            <div className="flex items-center justify-between gap-3 text-[9px]">
+              <span className="font-bold flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: isLocalInGas ? '#4ade80' : '#22d3ee', boxShadow: `0 0 8px ${isLocalInGas ? '#4ade80' : '#22d3ee'}` }} />
+                {isLocalInGas ? 'TOXIN SCRUBBER ACTIVE' : 'CBRN AIR PURIFIER'}
+              </span>
+              <span className="font-mono flex items-center gap-1.5">
+                {filterPercentage < 15 && <span className="text-[8px] font-black text-rose-400 tracking-wider animate-pulse">CRITICAL</span>}
+                <span>{filterPercentage}%</span>
+              </span>
+            </div>
+            <div className="gasmask-hud__bar">
+              <div
+                className="gasmask-hud__fill"
+                style={{
+                  width: `${filterPercentage}%`,
+                  backgroundColor: filterPercentage > 50 ? '#22d3ee' : filterPercentage > 20 ? '#fbbf24' : '#fb7185',
+                  boxShadow: `0 0 8px ${filterPercentage > 50 ? '#22d3ee' : filterPercentage > 20 ? '#fbbf24' : '#fb7185'}`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="coop-vitals pointer-events-none absolute z-50">
         <div className="coop-vitals__topline"><span>LV {hud.level}</span><span>{hud.kills} KILLS</span><span>{hud.players} LIVE</span></div>
         <div className="coop-vitals__health"><span>{Math.ceil(hud.health)}</span><div className="coop-meter"><i style={{ width: `${Math.max(0, Math.min(100, hud.health / Math.max(1, hud.maxHealth) * 100))}%` }} /></div></div>
         <div className="coop-vitals__lower"><span>XP {Math.floor(hud.experience / Math.max(1, hud.experienceToNextLevel) * 100)}%</span><span className="coop-vitals__currency">¤ {hud.coins}</span>{hud.cores > 0 && <span>{hud.cores} CORES</span>}</div>
         <div className="coop-xp"><i style={{ width: `${Math.max(0, Math.min(100, hud.experience / Math.max(1, hud.experienceToNextLevel) * 100))}%` }} /></div>
-        {localSnapshot && (localSnapshot.armorHp > 0 || localSnapshot.selfRevives > 0 || localSnapshot.passiveModules.length > 0) && <div className="coop-vitals__equipment"><ShieldPlus size={11} /> {Math.ceil(localSnapshot.armorHp)} ARMOR{localSnapshot.selfRevives > 0 ? ' · REBOOT READY' : ''}</div>}
+        {localSnapshot && (localSnapshot.armorHp > 0 || localSnapshot.gasMaskHp > 0 || localSnapshot.selfRevives > 0 || localSnapshot.passiveModules.length > 0) && (
+          <div className="coop-vitals__equipment">
+            {localSnapshot.armorHp > 0 && <span><ShieldPlus size={11} className="inline mr-1" /> {Math.ceil(localSnapshot.armorHp)} ARMOR</span>}
+            {localSnapshot.gasMaskHp > 0 && <span className="text-emerald-300 font-bold ml-1.5">☣ MASK {Math.round((localSnapshot.gasMaskHp / localSnapshot.gasMaskMaxHp) * 100)}%</span>}
+            {localSnapshot.selfRevives > 0 ? ' · REBOOT READY' : ''}
+          </div>
+        )}
         {hud.invulnerableRemainingMs > 0 && <div className="coop-vitals__shield">SHIELDED {Math.ceil(hud.invulnerableRemainingMs / 1000)}s</div>}
       </div>
-      {squadmates.length > 0 && <div className="coop-squad pointer-events-none absolute">
+      {squadmates.length > 0 && <div className="coop-squad pointer-events-none absolute z-50">
         {squadmates.map(player => {
           const status = player.lifeState === 'alive' ? `${Math.ceil(player.health)}/${Math.ceil(player.maxHealth)}` : player.lifeState === 'downed' ? (player.downedRemainingMs > 0 ? `DOWN ${Math.ceil(player.downedRemainingMs / 1000)}s` : 'DOWN · REVIVABLE') : 'OUT';
           return <div key={player.id} className={`coop-squadmate coop-squadmate--${player.lifeState}`}>
@@ -654,16 +867,25 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           </div>;
         })}
       </div>}
-      {isSpectator && <div className="coop-spectating pointer-events-none absolute"><span>SPECTATING</span><b>{spectatorTarget?.label || 'Acquiring target'}</b><small>CLICK · NEXT PLAYER</small></div>}
-      {objectiveHud && <div className={`coop-objective coop-objective--${objectiveHud.tone} pointer-events-none absolute`}>
+      {isSpectator && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span>SPECTATING</span><b>{spectatorTarget?.label || 'Acquiring target'}</b><small>CLICK · NEXT PLAYER</small></div>}
+      {!isSpectator && (hud.lifeState === 'downed' || hud.lifeState === 'eliminated') && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span className={hud.lifeState === 'downed' ? 'text-amber-300 font-black' : 'text-rose-300 font-black'}>● {hud.lifeState === 'downed' ? 'DOWNED · SPECTATING' : 'ELIMINATED · SPECTATING'}</span><b style={{ color: spectatedSquadmate?.color || '#f0abfc' }}>{spectatedSquadmate?.label || downedSpectatorTarget?.label || 'SQUAD'}</b><small>LEFT CLICK · CYCLE SQUAD</small></div>}
+      {objectiveHud && <div className={`coop-objective coop-objective--${objectiveHud.tone} pointer-events-none absolute z-50`}>
         <div className="coop-objective__meta"><span>{objectiveHud.label}</span><span>{objectiveHud.detail}</span></div>
         <div className="coop-objective__title">{objectiveHud.title}</div>
         {objectiveHud.progress !== undefined && <div className="coop-objective__meter"><i style={{ width: `${Math.max(0, Math.min(100, objectiveHud.progress))}%` }} /></div>}
       </div>}
-      {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[43%] -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
+      {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[24%] z-50 -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
       {revivingTarget && <div className="pointer-events-none absolute left-1/2 top-[56%] z-20 w-[min(330px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/55 bg-black/80 px-4 py-3 text-center shadow-[0_0_24px_rgba(34,211,238,.18)] backdrop-blur-md"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">Hold F · Reviving {revivingTarget.label}</div><div className="mt-2 h-2 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, revivingTarget.reviveProgressMs / 3000 * 100)}%` }} /></div><div className="mt-1 text-[9px] font-mono text-cyan-100/70">{Math.round(revivingTarget.reviveProgressMs / 3000 * 100)}%</div></div>}
-      {!isSpectator && (hud.selectedSlot === 3 && hud.isAiming ? <div className="pointer-events-none absolute inset-0 z-10 rounded-full border-[min(17vw,220px)] border-black/90"><div className="absolute left-1/2 top-1/2 h-[64vh] w-px -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-px w-[64vh] -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100" /></div> : <div className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2"><span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-cyan-100/80" /><span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-cyan-100/80" /></div>)}
-      {!isSpectator && activeWeapon && <div className="coop-weapons pointer-events-none absolute">
+      {!isSpectator && hud.lifeState === 'alive' && (hud.selectedSlot === 3 && hud.isAiming ? <div className="pointer-events-none absolute inset-0 z-10 rounded-full border-[min(17vw,220px)] border-black/90"><div className="absolute left-1/2 top-1/2 h-[64vh] w-px -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-px w-[64vh] -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100" /></div> : <div className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2"><span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-cyan-100/80" /><span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-cyan-100/80" /></div>)}
+      {!isSpectator && hud.lifeState === 'alive' && matchSnapshot && localSnapshot && (
+        <CoopReticleCompass
+          localPlayer={localSnapshot}
+          players={matchSnapshot.players}
+          pings={matchSnapshot.pings}
+          renderer={rendererRef.current}
+        />
+      )}
+      {!isSpectator && hud.lifeState === 'alive' && activeWeapon && <div className="coop-weapons pointer-events-none absolute z-50">
         <div className="coop-weapons__name" style={{ color: activeWeapon.color }}><span>{activeWeapon.shortName}</span><small>LV {activeWeaponState?.level || 1}</small></div>
         <div className="coop-weapons__ammo"><b>{activeWeaponState?.magazineAmmo ?? '—'}</b><span>/ {activeWeaponState?.reserveAmmo ?? '—'}</span></div>
         <div className="coop-weapons__slots">{COOP_WEAPON_SLOTS.map((weaponId, index) => <span key={weaponId} data-selected={hud.selectedSlot === index}>{index + 1}</span>)}</div>
@@ -687,14 +909,290 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           <button onClick={() => { rendererRef.current?.exitPointerLock(); setStationPanelOpen(open => !open); }} className="border border-cyan-300/40 bg-cyan-400/10 px-3 py-1.5 text-[10px] font-black uppercase text-cyan-100 transition hover:bg-cyan-400/20">{stationOpen ? 'Close [F]' : 'Shop [F]'}</button>
         </div>
         {!stationOpen && <p className="mt-3 text-[10px] text-white/50">Press <span className="font-black text-cyan-100">F</span> to interact. It prioritizes reviving a nearby teammate.</p>}
-        {stationOpen && <><div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-2">{nearbyStation.stock.map(itemId => { const item = COOP_SHOP_ITEMS[itemId]; const passive = itemId in COOP_PASSIVE_BY_ID ? itemId as keyof typeof COOP_PASSIVE_BY_ID : undefined; const owned = passive && localSnapshot.passiveModules.find(module => module.id === passive); const cost = passive && owned ? passiveRankCost(passive, owned.rank) : item.cost; const affordable = localSnapshot.coins >= cost; return <button key={itemId} disabled={!affordable} onClick={() => purchaseStationItem(nearbyStation.id, itemId)} className="flex w-full items-center justify-between gap-4 border border-white/10 bg-white/[0.035] px-4 py-3 text-left transition hover:border-cyan-200/50 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"><span><span className="block text-xs font-bold text-white">{item.name}{owned ? ` · Rank ${owned.rank + 1}` : ''}</span><span className="mt-1 block text-[10px] leading-relaxed text-white/45">{item.description}</span></span><span className="shrink-0 text-xs font-mono text-amber-200"><Coins className="mr-1 inline" size={12} />{cost}</span></button>; })}</div>{stationMessage && <div className="mt-3 shrink-0 border border-cyan-200/20 bg-cyan-400/10 px-3 py-2 text-[10px] text-cyan-100">{stationMessage}</div>}<div className="mt-3 shrink-0 text-center text-[10px] text-white/40">Mouse wheel scrolls this list only · press <span className="font-black text-cyan-100">F</span> to close</div></>}
+        {stationOpen && <><div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-2">{nearbyStation.stock.map(itemId => {
+          const item = COOP_SHOP_ITEMS[itemId];
+          const passive = itemId in COOP_PASSIVE_BY_ID ? itemId as keyof typeof COOP_PASSIVE_BY_ID : undefined;
+          const owned = passive && localSnapshot.passiveModules.find(module => module.id === passive);
+          const cost = passive && owned ? passiveRankCost(passive, owned.rank) : item.cost;
+          const isGasMask = itemId === 'gas_mask';
+          const maskOwned = isGasMask && localSnapshot.gasMaskHp > 0;
+          const maskFull = isGasMask && localSnapshot.gasMaskHp >= localSnapshot.gasMaskMaxHp;
+          const affordable = localSnapshot.coins >= cost && !maskFull;
+          let statusText = owned ? ` · Rank ${owned.rank + 1}` : '';
+          if (isGasMask && maskOwned) {
+            statusText = ` · ${Math.round((localSnapshot.gasMaskHp / localSnapshot.gasMaskMaxHp) * 100)}% FILTER`;
+          }
+          return <button key={itemId} disabled={!affordable} onClick={() => purchaseStationItem(nearbyStation.id, itemId)} className="flex w-full items-center justify-between gap-4 border border-white/10 bg-white/[0.035] px-4 py-3 text-left transition hover:border-cyan-200/50 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"><span><span className="block text-xs font-bold text-white">{item.name}{statusText}</span><span className="mt-1 block text-[10px] leading-relaxed text-white/45">{item.description}</span></span><span className="shrink-0 text-xs font-mono text-amber-200"><Coins className="mr-1 inline" size={12} />{cost}</span></button>; })}</div>{stationMessage && <div className="mt-3 shrink-0 border border-cyan-200/20 bg-cyan-400/10 px-3 py-2 text-[10px] text-cyan-100">{stationMessage}</div>}<div className="mt-3 shrink-0 text-center text-[10px] text-white/40">Mouse wheel scrolls this list only · press <span className="font-black text-cyan-100">F</span> to close</div></>}
       </div>}
-      {!isSpectator && hud.lifeState === 'downed' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/35"><div className="w-[min(420px,calc(100vw-2rem))] border border-amber-300/50 bg-black/80 p-6 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.3em] text-amber-200">You are downed</div><div className="mt-3 text-4xl font-black text-white">{hud.downedRemainingMs > 0 ? `${Math.ceil(hud.downedRemainingMs / 1000)}s` : 'REVIVABLE'}</div><div className="mt-3 text-xs text-white/60">Watching <span className="font-black text-fuchsia-200">{downedSpectatorTarget?.label || 'your squad'}</span> in third person. Left click cycles living teammates.</div><div className="mt-2 text-xs text-white/60">A teammate must stand close and hold <span className="font-black text-cyan-200">F</span> for 3 seconds. Your body remains until the squad is wiped.</div>{hud.reviverId && <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-emerald-200">Revive in progress · {Math.round(hud.reviveProgressMs / 3000 * 100)}%</div>}<div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, hud.reviveProgressMs / 3000 * 100)}%` }} /></div></div></div>}
-      {!isSpectator && hud.lifeState === 'eliminated' && hud.matchState === 'active' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/45"><div className="border border-rose-300/40 bg-black/80 px-6 py-5 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.28em] text-rose-200">Eliminated</div><div className="mt-3 text-xs text-white/60">Your squad can still finish the encounter.</div></div></div>}
+      {/* Downed Edge Danger Vignette */}
+      {!isSpectator && hud.lifeState === 'downed' && (
+        <div
+          className="pointer-events-none absolute inset-0 z-20 bg-[radial-gradient(ellipse_at_center,transparent_52%,rgba(245,158,11,0.12)_78%,rgba(220,38,38,0.32)_100%)] animate-pulse"
+          style={{ animationDuration: '3s' }}
+        />
+      )}
+      {/* Eliminated Edge Vignette */}
+      {!isSpectator && hud.lifeState === 'eliminated' && hud.matchState === 'active' && (
+        <div className="pointer-events-none absolute inset-0 z-20 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(225,29,72,0.14)_82%,rgba(15,23,42,0.45)_100%)]" />
+      )}
+
+      {/* Downed Tactical Revive HUD (Anchored at bottom, never covering spectated operator) */}
+      {!isSpectator && hud.lifeState === 'downed' && (
+        <div className="pointer-events-none absolute bottom-6 left-1/2 z-40 w-[min(540px,calc(100vw-2.5rem))] -translate-x-1/2">
+          <div className="border border-amber-400/40 bg-[#060b13]/92 p-4 shadow-[0_0_35px_rgba(245,158,11,0.22)] backdrop-blur-xl">
+            {/* Top row: Status badges & Bleedout / State info */}
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24] animate-ping" />
+                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-200">
+                  Operative Down
+                </span>
+                {hud.reviverId ? (
+                  <span className="rounded bg-cyan-500/20 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-cyan-200 border border-cyan-400/40 animate-pulse">
+                    Reviving
+                  </span>
+                ) : (localSnapshot?.selfRevives ?? 0) > 0 ? (
+                  <span className="rounded bg-amber-500/25 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-200 border border-amber-400/50">
+                    Reboot Available
+                  </span>
+                ) : null}
+              </div>
+              <div className="font-mono text-sm font-black text-amber-300">
+                {hud.downedRemainingMs > 0 ? `${Math.ceil(hud.downedRemainingMs / 1000)}s BLEEDOUT` : 'REVIVABLE'}
+              </div>
+            </div>
+
+            {/* Middle row: Revive status or instructions */}
+            <div className="mt-2.5">
+              {hud.reviverId ? (
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-bold text-cyan-100">
+                    <span>
+                      {activeReviver?.label || 'Teammate'} is reviving you…
+                    </span>
+                    <span className="font-mono text-cyan-200">{Math.round((hud.reviveProgressMs / 3000) * 100)}%</span>
+                  </div>
+                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded bg-cyan-950/80 border border-cyan-400/30">
+                    <div
+                      className="h-full bg-cyan-300 shadow-[0_0_12px_#67e8f9] transition-[width] duration-100"
+                      style={{ width: `${Math.max(0, Math.min(100, (hud.reviveProgressMs / 3000) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (localSnapshot?.selfRevives ?? 0) > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-bold text-amber-100">
+                    <span>
+                      Hold <span className="font-black text-amber-300 underline">[ F ]</span> to Self-Revive (Emergency Reboot)
+                    </span>
+                    {(localSnapshot?.selfReviveProgressMs ?? 0) > 0 && (
+                      <span className="font-mono text-amber-200">
+                        {Math.round(((localSnapshot?.selfReviveProgressMs ?? 0) / 6000) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded bg-amber-950/80 border border-amber-400/30">
+                    <div
+                      className="h-full bg-amber-300 shadow-[0_0_12px_#f59e0b] transition-[width] duration-100"
+                      style={{ width: `${Math.max(0, Math.min(100, ((localSnapshot?.selfReviveProgressMs ?? 0) / 6000) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-[10px] text-white/60">
+                  <span>A teammate must stand close and hold <span className="font-black text-cyan-200">[ F ]</span> for 3s</span>
+                  <span className="text-white/40 font-mono text-[9px]">BODY PRESERVED</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Eliminated Spectating HUD (Anchored at bottom) */}
+      {!isSpectator && hud.lifeState === 'eliminated' && hud.matchState === 'active' && (
+        <div className="pointer-events-none absolute bottom-6 left-1/2 z-40 w-[min(480px,calc(100vw-2.5rem))] -translate-x-1/2">
+          <div className="border border-rose-400/40 bg-[#12060a]/92 p-3.5 text-center shadow-[0_0_35px_rgba(244,63,94,0.2)] backdrop-blur-xl">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-rose-300">
+              Operative Eliminated · Spectating Squad
+            </div>
+            <div className="mt-1 text-[11px] text-white/65">
+              Watching <span className="font-bold text-fuchsia-200">{spectatedSquadmate?.label || downedSpectatorTarget?.label || 'your squad'}</span>. Left-click to cycle operators.
+            </div>
+          </div>
+        </div>
+      )}
       {hud.matchState !== 'active' && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="w-[min(440px,calc(100vw-2rem))] border border-rose-300/45 bg-[#10070b] p-7 text-center shadow-[0_0_60px_rgba(244,63,94,.2)]"><div className="text-[10px] font-black uppercase tracking-[0.32em] text-rose-200">{hud.matchState === 'solo_defeat' ? 'Run ended' : 'Squad wiped'}</div><h2 className="mt-3 text-3xl font-black text-white">{hud.matchState === 'solo_defeat' ? 'SYSTEM FAILURE' : 'NO OPERATIVES REMAIN'}</h2><p className="mt-3 text-xs leading-relaxed text-white/60">Kills confirmed: {hud.kills}. {launch.role === 'host' ? 'Retry instantly without reconnecting the squad.' : 'Waiting for the host to start the next run.'}</p><div className="mt-6 flex justify-center gap-3">{launch.role === 'host' && <button onClick={retryRun} className="border border-emerald-300/55 bg-emerald-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-100 transition hover:bg-emerald-400/20">Retry run</button>}<button onClick={onExit} className="border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 transition hover:bg-cyan-400/20">Return to lobby</button></div></div></div>}
       {matchSnapshot?.results && <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#03070c]/90 p-4 backdrop-blur-xl"><div className="w-[min(760px,calc(100vw-2rem))] border border-cyan-300/35 bg-[#07111b] p-6 shadow-[0_0_60px_rgba(34,211,238,.16)]"><div className="text-center"><div className={`text-[10px] font-black uppercase tracking-[0.32em] ${matchSnapshot.results.success ? 'text-cyan-200' : 'text-rose-200'}`}>{matchSnapshot.results.success ? 'Squad extracted' : 'Run failed'}</div><h2 className="mt-2 text-3xl font-black text-white">{matchSnapshot.results.success ? 'SECTOR BREACH COMPLETE' : 'SIGNAL LOST'}</h2><p className="mt-2 text-xs text-white/55">{Math.ceil(matchSnapshot.results.durationMs / 60000)} min · {matchSnapshot.results.contractsCompleted} contracts · {matchSnapshot.results.bossesDefeated} bosses</p></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{matchSnapshot.results.players.map(player => <div key={player.playerId} className="border border-white/10 bg-white/[.035] p-3"><div className="flex items-center justify-between"><span className="font-black text-white" style={{ color: player.color }}>{player.label}</span><span className="text-[9px] font-black uppercase tracking-wider text-amber-200">{player.medal}</span></div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]"><span><b className="block text-white">{player.kills}</b><i className="not-italic text-white/45">Kills</i></span><span><b className="block text-white">{Math.round(player.firearmDamage + player.passiveDamage)}</b><i className="not-italic text-white/45">Damage</i></span><span><b className="block text-white">{player.revives}</b><i className="not-italic text-white/45">Revives</i></span></div></div>)}</div><div className="mt-6 text-center"><div className="mb-3 text-[10px] text-white/45">{launch.role === 'host' ? 'Retry starts a new run without reconnecting anyone.' : 'The host can retry without reconnecting anyone.'}</div>{launch.role === 'host' && <button onClick={retryRun} className="mr-3 border border-emerald-300/55 bg-emerald-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/20">Retry run</button>}<button onClick={onExit} className="border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 hover:bg-cyan-400/20">Return to lobby</button></div></div></div>}
       {connectionStatus !== 'connected' && <div className={`absolute left-1/2 top-20 z-30 -translate-x-1/2 border px-4 py-3 text-center text-xs backdrop-blur-sm ${connectionStatus === 'reconnecting' ? 'border-amber-300/45 bg-amber-950/80 text-amber-100' : 'border-red-300/45 bg-red-950/80 text-red-100'}`}><div>{connectionMessage}</div>{connectionStatus === 'disconnected' && <button onClick={onExit} className="mt-2 border border-red-200/35 px-3 py-1 text-[10px] font-black uppercase tracking-wider hover:bg-red-300/10">Back to servers</button>}</div>}
       <button onClick={onExit} aria-label="Leave arena" className="coop-exit absolute"><ArrowLeft size={13} /><span>Leave</span></button>
+    </div>
+  );
+}
+
+/** Radial tactical compass around the center aim crosshair displaying real-time
+ * bearing, distance, and status of squadmates (including emergency revive indicators for downed allies)
+ * as well as active tactical and danger pings. */
+function CoopReticleCompass({
+  localPlayer,
+  players,
+  pings,
+  renderer,
+}: {
+  localPlayer: CoopSnapshot['players'][number];
+  players: CoopSnapshot['players'];
+  pings?: CoopPing[];
+  renderer: MultiplayerRendererBridge | null;
+}) {
+  const [liveAimAngle, setLiveAimAngle] = useState(
+    renderer ? renderer.getAimAngle() : localPlayer.angle
+  );
+
+  useEffect(() => {
+    let animId: number;
+    const update = () => {
+      if (renderer) {
+        setLiveAimAngle(renderer.getAimAngle());
+      }
+      animId = requestAnimationFrame(update);
+    };
+    animId = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(animId);
+  }, [renderer]);
+
+  const teammates = players.filter(
+    player => player.id !== localPlayer.id && player.lifeState !== 'eliminated'
+  );
+  const activePings = (pings || []).filter(ping => ping.playerId !== localPlayer.id);
+
+  if (!teammates.length && !activePings.length) return null;
+
+  const orbitRadius = 54;
+  const badgeRadius = orbitRadius + 18;
+
+  return (
+    <div className="coop-reticle-compass">
+      <div className="coop-reticle-ring" />
+      {/* Squadmates */}
+      {teammates.map(teammate => {
+        const dx = teammate.x - localPlayer.x;
+        const dy = teammate.y - localPlayer.y;
+        const dist = Math.hypot(dx, dy);
+        const distM = Math.max(1, Math.round(dist / 12));
+        const worldAngle = Math.atan2(dy, dx);
+        let relAngle = worldAngle - liveAimAngle;
+        while (relAngle > Math.PI) relAngle -= 2 * Math.PI;
+        while (relAngle < -Math.PI) relAngle += 2 * Math.PI;
+
+        const screenAngle = relAngle - Math.PI / 2;
+        const x = Math.cos(screenAngle) * orbitRadius;
+        const y = Math.sin(screenAngle) * orbitRadius;
+        const chevronRotationDeg = (relAngle * 180) / Math.PI;
+
+        const isDowned = teammate.lifeState === 'downed';
+        const color = isDowned ? '#fbbf24' : teammate.color;
+
+        const badgeX = Math.cos(screenAngle) * badgeRadius;
+        const badgeY = Math.sin(screenAngle) * badgeRadius;
+
+        return (
+          <div
+            key={teammate.id}
+            className={`coop-reticle-node ${isDowned ? 'coop-reticle-node--downed' : ''}`}
+            style={{ color }}
+          >
+            <div
+              className="coop-reticle-chevron"
+              style={{
+                transform: `translate(${x}px, ${y}px) rotate(${chevronRotationDeg}deg)`,
+                color,
+              }}
+            />
+            <div
+              className="coop-reticle-badge"
+              style={{
+                transform: `translate(calc(-50% + ${badgeX}px), calc(-50% + ${badgeY}px))`,
+                color,
+              }}
+            >
+              {isDowned ? (
+                <>
+                  <span className="text-[8px] font-black text-amber-300">✚ REVIVE</span>
+                  <span className="font-bold text-amber-100">{teammate.label.slice(0, 4)}</span>
+                  <span className="font-mono text-[7px] text-amber-200/90">{distM}m</span>
+                </>
+              ) : (
+                <>
+                  <span>{teammate.label.slice(0, 4)}</span>
+                  <span className="font-mono text-[7px] text-white/75">{distM}m</span>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Tactical Pings (Distinct diamond markers) */}
+      {activePings.map(ping => {
+        const pdx = ping.x - localPlayer.x;
+        const pdy = ping.y - localPlayer.y;
+        const pdist = Math.hypot(pdx, pdy);
+        const pdistM = Math.max(1, Math.round(pdist / 12));
+        const pWorldAngle = Math.atan2(pdy, pdx);
+        let pRelAngle = pWorldAngle - liveAimAngle;
+        while (pRelAngle > Math.PI) pRelAngle -= 2 * Math.PI;
+        while (pRelAngle < -Math.PI) pRelAngle += 2 * Math.PI;
+
+        const pScreenAngle = pRelAngle - Math.PI / 2;
+        const pmX = Math.cos(pScreenAngle) * orbitRadius;
+        const pmY = Math.sin(pScreenAngle) * orbitRadius;
+
+        const isDanger = ping.kind === 'enemy' || ping.kind === 'boss';
+        const pColor = isDanger
+          ? '#ef4444'
+          : ping.kind === 'revive'
+          ? '#fbbf24'
+          : ping.kind === 'station'
+          ? '#38bdf8'
+          : ping.playerColor || '#22d3ee';
+
+        const pBadgeX = Math.cos(pScreenAngle) * badgeRadius;
+        const pBadgeY = Math.sin(pScreenAngle) * badgeRadius;
+
+        const pingTag = isDanger
+          ? '⚠️ DANGER'
+          : ping.kind === 'station'
+          ? '🛒 BUY'
+          : ping.kind === 'revive'
+          ? '✚ REVIVE'
+          : '📍 PING';
+
+        return (
+          <div
+            key={`reticle-ping-${ping.id}`}
+            className={`coop-reticle-ping ${isDanger ? 'coop-reticle-ping--danger' : ''}`}
+            style={{ color: pColor }}
+          >
+            <div
+              className="coop-reticle-ping-diamond"
+              style={{
+                transform: `translate(${pmX}px, ${pmY}px) rotate(45deg)`,
+                color: pColor,
+              }}
+            />
+            <div
+              className="coop-reticle-ping-badge"
+              style={{
+                transform: `translate(calc(-50% + ${pBadgeX}px), calc(-50% + ${pBadgeY}px))`,
+                color: pColor,
+              }}
+            >
+              <span>{pingTag}</span>
+              <span className="font-mono text-[7px] text-white/80">{pdistM}m</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -715,16 +1213,59 @@ function CoopMinimap({ snapshot, localPlayer }: { snapshot: CoopSnapshot; localP
   const objective = snapshot.run.objective;
   const boss = snapshot.run.boss;
   const exfil = snapshot.run.exfil;
-  return <div className="coop-minimap pointer-events-none absolute">
+  return <div className="coop-minimap pointer-events-none absolute z-50">
     <div className="coop-minimap__disc relative overflow-hidden rounded-full border border-cyan-400/30 bg-black/65 shadow-[0_0_20px_rgba(0,240,255,.16)] backdrop-blur-sm">
       <div className="absolute inset-2 rounded-full border border-cyan-400/20" /><div className="absolute inset-7 rounded-full border border-cyan-400/15" />
       <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-cyan-400/25" /><div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-cyan-400/25" />
       {threats.map(enemy => { const position = point(enemy.x, enemy.y); return <span key={enemy.id} className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${enemy.type === 'titan' ? 'h-3 w-3 bg-rose-500 shadow-[0_0_10px_#fb7185]' : 'h-1.5 w-1.5 bg-rose-400/90'}`} style={position} />; })}
+      {snapshot.gasZone && (() => {
+        const gasCenter = point(snapshot.gasZone.x, snapshot.gasZone.y);
+        const gasScreenRadius = Math.max(8, (snapshot.gasZone.radius / range) * radarRadius);
+        return (
+          <div
+            title={`Toxic Gas Zone (${snapshot.gasZone.state.toUpperCase()})`}
+            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-400/80 bg-emerald-500/15 shadow-[0_0_12px_rgba(74,222,128,0.35)] pointer-events-none"
+            style={{
+              left: `${gasCenter.left}px`,
+              top: `${gasCenter.top}px`,
+              width: `${gasScreenRadius * 2}px`,
+              height: `${gasScreenRadius * 2}px`,
+            }}
+          >
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-black text-emerald-300 opacity-80">
+              ☣
+            </span>
+          </div>
+        );
+      })()}
       {snapshot.players.filter(player => player.id !== localPlayer.id && player.lifeState !== 'eliminated').map(player => { const position = point(player.x, player.y); return <span key={player.id} className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-white shadow-[0_0_7px_currentColor]" style={{ ...position, backgroundColor: player.color, color: player.color }} />; })}
       {snapshot.buyStations.filter(station => station.active).map(station => { const position = point(station.x, station.y); return <span key={station.id} title="Buy Station" className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-cyan-50 bg-cyan-300 shadow-[0_0_12px_#22d3ee]" style={position} />; })}
       {objective && <span title={objective.title} className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-100 bg-emerald-300 shadow-[0_0_12px_#6ee7b7]" style={point(objective.x, objective.y)} />}
       {boss && <span title={boss.name} className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-rose-100 bg-rose-500 shadow-[0_0_14px_#fb7185] animate-pulse" style={point(boss.x, boss.y)} />}
       {exfil && <span title="Extraction" className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-amber-100 bg-amber-300 shadow-[0_0_13px_#fbbf24]" style={point(exfil.x, exfil.y)} />}
+      {snapshot.pings?.map(ping => {
+        const position = point(ping.x, ping.y);
+        const isDanger = ping.kind === 'enemy' || ping.kind === 'boss';
+        const pingColor = isDanger
+          ? '#ef4444'
+          : ping.kind === 'revive'
+          ? '#fbbf24'
+          : ping.kind === 'station'
+          ? '#38bdf8'
+          : ping.playerColor || '#22d3ee';
+        return (
+          <div key={ping.id} className="absolute pointer-events-none" style={position}>
+            <span
+              className={`absolute -translate-x-1/2 -translate-y-1/2 ${isDanger ? 'h-3.5 w-3.5' : 'h-2.5 w-2.5'} rotate-45 border border-white shadow-[0_0_12px_currentColor]`}
+              style={{ backgroundColor: pingColor, color: pingColor }}
+            />
+            <span
+              className={`absolute -translate-x-1/2 -translate-y-1/2 ${isDanger ? 'h-7 w-7 border-2' : 'h-5 w-5 border'} rounded-full border-current opacity-85 animate-ping`}
+              style={{ color: pingColor }}
+            />
+          </div>
+        );
+      })}
       <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"><span className="h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_9px_#22d3ee]" /><span className="absolute -top-2 h-0 w-0 border-x-[3px] border-x-transparent border-b-[6px] border-b-white" /></div>
     </div>
   </div>;

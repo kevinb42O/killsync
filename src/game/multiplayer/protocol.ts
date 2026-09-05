@@ -48,10 +48,27 @@ export interface MultiplayerStateFrame {
   payload: unknown;
 }
 
+export type CoopPingKind = 'location' | 'enemy' | 'boss' | 'station' | 'objective' | 'revive';
+
+export interface CoopPing {
+  id: number;
+  playerId: string;
+  playerLabel: string;
+  playerColor: string;
+  x: number;
+  y: number;
+  z?: number;
+  kind: CoopPingKind;
+  label: string;
+  createdAtMs: number;
+  expiresAtMs: number;
+  remainingMs?: number;
+}
+
 export interface MultiplayerReliableEvent {
   type: 'event';
   version: number;
-  event: 'ready' | 'spectate' | 'roster' | 'start' | 'cast' | 'revive' | 'station_purchase' | 'leave' | 'error';
+  event: 'ready' | 'spectate' | 'roster' | 'start' | 'cast' | 'revive' | 'station_purchase' | 'leave' | 'error' | 'ping';
   payload?: unknown;
 }
 

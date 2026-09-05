@@ -8,17 +8,18 @@ import { COOP_ENEMY_DEATH_PRESENTATION_MS, COOP_WEAPON_DETAILS, COOP_WEAPON_SLOT
 import { CoopFirearmVisualRig } from '../rendering/coopFirearmVisuals';
 import type { CoopFirearmId } from '../combat/coopFirearms';
 import { COOP_PASSIVE_BY_ID, passiveRadius, type CoopPassiveModuleId } from './CoopPassiveModules';
+import { COOP_UPLINK_RADIUS } from './CoopRunDirector';
 import { CoopTacticalVisuals } from '../rendering/CoopTacticalVisuals';
+import type { CoopPingKind } from './protocol';
+import {
+  type CoopOperatorRig,
+  createCoopOperatorRig,
+  updateCoopOperatorRig,
+  disposeCoopOperatorRig,
+} from '../rendering/coopOperatorVisuals';
+import { OperatorTrailSystem } from '../rendering/OperatorTrailSystem';
 
 type PresentationParticle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; z?: number };
-type RemotePlayerPresentation = {
-  mesh: THREE.Group;
-  firearm: CoopFirearmVisualRig;
-  nameplate: THREE.Sprite;
-  body: THREE.Object3D;
-  visor: THREE.Object3D;
-  downedMarker: THREE.Group;
-};
 
 /**
  * Presents the network snapshot through the established production Renderer3D.
@@ -29,9 +30,10 @@ type RemotePlayerPresentation = {
 export class MultiplayerRendererBridge {
   private readonly renderer = new Renderer3D();
   private readonly tacticalVisuals = new CoopTacticalVisuals(this.renderer.scene);
-  private readonly remotePlayers = new Map<string, RemotePlayerPresentation>();
+  private readonly remotePlayers = new Map<string, CoopOperatorRig>();
   private readonly passiveMeshes = new Map<string, THREE.Group>();
   private readonly localFirearm = new CoopFirearmVisualRig(true);
+  private readonly trailSystem: OperatorTrailSystem;
   private readonly seenCombatEventIds = new Map<number, number>();
   private readonly combatParticles: PresentationParticle[] = [];
   private readonly renderEnemies: Enemy[] = [];
@@ -49,6 +51,9 @@ export class MultiplayerRendererBridge {
   private lastSnapshotTick = -1;
   private visualElapsedMs = 0;
   private readonly predictedFireActions = new Set<number>();
+  private lastLocalZ = 0;
+  private localWasAirborne = false;
+  private localAirborneTimeMs = 0;
 
   constructor() {
     this.renderState = {
@@ -62,6 +67,7 @@ export class MultiplayerRendererBridge {
     // The existing authored sidearm is the handgun. Alternative firearms are
     // mounted beside that exact rig and swap in only when selected.
     this.renderer.fpsWeaponGroup.add(this.localFirearm.group);
+    this.trailSystem = new OperatorTrailSystem(this.renderer.scene);
   }
 
   mount(container: HTMLElement) {
@@ -80,9 +86,119 @@ export class MultiplayerRendererBridge {
   requestPointerLock() { this.renderer.requestPointerLock(); }
   exitPointerLock() { this.renderer.exitPointerLock(); }
   get isPointerLocked() { return this.renderer.isPointerLocked; }
+  canLocalJump() { return this.lastLocalZ <= 0.08; }
   getAimAngle() { return Math.atan2(-Math.cos(this.renderer.yaw), -Math.sin(this.renderer.yaw)); }
   getAimPitch() { return this.renderer.pitch; }
-  /** Immediate local-only feedback. The matching authoritative event is
+
+  /** Calculates the world coordinates and target context for a tactical ping. */
+  calculatePingTarget(snapshot: CoopSnapshot | null, localPlayerId: string): { x: number; y: number; z: number; kind: CoopPingKind; label: string } {
+    const local = snapshot?.players.find(p => p.id === localPlayerId) || snapshot?.players[0];
+    if (!local) return { x: 0, y: 0, z: 0, kind: 'location', label: 'Waypoint' };
+
+    const yaw = this.renderer.yaw;
+    const pitch = this.renderer.pitch;
+    const forwardX = -Math.sin(yaw);
+    const forwardY = -Math.cos(yaw);
+    const aimAngle = this.getAimAngle();
+
+    if (snapshot) {
+      // 1. Boss
+      const boss = snapshot.run.boss;
+      if (boss) {
+        const dx = boss.x - local.x;
+        const dy = boss.y - local.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - aimAngle);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        if (diff < 0.16 && dist < 2600) {
+          return { x: boss.x, y: boss.y, z: 20, kind: 'boss', label: boss.name.toUpperCase() };
+        }
+      }
+
+      // 2. Downed Teammates (Revive Ping)
+      const downed = snapshot.players.filter(p => p.id !== localPlayerId && p.lifeState === 'downed');
+      for (const teammate of downed) {
+        const dx = teammate.x - local.x;
+        const dy = teammate.y - local.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - aimAngle);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        if (diff < 0.18 && dist < 2400) {
+          return { x: teammate.x, y: teammate.y, z: 5, kind: 'revive', label: `REVIVE ${teammate.label.toUpperCase()}` };
+        }
+      }
+
+      // 3. Nearest Hostile within aim cone
+      let bestEnemy: { x: number; y: number; kind: CoopPingKind; label: string; score: number } | null = null;
+      for (const enemy of snapshot.enemies) {
+        if (enemy.dying) continue;
+        const dx = enemy.x - local.x;
+        const dy = enemy.y - local.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 1800) continue;
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - aimAngle);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        if (diff < 0.14) {
+          const score = diff * dist;
+          if (!bestEnemy || score < bestEnemy.score) {
+            bestEnemy = {
+              x: enemy.x,
+              y: enemy.y,
+              kind: 'enemy',
+              label: `HOSTILE (${enemy.type.toUpperCase()})`,
+              score,
+            };
+          }
+        }
+      }
+      if (bestEnemy) {
+        return { x: bestEnemy.x, y: bestEnemy.y, z: 12, kind: bestEnemy.kind, label: bestEnemy.label };
+      }
+
+      // 4. Buy Station
+      for (const station of snapshot.buyStations) {
+        if (!station.active) continue;
+        const dx = station.x - local.x;
+        const dy = station.y - local.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - aimAngle);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        if (diff < 0.16 && dist < 2200) {
+          return { x: station.x, y: station.y, z: 10, kind: 'station', label: 'BUY STATION' };
+        }
+      }
+
+      // 5. Objective / Uplink
+      const objective = snapshot.run.objective;
+      if (objective) {
+        const dx = objective.x - local.x;
+        const dy = objective.y - local.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - aimAngle);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        if (diff < 0.18 && dist < 2500) {
+          return { x: objective.x, y: objective.y, z: 15, kind: 'objective', label: objective.title.toUpperCase() };
+        }
+      }
+    }
+
+    // 6. Ground plane projection or forward look position
+    let targetDist = 650;
+    if (pitch < -0.06) {
+      const camHeight = 36 + (local.z || 0);
+      targetDist = Math.max(50, Math.min(1200, camHeight / Math.tan(-pitch)));
+    }
+    const pingX = Math.round(local.x + forwardX * targetDist);
+    const pingY = Math.round(local.y + forwardY * targetDist);
+    return { x: pingX, y: pingY, z: 0, kind: 'location', label: 'WAYPOINT' };
+  }
+
+  /**
    * deduplicated later; damage and ammo never leave the host simulation. */
   predictLocalFire(weaponId: CoopFirearmId, actionId: number) {
     this.predictedFireActions.add(actionId);
@@ -116,6 +232,18 @@ export class MultiplayerRendererBridge {
     player.level = local.level; player.experience = local.experience; player.experienceToNextLevel = local.experienceToNextLevel;
     player.coins = local.coins; player.pendingDataCores = local.pendingDataCores;
     this.renderer.presentationVerticalOffset = local.z;
+    const currentZ = local.z;
+    if (currentZ > 0.08) {
+      this.localAirborneTimeMs += deltaMs;
+      this.localWasAirborne = true;
+    } else {
+      if (this.localWasAirborne && this.localAirborneTimeMs >= 60) {
+        soundManager.playLanding();
+      }
+      this.localWasAirborne = false;
+      this.localAirborneTimeMs = 0;
+    }
+    this.lastLocalZ = currentZ;
     // Crouches use the same low presentation silhouette as a slide, but do
     // not retain the sprint FOV once the slide key is held.
     this.renderer.presentationSprinting = local.sprinting && !local.sliding && !local.crouching;
@@ -138,7 +266,16 @@ export class MultiplayerRendererBridge {
       player.weapons[0] = this.createSelectedWeapon(selectedWeaponId, local.selectedWeaponLevel);
       player.weapons.length = 1;
     }
-    this.renderState.viewMode = isSpectating ? 'THIRD_PERSON' : 'FIRST_PERSON';
+    // When spectating we keep viewMode FIRST_PERSON so that Renderer3D
+    // renders the camera without the old low-detail thirdPersonPlayerGroup.
+    // The spectated player is instead rendered by their CoopOperatorRig
+    // (see syncRemotePlayers below). We drive renderer.yaw from the network
+    // angle so the chase-behind rig faces the correct direction.
+    if (isSpectating) {
+      // Convert game angle (atan2 XY) → Three.js yaw so camera & rig align.
+      this.renderer.yaw = Math.atan2(-Math.cos(local.angle), -Math.sin(local.angle));
+    }
+    this.renderState.viewMode = 'FIRST_PERSON';
     this.renderState.gameTime = snapshot.elapsedMs;
     this.syncRenderEnemies(snapshot);
     this.syncRenderProjectiles(snapshot);
@@ -153,12 +290,45 @@ export class MultiplayerRendererBridge {
       this.renderState.shops = snapshot.buyStations.filter(station => station.active).map(station => ({ id: `coop-station-${station.id}`, position: { x: station.x, y: station.y }, radius: station.radius }));
       this.renderState.exfillPortal = snapshot.run.exfil ? { position: { x: snapshot.run.exfil.x, y: snapshot.run.exfil.y }, radius: snapshot.run.exfil.radius, active: snapshot.run.phase === 'exfil' } : null;
     }
+    this.renderState.gasZone = snapshot.gasZone;
+
+    // Ambient floating toxic chemical spores when local player is within the gas
+    if (snapshot.gasZone && Math.hypot(local.x - snapshot.gasZone.x, local.y - snapshot.gasZone.y) <= snapshot.gasZone.radius) {
+      if (Math.random() < 0.35 && this.combatParticles.length < 320) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 30 + Math.random() * 180;
+        this.combatParticles.push({
+          x: local.x + Math.cos(angle) * dist,
+          y: local.y + Math.sin(angle) * dist,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 0.5) * 8,
+          life: 0,
+          maxLife: 600 + Math.random() * 400,
+          color: Math.random() < 0.65 ? '#4ade80' : '#a3e635',
+          size: 2.5 + Math.random() * 3,
+          z: 6 + Math.random() * 34,
+        });
+      }
+    }
+
     this.consumeCombatEvents(snapshot.combatEvents, localPlayerId, deltaMs);
     this.renderState.particles = this.combatParticles;
     this.renderState.screenShake = this.presentationShake;
-    this.syncRemotePlayers(snapshot, isSpectating ? spectatorTargetId! : localPlayerId);
+    // Always pass the true localPlayerId so every teammate (including the
+    // spectated player) gets their rich CoopOperatorRig rendered. The caller
+    // no longer uses the old thirdPersonPlayerGroup for spectating.
+    this.syncRemotePlayers(snapshot, localPlayerId);
     this.syncPassiveModules(snapshot);
     this.tacticalVisuals.update(snapshot, this.visualElapsedMs);
+    this.trailSystem.update(snapshot.players, snapshot.elapsedMs, deltaMs);
+
+    // Continuous Tower Mission (Uplink) charging sound
+    const objective = snapshot.run?.objective;
+    const isUplink = objective?.kind === 'uplink' && !objective.completed;
+    const inUplinkCircle = Boolean(isUplink && local.lifeState === 'alive'
+      && Math.hypot(local.x - objective.x, local.y - objective.y) <= COOP_UPLINK_RADIUS);
+    const progressRatio = isUplink && objective.required > 0 ? objective.progress / objective.required : 0;
+    soundManager.updateTowerCharge(inUplinkCircle, progressRatio);
 
     const engine = this.renderState as unknown as GameEngine;
     this.renderer.prepareFrame(engine, deltaMs);
@@ -166,11 +336,16 @@ export class MultiplayerRendererBridge {
   }
 
   destroy() {
+    soundManager.stopTowerCharge();
     this.exitPointerLock();
     this.renderer.renderer.domElement.removeEventListener('pointerdown', this.handleCanvasPointerDown);
     this.localFirearm.dispose();
     this.tacticalVisuals.dispose();
-    for (const remote of this.remotePlayers.values()) { remote.firearm.dispose(); disposeNameplate(remote.nameplate); this.renderer.scene.remove(remote.mesh); }
+    this.trailSystem.dispose();
+    for (const remote of this.remotePlayers.values()) {
+      disposeCoopOperatorRig(remote);
+      this.renderer.scene.remove(remote.root);
+    }
     this.remotePlayers.clear();
     for (const mesh of this.passiveMeshes.values()) { this.renderer.scene.remove(mesh); disposeGroup(mesh); }
     this.passiveMeshes.clear();
@@ -339,6 +514,12 @@ export class MultiplayerRendererBridge {
     } else if (event.kind === 'player_downed') {
       this.spawnBurst(event.x, event.y, '#fb7185', 14, 800, 5);
       if (event.playerId === localPlayerId) this.presentationShake = Math.max(this.presentationShake, 9);
+    } else if (event.kind === 'objective_completed') {
+      this.spawnBurst(event.x, event.y, '#5eead4', 24, 1000, 6);
+      this.presentationShake = Math.max(this.presentationShake, 6);
+      soundManager.playObjectiveComplete();
+    } else if (event.kind === 'round_started') {
+      soundManager.playNewRound();
     } else if (event.kind === 'player_revived') {
       this.spawnBurst(event.x, event.y, '#5eead4', 18, 900, 5.5);
       if (event.playerId === localPlayerId) { this.presentationShake = Math.max(this.presentationShake, 5); soundManager.playLevelUp(); }
@@ -356,8 +537,13 @@ export class MultiplayerRendererBridge {
     } else if (event.kind === 'drop_spawned') {
       this.spawnBurst(event.x, event.y, event.color || '#00ffcc', 4, 520, 3.5);
     } else if (event.kind === 'pickup_collected' && event.playerId === localPlayerId) {
-      this.spawnBurst(event.x, event.y, event.color || '#00ffcc', 5, 420, 3);
-      soundManager.playCollect();
+      if (event.itemType === 'hp') {
+        this.spawnBurst(event.x, event.y, '#ff3366', 14, 600, 4.5);
+        soundManager.playHeal();
+      } else {
+        this.spawnBurst(event.x, event.y, event.color || '#00ffcc', 5, 420, 3);
+        soundManager.playCollect();
+      }
     } else if (event.kind === 'level_up' && event.playerId === localPlayerId) {
       this.spawnBurst(event.x, event.y, event.color || '#67e8f9', 16, 900, 5.5);
       soundManager.playLevelUp();
@@ -404,33 +590,17 @@ export class MultiplayerRendererBridge {
       active.add(player.id);
       let remote = this.remotePlayers.get(player.id);
       if (!remote) {
-        remote = this.createRemotePlayer(player.color, player.label);
-        this.remotePlayers.set(player.id, remote); this.renderer.scene.add(remote.mesh);
+        remote = createCoopOperatorRig(player.color, player.label);
+        this.remotePlayers.set(player.id, remote);
+        this.renderer.scene.add(remote.root);
       }
-      const mesh = remote.mesh;
-      const downed = player.lifeState === 'downed';
-      mesh.visible = player.lifeState !== 'eliminated';
-      mesh.position.set(player.x, player.z, player.y);
-      const lowProfile = player.sliding || player.crouching;
-      mesh.scale.set(1, lowProfile ? 0.62 : 1, lowProfile ? 1.16 : 1);
-      mesh.rotation.y = Math.PI / 2 - player.angle;
-      // Rotate only the body. Tipping the whole avatar group drove its origin
-      // into the city floor, making a still-revivable teammate disappear.
-      mesh.rotation.z = 0;
-      remote.body.position.set(0, downed ? 14 : 29, 0);
-      remote.body.rotation.set(0, 0, downed ? Math.PI / 2 : 0);
-      remote.visor.position.set(downed ? 24 : 0, downed ? 14 : 43, downed ? 0 : 12);
-      remote.visor.rotation.set(0, 0, downed ? Math.PI / 2 : 0);
-      remote.firearm.group.visible = !downed;
-      remote.nameplate.position.set(0, downed ? 32 : 62, 0);
-      remote.downedMarker.visible = downed;
-      if (downed) remote.downedMarker.rotation.y = snapshot.elapsedMs * .0025;
-      const state = player.weaponStates[player.selectedSlot];
-      if (state && !downed) remote.firearm.update(state, snapshot.elapsedMs, 16.666, player.isAiming);
+      updateCoopOperatorRig(remote, player, snapshot.elapsedMs, 16.666);
     }
     for (const [id, remote] of this.remotePlayers) {
       if (active.has(id)) continue;
-      remote.firearm.dispose(); disposeNameplate(remote.nameplate); this.renderer.scene.remove(remote.mesh); this.remotePlayers.delete(id);
+      disposeCoopOperatorRig(remote);
+      this.renderer.scene.remove(remote.root);
+      this.remotePlayers.delete(id);
     }
   }
 
@@ -460,22 +630,6 @@ export class MultiplayerRendererBridge {
       if (active.has(key)) continue;
       this.renderer.scene.remove(mesh); disposeGroup(mesh); this.passiveMeshes.delete(key);
     }
-  }
-
-  private createRemotePlayer(color: string, label: string) {
-    const group = new THREE.Group();
-    const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), emissive: new THREE.Color(color), emissiveIntensity: 0.55, roughness: 0.34 });
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(13, 28, 5, 10), material); body.position.y = 29; group.add(body);
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(18, 7, 4), new THREE.MeshBasicMaterial({ color: 0x67e8f9 })); visor.position.set(0, 43, 12); group.add(visor);
-    const firearm = new CoopFirearmVisualRig(false); group.add(firearm.group);
-    const nameplate = createNameplate(label, color); nameplate.position.set(0, 62, 0); group.add(nameplate);
-    const downedMarker = new THREE.Group();
-    const markerMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: .82, blending: THREE.AdditiveBlending, depthWrite: false });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(31, 1.8, 8, 40), markerMaterial);
-    ring.rotation.x = Math.PI / 2; ring.position.y = 1.5; downedMarker.add(ring);
-    const cross = new THREE.Mesh(new THREE.BoxGeometry(42, 1.4, 2), markerMaterial); cross.position.y = 2; downedMarker.add(cross);
-    downedMarker.visible = false; group.add(downedMarker);
-    return { mesh: group, firearm, nameplate, body, visor, downedMarker };
   }
 }
 
@@ -517,34 +671,4 @@ function disposeGroup(group: THREE.Group) {
     const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
     if (Array.isArray(material)) material.forEach(item => item.dispose()); else material?.dispose();
   });
-}
-
-function createNameplate(label: string, color: string) {
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d')!;
-  const text = label.toUpperCase().slice(0, 16);
-  context.font = '900 34px system-ui, sans-serif';
-  const width = Math.max(150, Math.ceil(context.measureText(text).width + 42));
-  canvas.width = width;
-  canvas.height = 56;
-  context.font = '900 34px system-ui, sans-serif';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillStyle = 'rgba(2, 8, 18, .82)';
-  roundedRect(context, 2, 2, width - 4, 52, 10); context.fill();
-  context.strokeStyle = color; context.globalAlpha = .9; context.lineWidth = 2; roundedRect(context, 2, 2, width - 4, 52, 10); context.stroke();
-  context.globalAlpha = 1; context.fillStyle = '#f8fafc'; context.fillText(text, width / 2, 29);
-  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false }));
-  sprite.scale.set(width * .36, 20, 1);
-  return sprite;
-}
-
-function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
-  context.beginPath(); context.roundRect(x, y, width, height, radius); context.closePath();
-}
-
-function disposeNameplate(sprite: THREE.Sprite) {
-  const material = sprite.material as THREE.SpriteMaterial;
-  material.map?.dispose(); material.dispose();
 }

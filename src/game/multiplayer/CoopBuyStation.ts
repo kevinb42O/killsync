@@ -1,6 +1,6 @@
 import { COOP_PASSIVE_BY_ID, type CoopPassiveModuleId } from './CoopPassiveModules';
 
-export type CoopShopItemId = 'selected_ammo' | 'full_ammo' | 'trauma_patch' | 'emergency_reboot' | 'armor_1' | 'armor_2' | CoopPassiveModuleId;
+export type CoopShopItemId = 'selected_ammo' | 'full_ammo' | 'trauma_patch' | 'emergency_reboot' | 'armor_1' | 'armor_2' | 'gas_mask' | CoopPassiveModuleId;
 
 export interface CoopBuyStationSnapshot {
   id: number;
@@ -21,6 +21,7 @@ export const COOP_SHOP_ITEMS: Readonly<Record<CoopShopItemId, CoopShopItemDefini
   emergency_reboot: { id: 'emergency_reboot', name: 'Emergency Reboot', description: 'One personal six-second self-revive.', cost: 650 },
   armor_1: { id: 'armor_1', name: 'Armor Plating I', description: 'A 50 HP rechargeable protective shield.', cost: 350 },
   armor_2: { id: 'armor_2', name: 'Armor Plating II', description: 'Upgrade your shield to 100 HP.', cost: 700 },
+  gas_mask: { id: 'gas_mask', name: 'Tactical Gas Mask', description: 'CBRN respirator. Takes 100% of toxic gas damage until destroyed.', cost: 350 },
   orbit_drones: { id: 'orbit_drones', name: COOP_PASSIVE_BY_ID.orbit_drones.name, description: COOP_PASSIVE_BY_ID.orbit_drones.description, cost: COOP_PASSIVE_BY_ID.orbit_drones.purchaseCost },
   data_scythe: { id: 'data_scythe', name: COOP_PASSIVE_BY_ID.data_scythe.name, description: COOP_PASSIVE_BY_ID.data_scythe.description, cost: COOP_PASSIVE_BY_ID.data_scythe.purchaseCost },
   void_aura: { id: 'void_aura', name: COOP_PASSIVE_BY_ID.void_aura.name, description: COOP_PASSIVE_BY_ID.void_aura.description, cost: COOP_PASSIVE_BY_ID.void_aura.purchaseCost },
@@ -29,6 +30,6 @@ export const COOP_SHOP_ITEMS: Readonly<Record<CoopShopItemId, CoopShopItemDefini
 });
 
 export const COOP_BUY_STATION_STOCK: readonly CoopShopItemId[] = Object.freeze([
-  'selected_ammo', 'full_ammo', 'trauma_patch', 'emergency_reboot', 'armor_1', 'armor_2',
+  'selected_ammo', 'full_ammo', 'trauma_patch', 'emergency_reboot', 'armor_1', 'armor_2', 'gas_mask',
   'orbit_drones', 'data_scythe', 'void_aura', 'frost_aura', 'neural_pulse',
 ]);

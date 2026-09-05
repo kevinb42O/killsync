@@ -232,6 +232,8 @@ export interface Inventory {
   armorTier: number; // 0=none, 1=tier1, 2=tier2, 3=tier3
   hasRevive: boolean;
   nukeCount: number;
+  gasMaskHp?: number;
+  gasMaskMaxHp?: number;
 }
 
 export interface Shop {

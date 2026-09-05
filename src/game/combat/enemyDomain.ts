@@ -48,7 +48,6 @@ export interface EnemyAttackProfile {
 /** Shared readability contract for solo and co-op. Network authority and
  * damage application remain mode-specific, but timing/range tells do not. */
 export const ENEMY_ATTACK_PROFILES: Partial<Record<EnemyType, EnemyAttackProfile>> = {
-  fast: { kind: 'lunge', minRange: 90, maxRange: 330, radius: 58, windupMs: 480, cooldownMs: 2_700, openingDelayMs: 900, damageMultiplier: 1.25 },
   ranged: { kind: 'artillery', minRange: 180, maxRange: 760, radius: 76, windupMs: 1_000, cooldownMs: 3_300, openingDelayMs: 1_200, damageMultiplier: 1 },
   tank: { kind: 'shockwave', minRange: 0, maxRange: 170, radius: 165, windupMs: 1_100, cooldownMs: 3_400, openingDelayMs: 1_400, damageMultiplier: .87 },
   phantom: { kind: 'ambush', minRange: 150, maxRange: 620, radius: 82, windupMs: 720, cooldownMs: 4_200, openingDelayMs: 1_600, damageMultiplier: 1.35 },
@@ -88,7 +87,7 @@ const SOLO_SPAWN_PACKS: readonly { id: SoloSpawnPackId; unlockMinutes: number; w
   { id: 'swarm', unlockMinutes: 0, weight: 4, members: ['basic', 'basic'] },
   { id: 'swarm', unlockMinutes: 0, weight: 6, members: ['basic', 'basic', 'basic'] },
   { id: 'raiders', unlockMinutes: 2, weight: 3, members: ['fast', 'basic'] },
-  { id: 'raiders', unlockMinutes: 2, weight: 4, members: ['fast', 'fast', 'basic'] },
+  { id: 'raiders', unlockMinutes: 2, weight: 3, members: ['fast', 'basic', 'basic'] },
   { id: 'fireteam', unlockMinutes: 8, weight: 3, members: ['basic', 'ranged'] },
   { id: 'fireteam', unlockMinutes: 8, weight: 3.5, members: ['basic', 'basic', 'ranged'] },
   { id: 'siege', unlockMinutes: 8, weight: 2, members: ['tank', 'ranged'] },
@@ -283,6 +282,40 @@ export function rollCoinDrop(type: EnemyType | 'boss', luck: number, coinDropCha
   if (type === 'tank') return 'coin_silver';
   if (type === 'fast' || type === 'ranged' || type === 'phantom') return random() < 0.2 ? 'coin_silver' : 'coin_bronze';
   return 'coin_bronze';
+}
+
+export const COOP_HEART_DROP_RATES: Record<EnemyType | 'boss', number> = {
+  boss: 1.0,
+  titan: 1.0,
+  elite: 0.25,
+  tank: 0.045,
+  phantom: 0.04,
+  basic: 0.018,
+  fast: 0.018,
+  ranged: 0.018,
+};
+
+export interface CoopHeartDropOptions {
+  playerInjured?: boolean;
+  activeHeartsCount?: number;
+  killsSinceLastHeartDrop?: number;
+}
+
+export function rollCoopHeartDrop(
+  type: EnemyType | 'boss',
+  random: () => number,
+  options: CoopHeartDropOptions = {}
+): boolean {
+  if (type === 'boss' || type === 'titan') return true;
+  const { playerInjured = false, activeHeartsCount = 0, killsSinceLastHeartDrop = 0 } = options;
+  if (activeHeartsCount >= 4) return false;
+  if (playerInjured && killsSinceLastHeartDrop >= 85) return true;
+
+  let baseRate = COOP_HEART_DROP_RATES[type] ?? 0.018;
+  if (playerInjured) baseRate *= 1.4;
+  if (activeHeartsCount >= 2) baseRate *= 0.25;
+
+  return random() < baseRate;
 }
 
 export function rollHolderItem(random: () => number): ItemType {

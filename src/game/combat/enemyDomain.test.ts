@@ -24,6 +24,8 @@ import {
   shouldDropTreasure,
   supplyGuardMultipliers,
   resolveEnemyDamage,
+  rollCoopHeartDrop,
+  COOP_HEART_DROP_RATES,
 } from './enemyDomain';
 
 describe('enemy domain', () => {
@@ -157,4 +159,37 @@ describe('enemy domain', () => {
     expect(getPickupEffect('bomb')).toEqual({ kind: 'bomb', damage: 100 });
     expect(getPickupEffect('data_core')).toEqual({ kind: 'data_core', amount: 1 });
   });
+
+  it('balances co-op full-health heart drops with clutch assists and anti-hoarding caps', () => {
+    // Bosses and titans always drop hearts
+    expect(rollCoopHeartDrop('boss', () => 0.999)).toBe(true);
+    expect(rollCoopHeartDrop('titan', () => 0.999)).toBe(true);
+    expect(rollCoopHeartDrop('boss', () => 0.999, { activeHeartsCount: 10 })).toBe(true);
+
+    // Standard drop thresholds
+    expect(rollCoopHeartDrop('elite', () => 0.24)).toBe(true);
+    expect(rollCoopHeartDrop('elite', () => 0.26)).toBe(false);
+    expect(rollCoopHeartDrop('tank', () => 0.04)).toBe(true);
+    expect(rollCoopHeartDrop('tank', () => 0.05)).toBe(false);
+    expect(rollCoopHeartDrop('basic', () => 0.017)).toBe(true);
+    expect(rollCoopHeartDrop('basic', () => 0.019)).toBe(false);
+
+    // Anti-hoarding cap: 4+ active world hearts suppresses regular enemy drops
+    expect(rollCoopHeartDrop('elite', () => 0, { activeHeartsCount: 4 })).toBe(false);
+    expect(rollCoopHeartDrop('basic', () => 0, { activeHeartsCount: 5 })).toBe(false);
+
+    // Soft throttle: 2+ active world hearts reduces drop rate
+    const normalBasic = COOP_HEART_DROP_RATES.basic; // 0.018
+    expect(rollCoopHeartDrop('basic', () => normalBasic * 0.2, { activeHeartsCount: 2 })).toBe(true);
+    expect(rollCoopHeartDrop('basic', () => normalBasic * 0.3, { activeHeartsCount: 2 })).toBe(false);
+
+    // Low health clutch assist: boosts rate by 1.4x
+    expect(rollCoopHeartDrop('basic', () => normalBasic * 1.3, { playerInjured: true })).toBe(true);
+    expect(rollCoopHeartDrop('basic', () => normalBasic * 1.5, { playerInjured: true })).toBe(false);
+
+    // Pity guarantee: injured squad with 85+ dry kills gets guaranteed heart
+    expect(rollCoopHeartDrop('basic', () => 0.999, { playerInjured: true, killsSinceLastHeartDrop: 85 })).toBe(true);
+    expect(rollCoopHeartDrop('basic', () => 0.999, { playerInjured: false, killsSinceLastHeartDrop: 100 })).toBe(false);
+  });
 });
+

@@ -19,7 +19,7 @@ describe('CoopSimulation firearm authority', () => {
   it('exposes exactly the five dedicated co-op firearms', () => {
     expect(COOP_WEAPON_SLOTS).toEqual(['plasma_gun', 'assault_rifle', 'combat_shotgun', 'sniper_rifle', 'smg']);
     const player = sim().createSnapshot().players[0];
-    expect(player.weaponStates.map(weapon => [weapon.magazineAmmo, weapon.reserveAmmo])).toEqual([[12, 72], [30, 150], [8, 40], [5, 25], [40, 180]]);
+    expect(player.weaponStates.map(weapon => [weapon.magazineAmmo, weapon.reserveAmmo])).toEqual([[12, 72], [60, 240], [8, 40], [5, 25], [60, 240]]);
   });
 
   it('uses magazines, auto reload, and host-side fire cadence', () => {
@@ -110,6 +110,60 @@ describe('CoopSimulation firearm authority', () => {
     expect(snapshot.items).toHaveLength(COOP_MAX_WORLD_ITEMS);
     expect(snapshot.players[0].pendingDataCores).toBe(1);
     expect(snapshot.combatEvents).toContainEqual(expect.objectContaining({ kind: 'pickup_collected', playerId: 'host', itemType: 'data_core', amount: 1 }));
+  });
+
+  it('restores full health when collecting an hp heart item', () => {
+    const simulation = sim();
+    const player = simulation['players'].get('host')!;
+    player.health = 14;
+    expect(player.health).toBe(14);
+    expect(player.maxHealth).toBe(100);
+
+    simulation['spawnItem'](player.x, player.y, 'hp');
+    simulation['updateDrops'](0.1);
+
+    expect(player.health).toBe(player.maxHealth);
+    const snapshot = simulation.createSnapshot();
+    expect(snapshot.combatEvents).toContainEqual(
+      expect.objectContaining({
+        kind: 'pickup_collected',
+        playerId: 'host',
+        itemType: 'hp',
+        amount: 100,
+      })
+    );
+  });
+
+  it('guarantees an hp heart drop when slaying a boss or titan', () => {
+    const simulation = sim();
+    const titan = {
+      id: 999,
+      x: 1000,
+      y: 1000,
+      health: 1,
+      maxHealth: 1000,
+      type: 'titan' as const,
+      color: '#ffffff',
+      radius: 88,
+      damage: 40,
+      speed: 1,
+      experienceValue: 500,
+      hitFlashMs: 0,
+      hitFlashUntilMs: 0,
+      slowMultiplier: 1,
+      isHolder: false,
+      dying: false,
+      deathRemainingMs: 0,
+      targetLeaseUntilMs: 0,
+    };
+    simulation['enemies'].push(titan);
+    simulation['killEnemy'](titan, 'host');
+
+    const snapshot = simulation.createSnapshot();
+    const heartItem = snapshot.items.find(item => item.type === 'hp');
+    expect(heartItem).toBeDefined();
+    expect(heartItem!.x).toBe(1000);
+    expect(heartItem!.y).toBe(1000);
   });
 });
 
@@ -250,6 +304,55 @@ describe('CoopSimulation player lifecycle', () => {
     expect((simulation as any).players.get('host').reviveProgressMs).toBe(0);
   });
 
+  it('allows purchasing a gas mask at a buy station and protects against toxic gas damage', () => {
+    const simulation = sim();
+    const station = simulation.createSnapshot().buyStations[0];
+    const host = (simulation as any).players.get('host');
+    host.coins = 1000;
+    expect(host.gasMaskHp).toBe(0);
+
+    // Position host at station
+    host.x = station.x;
+    host.y = station.y;
+
+    // Purchase gas mask
+    const err = simulation.purchase('host', station.id, 'gas_mask');
+    expect(err).toBeUndefined();
+    expect(host.gasMaskHp).toBe(150);
+    expect(host.gasMaskMaxHp).toBe(150);
+    expect(host.coins).toBe(1000 - 350);
+
+    // Purchasing again while full returns message
+    const err2 = simulation.purchase('host', station.id, 'gas_mask');
+    expect(err2).toBe('Gas Mask already at maximum filter capacity.');
+
+    // Teleport player into toxic gas zone
+    const gas = (simulation as any).gasZone;
+    host.x = gas.x;
+    host.y = gas.y;
+    const initialHealth = host.health;
+
+    // Tick inside gas for 1 second in 50ms steps: gas mask absorbs damage, health remains 100%
+    for (let t = 0; t < 1000; t += 50) simulation.tick(50);
+    expect(host.health).toBe(initialHealth);
+    expect(host.gasMaskHp).toBeLessThan(150);
+    expect(host.gasMaskHp).toBeCloseTo(150 - 3, 0.5);
+
+    // Drain remainder of mask
+    host.gasMaskHp = 0.1;
+    simulation.tick(50);
+    // Mask breaks, emitted event
+    expect(host.gasMaskHp).toBe(0);
+    const events = simulation.createSnapshot().combatEvents;
+    expect(events.some(e => e.kind === 'mask_broken')).toBe(true);
+
+    // Now unprotected in gas: player takes direct health damage at 3 DPS
+    const hpBefore = host.health;
+    for (let t = 0; t < 1000; t += 50) simulation.tick(50);
+    expect(host.health).toBeLessThan(hpBefore);
+    expect(host.health).toBeCloseTo(hpBefore - 3, 0.5);
+  });
+
   it('wipes a squad when no living operative remains', () => {
     const simulation = new CoopSimulation([
       { id: 'host', label: 'Host', color: '#0ff' },
@@ -261,3 +364,64 @@ describe('CoopSimulation player lifecycle', () => {
     expect(simulation.createSnapshot().matchState).toBe('squad_wiped');
   });
 });
+
+describe('CoopSimulation tactical pings', () => {
+  it('adds and serializes tactical pings in world snapshot and emits ping combat event', () => {
+    const simulation = sim();
+    simulation.addPing('host', 250, 400, 0, 'enemy', 'Host pinged Danger');
+
+    const snapshot = simulation.createSnapshot();
+    expect(snapshot.pings).toBeDefined();
+    expect(snapshot.pings?.length).toBe(1);
+    expect(snapshot.pings?.[0]).toMatchObject({
+      playerId: 'host',
+      x: 250,
+      y: 400,
+      kind: 'enemy',
+      label: 'Host pinged Danger',
+    });
+    expect(snapshot.pings?.[0].remainingMs).toBeGreaterThan(6000);
+
+    expect(snapshot.combatEvents).toContainEqual(
+      expect.objectContaining({
+        kind: 'ping',
+        playerId: 'host',
+        x: 250,
+        y: 400,
+      })
+    );
+  });
+
+  it('removes previous ping when a player places a new ping', () => {
+    const simulation = sim();
+    simulation.addPing('host', 100, 100, 0, 'location', 'Old Waypoint');
+    expect(simulation.createSnapshot().pings?.length).toBe(1);
+    expect(simulation.createSnapshot().pings?.[0].label).toBe('Old Waypoint');
+
+    // Placing a new ping replaces the old one
+    simulation.addPing('host', 300, 450, 0, 'enemy', 'Danger');
+    const snapshot = simulation.createSnapshot();
+    expect(snapshot.pings?.length).toBe(1);
+    expect(snapshot.pings?.[0]).toMatchObject({
+      x: 300,
+      y: 450,
+      kind: 'enemy',
+      label: 'Danger',
+    });
+  });
+
+  it('expires pings over simulation tick time', () => {
+    const simulation = sim();
+    simulation.addPing('host', 100, 100, 0, 'location', 'Waypoint');
+    expect(simulation.createSnapshot().pings?.length).toBe(1);
+
+    // Advance simulation past 6.5s expiration duration (tick clamps at 50ms)
+    for (let elapsed = 0; elapsed < 7000; elapsed += 50) {
+      simulation.tick(50);
+    }
+
+    const snapshot = simulation.createSnapshot();
+    expect(snapshot.pings?.length).toBe(0);
+  });
+});
+

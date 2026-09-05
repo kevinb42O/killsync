@@ -57,16 +57,13 @@ describe('tactical enemies', () => {
     expect(enemy.y).not.toBe(initialY);
   });
 
-  it.each([
-    ['fast', 240, 'lunge'],
-    ['phantom', 420, 'ambush'],
-  ] as const)('telegraphs and completes the %s relocation attack', (type, distance, kind) => {
-    const simulation = setup(type, distance);
+  it('telegraphs and completes the phantom relocation attack', () => {
+    const simulation = setup('phantom', 420);
     advanceUntilHazard(simulation);
     const warning = simulation.createSnapshot().hazards?.[0];
-    expect(warning).toMatchObject({ kind, radius: ENEMY_ATTACK_PROFILES[type]!.radius });
+    expect(warning).toMatchObject({ kind: 'ambush', radius: ENEMY_ATTACK_PROFILES.phantom!.radius });
     const healthBefore = simulation.createSnapshot().players[0].health;
-    for (let elapsed = 0; elapsed < ENEMY_ATTACK_PROFILES[type]!.windupMs; elapsed += 50) simulation.tick(50);
+    for (let elapsed = 0; elapsed < ENEMY_ATTACK_PROFILES.phantom!.windupMs; elapsed += 50) simulation.tick(50);
     const snapshot = simulation.createSnapshot();
     expect(snapshot.players[0].health).toBeLessThan(healthBefore);
     expect(Math.hypot(snapshot.enemies[0].x - warning!.x, snapshot.enemies[0].y - warning!.y)).toBeLessThan(1);

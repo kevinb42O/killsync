@@ -22,6 +22,7 @@ type Join = {
 
 type Room = {
   id: string;
+  code?: string;
   hostToken: string;
   hostName: string;
   maxPlayers: number;
@@ -31,7 +32,7 @@ type Room = {
   joins: Map<string, Join>;
 };
 
-export type PublicRoom = Pick<Room, 'id' | 'hostName' | 'maxPlayers' | 'playerCount' | 'state'>;
+export type PublicRoom = Pick<Room, 'id' | 'code' | 'hostName' | 'maxPlayers' | 'playerCount' | 'state'>;
 
 const rooms = new Map<string, Room>();
 const requestRates = new Map<string, { startedAt: number; count: number }>();
@@ -72,8 +73,10 @@ export function createMultiplayerRouter() {
     if (rooms.size >= MAX_ROOMS) return response.status(503).json({ error: 'Lobby service is full. Try again shortly.' });
     const hostName = cleanName(request.body?.hostName) || 'OPERATIVE';
     const maxPlayers = Math.max(2, Math.min(4, Number(request.body?.maxPlayers) || 4));
+    const code = cleanCode(request.body?.code);
+    const id = cleanId(request.body?.id) || (code ? `room-${code.toLowerCase()}` : shortId('room'));
     const room: Room = {
-      id: shortId('room'), hostToken: token(), hostName, maxPlayers, playerCount: 1,
+      id, code: code || id, hostToken: token(), hostName, maxPlayers, playerCount: 1,
       state: 'waiting', updatedAt: Date.now(), joins: new Map(),
     };
     rooms.set(room.id, room);
@@ -161,10 +164,12 @@ function guestJoin(roomId: string, requestId: string, authorization?: string) {
   return join && authorization === `Bearer ${join.token}` ? join : undefined;
 }
 
-function publicRoom(room: Room): PublicRoom { return { id: room.id, hostName: room.hostName, maxPlayers: room.maxPlayers, playerCount: room.playerCount, state: room.state }; }
+function publicRoom(room: Room): PublicRoom { return { id: room.id, code: room.code, hostName: room.hostName, maxPlayers: room.maxPlayers, playerCount: room.playerCount, state: room.state }; }
 function shortId(prefix: string) { return `${prefix}-${crypto.randomBytes(5).toString('base64url')}`; }
 function token() { return crypto.randomBytes(24).toString('base64url'); }
 function cleanName(value: unknown) { return typeof value === 'string' ? value.replace(/[^a-z0-9 _-]/gi, '').trim().slice(0, 24) : ''; }
+function cleanCode(value: unknown) { return typeof value === 'string' ? value.replace(/[^a-z0-9-]/gi, '').trim().toUpperCase().slice(0, 16) : ''; }
+function cleanId(value: unknown) { return typeof value === 'string' ? value.replace(/[^a-z0-9-]/gi, '').trim().slice(0, 32) : ''; }
 function purgeExpired() {
   const now = Date.now();
   for (const room of rooms.values()) {

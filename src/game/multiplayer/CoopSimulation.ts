@@ -1,4 +1,5 @@
-import { MultiplayerInputFrame } from './protocol';
+import { CoopPing, CoopPingKind, MultiplayerInputFrame } from './protocol';
+export type { CoopPing, CoopPingKind } from './protocol';
 import { GAME_WIDTH } from '../../constants';
 import { COOP_FIREARM_BY_ID, COOP_FIREARM_DEFINITIONS, COOP_WEAPON_SLOTS as FIREARM_SLOTS, createCoopWeaponRuntime, firearmDamage, firearmFireInterval, firearmSpread, type AmmoType, type CoopFirearmId, type CoopWeaponRuntime } from '../combat/coopFirearms';
 import {
@@ -13,6 +14,8 @@ import {
   type ItemType,
   rollCoinDrop,
   rollHolderItem,
+  rollCoopHeartDrop,
+  ITEM_HOLDER_CHANCE,
 } from '../combat/enemyDomain';
 import { isWorldPositionClear, resolveWorldCollisions } from '../world/WorldLayout';
 import { buildEncounterClusters, EncounterDirector, type EncounterDirectorSnapshot, type EncounterOrder, type EncounterPlayer, type EncounterRoundEvent } from './EncounterDirector';
@@ -24,6 +27,7 @@ import { awardMedals, createRunStats, type CoopPlayerRunStats, type CoopRunResul
 import { advancePlayerMovement, COOP_PLAYER_RADIUS, type PlayerMotionState } from './playerMovement';
 import { findEnemyDetour, hasClearAttackPath, moveTacticalEnemy } from './enemyTactics';
 import { SpatialHash } from './SpatialHash';
+import { CoopGasZone, GAS_DPS, type CoopGasZoneSnapshot } from './CoopGasZone';
 
 /** Multiplayer shares the production city's physical 12 km square. */
 export const COOP_WORLD_SIZE = GAME_WIDTH;
@@ -114,6 +118,8 @@ export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   selfReviveProgressMs: number;
   armorTier: number;
   armorHp: number;
+  gasMaskHp: number;
+  gasMaskMaxHp: number;
   passiveModules: CoopPassiveSnapshot[];
   lastProcessedInput?: number;
   lastProcessedFireAction?: number;
@@ -174,7 +180,7 @@ export interface CoopItemSnapshot {
 }
 export interface CoopAmmoCacheSnapshot { id: number; x: number; y: number; ammoType: AmmoType; amount: number; color: string; }
 
-export type CoopCombatEventKind = 'enemy_hit' | 'enemy_killed' | 'damage_number' | 'drop_spawned' | 'pickup_collected' | 'level_up' | 'weapon_upgraded' | 'weapon_fired' | 'reload_started' | 'reload_shell_loaded' | 'reload_finished' | 'empty_fire' | 'ammo_collected' | 'player_damaged' | 'player_downed' | 'player_revived' | 'player_eliminated' | 'revive_started' | 'squad_wiped' | 'solo_defeat' | 'station_online' | 'station_purchase' | 'objective_started' | 'objective_completed' | 'boss_spawned' | 'boss_defeated' | 'boss_ability' | 'exfil_deployed' | 'passive_triggered' | 'self_revived' | 'round_started' | 'round_completed';
+export type CoopCombatEventKind = 'enemy_hit' | 'enemy_killed' | 'damage_number' | 'drop_spawned' | 'pickup_collected' | 'level_up' | 'weapon_upgraded' | 'weapon_fired' | 'reload_started' | 'reload_shell_loaded' | 'reload_finished' | 'empty_fire' | 'ammo_collected' | 'player_damaged' | 'player_downed' | 'player_revived' | 'player_eliminated' | 'revive_started' | 'squad_wiped' | 'solo_defeat' | 'station_online' | 'station_purchase' | 'objective_started' | 'objective_completed' | 'boss_spawned' | 'boss_defeated' | 'boss_ability' | 'exfil_deployed' | 'passive_triggered' | 'self_revived' | 'round_started' | 'round_completed' | 'gas_warning' | 'gas_spread' | 'mask_broken' | 'mask_damaged' | 'gas_damaged' | 'ping';
 
 /** A replay-safe presentation event. It is also repeated in snapshots briefly
  * so packet loss cannot suppress feedback on a guest. */
@@ -228,13 +234,15 @@ export interface CoopSnapshot {
   matchState: CoopMatchState;
   run: CoopRunSnapshot;
   buyStations: CoopBuyStationSnapshot[];
+  gasZone?: CoopGasZoneSnapshot;
   results?: CoopRunResultsSnapshot;
   /** Present on current authoritative snapshots; optional for backward-compatible replay frames. */
   encounter?: EncounterDirectorSnapshot;
   hazards?: CoopHazardSnapshot[];
+  pings?: CoopPing[];
 }
 
-type CoopPlayer = CoopPlayerSnapshot & { verticalVelocity: number; lastJumpSequence: number; lastReloadSequence: number; lastFireActionId: number; slideAngle: number; aimPitch: number; previousFiring: boolean; shotSequence: number; lastDamageEventAtMs: number; passiveRuntime: CoopPassiveRuntime[]; lastArmorDamageAtMs: number };
+type CoopPlayer = CoopPlayerSnapshot & { verticalVelocity: number; lastJumpSequence: number; lastReloadSequence: number; lastFireActionId: number; slideAngle: number; aimPitch: number; previousFiring: boolean; shotSequence: number; lastDamageEventAtMs: number; passiveRuntime: CoopPassiveRuntime[]; lastArmorDamageAtMs: number; lastGasNoticeAtMs: number };
 type CoopEnemy = CoopEnemySnapshot & { hitFlashUntilMs: number; deathUntilMs?: number; killedByPlayerId?: string; targetLeaseUntilMs: number; nextAttackAtMs?: number };
 type CoopProjectile = CoopProjectileSnapshot & {
   verticalVelocity: number;
@@ -263,6 +271,8 @@ export class CoopSimulation {
   private ammoCaches: CoopAmmoCacheSnapshot[] = [];
   private combatEvents: CoopCombatEvent[] = [];
   private hazards: Array<CoopHazardSnapshot & { damage: number; resolved: boolean }> = [];
+  private pings: CoopPing[] = [];
+  private nextPingId = 1;
   private matchState: CoopMatchState = 'active';
   private nextEntityId = 1;
   private nextCombatEventId = 1;
@@ -271,6 +281,7 @@ export class CoopSimulation {
   private readonly runDirector: CoopRunDirector;
   private readonly spawnTopology = new SpawnTopology();
   private readonly stations: CoopBuyStationSnapshot[] = [];
+  private readonly gasZone: CoopGasZone;
   private readonly runStats = new Map<string, CoopPlayerRunStats>();
   private nextScenarioAtMs = 0;
   private bossEnemyId?: number;
@@ -280,6 +291,7 @@ export class CoopSimulation {
   private elapsedMs = 0;
   private simulationTick = 0;
   private kills = 0;
+  private killsSinceLastHeartDrop = 0;
 
   constructor(players: CoopPlayerSeed[], seed: number = 0xdecafbad) {
     this.randomState = seed >>> 0;
@@ -287,6 +299,7 @@ export class CoopSimulation {
     // topology-aware director begins after a brief safe insertion instead.
     this.encounterDirector = new EncounterDirector(seed, COOP_SAFE_INSERTION_MS);
     this.runDirector = new CoopRunDirector(seed);
+    this.gasZone = new CoopGasZone(this.squadCentre(), seed);
     players.forEach(player => this.addPlayer(player));
     // A station must exist from the first playable second. It gives friends a
     // clear rally point, lets us validate its world beacon immediately, and
@@ -305,8 +318,8 @@ export class CoopSimulation {
       level: 1, experience: 0, experienceToNextLevel: getRunXPRequired(1), coins: 0, pendingDataCores: 0,
       weaponStates, weaponLevels: weaponStates.map(state => state.level), selectedWeaponLevel: 1, selectedWeaponId: 'plasma_gun', isAiming: false, isReloading: false, isSwitching: false,
       lifeState: 'alive', downedRemainingMs: 0, reviveProgressMs: 0, invulnerableRemainingMs: 0,
-      selfRevives: 0, selfReviveProgressMs: 0, armorTier: 0, armorHp: 0, passiveModules: [],
-      verticalVelocity: 0, lastJumpSequence: -1, lastReloadSequence: -1, lastFireActionId: 0, slideAngle: 0, aimPitch: 0, previousFiring: false, shotSequence: 0, lastDamageEventAtMs: -Infinity, passiveRuntime: [], lastArmorDamageAtMs: -Infinity,
+      selfRevives: 0, selfReviveProgressMs: 0, armorTier: 0, armorHp: 0, gasMaskHp: 0, gasMaskMaxHp: 150, passiveModules: [],
+      verticalVelocity: 0, lastJumpSequence: -1, lastReloadSequence: -1, lastFireActionId: 0, slideAngle: 0, aimPitch: 0, previousFiring: false, shotSequence: 0, lastDamageEventAtMs: -Infinity, passiveRuntime: [], lastArmorDamageAtMs: -Infinity, lastGasNoticeAtMs: -Infinity,
     });
     this.runStats.set(player.id, createRunStats(player.id));
     return true;
@@ -339,6 +352,7 @@ export class CoopSimulation {
     const seconds = dt / 1000;
     this.elapsedMs += dt;
     this.simulationTick++;
+    this.pings = this.pings.filter(ping => ping.expiresAtMs > this.elapsedMs);
 
     if (this.matchState !== 'active' || this.results) {
       this.combatEvents = this.combatEvents.filter(event => this.elapsedMs - event.atMs <= COMBAT_EVENT_RETENTION_MS);
@@ -370,6 +384,20 @@ export class CoopSimulation {
       if (player.armorTier > 0 && this.elapsedMs - player.lastArmorDamageAtMs >= 3_000) {
         player.armorHp = Math.min(maxArmorHp(player.armorTier), player.armorHp + dt * .024);
       }
+      if (player.lifeState === 'alive' && this.gasZone.isInsideGas(player.x, player.y, PLAYER_RADIUS)) {
+        const gasDamage = (GAS_DPS * dt) / 1000;
+        if (player.gasMaskHp > 0) {
+          const prevMask = player.gasMaskHp;
+          player.gasMaskHp = Math.max(0, player.gasMaskHp - gasDamage);
+          if (player.gasMaskHp <= 0 && prevMask > 0) {
+            this.emitCombatEvent({ kind: 'mask_broken', x: player.x, y: player.y, playerId: player.id, color: '#fb7185' });
+          } else if (Math.random() < 0.03) {
+            this.emitCombatEvent({ kind: 'mask_damaged', x: player.x, y: player.y, playerId: player.id, color: '#22d3ee' });
+          }
+        } else {
+          this.applyGasDamage(player, gasDamage);
+        }
+      }
       if (input) {
         player.lastProcessedInput = input.sequence;
         advancePlayerMovement(player, input, dt);
@@ -392,6 +420,13 @@ export class CoopSimulation {
     }
 
     this.updateRun(dt);
+    const gasEvent = this.gasZone.tick(dt, this.elapsedMs);
+    if (gasEvent.warningTriggered) {
+      this.emitCombatEvent({ kind: 'gas_warning', x: this.gasZone.x, y: this.gasZone.y, color: '#f59e0b', amount: 30 });
+    }
+    if (gasEvent.spreadTriggered) {
+      this.emitCombatEvent({ kind: 'gas_spread', x: this.gasZone.x, y: this.gasZone.y, color: '#4ade80', amount: this.gasZone.radius });
+    }
     if (this.results) return;
     this.updatePassiveModules();
     this.scheduleEncounters();
@@ -410,7 +445,6 @@ export class CoopSimulation {
       // A clear-path result has no tactical effect outside the ability's
       // maximum range, so never ray-march across kilometres of city.
       const needsAttackPath = (enemy.type === 'ranged' && distance <= ENEMY_ATTACK_PROFILES.ranged!.maxRange)
-        || (enemy.type === 'fast' && distance <= ENEMY_ATTACK_PROFILES.fast!.maxRange)
         || (enemy.type === 'phantom' && distance <= ENEMY_ATTACK_PROFILES.phantom!.maxRange)
         || (enemy.type === 'elite' && distance <= ENEMY_ATTACK_PROFILES.elite!.maxRange);
       if (needsAttackPath && this.elapsedMs >= (navigation.nextPathCheckAtMs || 0)) {
@@ -442,10 +476,6 @@ export class CoopSimulation {
       } else if (enemy.type === 'tank' && distance >= ENEMY_ATTACK_PROFILES.tank!.minRange && distance <= ENEMY_ATTACK_PROFILES.tank!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0)) {
         const attack = ENEMY_ATTACK_PROFILES.tank!;
         this.queueHazard(enemy, attack.kind, enemy.x, enemy.y, attack.radius, enemy.damage * attack.damageMultiplier, attack.windupMs, '#fbbf24');
-        enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
-      } else if (enemy.type === 'fast' && distance >= ENEMY_ATTACK_PROFILES.fast!.minRange && distance <= ENEMY_ATTACK_PROFILES.fast!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
-        const attack = ENEMY_ATTACK_PROFILES.fast!;
-        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, Math.max(12, enemy.damage * attack.damageMultiplier), attack.windupMs, '#f59e0b');
         enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
       } else if (enemy.type === 'phantom' && distance >= ENEMY_ATTACK_PROFILES.phantom!.minRange && distance <= ENEMY_ATTACK_PROFILES.phantom!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
         const attack = ENEMY_ATTACK_PROFILES.phantom!;
@@ -552,10 +582,45 @@ export class CoopSimulation {
       matchState: this.matchState,
       run: this.runDirector.snapshot(Math.round(this.elapsedMs)),
       buyStations: this.stations.map(station => ({ ...station, stock: [...station.stock] })),
+      gasZone: this.gasZone.snapshot(Math.round(this.elapsedMs)),
       results: this.results && { ...this.results, players: this.results.players.map(player => ({ ...player, passiveDamageById: { ...player.passiveDamageById } })) },
       encounter: this.encounterDirector.snapshot(buildEncounterClusters(this.encounterPlayers(), this.encounterEnemies()).length),
       hazards: this.hazards.map(({ damage: _damage, resolved: _resolved, ...hazard }) => ({ ...hazard })),
+      pings: this.pings.map(ping => ({
+        ...ping,
+        remainingMs: Math.max(0, ping.expiresAtMs - Math.round(this.elapsedMs)),
+      })),
     };
+  }
+
+  addPing(playerId: string, x: number, y: number, z: number = 0, kind: CoopPingKind = 'location', label: string = 'Waypoint'): CoopPing | undefined {
+    const player = this.players.get(playerId);
+    if (!player) return undefined;
+    // Making a ping removes any previous ping from this player
+    this.pings = this.pings.filter(p => p.playerId !== playerId);
+    if (this.pings.length >= 10) this.pings.shift();
+    const ping: CoopPing = {
+      id: this.nextPingId++,
+      playerId,
+      playerLabel: player.label,
+      playerColor: player.color,
+      x: Math.round(x),
+      y: Math.round(y),
+      z: Math.round(z),
+      kind,
+      label,
+      createdAtMs: Math.round(this.elapsedMs),
+      expiresAtMs: Math.round(this.elapsedMs) + 6500,
+    };
+    this.pings.push(ping);
+    this.emitCombatEvent({
+      kind: 'ping',
+      x: ping.x,
+      y: ping.y,
+      playerId,
+      color: kind === 'enemy' || kind === 'boss' ? '#ef4444' : kind === 'revive' ? '#fbbf24' : player.color,
+    });
+    return ping;
   }
 
   /** Reliable purchase entry point. The WebRTC/UI layer supplies only intent;
@@ -597,6 +662,9 @@ export class CoopSimulation {
       if (player.armorTier < 1) return 'Armor Plating I is required first.';
       if (player.armorTier >= 2) return 'Armor Plating II already installed.';
       player.armorTier = 2; player.armorHp = maxArmorHp(2);
+    } else if (itemId === 'gas_mask') {
+      if (player.gasMaskHp >= player.gasMaskMaxHp && player.gasMaskHp > 0) return 'Gas Mask already at maximum filter capacity.';
+      player.gasMaskHp = 150; player.gasMaskMaxHp = 150;
     } else if (isPassiveModule(itemId)) {
       const owned = player.passiveRuntime.find(module => module.id === itemId);
       if (owned) {
@@ -747,7 +815,7 @@ export class CoopSimulation {
           resolveWorldCollisions(position, PLAYER_RADIUS); player.x = position.x; player.y = position.y;
         } else this.damagePlayer(player, hazard.damage, hazard.x, hazard.y);
       }
-      if (hazard.kind === 'lunge' || hazard.kind === 'ambush') {
+      if (hazard.kind === 'ambush') {
         const source = this.enemies.find(enemy => enemy.id === hazard.enemyId && !enemy.dying);
         if (source && isWorldPositionClear(hazard.x, hazard.y, source.radius)) { source.x = hazard.x; source.y = hazard.y; }
       }
@@ -840,6 +908,29 @@ export class CoopSimulation {
     if (this.elapsedMs - player.lastDamageEventAtMs >= 240 || player.health <= 0) {
       player.lastDamageEventAtMs = this.elapsedMs;
       this.emitCombatEvent({ kind: 'player_damaged', x: sourceX, y: sourceY, playerId: player.id, amount, color: '#fb7185' });
+    }
+    if (player.health <= 0) this.downPlayer(player);
+  }
+
+  /** Toxic inhalation directly chips vitality, bypassing kinetic armor and
+   * pacing visual alerts so players are not overwhelmed by screen flashes. */
+  private applyGasDamage(player: CoopPlayer, amount: number) {
+    if (this.matchState !== 'active' || player.lifeState !== 'alive' || player.invulnerableRemainingMs > 0 || amount <= 0) return;
+    this.cancelRevivesBy(player.id);
+    player.health = Math.max(0, player.health - amount);
+    const stats = this.runStats.get(player.id);
+    if (stats) stats.damageTaken += amount;
+
+    if (this.elapsedMs - player.lastGasNoticeAtMs >= 1500 || player.health <= 0) {
+      player.lastGasNoticeAtMs = this.elapsedMs;
+      this.emitCombatEvent({
+        kind: 'gas_damaged',
+        x: player.x,
+        y: player.y,
+        playerId: player.id,
+        amount: Math.round(GAS_DPS * 1.5),
+        color: '#4ade80',
+      });
     }
     if (player.health <= 0) this.downPlayer(player);
   }
@@ -1065,6 +1156,20 @@ export class CoopSimulation {
       const coin = rollCoinDrop(enemy.type, 1, 0.22, () => this.random());
       if (coin) this.spawnItem(enemy.x, enemy.y, coin, playerId);
     }
+
+    this.killsSinceLastHeartDrop++;
+    const activeHeartsCount = this.items.filter(item => item.type === 'hp').length;
+    const playerInjured = [...this.players.values()].some(p => p.health > 0 && p.health <= p.maxHealth * 0.40);
+    const dropHeart = rollCoopHeartDrop(enemy.type, () => this.random(), {
+      playerInjured,
+      activeHeartsCount,
+      killsSinceLastHeartDrop: this.killsSinceLastHeartDrop,
+    });
+    if (dropHeart) {
+      this.spawnItem(enemy.x, enemy.y, 'hp', playerId);
+      this.killsSinceLastHeartDrop = 0;
+    }
+
     if (enemy.id === this.bossEnemyId) this.onBossKilled(enemy);
     if (this.runDirector.completeEliteTarget(enemy.id)) this.onObjectiveCompleted(this.squadCentre());
   }
@@ -1179,7 +1284,7 @@ export class CoopSimulation {
   private collectItem(item: CoopItemSnapshot, player: CoopPlayer) {
     const effect = getPickupEffect(item.type, item.value);
     if (effect.kind === 'heal') {
-      player.health = Math.min(player.maxHealth, player.health + effect.amount);
+      player.health = player.maxHealth;
     } else if (effect.kind === 'coins') {
       player.coins += effect.amount;
       const stats = this.runStats.get(player.id); if (stats) stats.creditsEarned += effect.amount;
@@ -1192,7 +1297,8 @@ export class CoopSimulation {
     } else {
       player.pendingDataCores += effect.amount;
     }
-    this.emitCombatEvent({ kind: 'pickup_collected', x: item.x, y: item.y, playerId: player.id, itemType: item.type, amount: item.value, color: item.color });
+    const eventAmount = item.type === 'hp' ? player.maxHealth : item.value;
+    this.emitCombatEvent({ kind: 'pickup_collected', x: item.x, y: item.y, playerId: player.id, itemType: item.type, amount: eventAmount, color: item.color });
   }
 
   private addExperience(player: CoopPlayer, amount: number) {
@@ -1221,7 +1327,7 @@ export class CoopSimulation {
       id: this.nextEntityId++, x: position.x, y: position.y, health: definition.health * healthMultiplier, maxHealth: definition.health * healthMultiplier,
       type, color: definition.color, radius: definition.radius, damage: definition.damage * damageMultiplier, speed: definition.speed,
       experienceValue: Math.round(definition.xp * (.75 + healthMultiplier * .25)), hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1,
-      isHolder: false, dying: false, deathRemainingMs: 0,
+      isHolder: this.random() > 1 - ITEM_HOLDER_CHANCE, dying: false, deathRemainingMs: 0,
       targetPlayerId, spawnPacketId: packetId, targetLeaseUntilMs: this.elapsedMs + 2_500,
       nextAttackAtMs: this.elapsedMs + enemyOpeningDelay(type),
     });
@@ -1375,9 +1481,9 @@ function enemyOpeningDelay(type: keyof typeof ENEMY_TYPES) {
   return ENEMY_ATTACK_PROFILES[type]?.openingDelayMs || 0;
 }
 function enemyAmmoDropChance(type: keyof typeof ENEMY_TYPES) {
-  if (type === 'tank') return .30;
-  if (type === 'fast' || type === 'ranged' || type === 'phantom') return .18;
-  return .10;
+  if (type === 'tank') return .32;
+  if (type === 'fast' || type === 'ranged' || type === 'phantom') return .22;
+  return .14;
 }
 function closestDrop<T extends { x: number; y: number }>(drops: readonly T[], x: number, y: number): T | undefined {
   let closest: T | undefined;

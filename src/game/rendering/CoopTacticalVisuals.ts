@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { CoopSnapshot } from '../multiplayer/CoopSimulation';
+import type { CoopPing, CoopSnapshot } from '../multiplayer/CoopSimulation';
 import { COOP_UPLINK_RADIUS } from '../multiplayer/CoopRunDirector';
 
 export class CoopTacticalVisuals {
@@ -60,6 +60,29 @@ export class CoopTacticalVisuals {
       marker.scale.setScalar(hazard.radius * (.10 + progress * .055));
       marker.material.opacity = detonated ? 0 : .35 + progress * .6;
     }
+    for (const ping of snapshot.pings || []) {
+      const key = `ping-${ping.id}`;
+      active.add(key);
+      const zone = this.getPingZone(key, ping);
+      zone.position.set(ping.x, 2, ping.y);
+      const remaining = Math.max(0, Math.min(1, (ping.expiresAtMs - elapsedMs) / 1500));
+      const pulse = 0.85 + Math.sin(elapsedMs * 0.008) * 0.15;
+      const ring = zone.getObjectByName('ring') as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+      if (ring) {
+        ring.scale.setScalar(24 * pulse);
+        ring.material.opacity = 0.8 * remaining;
+      }
+      const marker = zone.getObjectByName('marker') as THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshBasicMaterial>;
+      if (marker) {
+        marker.position.y = 24 + Math.sin(elapsedMs * 0.005) * 4;
+        marker.rotation.y = elapsedMs * 0.003;
+        marker.material.opacity = 0.9 * remaining;
+      }
+      const beam = zone.getObjectByName('beam') as THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
+      if (beam) {
+        beam.material.opacity = 0.35 * remaining * pulse;
+      }
+    }
     for (const [key, zone] of this.zones) {
       if (active.has(key)) continue;
       this.disposeZone(zone); this.zones.delete(key);
@@ -97,6 +120,47 @@ export class CoopTacticalVisuals {
       signal.name = 'signal'; signal.position.y = 125; group.add(signal);
     }
     this.scene.add(group); this.zones.set(key, group); return group;
+  }
+
+  private getPingZone(key: string, ping: CoopPing) {
+    const existing = this.zones.get(key);
+    if (existing) return existing;
+    const group = new THREE.Group();
+    const color = ping.kind === 'enemy' || ping.kind === 'boss'
+      ? '#ef4444'
+      : ping.kind === 'revive'
+      ? '#fbbf24'
+      : ping.kind === 'station'
+      ? '#38bdf8'
+      : ping.playerColor || '#22d3ee';
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.85, 1, 32),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
+    );
+    ring.name = 'ring';
+    ring.rotation.x = -Math.PI / 2;
+    group.add(ring);
+
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.2, 3.2, 90, 8, 1, true),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
+    );
+    beam.name = 'beam';
+    beam.position.y = 45;
+    group.add(beam);
+
+    const marker = new THREE.Mesh(
+      new THREE.OctahedronGeometry(6, 0),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false })
+    );
+    marker.name = 'marker';
+    marker.position.y = 24;
+    group.add(marker);
+
+    this.scene.add(group);
+    this.zones.set(key, group);
+    return group;
   }
 
   private disposeZone(zone: THREE.Group) {
