@@ -1,4 +1,4 @@
-import type { EnemyType, ItemType, TreasureTier } from './game/combat/enemyDomain';
+import type { EnemyAttackKind, EnemyType, ItemType, TreasureTier } from './game/combat/enemyDomain';
 
 export interface Vector2D {
   x: number;
@@ -70,6 +70,15 @@ export interface Enemy extends Entity {
   presentationFacingAngle?: number;
   presentationDeathProgress?: number;
   presentationAttackCharge?: number;
+  /** Solo-mode authored attack state. Co-op carries equivalent state in its
+   * authoritative snapshot rather than trusting renderer-local timers. */
+  attackCooldownMs?: number;
+  attackWindupMs?: number;
+  attackWindupDurationMs?: number;
+  attackTarget?: Vector2D;
+  attackKind?: EnemyAttackKind;
+  spawnPackId?: string;
+  spawnedAtMs?: number;
 }
 
 export interface Projectile extends Entity {

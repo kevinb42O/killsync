@@ -40,20 +40,20 @@ interface EventEntry {
 
 // ─── Data ──────────────────────────────────────────────────────
 const ENEMY_DATABASE: EnemyEntry[] = [
-  { key: 'basic', ...ENEMY_TYPES.basic, spawnTime: '0:00', threatLevel: 1, description: 'Standard surveillance drone. Low threat individually but lethal in swarms.', behavior: 'Moves directly toward the operator at a constant pace. No special abilities.', tip: 'Early fodder — use them to build your combo meter for Overdrive.' },
-  { key: 'fast', ...ENEMY_TYPES.fast, spawnTime: '2:00', threatLevel: 2, description: 'Lightweight reconnaissance unit with boosted servos. Flanks and overwhelms.', behavior: 'Faster approach speed. Tends to come in clusters from multiple directions.', tip: 'Area weapons like Void Aura handle Scout packs efficiently.' },
-  { key: 'tank', ...ENEMY_TYPES.tank, spawnTime: '5:00', threatLevel: 3, description: 'Armored heavy unit with reinforced plating. Absorbs massive punishment.', behavior: 'Slow but extremely durable. High contact damage — avoid melee range.', tip: 'High-penetration weapons and Might upgrades cut through their armor.' },
-  { key: 'ranged', ...ENEMY_TYPES.ranged, spawnTime: '8:00', threatLevel: 3, description: 'Long-range threat with targeting systems. Maintains distance while engaging.', behavior: 'Higher speed with moderate health. Approaches quickly and deals consistent damage.', tip: 'Prioritize with homing weapons. Phantom Chain locks them down.' },
-  { key: 'elite', ...ENEMY_TYPES.elite, spawnTime: '12:00', threatLevel: 4, description: 'Advanced combat unit with reinforced neural shielding. Drops Data Cores on kill.', behavior: 'Large hitbox, high HP pool. Pushes through projectiles via sheer durability.', tip: 'Always worth killing — guaranteed Data Core drop. Focus fire immediately.' },
-  { key: 'phantom', ...ENEMY_TYPES.phantom, spawnTime: '15:00', threatLevel: 4, description: 'Phase-shifted entity that flickers through the grid. Extremely fast and elusive.', behavior: 'Highest base speed in the game. Low health but hard to target due to speed.', tip: 'Area weapons and Frost Aura slow them to manageable speeds.' },
-  { key: 'titan', ...ENEMY_TYPES.titan, spawnTime: '20:00', threatLevel: 5, description: 'Colossal war machine. The largest non-boss threat in the grid. Massive damage.', behavior: 'Very slow but enormous hitbox. Devastating contact damage — one touch can end a run.', tip: 'Kite at max range. Stack Might and Boss Damage upgrades for efficient kills.' },
+  { key: 'basic', ...ENEMY_TYPES.basic, spawnTime: '0:00', threatLevel: 1, description: 'Standard surveillance drone. Low threat individually but lethal in a patrol.', behavior: 'Applies direct contact pressure and screens specialist units. No special attack.', tip: 'Clear the frontline before it pins you inside a specialist warning zone.' },
+  { key: 'fast', ...ENEMY_TYPES.fast, spawnTime: '2:00', threatLevel: 2, description: 'Lightweight reconnaissance unit with boosted servos. Flanks and overwhelms.', behavior: 'Approaches off-axis, then marks your position for a fast 480 ms lunge.', tip: 'Leave the marked circle immediately; the Scout commits to its displayed destination.' },
+  { key: 'tank', ...ENEMY_TYPES.tank, spawnTime: '5:00', threatLevel: 3, description: 'Armored heavy unit with reinforced plating. Anchors advancing packs.', behavior: 'Pushes into close range and charges a large 1.1-second shockwave.', tip: 'Create distance as the ring expands. In co-op, a well-timed jump clears the shockwave.' },
+  { key: 'ranged', ...ENEMY_TYPES.ranged, spawnTime: '8:00', threatLevel: 3, description: 'Long-range support platform with predictive targeting systems.', behavior: 'Retreats when crowded, strafes in its preferred band, and marks artillery zones through clear firing lanes.', tip: 'Break line of sight or step outside the locked reticle before it resolves.' },
+  { key: 'elite', ...ENEMY_TYPES.elite, spawnTime: '12:00', threatLevel: 4, description: 'Advanced command unit with reinforced neural shielding. Always drops a Data Core.', behavior: 'Orbits at mid range and deploys a larger, slower artillery warning while lesser units screen it.', tip: 'Clear space, dodge the large reticle, then focus fire for the guaranteed core.' },
+  { key: 'phantom', ...ENEMY_TYPES.phantom, spawnTime: '15:00', threatLevel: 4, description: 'Phase-shifted ambusher that flickers through the grid at extreme speed.', behavior: 'Takes a wide flank, marks a destination, then phase-relocates after a 720 ms warning.', tip: 'Track the suspended marker, not the Phantom silhouette. Frost effects limit its follow-up.' },
+  { key: 'titan', ...ENEMY_TYPES.titan, spawnTime: '20:00', threatLevel: 5, description: 'Colossal war machine and the largest normal threat in the grid.', behavior: 'Slow, extremely durable pressure with a huge collision footprint. Always drops a Data Core and ammo in co-op.', tip: 'Keep a clear retreat route and use penetration to damage its escort at the same time.' },
 ];
 
 const BOSS_ENTRY: EnemyEntry = {
   key: 'boss', name: 'Sector Boss', health: 9999, speed: 1.2, damage: 99, radius: 80, xp: 1000, color: '#ff0066',
   visual: 'boss', spawnTime: '2:00 / 5:00 / 10:00 / 20:00', threatLevel: 5,
-  description: 'Apex threat entity. Spawns at key time intervals with scaling health/damage. Percentage-based hits bypass armor.',
-  behavior: 'Deals % max HP damage per hit (1s cooldown). Gets stronger with each spawn. Drops diamond coins and Data Cores.',
+  description: 'Apex threat entity. Spawns at key time intervals with scaling health, damage, and a distinct fortress silhouette.',
+  behavior: 'Deals percentage max-HP contact damage on a 1-second cooldown. Armor can absorb it. Drops diamond coins and Data Cores.',
   tip: 'Titan Slayer perm upgrade is essential. Stay mobile — the 1s hit cooldown is your survival window.'
 };
 

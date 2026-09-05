@@ -40,8 +40,13 @@ For a production deployment, serve the built app and lobby service together:
 1. `npm run build`
 2. `npm run serve:multiplayer`
 
-Set `TURN_URLS`, `TURN_USERNAME`, and `TURN_CREDENTIAL` on that server to make
-TURN relay fallback available for restrictive home, work, or school networks.
+Set `TURN_URLS` and `TURN_SHARED_SECRET` on that server (and the same
+`static-auth-secret` in coturn) to make expiring TURN relay fallback available
+for restrictive home, work, or school networks.
 If the lobby service is hosted separately, set `VITE_MULTIPLAYER_SIGNALING_URL`
 at build time to its public origin. Never put TURN credentials in a `VITE_`
 variable: the service returns them through its server-side ICE configuration endpoint.
+
+The bundled signaling store is intentionally single-process. The server refuses
+`WEB_CONCURRENCY > 1` unless deployment explicitly declares a shared room store
+and sticky routing with `MULTIPLAYER_SHARED_ROOM_STORE=true`.

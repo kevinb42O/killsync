@@ -9,11 +9,15 @@ import { getWorldObstacles, isWorldPositionClear, resolveWorldCollisions, WORLD_
 import { ControlScheme, DEFAULT_CONTROL_SCHEME, isMovementDirectionPressed } from './controls';
 import {
   BOSS_HIT_STOP_MS,
+  ENEMY_ATTACK_PROFILES,
   calculateDifficultyMultiplier,
+  chooseSoloSpawnPack,
+  chooseSoloSpawnBearing,
   chooseWeightedEnemy,
   createBossStats,
   createEnemyStats,
   getEnemySpawnCandidates,
+  getEnemyAttackProfile,
   getGuaranteedEnemyDrop,
   getNextBossMilestone,
   getPickupEffect,
@@ -63,6 +67,21 @@ export interface BalanceTuning {
   bossXPRewardMultiplier: number;
 }
 
+function numericEnemyId(id: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < id.length; index++) hash = Math.imul(hash ^ id.charCodeAt(index), 16777619);
+  return hash >>> 0;
+}
+
+function hasEnemyAttackPath(from: Vector2D, to: Vector2D) {
+  const steps = Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 45);
+  for (let step = 1; step < steps; step++) {
+    const progress = step / steps;
+    if (!isWorldPositionClear(from.x + (to.x - from.x) * progress, from.y + (to.y - from.y) * progress, 5)) return false;
+  }
+  return true;
+}
+
 export interface AutoUpgradeNotice {
   id: string;
   name: string;
@@ -104,6 +123,7 @@ export class GameEngine {
   private readonly DEFAULT_WEAPON_DAMAGE_MULTIPLIER = 1.45;
   private readonly NON_ARC_WEAPON_COMPENSATION_MULTIPLIER = 1.55;
   private readonly MAX_ENEMIES = 500;
+  private readonly MAX_STANDARD_ENEMIES = 490;
   private readonly MAX_PROJECTILES = 1400;
   private readonly MAX_PARTICLES = 1600;
   private readonly MAX_DAMAGE_TEXTS = 180;
@@ -141,6 +161,7 @@ export class GameEngine {
   paused: boolean = false;
   chromaticAberration: number = 0;
   lastHitSoundAt: number = 0;
+  private lastEnemyDamageSoundAt = -Infinity;
   
   gameState: GameState = 'MENU';
   camera: Vector2D = { x: 0, y: 0 };
@@ -642,8 +663,52 @@ export class GameEngine {
       const clearOfShop = extraShops.every((shop) => Math.hypot(x - shop.position.x, y - shop.position.y) > radius + shop.radius + 36);
       if (clearOfShop && isWorldPositionClear(x, y, radius)) return { x, y };
     }
-    return { ...desired };
+    // Dense landmark corners can exhaust the cheap neighborhood probes. A
+    // deterministic spiral is still rare, but guarantees that an event enemy
+    // never materializes inside architecture or beyond the arena boundary.
+    const margin = radius + 8;
+    const origin = {
+      x: Math.max(margin, Math.min(GAME_WIDTH - margin, desired.x)),
+      y: Math.max(margin, Math.min(GAME_HEIGHT - margin, desired.y)),
+    };
+    for (let ring = 3; ring <= 14; ring++) {
+      for (let sample = 0; sample < 24; sample++) {
+        const angle = sample / 24 * Math.PI * 2;
+        const x = origin.x + Math.cos(angle) * ring * 90;
+        const y = origin.y + Math.sin(angle) * ring * 90;
+        if (x < margin || y < margin || x > GAME_WIDTH - margin || y > GAME_HEIGHT - margin) continue;
+        if (extraShops.some(shop => Math.hypot(x - shop.position.x, y - shop.position.y) <= radius + shop.radius + 36)) continue;
+        if (isWorldPositionClear(x, y, radius)) return { x, y };
+      }
+    }
+    // The central insertion street is authored clear. Offset along it if a
+    // terminal occupies the exact centre.
+    for (const x of [GAME_WIDTH / 2, GAME_WIDTH / 2 + 420, GAME_WIDTH / 2 - 420]) {
+      const y = GAME_HEIGHT / 2;
+      if (extraShops.every(shop => Math.hypot(x - shop.position.x, y - shop.position.y) > radius + shop.radius + 36) && isWorldPositionClear(x, y, radius)) return { x, y };
+    }
+    // Exhaustive, deterministic last resort. This path should only be reached
+    // when an authored landmark and both shop terminals crowd the requested
+    // neighborhood, so favor correctness over the tiny one-off scan cost.
+    const gridStep = Math.max(120, radius * 2 + 24);
+    for (let y = margin; y <= GAME_HEIGHT - margin; y += gridStep) {
+      for (let x = margin; x <= GAME_WIDTH - margin; x += gridStep) {
+        if (extraShops.some(shop => Math.hypot(x - shop.position.x, y - shop.position.y) <= radius + shop.radius + 36)) continue;
+        if (isWorldPositionClear(x, y, radius)) return { x, y };
+      }
+    }
+    // Pathological custom maps can contain no position large enough for the
+    // requested radius. Preserve boundary safety in that impossible case.
+    return origin;
   }
+
+  /** EventManager uses the same collision-safe placement contract as the
+   * normal spawner without gaining access to other world-placement internals. */
+  findClearEnemySpawnPosition(desired: Vector2D, radius: number): Vector2D {
+    return this.findClearWorldPosition(desired, radius);
+  }
+
+  hasEnemyCapacity() { return this.enemies.length < this.MAX_ENEMIES; }
 
   private resolveEntityWorldCollision(position: Vector2D, radius: number) {
     const result = resolveWorldCollisions(position, radius);
@@ -1813,7 +1878,6 @@ export class GameEngine {
       const dx = this.player.position.x - enemy.position.x;
       const dy = this.player.position.y - enemy.position.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist === 0) continue; // Prevent division by zero
       
       // Hit flash decay
       if (enemy.hitFlash && enemy.hitFlash > 0) {
@@ -1827,6 +1891,10 @@ export class GameEngine {
       }
       
       const slowMultiplier = enemy.slowMultiplier || 1;
+      if (this.updateEnemySpecialAttack(enemy, dist, dt)) {
+        enemy.velocity.x *= .82; enemy.velocity.y *= .82;
+        continue;
+      }
       // Cap speed scaling to a max of 2.0x, softly scaling with difficulty
       const speedScale = enemy.type === 'boss' ? 1 : Math.min(2.0, 1 + (this.difficultyMultiplier - 1) * 0.2);
       const baseSpeed = enemy.speed * speedScale;
@@ -1838,9 +1906,17 @@ export class GameEngine {
         effectiveSpeed = Math.min(effectiveSpeed, this.player.speed * 0.95);
       }
       
-      // Move towards player
-      const targetVx = (dx / dist) * effectiveSpeed;
-      const targetVy = (dy / dist) * effectiveSpeed;
+      // Archetypes occupy distinct combat bands instead of sharing one direct
+      // contact chase. Ranged units kite, while Scouts and Phantoms flank.
+      let travelAngle = Math.atan2(dy, dx);
+      if (enemy.type === 'ranged') {
+        if (dist < 280) travelAngle += Math.PI;
+        else if (dist < 520) { travelAngle += (numericEnemyId(enemy.id) % 2 ? 1 : -1) * Math.PI / 2; effectiveSpeed *= .34; }
+      } else if ((enemy.type === 'fast' || enemy.type === 'phantom') && dist > 110) {
+        travelAngle += (numericEnemyId(enemy.id) % 2 ? 1 : -1) * (enemy.type === 'phantom' ? .72 : .42);
+      }
+      const targetVx = Math.cos(travelAngle) * effectiveSpeed;
+      const targetVy = Math.sin(travelAngle) * effectiveSpeed;
       
       // Apply existing velocity (which might include knockback) and lerp towards target velocity
       enemy.velocity.x += (targetVx - enemy.velocity.x) * 0.1;
@@ -1856,6 +1932,58 @@ export class GameEngine {
         if (collision.blockedY) enemy.velocity.y = 0;
       }
     }
+  }
+
+  private updateEnemySpecialAttack(enemy: Enemy, distance: number, dt: number) {
+    enemy.attackCooldownMs = Math.max(0, (enemy.attackCooldownMs || 0) - dt);
+    if (enemy.attackWindupMs !== undefined && enemy.attackWindupMs > 0) {
+      enemy.attackWindupMs = Math.max(0, enemy.attackWindupMs - dt);
+      enemy.presentationAttackCharge = 1 - enemy.attackWindupMs / Math.max(1, enemy.attackWindupDurationMs || 1);
+      if (enemy.attackWindupMs > 0) return true;
+      const target = enemy.attackTarget;
+      const kind = enemy.attackKind;
+      const attackProfile = enemy.type === 'boss' ? undefined : ENEMY_ATTACK_PROFILES[enemy.type];
+      const radius = attackProfile?.radius || 70;
+      if (target && Math.hypot(this.player.position.x - target.x, this.player.position.y - target.y) <= radius + this.player.radius) {
+        const multiplier = attackProfile?.damageMultiplier ?? 1;
+        this.applyEnemyDamage(enemy.damage * multiplier, kind === 'shockwave' ? 12 : 8);
+      }
+      if (target && (kind === 'lunge' || kind === 'ambush')) {
+        const position = { ...target };
+        this.resolveEntityWorldCollision(position, enemy.radius);
+        enemy.position = position;
+      }
+      if (target) this.createExplosion(target.x, target.y, enemy.color, kind === 'shockwave' ? 18 : 10);
+      enemy.attackWindupMs = undefined; enemy.attackWindupDurationMs = undefined; enemy.attackTarget = undefined; enemy.attackKind = undefined; enemy.presentationAttackCharge = 0;
+      enemy.attackCooldownMs = attackProfile?.cooldownMs || 3_800;
+      return true;
+    }
+    if ((enemy.attackCooldownMs || 0) > 0 || enemy.type === 'basic' || enemy.type === 'titan' || enemy.type === 'boss') return false;
+    const profile = getEnemyAttackProfile(enemy.type, distance);
+    // Relocation attacks may be fast, but they must not phase through authored
+    // cover. Only the radial Goliath shockwave intentionally ignores line of
+    // sight once the player enters its close combat band.
+    if (!profile || (profile.kind !== 'shockwave' && !hasEnemyAttackPath(enemy.position, this.player.position))) return false;
+    enemy.attackKind = profile.kind; enemy.attackWindupMs = profile.windupMs; enemy.attackWindupDurationMs = profile.windupMs;
+    enemy.attackTarget = { ...this.player.position }; enemy.presentationAttackCharge = 0;
+    return true;
+  }
+
+  private applyEnemyDamage(amount: number, impact: number) {
+    if (amount <= 0 || this.reviveInvulnTimer > 0 || this.dashState.aegisShieldTimer > 0 || this.dashGhostTimer > 0) return;
+    let damageAmount = amount * this.balanceTuning.playerDamageTakenMultiplier;
+    const dashGuardLevel = this.getPermanentUpgradeLevel('perm_dash_guard');
+    if ((this.isDashing || this.dashGhostTimer > 0) && dashGuardLevel > 0) damageAmount *= 1 - Math.min(.75, dashGuardLevel * .12);
+    this.player.lastHitTime = this.gameTime;
+    if (this.player.armorHp > 0) { const absorbed = Math.min(this.player.armorHp, damageAmount); this.player.armorHp -= absorbed; damageAmount -= absorbed; }
+    this.player.health -= damageAmount;
+    this.screenShake = Math.max(this.screenShake, impact); this.chromaticAberration = Math.max(this.chromaticAberration, impact * .7);
+    if (this.gameTime - this.lastEnemyDamageSoundAt > 140) { soundManager.playDamage(); this.lastEnemyDamageSoundAt = this.gameTime; }
+    if (this.player.health > 0) return;
+    if (this.player.inventory.hasRevive) {
+      this.player.inventory.hasRevive = false; this.player.health = this.player.maxHealth * .5; this.reviveInvulnTimer = 3_000;
+      this.createExplosion(this.player.position.x, this.player.position.y, '#00ffff', 30); soundManager.playLevelUp();
+    } else this.processPlayerDeath();
   }
 
   updateProjectiles(dt: number) {
@@ -3833,61 +3961,19 @@ export class GameEngine {
       const radiusSum = this.player.radius + enemy.radius;
       
       if (distSq < radiusSum * radiusSum) {
-        if (this.reviveInvulnTimer > 0) continue; // Skip damage if reviving
-        // Aegis Slip or Ghost Frame: invulnerable windows
-        if (this.dashState.aegisShieldTimer > 0) continue;
-        if (this.dashGhostTimer > 0) continue;
-
         let damageAmount = 0;
         if (enemy.damagePercent) {
           // Bosses deal % max HP damage with a 1-second cooldown (i-frames)
           if (performance.now() - this.lastBossHitTime > 1000) {
-            damageAmount = this.player.maxHealth * enemy.damagePercent * this.balanceTuning.bossDamagePercentMultiplier * this.balanceTuning.playerDamageTakenMultiplier;
+            damageAmount = this.player.maxHealth * enemy.damagePercent * this.balanceTuning.bossDamagePercentMultiplier;
             this.lastBossHitTime = performance.now();
-            this.screenShake = 20;
-            this.chromaticAberration = 15;
-            soundManager.playDamage();
           }
         } else {
           // Regular enemies (dt-normalized)
-          damageAmount = enemy.damage * this.balanceTuning.playerDamageTakenMultiplier * 0.05 * (dt / 16.67);
-          this.screenShake = 5;
-          this.chromaticAberration = 5;
-          soundManager.playDamage();
+          damageAmount = enemy.damage * 0.05 * (dt / 16.67);
         }
-
-        if (damageAmount > 0) {
-          const dashGuardLevel = this.getPermanentUpgradeLevel('perm_dash_guard');
-          if ((this.isDashing || this.dashGhostTimer > 0) && dashGuardLevel > 0) {
-            const reduction = Math.min(0.75, dashGuardLevel * 0.12);
-            damageAmount *= (1 - reduction);
-          }
-
-          this.player.lastHitTime = this.gameTime;
-          if (this.player.armorHp > 0) {
-            if (damageAmount <= this.player.armorHp) {
-              this.player.armorHp -= damageAmount;
-              damageAmount = 0;
-            } else {
-              damageAmount -= this.player.armorHp;
-              this.player.armorHp = 0;
-            }
-          }
-          this.player.health -= damageAmount;
-        }
-
-        if (this.player.health <= 0) {
-          if (this.player.inventory.hasRevive) {
-            this.player.inventory.hasRevive = false;
-            this.player.health = this.player.maxHealth * 0.5;
-            this.reviveInvulnTimer = 3000; // 3 seconds invulnerability
-            this.createExplosion(this.player.position.x, this.player.position.y, '#00ffff', 30);
-            soundManager.playLevelUp();
-          } else {
-            this.processPlayerDeath();
-            if (this.gameState === 'GAME_OVER') return;
-          }
-        }
+        this.applyEnemyDamage(damageAmount, enemy.damagePercent ? 20 : 5);
+        if (this.gameState === 'GAME_OVER') return;
       }
     }
   }
@@ -4100,15 +4186,15 @@ export class GameEngine {
       this.spawnTimer = 0;
 
       const milestone = getNextBossMilestone(this.gameTime, this.spawnedBossMilestones);
-      if (milestone !== undefined) {
+      if (milestone !== undefined && this.hasEnemyCapacity()) {
         this.spawnedBossMilestones.add(milestone);
         this.spawnBoss(milestone);
         return;
       }
 
-      if (this.enemies.length >= this.MAX_ENEMIES) return;
+      if (this.enemies.length >= this.MAX_STANDARD_ENEMIES) return;
 
-      const spawnAttempts = getSpawnAttemptCount(this.difficultyMultiplier, this.MAX_ENEMIES - this.enemies.length, Math.random);
+      const spawnAttempts = getSpawnAttemptCount(this.difficultyMultiplier, this.MAX_STANDARD_ENEMIES - this.enemies.length, Math.random);
 
       if (spawnAttempts > 0 && Math.random() < 0.2) soundManager.playEnemySpawn();
       const activeCounts = this.enemies.reduce<Partial<Record<keyof typeof ENEMY_TYPES, number>>>((counts, enemy) => {
@@ -4116,7 +4202,13 @@ export class GameEngine {
         return counts;
       }, {});
 
-      for (let i = 0; i < spawnAttempts; i++) {
+      const candidates = getEnemySpawnCandidates(this.gameTime, activeCounts);
+      const pack = chooseSoloSpawnPack(Math.random, this.gameTime, candidates, spawnAttempts);
+      const forwardAngle = Math.atan2(-Math.cos(this.renderer3D?.yaw || 0), -Math.sin(this.renderer3D?.yaw || 0));
+      const baseAngle = chooseSoloSpawnBearing(Math.random, this.viewMode !== 'TOPDOWN_2D', forwardAngle);
+      const baseDistance = Math.max(this.canvas.width, this.canvas.height) / 2 + 170;
+
+      for (let i = 0; i < pack.members.length; i++) {
         // System Breach: override spawn position to portals
         const breachPos = this.eventManager.getBreachSpawnPosition(this);
         let spawnPos;
@@ -4125,8 +4217,9 @@ export class GameEngine {
           spawnPos = breachPos;
           isBreachSpawn = true;
         } else {
-          const angle = Math.random() * Math.PI * 2;
-          const dist = Math.max(this.canvas.width, this.canvas.height) / 2 + 150;
+          const lateral = i - (pack.members.length - 1) / 2;
+          const angle = baseAngle + lateral * .13;
+          const dist = baseDistance + (i % 2) * 42;
           spawnPos = {
             x: this.player.position.x + Math.cos(angle) * dist,
             y: this.player.position.y + Math.sin(angle) * dist
@@ -4134,10 +4227,15 @@ export class GameEngine {
         }
 
         const isHolder = Math.random() > 1 - ITEM_HOLDER_CHANCE;
-        const candidates = getEnemySpawnCandidates(this.gameTime, activeCounts);
         // Holders have no combat archetype in solo; keep their hidden type as
         // basic so the shared rules preserve the old random-consumption order.
-        const type = isHolder ? 'basic' : chooseWeightedEnemy(Math.random, candidates);
+        const currentlyAvailable = getEnemySpawnCandidates(this.gameTime, activeCounts);
+        const desiredType = pack.members[i];
+        // Revalidate each member because an earlier member of this same pack
+        // may have consumed the final elite, phantom, or titan capacity slot.
+        const type = isHolder ? 'basic' : desiredType && currentlyAvailable.includes(desiredType)
+          ? desiredType
+          : chooseWeightedEnemy(Math.random, currentlyAvailable);
         const stats = createEnemyStats(type, this.difficultyMultiplier, this.balanceTuning, isHolder);
         spawnPos = this.findClearWorldPosition(spawnPos, stats.radius);
         if (isHolder) {
@@ -4153,7 +4251,10 @@ export class GameEngine {
           damage: stats.damage, speed: stats.speed, experienceValue: stats.experienceValue,
           type,
           ...(isBreachSpawn ? { isEventEnemy: true } : {}),
-          ...(isHolder ? { isHolder: true } : {})
+          ...(isHolder ? { isHolder: true } : {}),
+          spawnPackId: pack.id,
+          spawnedAtMs: this.gameTime,
+          attackCooldownMs: ENEMY_ATTACK_PROFILES[type]?.openingDelayMs || 0,
         } as any);
         if (!isHolder) activeCounts[type] = (activeCounts[type] || 0) + 1;
       }
@@ -4181,7 +4282,8 @@ export class GameEngine {
       speed: bossStats.speed,
       experienceValue: bossStats.experienceValue,
       color: bossStats.color,
-      type: 'boss'
+      type: 'boss',
+      spawnedAtMs: this.gameTime,
     } as any);
     
     soundManager.playEnemySpawn();
@@ -5237,8 +5339,34 @@ export class GameEngine {
     // Common pulsing metric
     const pulse = (Math.sin(now * 0.005) + 1) / 2;
 
+    if (enemy.attackTarget && enemy.attackKind) {
+      const charge = Math.max(0, Math.min(1, enemy.presentationAttackCharge || 0));
+      const warningRadius = enemy.type === 'boss' ? 150 : ENEMY_ATTACK_PROFILES[enemy.type]?.radius || 70;
+      ctx.save();
+      ctx.strokeStyle = enemy.color; ctx.fillStyle = `${enemy.color}22`; ctx.lineWidth = 2 + charge * 3;
+      ctx.globalAlpha = .45 + charge * .5;
+      if (enemy.attackKind === 'lunge' || enemy.attackKind === 'ambush') {
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(enemy.attackTarget.x, enemy.attackTarget.y); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.beginPath(); ctx.arc(enemy.attackTarget.x, enemy.attackTarget.y, warningRadius * (.35 + charge * .65), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.translate(x, y);
+    const spawnProgress = enemy.spawnedAtMs === undefined ? 1 : Math.max(0, Math.min(1, (this.gameTime - enemy.spawnedAtMs) / 520));
+    if (spawnProgress < 1) {
+      ctx.save();
+      ctx.globalAlpha = 1 - spawnProgress;
+      ctx.strokeStyle = enemy.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(0, 0, r * (1.7 - spawnProgress * .45), 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      const easedSpawn = 1 - Math.pow(1 - spawnProgress, 3);
+      ctx.scale(Math.max(.05, easedSpawn), Math.max(.05, easedSpawn));
+    }
 
     // Hit Flash (White Overlay)
     if (enemy.hitFlash && enemy.hitFlash > 0) {
@@ -5378,7 +5506,7 @@ export class GameEngine {
           ctx.fillStyle = `rgba(255, 150, 0, ${0.3 + pulse * 0.3})`;
           ctx.beginPath();
           ctx.moveTo(-r, -r * 0.3);
-          ctx.lineTo(-r * (1.5 + Math.random()), 0);
+          ctx.lineTo(-r * (1.85 + Math.sin(now * .018 + numericEnemyId(enemy.id)) * .30), 0);
           ctx.lineTo(-r, r * 0.3);
           ctx.fill();
           
@@ -5547,11 +5675,12 @@ export class GameEngine {
         case 'phantom': {
           // --- PHANTOM (Digital Glitch) ---
           // Scanlines and jitter
-          const jitterX = lowDetailMode ? 0 : (Math.random() - 0.5) * 4;
-          const jitterY = lowDetailMode ? 0 : (Math.random() - 0.5) * 4;
+          const glitchPhase = now * .026 + numericEnemyId(enemy.id);
+          const jitterX = lowDetailMode ? 0 : Math.sin(glitchPhase) * 2;
+          const jitterY = lowDetailMode ? 0 : Math.cos(glitchPhase * 1.37) * 2;
           ctx.translate(jitterX, jitterY);
           
-          ctx.globalAlpha = lowDetailMode ? 0.85 : 0.6 + Math.random() * 0.4;
+          ctx.globalAlpha = lowDetailMode ? 0.85 : 0.78 + Math.sin(glitchPhase * .73) * .18;
           
           if (!lowDetailMode) {
             // Ghastly Trail
@@ -5578,14 +5707,15 @@ export class GameEngine {
           
           // Dark digital voids for eyes
           ctx.fillStyle = '#000';
-          ctx.fillRect(r * 0.2, -r * 0.4, r * 0.2 + (lowDetailMode ? 0.8 : Math.random() * 2), r * 0.2);
-          ctx.fillRect(r * 0.2, r * 0.2, r * 0.2 + (lowDetailMode ? 0.8 : Math.random() * 2), r * 0.2);
+          ctx.fillRect(r * 0.2, -r * 0.4, r * 0.2 + (lowDetailMode ? 0.8 : (Math.sin(glitchPhase) + 1)), r * 0.2);
+          ctx.fillRect(r * 0.2, r * 0.2, r * 0.2 + (lowDetailMode ? 0.8 : (Math.cos(glitchPhase) + 1)), r * 0.2);
           
           // Glitch lines across body
           ctx.fillStyle = enemy.color;
-          ctx.fillRect(-r*0.8, -r*0.6, r*1.6, lowDetailMode ? 1.5 : Math.random() * 3);
-          ctx.fillRect(-r*0.6, 0, r*1.2, lowDetailMode ? 1.5 : Math.random() * 3);
-          ctx.fillRect(-r*0.8, r*0.6, r*1.6, lowDetailMode ? 1.5 : Math.random() * 3);
+          const glitchWidth = lowDetailMode ? 1.5 : 1.5 + Math.sin(glitchPhase * 1.9) * 1.2;
+          ctx.fillRect(-r*0.8, -r*0.6, r*1.6, glitchWidth);
+          ctx.fillRect(-r*0.6, 0, r*1.2, glitchWidth);
+          ctx.fillRect(-r*0.8, r*0.6, r*1.6, glitchWidth);
           
           ctx.globalAlpha = 1.0;
           break;

@@ -8,7 +8,8 @@ import { compressVisualRadius, getProjectileVisualId } from './projectilePresent
 import { EvolutionProfile, getEvolutionProfile } from './evolutions';
 import { getWorldDistrictAt, getWorldObstacles, WORLD_DISTRICTS, WORLD_TRANSIT_LINES } from './world/WorldLayout';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
-import { animateCoopEnemyRig, createCoopEnemyRig } from './rendering/coopEnemyVisuals';
+import { animateCoopEnemyRig, createCoopEnemyRig, disposeCoopEnemyRig } from './rendering/coopEnemyVisuals';
+import { ENEMY_ATTACK_PROFILES } from './combat/enemyDomain';
 
 const COLOR_CACHE = new Map<string, THREE.Color>();
 
@@ -173,6 +174,8 @@ export class Renderer3D {
   
   // Object pools & 3D caches
   private enemyMeshes = new Map<string, THREE.Object3D>();
+  private enemyAttackTelegraphs = new Map<string, THREE.Mesh>();
+  private enemyGeometryCache = new Map<string, THREE.BufferGeometry>();
   private gemMeshes = new Map<string, THREE.Mesh>();
   private itemMeshes = new Map<string, THREE.Object3D>();
   private itemTemplates = new Map<WorldItem['type'], THREE.Object3D>();
@@ -1956,6 +1959,7 @@ export class Renderer3D {
 
   private updateEnemies3D(enemies: Enemy[], deltaTime: number) {
     const activeEnemyIds = new Set<string>();
+    const activeAttackIds = new Set<string>();
     const now = Date.now();
 
     for (const enemy of enemies) {
@@ -1983,6 +1987,21 @@ export class Renderer3D {
       const dirX = this.camera.position.x - enemy.position.x;
       const dirZ = this.camera.position.z - enemy.position.y;
       mesh.rotation.y = Math.atan2(dirX, dirZ);
+      const charge = THREE.MathUtils.clamp(enemy.presentationAttackCharge || 0, 0, 1);
+      mesh.scale.setScalar(1 + Math.sin(charge * Math.PI) * .1);
+      if (enemy.attackTarget && enemy.attackKind && charge >= 0) {
+        activeAttackIds.add(enemy.id);
+        let telegraph = this.enemyAttackTelegraphs.get(enemy.id);
+        if (!telegraph) {
+          telegraph = new THREE.Mesh(new THREE.RingGeometry(.82, 1, 32), new THREE.MeshBasicMaterial({ color: enemy.color, transparent: true, opacity: .72, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
+          telegraph.rotation.x = -Math.PI / 2; this.scene.add(telegraph); this.enemyAttackTelegraphs.set(enemy.id, telegraph);
+        }
+        const radius = enemy.type === 'boss' ? 150 : ENEMY_ATTACK_PROFILES[enemy.type]?.radius || 70;
+        telegraph.position.set(enemy.attackTarget.x, 2.5, enemy.attackTarget.y);
+        telegraph.scale.setScalar(radius * (.35 + charge * .65));
+        const material = telegraph.material as THREE.MeshBasicMaterial;
+        material.color.set(enemy.color); material.opacity = .45 + charge * .5;
+      }
 
       // Hit Flash feedback
       const mainMat = (mesh as any)._mainMaterial as THREE.MeshStandardMaterial;
@@ -1992,7 +2011,7 @@ export class Renderer3D {
           mainMat.emissiveIntensity = 2.5;
         } else {
           mainMat.emissive.copy(parseHexColor(enemy.color, 0xff0055));
-          mainMat.emissiveIntensity = 0.8;
+          mainMat.emissiveIntensity = 0.8 + charge * 1.1;
         }
       }
 
@@ -2004,6 +2023,7 @@ export class Renderer3D {
       if (healthBar && healthFill) {
         const ratio = THREE.MathUtils.clamp(enemy.health / Math.max(1, enemy.maxHealth), 0, 1);
         healthBar.visible = enemy.health < enemy.maxHealth && enemy.health > 0;
+        healthBar.quaternion.copy(mesh.quaternion).invert().multiply(this.camera.quaternion);
         healthFill.scale.x = ratio;
         healthFill.position.x = -((1 - ratio) * (enemy.radius || 15));
       }
@@ -2013,9 +2033,14 @@ export class Renderer3D {
     for (const [id, mesh] of this.enemyMeshes.entries()) {
       if (!activeEnemyIds.has(id)) {
         this.scene.remove(mesh);
-        this.disposeEffectMesh(mesh);
+        if (mesh.userData.coopRig) disposeCoopEnemyRig(mesh);
+        else this.disposeEffectMesh(mesh);
         this.enemyMeshes.delete(id);
       }
+    }
+    for (const [id, telegraph] of this.enemyAttackTelegraphs) {
+      if (activeAttackIds.has(id)) continue;
+      this.scene.remove(telegraph); telegraph.geometry.dispose(); (telegraph.material as THREE.Material).dispose(); this.enemyAttackTelegraphs.delete(id);
     }
   }
 
@@ -2451,23 +2476,23 @@ export class Renderer3D {
     switch (enemy.type) {
       case 'fast':
         // Razor Triangle / Cone
-        geo = new THREE.ConeGeometry(radius * 0.9, radius * 1.8, 4);
+        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.ConeGeometry(radius * 0.9, radius * 1.8, 4));
         break;
       case 'tank':
         // Armored heavy cube
-        geo = new THREE.BoxGeometry(radius * 1.6, radius * 1.6, radius * 1.6);
+        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.BoxGeometry(radius * 1.6, radius * 1.6, radius * 1.6));
         break;
       case 'ranged':
         // Diamond Spire (Octahedron)
-        geo = new THREE.OctahedronGeometry(radius * 1.1, 0);
+        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.OctahedronGeometry(radius * 1.1, 0));
         break;
       case 'elite':
         // Golden Icosahedron
-        geo = new THREE.IcosahedronGeometry(radius * 1.2, 0);
+        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.IcosahedronGeometry(radius * 1.2, 0));
         break;
       case 'phantom':
         // Ghost wireframe sphere + core
-        geo = new THREE.SphereGeometry(radius * 1.1, 8, 8);
+        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.SphereGeometry(radius * 1.1, 8, 8));
         material.wireframe = true;
         material.transparent = true;
         material.opacity = 0.75;
@@ -2475,12 +2500,12 @@ export class Renderer3D {
       case 'titan':
       case 'boss':
         // Giant Star / Mech Colossus
-        geo = new THREE.DodecahedronGeometry(radius * 1.4, 0);
+        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.DodecahedronGeometry(radius * 1.4, 0));
         break;
       case 'basic':
       default:
         // Pulsing geometric pyramid
-        geo = new THREE.ConeGeometry(radius, radius * 1.5, 6);
+        geo = this.cachedEnemyGeometry(enemy.type, radius, () => new THREE.ConeGeometry(radius, radius * 1.5, 6));
         break;
     }
 
@@ -2513,6 +2538,13 @@ export class Renderer3D {
     group.add(healthBar);
 
     return group;
+  }
+
+  private cachedEnemyGeometry(type: string, radius: number, create: () => THREE.BufferGeometry) {
+    const key = `${type}:${radius}`;
+    let geometry = this.enemyGeometryCache.get(key);
+    if (!geometry) { geometry = create(); geometry.userData.rendererEnemyShared = true; this.enemyGeometryCache.set(key, geometry); }
+    return geometry;
   }
 
   private updateProjectiles3D(projectiles: Projectile[], deltaTime: number) {
@@ -2904,7 +2936,7 @@ export class Renderer3D {
     root.traverse((node) => {
       const renderable = node as THREE.Mesh | THREE.Line;
       if (!(renderable as any).geometry || !(renderable as any).material) return;
-      renderable.geometry.dispose();
+      if (!renderable.geometry.userData.rendererEnemyShared) renderable.geometry.dispose();
       const materials = Array.isArray(renderable.material) ? renderable.material : [renderable.material];
       for (const material of materials) material.dispose();
     });
@@ -4223,6 +4255,15 @@ export class Renderer3D {
     window.removeEventListener('keydown', this.onDebugKeyDown);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     this.exitPointerLock();
+    for (const enemy of this.enemyMeshes.values()) {
+      if (enemy.userData.coopRig) disposeCoopEnemyRig(enemy);
+      else this.disposeEffectMesh(enemy);
+    }
+    this.enemyMeshes.clear();
+    for (const geometry of this.enemyGeometryCache.values()) geometry.dispose();
+    this.enemyGeometryCache.clear();
+    for (const telegraph of this.enemyAttackTelegraphs.values()) { telegraph.geometry.dispose(); (telegraph.material as THREE.Material).dispose(); }
+    this.enemyAttackTelegraphs.clear();
     for (const aura of this.persistentAuraMeshes.values()) this.disposeEffectMesh(aura);
     for (const orbit of this.persistentOrbitMeshes.values()) this.disposeEffectMesh(orbit);
     for (const strike of this.tendrilStrikeMeshes.values()) this.disposeEffectMesh(strike);

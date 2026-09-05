@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildEncounterClusters, COOP_INTERMISSION_MS, EncounterDirector, type EncounterPlayer } from './EncounterDirector';
+import { buildEncounterClusters, COOP_INTERMISSION_MS, encounterDamageMultiplier, encounterHealthMultiplier, EncounterDirector, enemyThreat, type EncounterPlayer } from './EncounterDirector';
 import { SpawnTopology } from './SpawnTopology';
 import { isWorldPositionClear } from '../world/WorldLayout';
 
@@ -40,6 +40,74 @@ describe('EncounterDirector', () => {
     ];
     expect(movingOrders).toEqual(stationaryOrders);
     expect(moving.snapshot(1).nextSpawnAtMs).toBe(stationary.snapshot(1).nextSpawnAtMs);
+  });
+
+  it('introduces new tiers in authored, formation-ready combat packs', () => {
+    const director = new EncounterDirector(0x42);
+    let time = 0;
+    for (let round = 1; round <= 3; round++) {
+      const first = director.schedule(time, [], players(6000, 6000), 90);
+      expect(new Set(first.map(order => order.packetId)).size).toBe(1);
+      expect(first.map(order => order.formationIndex)).toEqual(first.map((_, index) => index));
+      expect(first.every(order => order.formationSize === first.length)).toBe(true);
+      if (round === 3) {
+        expect(first[0].type).toBe('ranged');
+        expect(first.slice(1).every(order => order.type === 'basic')).toBe(true);
+        expect(first[0].packId).toBe('fireteam');
+        break;
+      }
+      while (director.snapshot(1).spawnedThisRound < director.snapshot(1).roundTotal) {
+        time = director.snapshot(1).nextSpawnAtMs;
+        director.schedule(time, [], players(6000, 6000), 90);
+      }
+      time = director.snapshot(1).nextSpawnAtMs;
+      director.schedule(time, [], players(6000, 6000), 90);
+      time += COOP_INTERMISSION_MS;
+    }
+  });
+
+  it('uses threat as a concurrency gate and scales durability more gently than population', () => {
+    const director = new EncounterDirector(0x1234);
+    director.schedule(0, [], players(6000, 6000), 90);
+    const nextAt = director.snapshot(1).nextSpawnAtMs;
+    const saturated = Array.from({ length: 9 }, () => ({ type: 'basic' as const }));
+    expect(director.schedule(nextAt, saturated, players(6000, 6000), 90)).toEqual([]);
+    expect(director.snapshot(1).activeThreat).toBe(9 * enemyThreat('basic'));
+    expect(encounterHealthMultiplier(6, 4)).toBeLessThan(1.7);
+    expect(encounterDamageMultiplier(20)).toBeLessThanOrEqual(1.45);
+  });
+
+  it('sustains ten finite rounds without roster overflow or premature archetypes', () => {
+    const director = new EncounterDirector(0xc0ffee);
+    let time = 0;
+    const totals: number[] = [];
+    for (let expectedRound = 1; expectedRound <= 10; expectedRound++) {
+      const orders = [...director.schedule(time, [], players(6000, 6000), 90)];
+      let guard = 0;
+      while (director.snapshot(1).spawnedThisRound < director.snapshot(1).roundTotal && guard++ < 200) {
+        time = director.snapshot(1).nextSpawnAtMs;
+        const packet = director.schedule(time, [], players(6000, 6000), 90);
+        expect(packet.length).toBeLessThanOrEqual(5);
+        orders.push(...packet);
+      }
+      const snapshot = director.snapshot(1);
+      expect(snapshot.round).toBe(expectedRound);
+      expect(snapshot.spawnedThisRound).toBe(snapshot.roundTotal);
+      expect(orders).toHaveLength(snapshot.roundTotal);
+      expect(snapshot.spawnedThreat).toBeLessThanOrEqual(snapshot.roundThreatBudget!);
+      expect(orders.every(order => order.healthMultiplier === encounterHealthMultiplier(expectedRound, 1))).toBe(true);
+      expect(orders.every(order => order.damageMultiplier === encounterDamageMultiplier(expectedRound))).toBe(true);
+      const unlocked = new Set(['basic', 'fast', 'ranged', 'tank', 'phantom', 'elite'].slice(0, Math.min(6, expectedRound)));
+      expect(orders.every(order => unlocked.has(order.type))).toBe(true);
+      totals.push(snapshot.roundTotal);
+
+      time = snapshot.nextSpawnAtMs;
+      director.schedule(time, [], players(6000, 6000), 90);
+      expect(director.snapshot(1).phase).toBe('intermission');
+      time += COOP_INTERMISSION_MS;
+    }
+    expect(totals).toEqual([...totals].sort((left, right) => left - right));
+    expect(totals.at(-1)).toBeLessThanOrEqual(64);
   });
 
   it('builds stable shared and split encounter clusters', () => {

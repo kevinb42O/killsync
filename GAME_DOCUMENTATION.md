@@ -14,6 +14,7 @@
 | `src/components/MultiplayerArena.tsx` | Direct WebRTC arena client: input collection, host ticking/snapshots, guest rendering, and perspective camera controls. |
 | `src/game/multiplayer/MultiplayerRendererBridge.ts` | Adapter that presents the shared co-op snapshot through the existing production `Renderer3D`, retaining its FPS viewmodel, chase camera, city, and weapon VFX. |
 | `src/game/SoundManager.ts` | Web Audio API effects plus decoded co-op firearm audio |
+| `ENEMY_SYSTEM.md` | Production enemy roster, packs, pacing formulas, tactics, telegraphs, rewards, and performance contract. |
 | `public/audio/cc0-gunfire.wav` | Bundled CC0 gunfire recording used for every host-accepted local co-op shot |
 | `public/audio/cc0-*-reload.wav` | Bundled CC0 handgun, rifle, and shotgun reload recordings |
 | `src/types.ts` | TypeScript interfaces: Entity, Player, Enemy, Projectile, Weapon, **OperatorDefinition** |
@@ -86,22 +87,24 @@ Each operator has a unique color palette, starting weapon, stat bonuses, and bas
 
 ## Enemy Types
 
-| Type | Unlocks At | Health | Speed | Shape |
-|------|-----------|--------|-------|-------|
-| basic | 0 min | 25 | 0.8 | circle |
-| fast | 2 min | 60 | 1.0 | triangle |
-| tank | 5 min | 150 | 0.9 | square |
-| ranged | 8 min | 50 | 1.3 | diamond |
-| elite | 12 min | 400 | 1.1 | hexagon |
-| phantom | 15 min | 60 | 2.0 | ghost |
-| titan | 20 min | 1000 | 0.5 | star |
+| Type | Unlocks At | Health | Damage | Speed | Role |
+|------|-----------|--------|--------|-------|------|
+| basic | 0 min | 12 | 10 | 1.0 | pressure |
+| fast | 2 min | 50 | 12 | 1.4 | flanker/lunge |
+| tank | 5 min | 180 | 30 | 0.9 | blocker/shockwave |
+| ranged | 8 min | 60 | 18 | 1.3 | support/artillery |
+| elite | 12 min | 500 | 45 | 1.2 | commander/artillery |
+| phantom | 15 min | 80 | 15 | 2.2 | ambusher |
+| titan | 20 min | 1200 | 55 | 0.6 | boss pressure |
 
-Bosses at 5/10/15/20 min. Item Holders (2% chance) drop world items.
+Solo bosses arrive at 2/5/10/20 minutes. Item Holders have a 2% spawn chance.
+See `ENEMY_SYSTEM.md` for authored packs, co-op rounds, attack timing, reward
+conservation, and renderer budgets.
 
 ## Difficulty Scaling
 
-```
-difficultyMultiplier = 1 + (gameTime / 60000) * 0.35 + (killCount / 1000)
+```text
+difficultyMultiplier = 1 + (wave - 1) * 0.15 + min(killCount / 2000, 0.5)
 ```
 
 ## Items & Drops
@@ -154,12 +157,14 @@ The main menu includes **Manual Co-op**. It is deliberately backend-free:
 
 The adapter uses unordered/unreliable `input` and `state` data channels for
 time-sensitive payloads, plus an ordered/reliable channel for joins and other
-important match events. It uses public STUN discovery only; there is no TURN,
-signaling, or gameplay backend.
+important match events. Manual codes use public STUN discovery by default; the
+public-lobby path can receive short-lived TURN REST credentials from the
+signaling service. Gameplay remains peer-to-peer and host-authoritative.
 
 **Current playable scope:** a host can launch a direct co-op arena alone or
-with friends. The host owns a fixed 20 Hz simulation; guests send input at
-20 Hz, while the host broadcasts snapshots at 10 Hz. The arena has
+with friends. A dedicated Web Worker pulse drives the host's fixed 30 Hz
+simulation independently from rendering; guests send input at 30 Hz and the
+host broadcasts per-peer snapshots at 20 Hz. The arena has
 host-authoritative squad movement, manual mouse-aimed fire with five firearms,
 enemy spawning/chasing, collision damage, and shared kill count. It also owns a
 full **Sector Breach** arc: an opening insertion, Uplink and Elite Hunt
@@ -197,10 +202,19 @@ faster than sprint, and keeps it going even when movement keys remain held or
 the camera turns. Releasing **W** immediately stands the player up and returns
 to the normal movement input; jumping also ends the slide.
 
-The authoritative simulation remains at 20 Hz and the network state stream at
-10 Hz, but the client interpolates snapshots on every animation frame. This
-keeps the host deterministic and low-bandwidth while avoiding visibly stepped
-10–20 FPS movement in first-person presentation.
+The authoritative simulation remains at 30 Hz and the network state stream at
+20 Hz, while the client interpolates snapshots on every animation frame. High
+volume entities are interest-filtered around each peer, pickup populations are
+bounded, and transforms are quantized; squad and objective state stays global.
+This keeps the host deterministic and avoids visibly stepped movement without
+uploading the entire combat district to every guest.
+
+Trigger pulls carry monotonic action IDs and are repeated in subsequent input
+frames until acknowledged in player state. The client presents its first shot
+immediately, deduplicates the later authoritative event, and the host advances
+accepted remote projectiles through at most 150 ms of measured input age. Ammo,
+damage, cadence, and hit decisions remain authoritative. Inputs older than two
+seconds become neutral so a stalled peer cannot continue walking or firing.
 
 Shots use both the host-accepted camera yaw **and pitch** for their spawn
 direction and authoritative 3D velocity. You can fire at the ground, into an

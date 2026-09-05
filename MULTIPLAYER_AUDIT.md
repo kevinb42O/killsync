@@ -18,7 +18,7 @@ environment-art pass.
 | High | Spawn-node IDs overwrote enemy entity IDs. Reused nodes produced duplicate enemies in React/Three.js and ambiguous combat targets. | Copy only spawn coordinates; preserve simulation-owned IDs. Regression test covers topology spawns. |
 | High | Mini-boss placeholders at `(0, 0)` became actual spawn positions. | Place bosses near the contract on collision-clear ground. Validate objectives and extraction locations too. |
 | High | Guests waited for input delivery, a 20 Hz host tick, a 10 Hz snapshot, and interpolation before moving. | Shared collision-aware movement, local prediction, input acknowledgments, reconciliation, 30 Hz input/simulation, and 20 Hz snapshots. Combat remains authoritative. |
-| High | Unordered snapshots could rewind state; resetting simulation ticks complicated retry ordering. | Monotonic transport ticks independent of run ticks; reject stale/duplicate state. Protocol is now version 11. |
+| High | Unordered snapshots could rewind state; resetting simulation ticks complicated retry ordering. | Monotonic transport ticks independent of run ticks; reject stale/duplicate state. Protocol is now version 12 after the acknowledged-fire follow-up. |
 | High | Snapshots over the old 64 KB receive limit disappeared. | Binary fragmentation into at most 12,020-byte packets; bounded 512 KB reassembly, timeout, and stale/loss handling. |
 | High | A rejected late join could still install an input mapping to another player's ID. | Install peer mappings only after successful player admission; reject duplicate lobby identities. |
 | Medium | React evaluated `new CoopSimulation(...)` on every host render, rebuilding spawn topology even though the ref kept the original instance. | Initialize once; remove redundant host HUD synchronization. |
@@ -34,57 +34,49 @@ Opening insertion is now 12 seconds instead of 60. Public matches can start with
 one operator. Solo test does not publish a room or need ICE/signaling requests;
 use public hosting when the room should remain discoverable.
 
-## Highest-Value Next Work
+## P1 Networking Follow-up (Implemented)
 
-### P1: Host Timing And Connection Recovery
+### Host Timing And Connection Recovery
 
-[src/components/MultiplayerArena.tsx](src/components/MultiplayerArena.tsx) still
-drives authoritative simulation from `requestAnimationFrame`. Background tabs,
-render stalls, or a slow host can slow the whole match. This was observable during
-browser testing. Moving simulation to a worker helps render contention, but a
-dedicated authoritative server is the stronger solution for background-tab and
-host-disconnect reliability.
+[src/components/MultiplayerArena.tsx](src/components/MultiplayerArena.tsx) now
+drives its 30 Hz fixed simulation from a dedicated worker pulse rather than
+`requestAnimationFrame`, with bounded catch-up after timer jitter. Inputs become
+neutral after two seconds without a fresh packet, preventing a stalled peer from
+continuing to walk or fire.
 
-Add snapshot-age/RTT/jitter/queue diagnostics and a stale-input timeout. Currently
-a peer can remain connected while its data flow stops. Define real reconnect and
-host-loss behavior rather than relying on connection-state labels. Keep the host
-tab foregrounded when testing the current peer-hosted implementation.
+Still outstanding: snapshot-age/RTT/jitter/queue diagnostics, an explicit
+reconnect flow, host migration, and ultimately a dedicated authoritative server.
 
-### P1: Bandwidth And Loss Resilience
+### Bandwidth And Loss Resilience
 
 [src/game/multiplayer/ManualWebRTCSession.ts](src/game/multiplayer/ManualWebRTCSession.ts)
-still sends full JSON snapshots, now fragmented safely. A fixture with four
-players, 90 enemies, and 200 gems was about 44 KB before extra combat events.
-At 20 Hz that is roughly 0.88 MB/s per guest before transport overhead. Three
-guests can therefore demand substantial host upload bandwidth.
+now builds a separate replaceable state packet for each peer. Combat entities
+outside a 2.6 km interest radius are culled, visible gems are capped at 96, and
+positions/health/angles are quantized. Squad, run, objective, result, encounter,
+and station state remains global.
 
-Next: measured per-peer interest filtering, quantized transforms, delta snapshots
-with periodic full baselines, bounded pickup populations, and event sequences
-separate from repeated world state. Preserve shared objective information even
-when distant combat entities are culled. Fragmentation fixes delivery limits,
-not bandwidth cost; a missing fragment still drops that snapshot.
+Still outstanding: field-packed binary encoding, delta snapshots with periodic
+full baselines, and event sequences separated from repeated world state.
 
-One-shot jump/reload/fire edges can still be lost on the unreliable input channel.
-Introduce acknowledged action IDs or redundant command bundles. The host currently
-samples the latest input rather than consuming an exact command history, so bursty
-loss can still require movement corrections. Local prediction does not eliminate
-remote-player interpolation delay or weapon/hit-confirmation round-trip delay.
-Add predicted firing presentation and bounded host-side shot rewind next.
+Trigger pulls now carry monotonic IDs repeated in later input frames and exposed
+as host acknowledgements. Local muzzle/audio/recoil presentation occurs on the
+trigger gesture and is deduplicated against the authoritative event. The host
+fast-forwards accepted projectiles by at most 150 ms of measured input age in
+small collision-checked steps. Jump/reload action IDs remain future work.
 
-### P1: Production Signaling Hardening
+### Production Signaling Hardening
 
-[server/multiplayerSignaling.ts](server/multiplayerSignaling.ts) uses process-local
-rooms, no per-client rate limit, no spectator reservation cap, and static TURN
-credentials returned by a public endpoint when configured. Before public launch,
-add quotas, bounded spectators/pending joins, expiring TURN credentials, and
-explicit cross-origin allowed methods for the PATCH/DELETE routes. A shared room
-store or sticky routing is needed before running multiple server instances.
+[server/multiplayerSignaling.ts](server/multiplayerSignaling.ts) now applies
+per-address request limits, pending-join and spectator caps, explicit CORS
+methods, and ten-minute HMAC TURN REST credentials. The standalone server refuses
+an accidental multi-process deployment unless shared-store/sticky-routing support
+is explicitly declared.
 
 [src/game/multiplayer/LobbySignaling.ts](src/game/multiplayer/LobbySignaling.ts)
-uses interval polling that can overlap slow requests. Serialize polls, abort
-outstanding requests on teardown, and retry failed offer publication without
-leaving requests permanently busy. Awaited session creation also needs cancellation
-guards when the user exits setup mid-request.
+now schedules the next poll only after the current request completes, aborts
+active fetches during teardown, checks cancellation after awaited WebRTC work,
+and releases failed offer requests so publication can retry. Cancellation of the
+initial static lobby-creation request remains a setup-screen concern.
 
 ### P2: Objectives And Encounter Design
 
@@ -94,10 +86,10 @@ encounters: assaults on the uplink, moving elite escorts, multi-site sabotage,
 and extraction waves. Avoid simply adding more idle capture time.
 
 [src/game/multiplayer/EncounterDirector.ts](src/game/multiplayer/EncounterDirector.ts)
-still mixes unlocked enemy tiers largely uniformly. Prefer authored compositions
-and threat budgets: blockers plus ranged support, small flanking packs, and
-recovery windows after elites. Local obstacle steering is not global pathfinding;
-use navigation routes for enemies stranded behind larger buildings.
+now uses finite rounds, authored frontline/support/flanking packs, real threat
+gates, collision-clear formations, tier introductions, and recovery windows.
+Enemies have local stuck detection and temporary detour waypoints. Full global
+route navigation remains a later option for more complex authored districts.
 
 Measure solo/two/four-player boss time-to-kill and ammo sustainability before
 changing health numbers. Define extraction participation and rewards explicitly:
@@ -110,10 +102,10 @@ a sparse procedural environment with simple materials. Author a smaller combat
 district with recognizable landmarks, intentional cover, lighting contrast, and
 less visual competition between environment neon and gameplay warnings.
 
-[src/game/Renderer3D.ts](src/game/Renderer3D.ts) still needs a complete scene-resource
-teardown audit, draw-call budgets, and quality presets. Pool/instance repeated
-enemy parts and cache bridge adaptations rather than allocating every entity's
-presentation object every frame. Capture sustained mobile GPU/frame-time data;
+[src/game/Renderer3D.ts](src/game/Renderer3D.ts) now reuses horde geometry,
+retains only per-rig mutable materials, applies distance detail visibility, and
+explicitly disposes instance resources. It still needs whole-scene draw-call
+budgets, quality presets, and sustained low-end mobile GPU/frame-time capture;
 nonblank mobile rendering is not proof of acceptable mobile performance.
 
 The production build emits an approximately 1.53 MB minified shared JS chunk
@@ -124,7 +116,7 @@ visitors to spectator mode; offer explicit Join/Spectate choices in a later pass
 
 ## Verification
 
-- Full suite: 92 tests across 17 files passed.
+- Full suite: 116 tests across 20 files passed.
 - TypeScript: `npm run lint` passed.
 - Production: `npm run build` passed, with the bundle-size warning noted above.
 - Actual two-browser public-lobby handshake and live WebRTC state delivery passed.

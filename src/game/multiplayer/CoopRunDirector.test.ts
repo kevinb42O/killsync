@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { COOP_INSERTION_DURATION_MS, CoopRunDirector } from './CoopRunDirector';
+import { COOP_BOSS_BASE_HEALTH, COOP_INSERTION_DURATION_MS, CoopRunDirector, coopBossHealth, coopObjectiveEliteHealth } from './CoopRunDirector';
 import { isWorldPositionClear } from '../world/WorldLayout';
 import { GAME_WIDTH } from '../../constants';
 
 describe('CoopRunDirector', () => {
+  it('scales scenario durability up in total but down per operator', () => {
+    for (const kind of Object.keys(COOP_BOSS_BASE_HEALTH) as Array<keyof typeof COOP_BOSS_BASE_HEALTH>) {
+      const health = [1, 2, 3, 4].map(players => coopBossHealth(kind, players));
+      const perOperator = health.map((value, index) => value / (index + 1));
+      expect(health).toEqual([...health].sort((left, right) => left - right));
+      expect(perOperator).toEqual([...perOperator].sort((left, right) => right - left));
+    }
+    expect(coopObjectiveEliteHealth(500, 1)).toBe(500);
+    expect(coopObjectiveEliteHealth(500, 4)).toBe(1625);
+  });
   it('places objectives and mini-bosses in clear space near the squad, including map edges', () => {
     for (const centre of [{ x: 6000, y: 6000 }, { x: 20, y: 20 }, { x: GAME_WIDTH - 20, y: GAME_WIDTH - 20 }]) {
       for (const seed of [1, 123, 0xdecafbad]) {

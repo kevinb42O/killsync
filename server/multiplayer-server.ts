@@ -3,6 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMultiplayerRouter } from './multiplayerSignaling';
 
+const workerCount = Number(process.env.WEB_CONCURRENCY || 1);
+if (workerCount > 1 && process.env.MULTIPLAYER_SHARED_ROOM_STORE !== 'true') {
+  throw new Error('Refusing multi-process signaling without MULTIPLAYER_SHARED_ROOM_STORE=true and sticky routing.');
+}
+
 const app = express();
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 app.use(express.json({ limit: '64kb' }));

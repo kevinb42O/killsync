@@ -21,6 +21,8 @@ type ManagedPeer = {
   inputChannel?: RTCDataChannel;
   stateChannel?: RTCDataChannel;
   reliableChannel?: RTCDataChannel;
+  estimatedOneWayMs: number;
+  latencySampledAt: number;
 };
 
 export interface ManualWebRTCSessionOptions {
@@ -28,7 +30,7 @@ export interface ManualWebRTCSessionOptions {
   sessionId?: string;
   iceServers?: RTCIceServer[];
   onPeerChange?: (peers: MultiplayerPeerInfo[]) => void;
-  onInput?: (peerId: string, frame: MultiplayerInputFrame) => void;
+  onInput?: (peerId: string, frame: MultiplayerInputFrame, estimatedOneWayMs: number) => void;
   onState?: (frame: MultiplayerStateFrame) => void;
   onEvent?: (peerId: string, event: MultiplayerReliableEvent) => void;
   onError?: (message: string) => void;
@@ -144,11 +146,12 @@ export class ManualWebRTCSession {
     }
   }
 
-  broadcastState(frame: MultiplayerStateFrame) {
+  broadcastState(frame: MultiplayerStateFrame, payloadForPeer?: (peerId: string) => unknown) {
     if (this.peers.size === 0) return;
-    const packets = encodeSnapshotPackets(JSON.stringify(frame), frame.tick);
     for (const peer of this.peers.values()) {
       if (peer.stateChannel?.readyState !== 'open' || peer.stateChannel.bufferedAmount > 64_000) continue;
+      const peerFrame = payloadForPeer ? { ...frame, payload: payloadForPeer(peer.peerId) } : frame;
+      const packets = encodeSnapshotPackets(JSON.stringify(peerFrame), frame.tick);
       for (const packet of packets) if (!this.send(peer.stateChannel, packet, false)) break;
     }
   }
@@ -181,7 +184,7 @@ export class ManualWebRTCSession {
       this.peers.delete(peerId);
     }
     const connection = new RTCPeerConnection({ iceServers: this.iceServers });
-    const peer: ManagedPeer = { peerId, connection };
+    const peer: ManagedPeer = { peerId, connection, estimatedOneWayMs: 0, latencySampledAt: 0 };
     this.peers.set(peerId, peer);
     connection.onconnectionstatechange = () => {
       this.notifyPeers();
@@ -228,7 +231,9 @@ export class ManualWebRTCSession {
       const message: unknown = JSON.parse(raw);
       if (!isMultiplayerWireMessage(message)) return;
       if (kind === 'input' && message.type === 'input') {
-        this.onInput?.(peerId, clampInputFrame(message));
+        const peer = this.peers.get(peerId);
+        if (peer) void this.refreshLatency(peer);
+        this.onInput?.(peerId, clampInputFrame(message), peer?.estimatedOneWayMs || 0);
       } else if (kind === 'state' && message.type === 'state') {
         if (!Number.isSafeInteger(message.tick) || message.tick <= this.latestStateTick) return;
         this.latestStateTick = message.tick;
@@ -239,6 +244,19 @@ export class ManualWebRTCSession {
     } catch {
       this.onError?.('A peer sent an unreadable network message.');
     }
+  }
+
+  private async refreshLatency(peer: ManagedPeer) {
+    const now = performance.now();
+    if (now - peer.latencySampledAt < 1_000 || peer.connection.connectionState !== 'connected') return;
+    peer.latencySampledAt = now;
+    try {
+      const reports = await peer.connection.getStats();
+      reports.forEach(report => {
+        if (report.type !== 'candidate-pair' || report.state !== 'succeeded' || !report.nominated || typeof report.currentRoundTripTime !== 'number') return;
+        peer.estimatedOneWayMs = Math.max(0, Math.min(150, report.currentRoundTripTime * 500));
+      });
+    } catch { /* A missing stats sample must never interrupt gameplay input. */ }
   }
 
   private send(channel: RTCDataChannel | undefined, message: string | ArrayBuffer, checkBackpressure = true): boolean {

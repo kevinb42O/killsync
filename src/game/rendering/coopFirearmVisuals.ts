@@ -1,12 +1,25 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COOP_FIREARM_BY_ID, type CoopFirearmId, type CoopWeaponRuntime } from '../combat/coopFirearms';
 
 type SuitMaterials = { forearm: THREE.MeshStandardMaterial; armor: THREE.MeshStandardMaterial; hand: THREE.MeshStandardMaterial; glow: THREE.MeshBasicMaterial };
 type VisualParts = { root: THREE.Group; bolt?: THREE.Object3D; magazine?: THREE.Object3D; pump?: THREE.Object3D; magazineHome?: THREE.Vector3; magazineRotationHome?: THREE.Euler; pumpHome?: THREE.Vector3; boltHome?: THREE.Vector3; muzzle: THREE.Object3D; flash: THREE.Sprite; flashMaterial: THREE.SpriteMaterial; accent: THREE.MeshBasicMaterial; suit?: SuitMaterials };
 
 const bodyGeometry = new THREE.BoxGeometry(1, 1, 1);
+const roundedBodyGeometry = new RoundedBoxGeometry(1, 1, 1, 2, .08);
 const tubeGeometry = new THREE.CylinderGeometry(.16, .16, 1, 8);
+const detailedTubeGeometry = new THREE.CylinderGeometry(.16, .16, 1, 12);
 const scopeGeometry = new THREE.CylinderGeometry(.26, .31, 1, 10);
+
+const WEAPON_PALETTES: Record<CoopFirearmId, { dark: number; panel: number; steel: number; trim: number; rubber: number }> = {
+  // These values deliberately preserve the existing modular handgun. The
+  // first-person handgun remains the separately authored Renderer3D model.
+  plasma_gun: { dark: 0x111c2c, panel: 0x38516d, steel: 0x8aa4bb, trim: 0x67e8f9, rubber: 0x0b111c },
+  assault_rifle: { dark: 0x0b1b19, panel: 0x245044, steel: 0x8fbeb0, trim: 0x34d399, rubber: 0x07110f },
+  combat_shotgun: { dark: 0x21130c, panel: 0x61321b, steel: 0xd0a064, trim: 0xfb923c, rubber: 0x140b07 },
+  sniper_rifle: { dark: 0x161228, panel: 0x41356d, steel: 0xaaa0cf, trim: 0xc4b5fd, rubber: 0x0d0a18 },
+  smg: { dark: 0x121b0d, panel: 0x385322, steel: 0x9caf8e, trim: 0xa3e635, rubber: 0x0a1007 },
+};
 const flashTexture = (() => {
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 32;
   const context = canvas.getContext('2d')!; const glow = context.createRadialGradient(16, 16, 1, 16, 16, 16);
@@ -107,13 +120,43 @@ export class CoopFirearmVisualRig {
 export function createRemoteFirearm(id: CoopFirearmId) { const rig = new CoopFirearmVisualRig(false); rig.setWeapon(id); return rig; }
 
 function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
-  const definition = COOP_FIREARM_BY_ID[id], root = new THREE.Group(), dark = new THREE.MeshStandardMaterial({ color: 0x111c2c, emissive: 0x07101d, emissiveIntensity: .65, metalness: .92, roughness: .19 }), panel = new THREE.MeshStandardMaterial({ color: 0x38516d, emissive: 0x0b1829, emissiveIntensity: .75, metalness: .8, roughness: .24 }), steel = new THREE.MeshStandardMaterial({ color: 0x8aa4bb, emissive: 0x182b3d, emissiveIntensity: .45, metalness: .96, roughness: .12 }), accent = new THREE.MeshBasicMaterial({ color: new THREE.Color(definition.visual.muzzleColor), transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
+  const definition = COOP_FIREARM_BY_ID[id], root = new THREE.Group(), palette = WEAPON_PALETTES[id], isHandgun = id === 'plasma_gun';
+  const dark = new THREE.MeshStandardMaterial({ color: palette.dark, emissive: isHandgun ? 0x07101d : palette.dark, emissiveIntensity: isHandgun ? .65 : .28, metalness: .92, roughness: isHandgun ? .19 : .24 });
+  const panel = new THREE.MeshStandardMaterial({ color: palette.panel, emissive: isHandgun ? 0x0b1829 : palette.dark, emissiveIntensity: isHandgun ? .75 : .34, metalness: .8, roughness: isHandgun ? .24 : .28 });
+  const steel = new THREE.MeshStandardMaterial({ color: palette.steel, emissive: isHandgun ? 0x182b3d : palette.dark, emissiveIntensity: isHandgun ? .45 : .16, metalness: .96, roughness: isHandgun ? .12 : .18 });
+  const rubber = new THREE.MeshStandardMaterial({ color: palette.rubber, metalness: .2, roughness: .72 });
+  const accent = new THREE.MeshBasicMaterial({ color: palette.trim, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
+  const accentMetal = new THREE.MeshStandardMaterial({ color: palette.trim, emissive: palette.trim, emissiveIntensity: .72, metalness: .58, roughness: .22 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: palette.trim, emissive: palette.trim, emissiveIntensity: .28, transparent: true, opacity: .32, roughness: .08, metalness: .22, transmission: .18, depthWrite: false, side: THREE.DoubleSide });
   const suit: SuitMaterials = { forearm: new THREE.MeshStandardMaterial({ color: 0x101827, emissive: 0x07101d, metalness: .72, roughness: .30 }), armor: new THREE.MeshStandardMaterial({ color: 0x263449, emissive: 0x091525, metalness: .82, roughness: .22 }), hand: new THREE.MeshStandardMaterial({ color: 0x263449, emissive: 0x07101d, metalness: .76, roughness: .25 }), glow: new THREE.MeshBasicMaterial({ color: new THREE.Color(definition.visual.muzzleColor), transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }) };
-  const addBox = (size: [number, number, number], position: [number, number, number], material: THREE.Material = dark) => { const mesh = new THREE.Mesh(bodyGeometry, material); mesh.scale.set(...size); mesh.position.set(...position); root.add(mesh); return mesh; };
-  const addTube = (radius: number, length: number, position: [number, number, number], material: THREE.Material = dark) => { const mesh = new THREE.Mesh(tubeGeometry, material); mesh.scale.set(radius / .16, length, radius / .16); mesh.rotation.x = Math.PI / 2; mesh.position.set(...position); root.add(mesh); return mesh; };
+  const addBox = (size: [number, number, number], position: [number, number, number], material: THREE.Material = dark) => { const mesh = new THREE.Mesh(isHandgun ? bodyGeometry : roundedBodyGeometry, material); mesh.scale.set(...size); mesh.position.set(...position); root.add(mesh); return mesh; };
+  const addTube = (radius: number, length: number, position: [number, number, number], material: THREE.Material = dark) => { const mesh = new THREE.Mesh(isHandgun ? tubeGeometry : detailedTubeGeometry, material); mesh.scale.set(radius / .16, length, radius / .16); mesh.rotation.x = Math.PI / 2; mesh.position.set(...position); root.add(mesh); return mesh; };
   const addRail = (z: number, length: number, y = .46) => { addBox([.16, .10, length], [-.36, y, z], steel); addBox([.16, .10, length], [.36, y, z], steel); for (let notch = 0; notch < Math.ceil(length / .36); notch++) addBox([.82, .045, .06], [0, y + .08, z - length / 2 + .15 + notch * .32], accent); };
   const addVents = (z: number, count: number, width = .9) => { for (let vent = 0; vent < count; vent++) { const x = vent % 2 ? .56 : -.56; const y = vent < 2 ? .04 : .18; addBox([.10, .33, .40], [x, y, z - Math.floor(vent / 2) * .50], accent); } };
   const addBrace = (z: number, length: number) => { const brace = addBox([.18, .18, length], [.72, -.18, z], steel); brace.rotation.x = -.18; return brace; };
+  const addSidePlate = (z: number, length: number, material: THREE.Material = panel) => {
+    addBox([.08, .68, length], [-.75, .02, z], material);
+    addBox([.08, .68, length], [.75, .02, z], material);
+    addBox([.035, .09, length * .78], [-.80, .17, z], accent);
+    addBox([.035, .09, length * .78], [.80, .17, z], accent);
+  };
+  const addFasteners = (z: number, spacing: number, y = .30) => {
+    for (const x of [-.79, .79]) for (const offset of [-spacing, spacing]) {
+      const fastener = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, .045, 10), steel);
+      fastener.rotation.z = Math.PI / 2; fastener.position.set(x, y, z + offset); root.add(fastener);
+    }
+  };
+  const addEnergyWindow = (z: number, length: number) => {
+    addBox([.58, .10, length], [0, .69, z], glass);
+    addBox([.16, .035, length * .78], [0, .755, z], accent);
+    for (const end of [-1, 1]) addBox([.72, .13, .12], [0, .70, z + end * length * .46], steel);
+  };
+  const addMuzzleCollars = (z: number, radius: number) => {
+    for (let ring = 0; ring < 2; ring++) {
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(radius + ring * .035, .07, 8, 18), ring ? accentMetal : steel);
+      collar.position.set(0, 0, z - ring * .24); root.add(collar);
+    }
+  };
   const addCylinderBetween = (from: THREE.Vector3, to: THREE.Vector3, radius: number, material: THREE.Material) => {
     const mid = from.clone().add(to).multiplyScalar(.5), length = from.distanceTo(to);
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * .9, length, 8), material);
@@ -139,13 +182,120 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
   let magazine: THREE.Object3D | undefined, bolt: THREE.Object3D | undefined, pump: THREE.Object3D | undefined;
   const mountMuzzle = (z: number) => { const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, z); root.add(muzzle); const flashMaterial = new THREE.SpriteMaterial({ map: flashTexture, color: new THREE.Color(definition.visual.muzzleColor), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }); const flash = new THREE.Sprite(flashMaterial); flash.scale.setScalar(firstPerson ? 1.7 : .7); muzzle.add(flash); return { muzzle, flash, flashMaterial }; };
   if (id === 'plasma_gun') { chassis.scale.z = .85; chassis.position.z = -1.1; addTube(.31, 2.6, [0, .03, -4.32], panel); addRail(-3.9, 2.6); magazine = addBox([.58, .95, .88], [0, -.92, -1.32], dark); addBox([.15, .48, .70], [.43, -.94, -1.32], accent); }
-  if (id === 'assault_rifle') { addBox([1.18, .62, 2.05], [0, -.02, 1.08], dark); addBox([.92, .38, 1.62], [0, .16, 1.72], panel); addTube(.28, 4.85, [0, .05, -5.35], steel); addTube(.13, 4.95, [.48, -.18, -5.35], accent); addRail(-4.4, 4.45); magazine = addBox([.92, 1.72, .86], [0, -1.18, -1.85], dark); magazine.rotation.x = -.16; addBox([.18, 1.20, .66], [.56, -1.18, -1.85], accent); addReflex(root, accent, -2.05); addBox([.45, .22, .86], [0, -.46, -3.65], steel); addSupportArm(-4.10); }
-  if (id === 'combat_shotgun') { chassis.scale.x = 1.25; addBox([1.20, .58, 2.25], [0, .02, 1.28], dark); addTube(.46, 5.55, [0, .08, -5.55], steel); addTube(.25, 4.75, [0, -.48, -5.18], panel); for (let band = 0; band < 4; band++) addBox([1.05, .12, .18], [0, -.22, -3.5 - band * 1.05], accent); pump = addBox([1.52, .76, 1.28], [0, -.08, -4.18], dark); addBox([1.20, .11, .95], [0, .37, -4.18], accent); addBox([.95, .48, 1.05], [0, -.20, -7.88], dark); addSupportArm(-4.18); }
-  if (id === 'sniper_rifle') { addBox([1.08, .42, 2.8], [0, .05, 1.20], dark); addBox([.92, .22, 2.4], [0, .40, 1.22], panel); addTube(.20, 7.6, [0, .04, -6.55], steel); addTube(.11, 7.75, [.42, .05, -6.65], accent); addRail(-4.5, 6.8, .52); const scope = new THREE.Mesh(scopeGeometry, dark); scope.scale.set(2.55, 4.9, 2.55); scope.rotation.x = Math.PI / 2; scope.position.set(0, 1.28, -2.65); root.add(scope); const lens = new THREE.Mesh(new THREE.CircleGeometry(.48, 12), accent); lens.rotation.x = -Math.PI / 2; lens.position.set(0, 1.28, -5.13); root.add(lens); const scopeRing = new THREE.Mesh(new THREE.TorusGeometry(.54, .08, 6, 12), steel); scopeRing.rotation.x = Math.PI / 2; scopeRing.position.set(0, 1.28, -5.18); root.add(scopeRing); magazine = addBox([.82, 1.35, .92], [0, -1.05, -1.78], dark); bolt = addBox([.18, .18, .82], [.84, .28, -2.05], steel); addBox([.34, .34, .34], [1.05, .28, -1.72], accent); addSupportArm(-5.22); }
-  if (id === 'smg') { chassis.scale.set(1.20, 1.03, .82); chassis.position.z = -1.28; addBox([1.02, .50, 1.82], [0, -.05, 1.18], dark); addTube(.28, 3.25, [0, .03, -4.35], steel); addRail(-3.2, 2.8); magazine = addBox([.94, 2.35, .68], [0, -1.45, -1.25], dark); magazine.rotation.x = -.34; addBox([.18, 1.8, .44], [.56, -1.45, -1.25], accent); addReflex(root, accent, -1.72); for (let slot = 0; slot < 5; slot++) addBox([.14, .28, .32], [slot % 2 ? .62 : -.62, .02, -2.4 - Math.floor(slot / 2) * .44], accent); addSupportArm(-3.42); }
+  if (id === 'assault_rifle') {
+    // Emerald service rifle: layered stock, armored handguard and a visible
+    // power spine keep the silhouette readable without turning it into a slab.
+    addBox([1.18, .62, 2.05], [0, -.02, 1.08], dark);
+    addBox([.92, .38, 1.62], [0, .16, 1.72], panel);
+    addBox([1.10, .78, .34], [0, -.02, 2.54], rubber);
+    addBox([.70, .28, 1.10], [0, .48, 1.58], rubber);
+    addTube(.28, 4.85, [0, .05, -5.35], steel);
+    addTube(.13, 4.95, [.48, -.18, -5.35], accent);
+    addRail(-4.4, 4.45);
+    addSidePlate(-4.35, 3.20);
+    addFasteners(-4.30, 1.18);
+    addEnergyWindow(-1.62, 1.34);
+    addMuzzleCollars(-7.52, .39);
+    magazine = addBox([.92, 1.72, .86], [0, -1.18, -1.85], dark);
+    magazine.rotation.x = -.16;
+    addBox([.18, 1.20, .66], [.56, -1.18, -1.85], accent);
+    for (let mark = 0; mark < 3; mark++) addBox([.045, .12, .42], [-.49, -1.02 - mark * .34, -1.82], accentMetal);
+    addReflex(root, dark, steel, glass, accent, -2.05);
+    addBox([.45, .22, .86], [0, -.46, -3.65], steel);
+    addSupportArm(-4.10);
+  }
+  if (id === 'combat_shotgun') {
+    // Amber breacher: broad receiver, ventilated heat shield, ribbed pump and
+    // individual shell-status lamps sell weight and close-range purpose.
+    chassis.scale.x = 1.25;
+    addBox([1.20, .58, 2.25], [0, .02, 1.28], dark);
+    addBox([1.36, .82, .32], [0, -.02, 2.48], rubber);
+    addBox([.82, .26, 1.54], [0, .48, 1.25], panel);
+    addTube(.46, 5.55, [0, .08, -5.55], steel);
+    addTube(.25, 4.75, [0, -.48, -5.18], panel);
+    const heatShield = new THREE.Mesh(new THREE.CylinderGeometry(.58, .58, 4.55, 12, 1, true, .32, Math.PI * 2 - .64), dark);
+    heatShield.rotation.x = Math.PI / 2; heatShield.position.set(0, .08, -5.34); root.add(heatShield);
+    for (let vent = 0; vent < 5; vent++) {
+      addBox([.22, .08, .46], [-.39, .61, -3.65 - vent * .72], accentMetal);
+      addBox([.22, .08, .46], [.39, .61, -3.65 - vent * .72], accentMetal);
+    }
+    for (let band = 0; band < 4; band++) addBox([1.05, .12, .18], [0, -.22, -3.5 - band * 1.05], accent);
+    pump = addBox([1.52, .76, 1.28], [0, -.08, -4.18], rubber);
+    addBox([1.20, .11, .95], [0, .37, -4.18], accent);
+    for (let rib = 0; rib < 4; rib++) addBox([1.56, .10, .08], [0, -.42, -3.77 - rib * .27], steel);
+    addSidePlate(-1.64, 1.30, dark);
+    for (let shell = 0; shell < 4; shell++) addBox([.045, .16, .16], [.81, -.05, -1.22 - shell * .28], accent);
+    addMuzzleCollars(-8.48, .56);
+    addBox([.95, .48, 1.05], [0, -.20, -7.88], dark);
+    addSupportArm(-4.18);
+  }
+  if (id === 'sniper_rifle') {
+    // Violet marksman platform: long floating barrel, sculpted stock and a
+    // layered optic with real glass make it feel deliberately precision-built.
+    addBox([1.08, .42, 2.8], [0, .05, 1.20], dark);
+    addBox([.92, .22, 2.4], [0, .40, 1.22], panel);
+    addBox([1.18, .72, .34], [0, -.02, 2.74], rubber);
+    addBox([.54, .62, 1.76], [0, .48, 1.68], rubber);
+    addBox([.18, .18, 1.72], [-.56, -.34, 1.74], steel);
+    addBox([.18, .18, 1.72], [.56, -.34, 1.74], steel);
+    addTube(.20, 7.6, [0, .04, -6.55], steel);
+    addTube(.11, 7.75, [.42, .05, -6.65], accent);
+    addRail(-4.5, 6.8, .52);
+    addSidePlate(-4.65, 3.65, dark);
+    addFasteners(-4.65, 1.40, .18);
+    addEnergyWindow(-1.30, 1.56);
+    addMuzzleCollars(-10.02, .31);
+    const scope = new THREE.Mesh(scopeGeometry, dark);
+    scope.scale.set(2.55, 4.9, 2.55); scope.rotation.x = Math.PI / 2; scope.position.set(0, 1.28, -2.65); root.add(scope);
+    for (const ringZ of [-1.28, -3.95]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.56, .09, 8, 18), steel);
+      ring.position.set(0, 1.28, ringZ); root.add(ring);
+      addBox([.18, .48, .30], [0, .84, ringZ], dark);
+    }
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(.48, 24), glass);
+    lens.position.set(0, 1.28, -5.13); root.add(lens);
+    const reticle = new THREE.Mesh(new THREE.RingGeometry(.08, .11, 20), accent);
+    reticle.position.set(0, 1.28, -5.145); root.add(reticle);
+    const scopeRing = new THREE.Mesh(new THREE.TorusGeometry(.54, .08, 8, 18), steel);
+    scopeRing.position.set(0, 1.28, -5.18); root.add(scopeRing);
+    magazine = addBox([.82, 1.35, .92], [0, -1.05, -1.78], dark);
+    bolt = addBox([.18, .18, .82], [.84, .28, -2.05], steel);
+    addBox([.34, .34, .34], [1.05, .28, -1.72], accentMetal);
+    addSupportArm(-5.22);
+  }
+  if (id === 'smg') {
+    // Acid-lime compact: short vented shroud, skeletal stock and a translucent
+    // magazine witness strip distinguish it from the full-size rifle.
+    chassis.scale.set(1.20, 1.03, .82); chassis.position.z = -1.28;
+    addBox([1.02, .50, 1.82], [0, -.05, 1.18], dark);
+    addBox([1.02, .62, .28], [0, -.04, 2.15], rubber);
+    addBox([.16, .16, 1.56], [-.47, .23, 1.34], steel);
+    addBox([.16, .16, 1.56], [.47, .23, 1.34], steel);
+    addBox([.82, .30, .26], [0, .30, .66], panel);
+    addTube(.28, 3.25, [0, .03, -4.35], steel);
+    addRail(-3.2, 2.8);
+    addSidePlate(-3.46, 2.20);
+    addEnergyWindow(-1.34, .92);
+    addMuzzleCollars(-5.86, .38);
+    magazine = addBox([.94, 2.35, .68], [0, -1.45, -1.25], dark);
+    magazine.rotation.x = -.34;
+    addBox([.18, 1.8, .44], [.56, -1.45, -1.25], glass);
+    for (let mark = 0; mark < 5; mark++) addBox([.045, .10, .28], [.665, -.76 - mark * .31, -1.12], accent);
+    addReflex(root, dark, steel, glass, accent, -1.72);
+    for (let slot = 0; slot < 5; slot++) addBox([.14, .28, .32], [slot % 2 ? .62 : -.62, .02, -2.4 - Math.floor(slot / 2) * .44], accent);
+    addSupportArm(-3.42);
+  }
   const muzzleData = mountMuzzle(id === 'sniper_rifle' ? -10.45 : id === 'combat_shotgun' ? -8.85 : id === 'assault_rifle' ? -7.90 : id === 'smg' ? -6.18 : -6.15);
   root.traverse(node => { if (node instanceof THREE.Mesh) { node.castShadow = false; node.receiveShadow = false; } });
   return { root, bolt, magazine, pump, magazineHome: magazine?.position.clone(), magazineRotationHome: magazine?.rotation.clone(), pumpHome: pump?.position.clone(), boltHome: bolt?.position.clone(), muzzle: muzzleData.muzzle, flash: muzzleData.flash, flashMaterial: muzzleData.flashMaterial, accent, suit };
 }
 
-function addReflex(root: THREE.Group, accent: THREE.Material, z: number) { const housing = new THREE.Mesh(bodyGeometry, new THREE.MeshStandardMaterial({ color: 0x151e2d, metalness: .8, roughness: .24 })); housing.scale.set(.56, .34, .44); housing.position.set(0, .62, z); root.add(housing); const glass = new THREE.Mesh<THREE.PlaneGeometry, THREE.Material>(new THREE.PlaneGeometry(.34, .22), accent); glass.position.set(0, .66, z - .24); root.add(glass); }
+function addReflex(root: THREE.Group, dark: THREE.Material, steel: THREE.Material, glass: THREE.Material, accent: THREE.Material, z: number) {
+  const base = new THREE.Mesh(roundedBodyGeometry, steel); base.scale.set(.72, .16, .66); base.position.set(0, .58, z + .04); root.add(base);
+  const top = new THREE.Mesh(roundedBodyGeometry, dark); top.scale.set(.68, .12, .48); top.position.set(0, 1.08, z); root.add(top);
+  for (const x of [-.30, .30]) {
+    const wall = new THREE.Mesh(roundedBodyGeometry, dark); wall.scale.set(.10, .56, .48); wall.position.set(x, .84, z); root.add(wall);
+  }
+  const lens = new THREE.Mesh(new THREE.PlaneGeometry(.48, .34), glass); lens.position.set(0, .84, z - .25); root.add(lens);
+  const dot = new THREE.Mesh(new THREE.RingGeometry(.025, .052, 16), accent); dot.position.set(0, .84, z - .265); root.add(dot);
+}

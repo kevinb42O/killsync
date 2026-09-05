@@ -61,8 +61,26 @@ export interface CoopRunSnapshot {
 
 export const COOP_INSERTION_DURATION_MS = 12_000;
 export const COOP_UPLINK_RADIUS = 155;
+export const COOP_BOSS_BASE_HEALTH: Readonly<Record<CoopBossKind, number>> = Object.freeze({
+  neural_overlord: 4_800,
+  void_architect: 9_500,
+  singularity: 34_000,
+});
 const EXFIL_MS = 90_000;
 const EXFIL_HOLD_MS = 12_000;
+
+/** Total boss durability grows, while durability per operator falls modestly.
+ * This rewards adding teammates without making a four-player focus-fire squad
+ * erase a contract boss at solo speed. */
+export function coopBossHealth(kind: CoopBossKind, playerCount: number) {
+  const members = Math.max(1, Math.min(4, Math.trunc(playerCount)));
+  return Math.round(COOP_BOSS_BASE_HEALTH[kind] * (1 + (members - 1) * .70));
+}
+
+export function coopObjectiveEliteHealth(baseHealth: number, playerCount: number) {
+  const members = Math.max(1, Math.min(4, Math.trunc(playerCount)));
+  return Math.round(baseHealth * (1 + (members - 1) * .75));
+}
 
 /** A tiny deterministic state machine. Simulation owns all positional and
  * combat validation; this director only decides which beat is currently live. */

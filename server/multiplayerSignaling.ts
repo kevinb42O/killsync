@@ -4,6 +4,11 @@ import crypto from 'node:crypto';
 const ROOM_TTL_MS = 45_000;
 const JOIN_TTL_MS = 45_000;
 const MAX_ROOMS = 250;
+const MAX_PENDING_JOINS_PER_ROOM = 8;
+const MAX_SPECTATORS_PER_ROOM = 4;
+const RATE_WINDOW_MS = 60_000;
+const RATE_LIMIT_PER_WINDOW = 180;
+const TURN_CREDENTIAL_TTL_SECONDS = 600;
 
 type Join = {
   id: string;
@@ -29,6 +34,7 @@ type Room = {
 export type PublicRoom = Pick<Room, 'id' | 'hostName' | 'maxPlayers' | 'playerCount' | 'state'>;
 
 const rooms = new Map<string, Room>();
+const requestRates = new Map<string, { startedAt: number; count: number }>();
 
 export function createMultiplayerRouter() {
   const router = Router();
@@ -36,9 +42,25 @@ export function createMultiplayerRouter() {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('Access-Control-Allow-Origin', process.env.MULTIPLAYER_CORS_ORIGIN || '*');
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     next();
   });
   router.options('*', (_, response) => response.sendStatus(204));
+  router.use((request, response, next) => {
+    const now = Date.now();
+    const key = request.ip || request.socket.remoteAddress || 'unknown';
+    const current = requestRates.get(key);
+    const bucket = !current || now - current.startedAt >= RATE_WINDOW_MS ? { startedAt: now, count: 0 } : current;
+    bucket.count++;
+    requestRates.set(key, bucket);
+    response.setHeader('RateLimit-Limit', String(RATE_LIMIT_PER_WINDOW));
+    response.setHeader('RateLimit-Remaining', String(Math.max(0, RATE_LIMIT_PER_WINDOW - bucket.count)));
+    if (bucket.count > RATE_LIMIT_PER_WINDOW) {
+      response.setHeader('Retry-After', String(Math.ceil((bucket.startedAt + RATE_WINDOW_MS - now) / 1000)));
+      return response.status(429).json({ error: 'Too many signaling requests. Try again shortly.' });
+    }
+    next();
+  });
 
   router.get('/rooms', (_, response) => {
     purgeExpired();
@@ -79,6 +101,10 @@ export function createMultiplayerRouter() {
     const room = rooms.get(request.params.roomId);
     if (!room) return response.status(404).json({ error: 'This squad is no longer online.' });
     const spectate = room.state === 'in_game' && request.body?.spectate === true;
+    const pendingJoins = [...room.joins.values()].filter(join => !join.answer).length;
+    if (pendingJoins >= MAX_PENDING_JOINS_PER_ROOM) return response.status(429).json({ error: 'This squad has too many pending joins.' });
+    const spectators = [...room.joins.values()].filter(join => join.spectate).length;
+    if (spectate && spectators >= MAX_SPECTATORS_PER_ROOM) return response.status(409).json({ error: 'This squad has no spectator slots left.' });
     const reserved = [...room.joins.values()].filter(join => !join.answer && !join.spectate).length;
     if (!spectate && room.playerCount + reserved >= room.maxPlayers) return response.status(409).json({ error: 'This squad is full.' });
     const join: Join = { id: shortId('join'), token: token(), guestName: cleanName(request.body?.guestName) || 'OPERATIVE', spectate, createdAt: Date.now() };
@@ -145,10 +171,14 @@ function purgeExpired() {
     for (const join of room.joins.values()) if (now - join.createdAt > JOIN_TTL_MS) room.joins.delete(join.id);
     if (now - room.updatedAt > ROOM_TTL_MS) rooms.delete(room.id);
   }
+  for (const [key, bucket] of requestRates) if (now - bucket.startedAt > RATE_WINDOW_MS * 2) requestRates.delete(key);
 }
 function iceServers(): RTCIceServer[] {
   const urls = process.env.TURN_URLS?.split(',').map(url => url.trim()).filter(Boolean) || [];
-  const turn = urls.length && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL
-    ? [{ urls, username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL }] : [];
+  const sharedSecret = process.env.TURN_SHARED_SECRET;
+  const expiresAt = Math.floor(Date.now() / 1000) + TURN_CREDENTIAL_TTL_SECONDS;
+  const username = `${expiresAt}:coop-${crypto.randomBytes(6).toString('base64url')}`;
+  const turn = urls.length && sharedSecret
+    ? [{ urls, username, credential: crypto.createHmac('sha1', sharedSecret).update(username).digest('base64') }] : [];
   return [{ urls: 'stun:stun.l.google.com:19302' }, ...turn];
 }

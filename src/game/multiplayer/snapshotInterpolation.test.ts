@@ -20,4 +20,10 @@ describe('interpolateCoopSnapshot', () => {
     expect(result.players[0].z).toBe(50);
     expect(Math.abs(result.players[0].angle)).toBeGreaterThan(2.9);
   });
+
+  it('returns the authoritative snapshot unchanged after interpolation catches up', () => {
+    const current = snapshot(100, 1);
+    expect(interpolateCoopSnapshot(snapshot(0, 0), current, 1)).toBe(current);
+    expect(interpolateCoopSnapshot(snapshot(0, 0), current, 2)).toBe(current);
+  });
 });

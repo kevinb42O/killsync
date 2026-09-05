@@ -1,4 +1,5 @@
 import { ENEMY_TYPES, ITEM_TYPES, GAME_WIDTH, GAME_HEIGHT } from '../constants';
+import { ENEMY_ATTACK_PROFILES, bountyEnemyMultipliers, supplyGuardMultipliers } from './combat/enemyDomain';
 import { soundManager } from './SoundManager';
 import type { GameEngine } from './Engine';
 
@@ -43,6 +44,7 @@ export interface SupplyCrate {
   maxHealth: number;
   collected: boolean;
   guardSpawned: boolean;
+  guardEnemyId: string;
 }
 
 // ─── Announcement Queue ────────────────────────────────────────
@@ -179,9 +181,11 @@ export class EventManager {
     // Check supply crate pickup
     for (const crate of this.supplyCrates) {
       if (crate.collected) continue;
+      const guardAlive = crate.guardSpawned && engine.enemies.some(enemy => enemy.id === crate.guardEnemyId);
+      if (!guardAlive) crate.guardSpawned = false;
       const dx = engine.player.position.x - crate.x;
       const dy = engine.player.position.y - crate.y;
-      if (dx * dx + dy * dy < (engine.player.radius + crate.radius) * (engine.player.radius + crate.radius)) {
+      if (!crate.guardSpawned && dx * dx + dy * dy < (engine.player.radius + crate.radius) * (engine.player.radius + crate.radius)) {
         crate.collected = true;
         soundManager.playCollect();
         engine.player.health = Math.min(engine.player.maxHealth, engine.player.health + this.BALANCE.supplyHealAmount);
@@ -292,6 +296,7 @@ export class EventManager {
 
   // ─── Bounty Target ─────────────────────────────────────
   private spawnBountyTarget(engine: GameEngine) {
+    if (!engine.hasEnemyCapacity()) return;
     const angle = Math.random() * Math.PI * 2;
     const dist = Math.max(engine.canvas.width, engine.canvas.height) / 2 + 100;
     const x = engine.player.position.x + Math.cos(angle) * dist;
@@ -303,7 +308,7 @@ export class EventManager {
 
     const config = ENEMY_TYPES.elite;
     const enemyId = `bounty_${Date.now()}`;
-    const healthMult = (4 + engine.difficultyMultiplier * 1.2) * Math.min(this.adaptiveMultiplier, 1.8);
+    const multipliers = bountyEnemyMultipliers(engine.difficultyMultiplier, this.adaptiveMultiplier);
     const bountySpeedMultiplier = isVoidStalker ? 1.15 : 1.65;
     const adaptiveSpeedCap = isVoidStalker ? 1.15 : 1.35;
     const rawBountySpeed = config.speed * bountySpeedMultiplier * Math.min(this.adaptiveMultiplier, adaptiveSpeedCap);
@@ -314,19 +319,22 @@ export class EventManager {
 
     engine.enemies.push({
       id: enemyId,
-      position: { x, y },
+      position: engine.findClearEnemySpawnPosition({ x, y }, config.radius * 1.3),
       velocity: { x: 0, y: 0 },
       rotation: 0,
       radius: config.radius * 1.3,
-      health: config.health * healthMult,
-      maxHealth: config.health * healthMult,
+      health: config.health * multipliers.health,
+      maxHealth: config.health * multipliers.health,
       color: '#ffd700',
-      damage: config.damage * 2.4 * Math.min(this.adaptiveMultiplier, 1.5),
+      damage: config.damage * multipliers.damage,
       speed: finalBountySpeed,
       experienceValue: config.xp * 3,
       type: 'elite',
       hitFlash: 0,
       isEventEnemy: true,
+      spawnPackId: 'bounty',
+      spawnedAtMs: engine.gameTime,
+      attackCooldownMs: ENEMY_ATTACK_PROFILES.elite!.openingDelayMs,
     } as any);
 
     this.bountyTarget = {
@@ -342,34 +350,44 @@ export class EventManager {
   }
 
   private spawnSupplyDrop(engine: GameEngine) {
+    if (!engine.hasEnemyCapacity()) return;
     const angle = Math.random() * Math.PI * 2;
     const dist = 300 + Math.random() * 200;
-    const x = engine.player.position.x + Math.cos(angle) * dist;
-    const y = engine.player.position.y + Math.sin(angle) * dist;
+    const desired = { x: engine.player.position.x + Math.cos(angle) * dist, y: engine.player.position.y + Math.sin(angle) * dist };
+    const cratePosition = engine.findClearEnemySpawnPosition(desired, 48);
+    const x = cratePosition.x;
+    const y = cratePosition.y;
+    const guardEnemyId = `supply_guard_${Date.now()}`;
 
     this.supplyCrates.push({
       x, y, radius: 20,
       health: 1, maxHealth: 1,
       collected: false,
       guardSpawned: true,
+      guardEnemyId,
     });
 
     // Spawn a guard enemy on top of the crate
     const guardConfig = ENEMY_TYPES.tank;
+    const guardMultipliers = supplyGuardMultipliers(engine.difficultyMultiplier, this.adaptiveMultiplier);
+    const guardPosition = engine.findClearEnemySpawnPosition({ x: x + 65, y: y + 65 }, guardConfig.radius * 1.2);
     engine.enemies.push({
-      id: `supply_guard_${Date.now()}`,
-      position: { x: x + 30, y: y + 30 },
+      id: guardEnemyId,
+      position: guardPosition,
       velocity: { x: 0, y: 0 },
       rotation: 0,
       radius: guardConfig.radius * 1.2,
-      health: guardConfig.health * engine.difficultyMultiplier * 3.2 * Math.min(this.adaptiveMultiplier, 1.5),
-      maxHealth: guardConfig.health * engine.difficultyMultiplier * 3.2 * Math.min(this.adaptiveMultiplier, 1.5),
+      health: guardConfig.health * guardMultipliers.health,
+      maxHealth: guardConfig.health * guardMultipliers.health,
       color: '#ff8800',
-      damage: guardConfig.damage * engine.difficultyMultiplier * 1.8 * Math.min(this.adaptiveMultiplier, 1.4),
+      damage: guardConfig.damage * guardMultipliers.damage,
       speed: guardConfig.speed * 1.05,
       experienceValue: guardConfig.xp * 2,
       type: 'tank',
       isEventEnemy: true,
+      spawnPackId: 'supply_guard',
+      spawnedAtMs: engine.gameTime,
+      attackCooldownMs: ENEMY_ATTACK_PROFILES.tank!.openingDelayMs,
     } as any);
 
     this.announce('SUPPLY DROP INBOUND', 'Crate dropped — guarded!', '#00ff88');
@@ -457,6 +475,9 @@ export class EventManager {
   onEnemyKilled(enemyId: string, x: number, y: number, engine: GameEngine) {
     // Track kill for adaptive difficulty
     this.killTimestamps.push(engine.gameTime);
+
+    const guardedCrate = this.supplyCrates.find(crate => crate.guardEnemyId === enemyId);
+    if (guardedCrate) guardedCrate.guardSpawned = false;
 
     // Bounty target killed?
     if (this.bountyTarget && this.bountyTarget.enemyId === enemyId && !this.bountyTarget.claimed) {
@@ -663,7 +684,9 @@ export class EventManager {
       ctx.translate(crate.x, crate.y + hover);
 
       // Glow ring
-      ctx.strokeStyle = `rgba(0, 255, 136, ${0.4 + Math.sin(time * 4) * 0.2})`;
+      ctx.strokeStyle = crate.guardSpawned
+        ? `rgba(255, 136, 0, ${0.5 + Math.sin(time * 6) * 0.25})`
+        : `rgba(0, 255, 136, ${0.4 + Math.sin(time * 4) * 0.2})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(0, 0, crate.radius + 8, 0, Math.PI * 2);
@@ -671,13 +694,13 @@ export class EventManager {
 
       // Crate box
       ctx.fillStyle = '#1a1a2e';
-      ctx.strokeStyle = '#00ff88';
+      ctx.strokeStyle = crate.guardSpawned ? '#ff8800' : '#00ff88';
       ctx.lineWidth = 2;
       ctx.fillRect(-crate.radius, -crate.radius, crate.radius * 2, crate.radius * 2);
       ctx.strokeRect(-crate.radius, -crate.radius, crate.radius * 2, crate.radius * 2);
 
       // Cross symbol
-      ctx.strokeStyle = '#00ff88';
+      ctx.strokeStyle = crate.guardSpawned ? '#ff8800' : '#00ff88';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(0, -crate.radius * 0.5);

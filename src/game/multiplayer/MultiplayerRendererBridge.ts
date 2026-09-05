@@ -4,7 +4,7 @@ import { Enemy, ExperienceGem, Player, Projectile, Weapon, WorldItem } from '../
 import { GameEngine } from '../Engine';
 import { Renderer3D } from '../Renderer3D';
 import { soundManager } from '../SoundManager';
-import { COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, CoopCombatEvent, CoopSnapshot } from './CoopSimulation';
+import { COOP_ENEMY_DEATH_PRESENTATION_MS, COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, CoopCombatEvent, CoopSnapshot } from './CoopSimulation';
 import { CoopFirearmVisualRig } from '../rendering/coopFirearmVisuals';
 import type { CoopFirearmId } from '../combat/coopFirearms';
 import { COOP_PASSIVE_BY_ID, passiveRadius, type CoopPassiveModuleId } from './CoopPassiveModules';
@@ -34,12 +34,21 @@ export class MultiplayerRendererBridge {
   private readonly localFirearm = new CoopFirearmVisualRig(true);
   private readonly seenCombatEventIds = new Map<number, number>();
   private readonly combatParticles: PresentationParticle[] = [];
+  private readonly renderEnemies: Enemy[] = [];
+  private readonly renderEnemyById = new Map<number, Enemy>();
+  private readonly renderProjectiles: Projectile[] = [];
+  private readonly renderProjectileById = new Map<number, Projectile>();
+  private readonly renderGems: ExperienceGem[] = [];
+  private readonly renderGemById = new Map<number, ExperienceGem>();
+  private readonly renderItems: WorldItem[] = [];
+  private readonly renderItemById = new Map<string, WorldItem>();
   private readonly renderState: Record<string, unknown>;
   private readonly handleCanvasPointerDown = () => this.requestPointerLock();
   private lastHitSoundAt = -Infinity;
   private presentationShake = 0;
   private lastSnapshotTick = -1;
   private visualElapsedMs = 0;
+  private readonly predictedFireActions = new Set<number>();
 
   constructor() {
     this.renderState = {
@@ -73,9 +82,19 @@ export class MultiplayerRendererBridge {
   get isPointerLocked() { return this.renderer.isPointerLocked; }
   getAimAngle() { return Math.atan2(-Math.cos(this.renderer.yaw), -Math.sin(this.renderer.yaw)); }
   getAimPitch() { return this.renderer.pitch; }
+  /** Immediate local-only feedback. The matching authoritative event is
+   * deduplicated later; damage and ammo never leave the host simulation. */
+  predictLocalFire(weaponId: CoopFirearmId, actionId: number) {
+    this.predictedFireActions.add(actionId);
+    if (this.predictedFireActions.size > 32) this.predictedFireActions.delete(this.predictedFireActions.values().next().value!);
+    soundManager.playGunfire(weaponId);
+    if (weaponId === 'plasma_gun') this.renderer.triggerMuzzleFlash(COOP_WEAPON_DETAILS[weaponId].color);
+    else this.localFirearm.fire(weaponId);
+  }
 
   render(snapshot: CoopSnapshot | null, localPlayerId: string, deltaMs: number, spectatorTargetId?: string | null, forceFirstPerson: boolean = false) {
     if (!snapshot) return;
+    const snapshotChanged = snapshot.tick !== this.lastSnapshotTick;
     if (snapshot.tick < this.lastSnapshotTick) {
       this.seenCombatEventIds.clear(); this.combatParticles.length = 0; this.presentationShake = 0;
     }
@@ -91,8 +110,8 @@ export class MultiplayerRendererBridge {
     const selectedWeaponId = COOP_WEAPON_SLOTS[local.selectedSlot] || 'plasma_gun';
     const weaponState = local.weaponStates[local.selectedSlot];
     const player = this.renderState.player as Player;
-    player.position = { x: local.x, y: local.y };
-    player.velocity = { x: Math.cos(local.angle) * 0.01, y: Math.sin(local.angle) * 0.01 };
+    player.position.x = local.x; player.position.y = local.y;
+    player.velocity.x = Math.cos(local.angle) * 0.01; player.velocity.y = Math.sin(local.angle) * 0.01;
     player.health = local.health; player.maxHealth = local.maxHealth;
     player.level = local.level; player.experience = local.experience; player.experienceToNextLevel = local.experienceToNextLevel;
     player.coins = local.coins; player.pendingDataCores = local.pendingDataCores;
@@ -115,20 +134,25 @@ export class MultiplayerRendererBridge {
     const rightChevron = this.renderer.armChevronTrim.material as THREE.MeshStandardMaterial;
     this.localFirearm.matchSuitPalette(rightForearm.color, rightPalm.color, rightChevron.color);
     if (weaponState) this.localFirearm.update(weaponState, snapshot.elapsedMs, deltaMs, local.isAiming);
-    player.weapons = [this.createSelectedWeapon(selectedWeaponId, local.selectedWeaponLevel)];
+    if (player.weapons[0]?.id !== selectedWeaponId || player.weapons[0]?.level !== local.selectedWeaponLevel) {
+      player.weapons[0] = this.createSelectedWeapon(selectedWeaponId, local.selectedWeaponLevel);
+      player.weapons.length = 1;
+    }
     this.renderState.viewMode = isSpectating ? 'THIRD_PERSON' : 'FIRST_PERSON';
     this.renderState.gameTime = snapshot.elapsedMs;
-    this.renderState.enemies = snapshot.enemies.map(enemy => this.toEnemy(enemy));
-    this.renderState.projectiles = snapshot.projectiles.map(projectile => this.toProjectile(projectile));
-    this.renderState.gems = snapshot.gems.map(gem => this.toGem(gem));
-    this.renderState.items = [
-      ...snapshot.items.map(item => this.toItem(item)),
-      ...snapshot.ammoCaches.map(cache => ({ id: `coop-ammo-${cache.id}`, position: { x: cache.x, y: cache.y }, type: 'data_core' as const, value: cache.amount, color: cache.color, radius: 16 })),
-    ];
+    this.syncRenderEnemies(snapshot);
+    this.syncRenderProjectiles(snapshot);
+    if (snapshotChanged) this.syncStaticRenderEntities(snapshot);
+    this.renderState.enemies = this.renderEnemies;
+    this.renderState.projectiles = this.renderProjectiles;
+    this.renderState.gems = this.renderGems;
+    this.renderState.items = this.renderItems;
     // Reuse the production city props for co-op terminals and extraction. The
     // host supplies only compact snapshot positions; presentation stays local.
-    this.renderState.shops = snapshot.buyStations.filter(station => station.active).map(station => ({ id: `coop-station-${station.id}`, position: { x: station.x, y: station.y }, radius: station.radius }));
-    this.renderState.exfillPortal = snapshot.run.exfil ? { position: { x: snapshot.run.exfil.x, y: snapshot.run.exfil.y }, radius: snapshot.run.exfil.radius, active: snapshot.run.phase === 'exfil' } : null;
+    if (snapshotChanged) {
+      this.renderState.shops = snapshot.buyStations.filter(station => station.active).map(station => ({ id: `coop-station-${station.id}`, position: { x: station.x, y: station.y }, radius: station.radius }));
+      this.renderState.exfillPortal = snapshot.run.exfil ? { position: { x: snapshot.run.exfil.x, y: snapshot.run.exfil.y }, radius: snapshot.run.exfil.radius, active: snapshot.run.phase === 'exfil' } : null;
+    }
     this.consumeCombatEvents(snapshot.combatEvents, localPlayerId, deltaMs);
     this.renderState.particles = this.combatParticles;
     this.renderState.screenShake = this.presentationShake;
@@ -170,6 +194,86 @@ export class MultiplayerRendererBridge {
     return { id: definition.id, name: definition.name, level, maxLevel: 8, description: definition.description, cooldown: (definition.baseCooldown || 600) * Math.pow(0.9, Math.max(0, level - 1)), lastFired: 0, type: definition.type as Weapon['type'], burstCount: definition.burstCount, burstDelay: definition.burstDelay };
   }
 
+  /** Keep renderer-contract objects stable across display frames. */
+  private syncRenderEnemies(snapshot: CoopSnapshot) {
+    const active = new Set<number>();
+    this.renderEnemies.length = 0;
+    for (const source of snapshot.enemies) {
+      active.add(source.id);
+      let enemy = this.renderEnemyById.get(source.id);
+      if (!enemy) { enemy = this.toEnemy(source); this.renderEnemyById.set(source.id, enemy); }
+      else {
+        enemy.position.x = source.x; enemy.position.y = source.y;
+        enemy.radius = source.radius; enemy.health = source.health; enemy.maxHealth = source.maxHealth;
+        enemy.color = source.color; enemy.damage = source.damage; enemy.speed = source.speed * 88;
+        enemy.experienceValue = source.experienceValue; enemy.type = source.type;
+        enemy.hitFlash = source.hitFlashMs; enemy.slowMultiplier = source.slowMultiplier;
+        enemy.presentationFacingAngle = source.facingAngle;
+        enemy.presentationDeathProgress = source.dying ? 1 - source.deathRemainingMs / COOP_ENEMY_DEATH_PRESENTATION_MS : 0;
+        enemy.presentationAttackCharge = source.attackWindupUntilMs && source.attackWindupUntilMs > this.visualElapsedMs
+          ? 1 - Math.min(1, (source.attackWindupUntilMs - this.visualElapsedMs) / 1600) : 0;
+      }
+      this.renderEnemies.push(enemy);
+    }
+    for (const id of this.renderEnemyById.keys()) if (!active.has(id)) this.renderEnemyById.delete(id);
+  }
+
+  private syncRenderProjectiles(snapshot: CoopSnapshot) {
+    const active = new Set<number>();
+    this.renderProjectiles.length = 0;
+    for (const source of snapshot.projectiles) {
+      active.add(source.id);
+      let projectile = this.renderProjectileById.get(source.id);
+      if (!projectile) { projectile = this.toProjectile(source); this.renderProjectileById.set(source.id, projectile); }
+      else {
+        const horizontalVelocity = Math.cos(source.pitch) * source.velocity;
+        projectile.position.x = source.x; projectile.position.y = source.y;
+        projectile.velocity.x = Math.cos(source.angle) * horizontalVelocity;
+        projectile.velocity.y = Math.sin(source.angle) * horizontalVelocity;
+        projectile.radius = source.radius; projectile.duration = source.lifeMs;
+        projectile.rotation = source.angle; projectile.z = source.z; projectile.presentationPitch = source.pitch;
+      }
+      this.renderProjectiles.push(projectile);
+    }
+    for (const id of this.renderProjectileById.keys()) if (!active.has(id)) this.renderProjectileById.delete(id);
+  }
+
+  /** Drops only change on simulation snapshots, not during interpolation. */
+  private syncStaticRenderEntities(snapshot: CoopSnapshot) {
+    const activeGems = new Set<number>();
+    this.renderGems.length = 0;
+    for (const source of snapshot.gems) {
+      activeGems.add(source.id);
+      let gem = this.renderGemById.get(source.id);
+      if (!gem) { gem = this.toGem(source); this.renderGemById.set(source.id, gem); }
+      else { gem.position.x = source.x; gem.position.y = source.y; gem.value = source.value; gem.color = source.color; }
+      this.renderGems.push(gem);
+    }
+    for (const id of this.renderGemById.keys()) if (!activeGems.has(id)) this.renderGemById.delete(id);
+
+    const activeItems = new Set<string>();
+    this.renderItems.length = 0;
+    for (const source of snapshot.items) {
+      const key = `item:${source.id}`;
+      activeItems.add(key);
+      let item = this.renderItemById.get(key);
+      if (!item) { item = this.toItem(source); this.renderItemById.set(key, item); }
+      else { item.position.x = source.x; item.position.y = source.y; item.type = source.type; item.value = source.value; item.color = source.color; }
+      this.renderItems.push(item);
+    }
+    for (const source of snapshot.ammoCaches) {
+      const key = `ammo:${source.id}`;
+      activeItems.add(key);
+      let item = this.renderItemById.get(key);
+      if (!item) {
+        item = { id: `coop-ammo-${source.id}`, position: { x: source.x, y: source.y }, type: 'data_core', value: source.amount, color: source.color, radius: 16 };
+        this.renderItemById.set(key, item);
+      } else { item.position.x = source.x; item.position.y = source.y; item.value = source.amount; item.color = source.color; }
+      this.renderItems.push(item);
+    }
+    for (const id of this.renderItemById.keys()) if (!activeItems.has(id)) this.renderItemById.delete(id);
+  }
+
   private toEnemy(enemy: CoopSnapshot['enemies'][number]): Enemy {
     return {
       id: `coop-enemy-${enemy.id}`, position: { x: enemy.x, y: enemy.y }, velocity: { x: 0, y: 0 },
@@ -177,7 +281,7 @@ export class MultiplayerRendererBridge {
       damage: enemy.damage, speed: enemy.speed * 88, experienceValue: enemy.experienceValue, type: enemy.type as Enemy['type'],
       hitFlash: enemy.hitFlashMs, slowMultiplier: enemy.slowMultiplier,
       presentationFacingAngle: enemy.facingAngle,
-      presentationDeathProgress: enemy.dying ? 1 - enemy.deathRemainingMs / 220 : 0,
+      presentationDeathProgress: enemy.dying ? 1 - enemy.deathRemainingMs / COOP_ENEMY_DEATH_PRESENTATION_MS : 0,
       presentationAttackCharge: enemy.attackWindupUntilMs && enemy.attackWindupUntilMs > this.visualElapsedMs ? 1 - Math.min(1, (enemy.attackWindupUntilMs - this.visualElapsedMs) / 1600) : 0,
     };
   }
@@ -268,12 +372,15 @@ export class MultiplayerRendererBridge {
     } else if (event.kind === 'weapon_fired') {
       if (event.weaponId) {
         if (event.playerId === localPlayerId) {
+          const predicted = event.actionId !== undefined && this.predictedFireActions.delete(event.actionId);
           // Only the locally controlled weapon is heard as a direct shot.
           // The authoritative fire event means this covers every firearm and
           // cannot play for a rejected client-side trigger pull.
-          soundManager.playGunfire(event.weaponId);
-          if (event.weaponId === 'plasma_gun') this.renderer.triggerMuzzleFlash(event.color || '#67e8f9');
-          else this.localFirearm.fire(event.weaponId as CoopFirearmId);
+          if (!predicted) {
+            soundManager.playGunfire(event.weaponId);
+            if (event.weaponId === 'plasma_gun') this.renderer.triggerMuzzleFlash(event.color || '#67e8f9');
+            else this.localFirearm.fire(event.weaponId as CoopFirearmId);
+          }
         }
         else this.remotePlayers.get(event.playerId || '')?.firearm.fire(event.weaponId as CoopFirearmId);
       }

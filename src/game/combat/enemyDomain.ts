@@ -19,17 +19,112 @@ export interface EnemyDefinition {
   color: string;
   name: string;
   visual: EnemyVisual;
+  role: 'pressure' | 'flanker' | 'blocker' | 'support' | 'commander' | 'ambusher' | 'boss';
+  threat: number;
 }
 
 export const ENEMY_TYPES: Record<EnemyType, EnemyDefinition> = {
-  basic: { health: 12, speed: 1.0, damage: 10, radius: 15, xp: 5, color: '#ff4444', name: 'Drone', visual: 'circle' },
-  fast: { health: 50, speed: 1.4, damage: 12, radius: 14, xp: 12, color: '#ffaa00', name: 'Scout', visual: 'triangle' },
-  tank: { health: 180, speed: 0.9, damage: 30, radius: 25, xp: 30, color: '#8800ff', name: 'Goliath', visual: 'square' },
-  ranged: { health: 60, speed: 1.3, damage: 18, radius: 18, xp: 20, color: '#00ff88', name: 'Sniper', visual: 'diamond' },
-  elite: { health: 500, speed: 1.2, damage: 45, radius: 35, xp: 100, color: '#ff00ff', name: 'Elite Guard', visual: 'hexagon' },
-  phantom: { health: 80, speed: 2.2, damage: 15, radius: 20, xp: 50, color: '#ffffff', name: 'Phantom', visual: 'ghost' },
-  titan: { health: 1200, speed: 0.6, damage: 55, radius: 60, xp: 500, color: '#ff0000', name: 'Titan', visual: 'star' },
+  basic: { health: 12, speed: 1.0, damage: 10, radius: 15, xp: 5, color: '#ff4444', name: 'Drone', visual: 'circle', role: 'pressure', threat: 1 },
+  fast: { health: 50, speed: 1.4, damage: 12, radius: 14, xp: 12, color: '#ffaa00', name: 'Scout', visual: 'triangle', role: 'flanker', threat: 1.25 },
+  tank: { health: 180, speed: 0.9, damage: 30, radius: 25, xp: 30, color: '#8800ff', name: 'Goliath', visual: 'square', role: 'blocker', threat: 3.5 },
+  ranged: { health: 60, speed: 1.3, damage: 18, radius: 18, xp: 20, color: '#00ff88', name: 'Sniper', visual: 'diamond', role: 'support', threat: 1.6 },
+  elite: { health: 500, speed: 1.2, damage: 45, radius: 35, xp: 100, color: '#ff00ff', name: 'Elite Guard', visual: 'hexagon', role: 'commander', threat: 6 },
+  phantom: { health: 80, speed: 2.2, damage: 15, radius: 20, xp: 50, color: '#ffffff', name: 'Phantom', visual: 'ghost', role: 'ambusher', threat: 2.4 },
+  titan: { health: 1200, speed: 0.6, damage: 55, radius: 60, xp: 500, color: '#ff0000', name: 'Titan', visual: 'star', role: 'boss', threat: 15 },
 };
+
+export type EnemyAttackKind = 'artillery' | 'shockwave' | 'lunge' | 'ambush';
+export interface EnemyAttackProfile {
+  kind: EnemyAttackKind;
+  minRange: number;
+  maxRange: number;
+  radius: number;
+  windupMs: number;
+  cooldownMs: number;
+  openingDelayMs: number;
+  damageMultiplier: number;
+}
+
+/** Shared readability contract for solo and co-op. Network authority and
+ * damage application remain mode-specific, but timing/range tells do not. */
+export const ENEMY_ATTACK_PROFILES: Partial<Record<EnemyType, EnemyAttackProfile>> = {
+  fast: { kind: 'lunge', minRange: 90, maxRange: 330, radius: 58, windupMs: 480, cooldownMs: 2_700, openingDelayMs: 900, damageMultiplier: 1.25 },
+  ranged: { kind: 'artillery', minRange: 180, maxRange: 760, radius: 76, windupMs: 1_000, cooldownMs: 3_300, openingDelayMs: 1_200, damageMultiplier: 1 },
+  tank: { kind: 'shockwave', minRange: 0, maxRange: 170, radius: 165, windupMs: 1_100, cooldownMs: 3_400, openingDelayMs: 1_400, damageMultiplier: .87 },
+  phantom: { kind: 'ambush', minRange: 150, maxRange: 620, radius: 82, windupMs: 720, cooldownMs: 4_200, openingDelayMs: 1_600, damageMultiplier: 1.35 },
+  elite: { kind: 'artillery', minRange: 0, maxRange: 720, radius: 105, windupMs: 1_250, cooldownMs: 4_800, openingDelayMs: 1_800, damageMultiplier: .72 },
+};
+
+export function getEnemyAttackProfile(type: EnemyType, distance: number): EnemyAttackProfile | undefined {
+  const profile = ENEMY_ATTACK_PROFILES[type];
+  return profile && distance >= profile.minRange && distance <= profile.maxRange ? profile : undefined;
+}
+
+export interface EventEnemyMultipliers { health: number; damage: number; }
+
+/** Timed bounty targets must remain killable inside their 15-second window,
+ * while their artillery cannot become an untelegraphed one-shot via adaptive
+ * difficulty. Both curves retain meaningful late-run scaling. */
+export function bountyEnemyMultipliers(difficultyMultiplier: number, adaptiveMultiplier: number): EventEnemyMultipliers {
+  const difficulty = Math.max(1, difficultyMultiplier);
+  const adaptive = Math.max(1, adaptiveMultiplier);
+  return {
+    health: Math.min(3.4, (.75 + (difficulty - 1) * .25) * Math.min(adaptive, 1.35)),
+    damage: Math.min(1.9, (.85 + (difficulty - 1) * .16) * Math.min(adaptive, 1.2)),
+  };
+}
+
+export function supplyGuardMultipliers(difficultyMultiplier: number, adaptiveMultiplier: number): EventEnemyMultipliers {
+  const difficulty = Math.max(1, difficultyMultiplier);
+  const adaptive = Math.max(1, adaptiveMultiplier);
+  return {
+    health: Math.min(3, (1.5 + (difficulty - 1) * .30) * Math.min(adaptive, 1.35)),
+    damage: Math.min(1.65, (.90 + (difficulty - 1) * .14) * Math.min(adaptive, 1.2)),
+  };
+}
+
+export type SoloSpawnPackId = 'swarm' | 'raiders' | 'fireteam' | 'siege' | 'hunt' | 'command';
+const SOLO_SPAWN_PACKS: readonly { id: SoloSpawnPackId; unlockMinutes: number; weight: number; members: readonly EnemyType[] }[] = [
+  { id: 'swarm', unlockMinutes: 0, weight: 4, members: ['basic', 'basic'] },
+  { id: 'swarm', unlockMinutes: 0, weight: 6, members: ['basic', 'basic', 'basic'] },
+  { id: 'raiders', unlockMinutes: 2, weight: 3, members: ['fast', 'basic'] },
+  { id: 'raiders', unlockMinutes: 2, weight: 4, members: ['fast', 'fast', 'basic'] },
+  { id: 'fireteam', unlockMinutes: 8, weight: 3, members: ['basic', 'ranged'] },
+  { id: 'fireteam', unlockMinutes: 8, weight: 3.5, members: ['basic', 'basic', 'ranged'] },
+  { id: 'siege', unlockMinutes: 8, weight: 2, members: ['tank', 'ranged'] },
+  { id: 'siege', unlockMinutes: 8, weight: 2.5, members: ['tank', 'basic', 'ranged'] },
+  { id: 'hunt', unlockMinutes: 15, weight: 1.5, members: ['phantom', 'fast'] },
+  { id: 'hunt', unlockMinutes: 15, weight: 2, members: ['phantom', 'fast', 'fast'] },
+  { id: 'command', unlockMinutes: 15, weight: 1, members: ['elite', 'tank', 'ranged', 'basic'] },
+] as const;
+
+export interface SoloSpawnPack { id: SoloSpawnPackId | 'mixed'; members: EnemyType[]; }
+
+/** Top-down can use the full perimeter. Perspective modes spawn inside a rear
+ * arc, guaranteeing at least 99 degrees from the crosshair before obstacle
+ * correction. Authored breach portals intentionally bypass this rule. */
+export function chooseSoloSpawnBearing(random: () => number, perspective: boolean, forwardAngle: number): number {
+  if (!perspective) return random() * Math.PI * 2;
+  return forwardAngle + Math.PI + (random() - .5) * Math.PI * .9;
+}
+
+/** Select one coherent formation, then fill spare high-difficulty slots from
+ * the weighted table. This preserves the caller's exact population budget. */
+export function chooseSoloSpawnPack(random: () => number, elapsedMs: number, candidates: readonly EnemyType[], count: number): SoloSpawnPack {
+  const capacity = Math.max(0, Math.trunc(count));
+  if (capacity === 0 || candidates.length === 0) return { id: 'mixed', members: [] };
+  const candidateSet = new Set(candidates);
+  const available = SOLO_SPAWN_PACKS.filter(pack => elapsedMs >= pack.unlockMinutes * 60_000 && pack.members.length <= capacity && pack.members.every(type => candidateSet.has(type)));
+  let selected = available[0];
+  if (available.length) {
+    const total = available.reduce((sum, pack) => sum + pack.weight, 0);
+    let roll = random() * total;
+    for (const pack of available) { roll -= pack.weight; if (roll <= 0) { selected = pack; break; } }
+  }
+  const members = selected ? [...selected.members] : [];
+  while (members.length < capacity) members.push(chooseWeightedEnemy(random, candidates));
+  return { id: selected?.id || 'mixed', members };
+}
 
 export const ITEM_TYPES: Record<ItemType, { color: string; value: number; weight: number; shape: string }> = {
   hp: { color: '#ff3366', value: 30, weight: 0.4, shape: 'heart' },
@@ -191,8 +286,14 @@ export function rollCoinDrop(type: EnemyType | 'boss', luck: number, coinDropCha
 }
 
 export function rollHolderItem(random: () => number): ItemType {
-  const types = Object.keys(ITEM_TYPES) as ItemType[];
-  return types[Math.min(types.length - 1, Math.floor(random() * types.length))];
+  const weighted = (Object.keys(ITEM_TYPES) as ItemType[]).filter(type => ITEM_TYPES[type].weight > 0);
+  const total = weighted.reduce((sum, type) => sum + ITEM_TYPES[type].weight, 0);
+  let roll = Math.max(0, Math.min(.999999999, random())) * total;
+  for (const type of weighted) {
+    roll -= ITEM_TYPES[type].weight;
+    if (roll <= 0) return type;
+  }
+  return weighted[weighted.length - 1] || 'hp';
 }
 
 export function rollTreasureTier(elapsedMs: number, random: () => number): TreasureTier {

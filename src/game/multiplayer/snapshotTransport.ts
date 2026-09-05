@@ -2,9 +2,11 @@ const MAGIC = 0x4b53594e;
 const HEADER_BYTES = 20;
 const CHUNK_BYTES = 12_000;
 export const MAX_SNAPSHOT_BYTES = 512_000;
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder('utf-8', { fatal: true });
 
 export function encodeSnapshotPackets(message: string, tick: number): ArrayBuffer[] {
-  const bytes = new TextEncoder().encode(message);
+  const bytes = textEncoder.encode(message);
   if (bytes.length > MAX_SNAPSHOT_BYTES || !Number.isSafeInteger(tick) || tick < 0) return [];
   const count = Math.max(1, Math.ceil(bytes.length / CHUNK_BYTES));
   return Array.from({ length: count }, (_, index) => {
@@ -45,7 +47,7 @@ export class SnapshotAssembler {
     for (const [partIndex, part] of entry.parts) bytes.set(part, partIndex * CHUNK_BYTES);
     for (const pendingTick of this.pending.keys()) if (pendingTick <= tick) this.pending.delete(pendingTick);
     try {
-      const message = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      const message = textDecoder.decode(bytes);
       this.latestCompletedTick = tick;
       return message;
     } catch { return; }

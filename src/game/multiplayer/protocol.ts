@@ -6,8 +6,8 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v11 keeps transport ticks monotonic across run retries. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 11;
+/** v12 adds redundant action ids and host-reported action acknowledgements. */
+export const MULTIPLAYER_PROTOCOL_VERSION = 12;
 
 export type MultiplayerRole = 'host' | 'guest';
 
@@ -22,6 +22,9 @@ export interface MultiplayerInputFrame {
   aimPitch: number;
   selectedSlot: number;
   firing: boolean;
+  /** Monotonic trigger-pull id. Repeated input frames make semi-auto fire
+   * resilient to loss without allowing the host to execute an action twice. */
+  fireActionId?: number;
   /** Edge-triggered reload request, consumed by the authoritative host. */
   reloadPressed?: boolean;
   /** Held right-mouse aim state; spread is validated by the host. */
@@ -91,6 +94,7 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   sequence: boundedInteger(frame.sequence, Number.MAX_SAFE_INTEGER),
   clientTime: boundedInteger(frame.clientTime, Number.MAX_SAFE_INTEGER),
   firing: Boolean(frame.firing),
+  fireActionId: boundedInteger(frame.fireActionId, Number.MAX_SAFE_INTEGER),
   reloadPressed: Boolean(frame.reloadPressed),
   aiming: Boolean(frame.aiming),
   sprinting: Boolean(frame.sprinting),

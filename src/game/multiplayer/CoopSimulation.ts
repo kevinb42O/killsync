@@ -3,6 +3,7 @@ import { GAME_WIDTH } from '../../constants';
 import { COOP_FIREARM_BY_ID, COOP_FIREARM_DEFINITIONS, COOP_WEAPON_SLOTS as FIREARM_SLOTS, createCoopWeaponRuntime, firearmDamage, firearmFireInterval, firearmSpread, type AmmoType, type CoopFirearmId, type CoopWeaponRuntime } from '../combat/coopFirearms';
 import {
   ENEMY_TYPES,
+  ENEMY_ATTACK_PROFILES,
   EXPERIENCE_GEM_COLOR,
   getGuaranteedEnemyDrop,
   getPickupEffect,
@@ -14,14 +15,15 @@ import {
   rollHolderItem,
 } from '../combat/enemyDomain';
 import { isWorldPositionClear, resolveWorldCollisions } from '../world/WorldLayout';
-import { buildEncounterClusters, EncounterDirector, type EncounterDirectorSnapshot, type EncounterPlayer, type EncounterRoundEvent } from './EncounterDirector';
+import { buildEncounterClusters, EncounterDirector, type EncounterDirectorSnapshot, type EncounterOrder, type EncounterPlayer, type EncounterRoundEvent } from './EncounterDirector';
 import { SpawnTopology } from './SpawnTopology';
-import { COOP_INSERTION_DURATION_MS, COOP_UPLINK_RADIUS, CoopRunDirector, type CoopRunSnapshot } from './CoopRunDirector';
+import { COOP_INSERTION_DURATION_MS, COOP_UPLINK_RADIUS, CoopRunDirector, coopBossHealth, coopObjectiveEliteHealth, type CoopRunSnapshot } from './CoopRunDirector';
 import { COOP_BUY_STATION_STOCK, COOP_SHOP_ITEMS, type CoopBuyStationSnapshot, type CoopShopItemId } from './CoopBuyStation';
 import { COOP_PASSIVE_BY_ID, passiveCooldownMs, passiveDamage, passiveRadius, passiveRankCost, type CoopPassiveModuleId, type CoopPassiveRuntime, type CoopPassiveSnapshot } from './CoopPassiveModules';
 import { awardMedals, createRunStats, type CoopPlayerRunStats, type CoopRunResultsSnapshot } from './CoopResults';
 import { advancePlayerMovement, COOP_PLAYER_RADIUS, type PlayerMotionState } from './playerMovement';
-import { hasClearAttackPath, moveTacticalEnemy } from './enemyTactics';
+import { findEnemyDetour, hasClearAttackPath, moveTacticalEnemy } from './enemyTactics';
+import { SpatialHash } from './SpatialHash';
 
 /** Multiplayer shares the production city's physical 12 km square. */
 export const COOP_WORLD_SIZE = GAME_WIDTH;
@@ -40,15 +42,27 @@ const ENEMY_RADIUS = 16;
 /** Slightly inside the renderer's camera limit, for stable network aim. */
 const MAX_AIM_PITCH = Math.PI * 0.44;
 const ENEMY_HIT_HEIGHT = 42;
-const DEATH_PRESENTATION_MS = 220;
+// Contract bosses exceed the base enemy-domain radius table.
+const MAX_ENEMY_RADIUS = 150;
+/** Dead units are already non-interactive; this is only the short visual grace
+ * period used by the renderer's collapse animation. */
+export const COOP_ENEMY_DEATH_PRESENTATION_MS = 480;
 const COMBAT_EVENT_RETENTION_MS = 750;
+/** A disconnected or backgrounded client must not keep walking or firing. */
+export const COOP_STALE_INPUT_MS = 2_000;
+/** Never let a forged timestamp skip a projectile across the whole arena. */
+export const COOP_MAX_SHOT_COMPENSATION_MS = 150;
 const GEM_MAGNET_RANGE = 200;
 const ITEM_MAGNET_RANGE = 150;
 const GEM_PICKUP_RADIUS = 10;
 const ITEM_PICKUP_RADIUS = 15;
+export const COOP_MAX_WORLD_GEMS = 160;
+export const COOP_MAX_WORLD_ITEMS = 48;
+export const COOP_MAX_AMMO_CACHES = 32;
 /** A calm staging window before the normal encounter director starts. */
 export const COOP_SAFE_INSERTION_MS = COOP_INSERTION_DURATION_MS;
-const COOP_MAX_ENEMIES = 90;
+export const COOP_MAX_ENEMIES = 90;
+export const COOP_MAX_ENCOUNTER_ENEMIES = 84;
 const WEAPON_MAX_LEVEL = 8;
 const SWITCH_MS = 280;
 const SNIPER_BOLT_MS = 420;
@@ -102,6 +116,7 @@ export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   armorHp: number;
   passiveModules: CoopPassiveSnapshot[];
   lastProcessedInput?: number;
+  lastProcessedFireAction?: number;
   motion?: Pick<PlayerMotionState, 'verticalVelocity' | 'lastJumpSequence' | 'slideAngle'>;
 }
 
@@ -132,7 +147,7 @@ export interface CoopEnemySnapshot {
 export interface CoopHazardSnapshot {
   id: number;
   enemyId: number;
-  kind: 'artillery' | 'shockwave' | 'gravity';
+  kind: 'artillery' | 'shockwave' | 'gravity' | 'lunge' | 'ambush';
   x: number;
   y: number;
   radius: number;
@@ -178,6 +193,7 @@ export interface CoopCombatEvent {
   weaponId?: CoopWeaponId;
   killedByPlayerId?: string;
   ammoType?: AmmoType;
+  actionId?: number;
 }
 
 export interface CoopProjectileSnapshot {
@@ -218,7 +234,7 @@ export interface CoopSnapshot {
   hazards?: CoopHazardSnapshot[];
 }
 
-type CoopPlayer = CoopPlayerSnapshot & { verticalVelocity: number; lastJumpSequence: number; lastReloadSequence: number; slideAngle: number; aimPitch: number; previousFiring: boolean; shotSequence: number; lastDamageEventAtMs: number; passiveRuntime: CoopPassiveRuntime[]; lastArmorDamageAtMs: number };
+type CoopPlayer = CoopPlayerSnapshot & { verticalVelocity: number; lastJumpSequence: number; lastReloadSequence: number; lastFireActionId: number; slideAngle: number; aimPitch: number; previousFiring: boolean; shotSequence: number; lastDamageEventAtMs: number; passiveRuntime: CoopPassiveRuntime[]; lastArmorDamageAtMs: number };
 type CoopEnemy = CoopEnemySnapshot & { hitFlashUntilMs: number; deathUntilMs?: number; killedByPlayerId?: string; targetLeaseUntilMs: number; nextAttackAtMs?: number };
 type CoopProjectile = CoopProjectileSnapshot & {
   verticalVelocity: number;
@@ -227,12 +243,19 @@ type CoopProjectile = CoopProjectileSnapshot & {
   damageIntervalMs: number;
   nextDamageAt: number;
 };
+type EnemyNavigationState = { x: number; y: number; stuckMs: number; waypoint?: { x: number; y: number }; waypointUntilMs: number; clearAttackPath?: boolean; nextPathCheckAtMs?: number };
 
 /** A small, deterministic, DOM-free authoritative combat simulation. */
 export class CoopSimulation {
   private players = new Map<string, CoopPlayer>();
   private inputByPlayer = new Map<string, MultiplayerInputFrame>();
   private latestInputSequence = new Map<string, number>();
+  private inputReceivedAtMs = new Map<string, number>();
+  private inputAgeMs = new Map<string, number>();
+  private enemyNavigation = new Map<number, EnemyNavigationState>();
+  private readonly enemySpatialIndex = new SpatialHash<CoopEnemy>(256);
+  private readonly nearbyEnemies: CoopEnemy[] = [];
+  private readonly activeEnemyIds = new Set<number>();
   private enemies: CoopEnemy[] = [];
   private projectiles: CoopProjectile[] = [];
   private gems: CoopGemSnapshot[] = [];
@@ -283,7 +306,7 @@ export class CoopSimulation {
       weaponStates, weaponLevels: weaponStates.map(state => state.level), selectedWeaponLevel: 1, selectedWeaponId: 'plasma_gun', isAiming: false, isReloading: false, isSwitching: false,
       lifeState: 'alive', downedRemainingMs: 0, reviveProgressMs: 0, invulnerableRemainingMs: 0,
       selfRevives: 0, selfReviveProgressMs: 0, armorTier: 0, armorHp: 0, passiveModules: [],
-      verticalVelocity: 0, lastJumpSequence: -1, lastReloadSequence: -1, slideAngle: 0, aimPitch: 0, previousFiring: false, shotSequence: 0, lastDamageEventAtMs: -Infinity, passiveRuntime: [], lastArmorDamageAtMs: -Infinity,
+      verticalVelocity: 0, lastJumpSequence: -1, lastReloadSequence: -1, lastFireActionId: 0, slideAngle: 0, aimPitch: 0, previousFiring: false, shotSequence: 0, lastDamageEventAtMs: -Infinity, passiveRuntime: [], lastArmorDamageAtMs: -Infinity,
     });
     this.runStats.set(player.id, createRunStats(player.id));
     return true;
@@ -297,14 +320,18 @@ export class CoopSimulation {
     this.players.delete(playerId);
     this.inputByPlayer.delete(playerId);
     this.latestInputSequence.delete(playerId);
+    this.inputReceivedAtMs.delete(playerId);
+    this.inputAgeMs.delete(playerId);
     return true;
   }
 
-  setInput(playerId: string, frame: MultiplayerInputFrame) {
+  setInput(playerId: string, frame: MultiplayerInputFrame, estimatedAgeMs = 0) {
     const previousSequence = this.latestInputSequence.get(playerId);
     if (!this.players.has(playerId) || (previousSequence !== undefined && frame.sequence < previousSequence)) return;
     this.latestInputSequence.set(playerId, frame.sequence);
     this.inputByPlayer.set(playerId, frame);
+    this.inputReceivedAtMs.set(playerId, this.elapsedMs);
+    this.inputAgeMs.set(playerId, clamp(estimatedAgeMs, 0, COOP_MAX_SHOT_COMPENSATION_MS));
   }
 
   tick(deltaMs: number) {
@@ -318,8 +345,14 @@ export class CoopSimulation {
       return;
     }
 
+    // Remote-shot compensation runs during input processing, so seed the
+    // broad phase before any player can fire this tick.
+    this.enemySpatialIndex.rebuild(this.enemies);
     for (const player of this.players.values()) {
-      const input = this.inputByPlayer.get(player.id);
+      const receivedAt = this.inputReceivedAtMs.get(player.id);
+      const storedInput = this.inputByPlayer.get(player.id);
+      const stale = storedInput && (receivedAt === undefined || this.elapsedMs - receivedAt > COOP_STALE_INPUT_MS);
+      const input = stale ? { ...storedInput, movement: 0, firing: false, aiming: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, reloadPressed: false, dashPressed: false } : storedInput;
       player.invulnerableRemainingMs = Math.max(0, player.invulnerableRemainingMs - dt);
       if (player.lifeState === 'downed') {
         if (player.selfRevives > 0 && input?.reviving) {
@@ -348,8 +381,11 @@ export class CoopSimulation {
         player.isAiming = Boolean(input.aiming) && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
         if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; this.startReload(player); }
         this.advanceWeaponActions(player);
-        const triggerPressed = input.firing && !player.previousFiring;
-        if (input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed);
+        const fireActionId = input.fireActionId || 0;
+        const triggerPressed = fireActionId > player.lastFireActionId || (input.fireActionId === undefined && input.firing && !player.previousFiring);
+        if (fireActionId > player.lastFireActionId) player.lastFireActionId = fireActionId;
+        player.lastProcessedFireAction = player.lastFireActionId;
+        if (input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
       }
       if (!input) advancePlayerMovement(player, undefined, dt);
@@ -359,6 +395,9 @@ export class CoopSimulation {
     if (this.results) return;
     this.updatePassiveModules();
     this.scheduleEncounters();
+    // Scheduling may add a packet. One linear rebuild replaces the former
+    // all-enemies separation scan performed by every moving enemy.
+    this.enemySpatialIndex.rebuild(this.enemies);
 
     for (const enemy of this.enemies) {
       if (enemy.dying) continue;
@@ -367,20 +406,67 @@ export class CoopSimulation {
       const distance = Math.hypot(target.x - enemy.x, target.y - enemy.y);
       enemy.facingAngle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
       const windingUp = (enemy.attackWindupUntilMs || 0) > this.elapsedMs;
-      if (!windingUp && distance > PLAYER_RADIUS + enemy.radius) enemy.facingAngle = moveTacticalEnemy(enemy, target, this.enemies, this.elapsedMs, dt);
-      if (enemy.type === 'ranged' && distance < 760 && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && hasClearAttackPath(enemy, target)) {
-        this.queueHazard(enemy, 'artillery', target.x, target.y, 76, enemy.damage, 1000, '#4ade80');
-        enemy.nextAttackAtMs = this.elapsedMs + 3200 + enemy.id % 5 * 150;
-      } else if (enemy.type === 'tank' && distance < 170 && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0)) {
-        this.queueHazard(enemy, 'shockwave', enemy.x, enemy.y, 165, 26, 1100, '#fbbf24');
-        enemy.nextAttackAtMs = this.elapsedMs + 3200;
-      } else if (enemy.type !== 'ranged' && enemy.type !== 'tank' && distance <= PLAYER_RADIUS + enemy.radius) {
+      const navigation = this.enemyNavigation.get(enemy.id) || { x: enemy.x, y: enemy.y, stuckMs: 0, waypointUntilMs: 0 };
+      // A clear-path result has no tactical effect outside the ability's
+      // maximum range, so never ray-march across kilometres of city.
+      const needsAttackPath = (enemy.type === 'ranged' && distance <= ENEMY_ATTACK_PROFILES.ranged!.maxRange)
+        || (enemy.type === 'fast' && distance <= ENEMY_ATTACK_PROFILES.fast!.maxRange)
+        || (enemy.type === 'phantom' && distance <= ENEMY_ATTACK_PROFILES.phantom!.maxRange)
+        || (enemy.type === 'elite' && distance <= ENEMY_ATTACK_PROFILES.elite!.maxRange);
+      if (needsAttackPath && this.elapsedMs >= (navigation.nextPathCheckAtMs || 0)) {
+        navigation.clearAttackPath = hasClearAttackPath(enemy, target);
+        // Stagger checks so a horde does not submit every world probe in one tick.
+        navigation.nextPathCheckAtMs = this.elapsedMs + 180 + enemy.id % 5 * 17;
+      }
+      const clearAttackPath = !needsAttackPath || Boolean(navigation.clearAttackPath);
+      const waypointReached = navigation.waypoint && Math.hypot(enemy.x - navigation.waypoint.x, enemy.y - navigation.waypoint.y) <= enemy.radius + 28;
+      if (waypointReached || this.elapsedMs >= navigation.waypointUntilMs) navigation.waypoint = undefined;
+      const travelTarget = navigation.waypoint || target;
+      if (!windingUp && distance > PLAYER_RADIUS + enemy.radius) {
+        const neighbors = this.enemySpatialIndex.query(enemy.x, enemy.y, enemy.radius + MAX_ENEMY_RADIUS + 48, this.nearbyEnemies);
+        enemy.facingAngle = moveTacticalEnemy(enemy, travelTarget, neighbors, this.elapsedMs, dt, clearAttackPath);
+      }
+      const progress = Math.hypot(enemy.x - navigation.x, enemy.y - navigation.y);
+      navigation.stuckMs = !windingUp && distance > 240 && progress < .2 ? navigation.stuckMs + dt : 0;
+      navigation.x = enemy.x; navigation.y = enemy.y;
+      if (navigation.stuckMs >= 700) {
+        navigation.waypoint = findEnemyDetour(enemy, target);
+        navigation.waypointUntilMs = this.elapsedMs + 2_200;
+        navigation.stuckMs = 0;
+      }
+      this.enemyNavigation.set(enemy.id, navigation);
+      if (enemy.type === 'ranged' && distance >= ENEMY_ATTACK_PROFILES.ranged!.minRange && distance <= ENEMY_ATTACK_PROFILES.ranged!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
+        const attack = ENEMY_ATTACK_PROFILES.ranged!;
+        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, enemy.damage * attack.damageMultiplier, attack.windupMs, '#4ade80');
+        enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs + enemy.id % 5 * 150;
+      } else if (enemy.type === 'tank' && distance >= ENEMY_ATTACK_PROFILES.tank!.minRange && distance <= ENEMY_ATTACK_PROFILES.tank!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0)) {
+        const attack = ENEMY_ATTACK_PROFILES.tank!;
+        this.queueHazard(enemy, attack.kind, enemy.x, enemy.y, attack.radius, enemy.damage * attack.damageMultiplier, attack.windupMs, '#fbbf24');
+        enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
+      } else if (enemy.type === 'fast' && distance >= ENEMY_ATTACK_PROFILES.fast!.minRange && distance <= ENEMY_ATTACK_PROFILES.fast!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
+        const attack = ENEMY_ATTACK_PROFILES.fast!;
+        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, Math.max(12, enemy.damage * attack.damageMultiplier), attack.windupMs, '#f59e0b');
+        enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
+      } else if (enemy.type === 'phantom' && distance >= ENEMY_ATTACK_PROFILES.phantom!.minRange && distance <= ENEMY_ATTACK_PROFILES.phantom!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
+        const attack = ENEMY_ATTACK_PROFILES.phantom!;
+        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, Math.max(16, enemy.damage * attack.damageMultiplier), attack.windupMs, '#e2e8f0');
+        enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
+      } else if (enemy.type === 'elite' && distance >= ENEMY_ATTACK_PROFILES.elite!.minRange && distance <= ENEMY_ATTACK_PROFILES.elite!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
+        const attack = ENEMY_ATTACK_PROFILES.elite!;
+        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, Math.max(24, enemy.damage * attack.damageMultiplier), attack.windupMs, '#f472d0');
+        enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
+      } else if (!windingUp && enemy.type !== 'ranged' && enemy.type !== 'tank' && distance <= PLAYER_RADIUS + enemy.radius) {
         this.damagePlayer(target, enemy.damage * seconds, enemy.x, enemy.y);
       }
       if (enemy.id === this.bossEnemyId) this.runDirector.updateBoss(enemy.health, enemy.x, enemy.y);
       this.runDirector.trackEliteTarget(enemy.id, enemy.x, enemy.y);
     }
+    this.activeEnemyIds.clear();
+    for (const enemy of this.enemies) if (!enemy.dying) this.activeEnemyIds.add(enemy.id);
     this.updateHazards();
+    // Movement changes bucket membership; projectile collision uses the new
+    // authoritative positions rather than the broad phase from tick start.
+    this.enemySpatialIndex.rebuild(this.enemies);
 
     for (const projectile of this.projectiles) {
       const owner = this.players.get(projectile.ownerId);
@@ -413,13 +499,14 @@ export class CoopSimulation {
       // Projectiles only hit an enemy when their 3D height crosses its body.
       // Aiming into the sky therefore flies over the horde; aiming at their
       // torso retains the usual generous FPS hit volume.
-      const hits = this.enemies.filter(enemy => {
-        if (enemy.dying) return false;
-        const horizontalHit = Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) < enemy.radius + projectile.radius;
+      const candidates = this.enemySpatialIndex.query(projectile.x, projectile.y, projectile.radius + MAX_ENEMY_RADIUS, this.nearbyEnemies);
+      for (const enemy of candidates) {
+        if (enemy.dying) continue;
+        const dx = enemy.x - projectile.x, dy = enemy.y - projectile.y;
+        const hitRadius = enemy.radius + projectile.radius;
+        const horizontalHit = dx * dx + dy * dy < hitRadius * hitRadius;
         const verticalHit = projectile.z >= -projectile.radius && projectile.z <= ENEMY_HIT_HEIGHT + enemy.radius + projectile.radius;
-        return horizontalHit && verticalHit;
-      });
-      for (const enemy of hits) {
+        if (!horizontalHit || !verticalHit) continue;
         this.applyDamage(enemy, projectile.damage, projectile.ownerId, projectile.weaponId);
         if (projectile.weaponId === 'sonic_boom') {
           enemy.x = clamp(enemy.x + Math.cos(projectile.angle) * 48, enemy.radius, COOP_WORLD_SIZE - enemy.radius);
@@ -439,6 +526,9 @@ export class CoopSimulation {
     this.finalizeDefeatIfNeeded();
     this.updateDrops(seconds);
     this.enemies = this.enemies.filter(enemy => !enemy.dying || (enemy.deathUntilMs || 0) > this.elapsedMs);
+    this.activeEnemyIds.clear();
+    for (const enemy of this.enemies) this.activeEnemyIds.add(enemy.id);
+    for (const id of this.enemyNavigation.keys()) if (!this.activeEnemyIds.has(id)) this.enemyNavigation.delete(id);
     this.combatEvents = this.combatEvents.filter(event => this.elapsedMs - event.atMs <= COMBAT_EVENT_RETENTION_MS);
     this.projectiles = this.projectiles.filter(projectile => projectile.lifeMs > 0
       && projectile.z > -projectile.radius && projectile.z < 1800
@@ -448,7 +538,7 @@ export class CoopSimulation {
   createSnapshot(): CoopSnapshot {
     return {
       tick: this.simulationTick, elapsedMs: Math.round(this.elapsedMs), kills: this.kills,
-      players: [...this.players.values()].map(({ verticalVelocity, lastJumpSequence, lastReloadSequence: _lastReloadSequence, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, ...player }) => ({ ...player, motion: { verticalVelocity, lastJumpSequence, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
+      players: [...this.players.values()].map(({ verticalVelocity, lastJumpSequence, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, ...player }) => ({ ...player, motion: { verticalVelocity, lastJumpSequence, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
       enemies: this.enemies.map(({ hitFlashUntilMs, deathUntilMs, killedByPlayerId: _killedBy, targetLeaseUntilMs: _lease, nextAttackAtMs: _nextAttack, ...enemy }) => ({
         ...enemy,
         hitFlashMs: Math.max(0, hitFlashUntilMs - this.elapsedMs),
@@ -463,7 +553,7 @@ export class CoopSimulation {
       run: this.runDirector.snapshot(Math.round(this.elapsedMs)),
       buyStations: this.stations.map(station => ({ ...station, stock: [...station.stock] })),
       results: this.results && { ...this.results, players: this.results.players.map(player => ({ ...player, passiveDamageById: { ...player.passiveDamageById } })) },
-      encounter: this.encounterDirector.snapshot(buildEncounterClusters(this.encounterPlayers(), this.enemies).length),
+      encounter: this.encounterDirector.snapshot(buildEncounterClusters(this.encounterPlayers(), this.encounterEnemies()).length),
       hazards: this.hazards.map(({ damage: _damage, resolved: _resolved, ...hazard }) => ({ ...hazard })),
     };
   }
@@ -562,7 +652,8 @@ export class CoopSimulation {
     if (!objective || objective.kind !== 'elite_hunt' || objective.targetEnemyId !== undefined) return;
     const definition = ENEMY_TYPES.elite;
     const id = this.nextEntityId++;
-    this.enemies.push({ id, x: objective.x, y: objective.y, health: definition.health * this.partyScale(1.5), maxHealth: definition.health * this.partyScale(1.5), type: 'elite', color: definition.color, radius: definition.radius, damage: definition.damage * this.partyScale(.24), speed: definition.speed, experienceValue: definition.xp * 4, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: true, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500 });
+    const health = coopObjectiveEliteHealth(definition.health, this.players.size);
+    this.enemies.push({ id, x: objective.x, y: objective.y, health, maxHealth: health, type: 'elite', color: definition.color, radius: definition.radius, damage: definition.damage * this.partyScale(.24), speed: definition.speed, experienceValue: definition.xp * 4, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: true, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500, nextAttackAtMs: this.elapsedMs + enemyOpeningDelay('elite') });
     this.runDirector.setEliteTarget(id);
     this.emitCombatEvent({ kind: 'objective_started', x: objective.x, y: objective.y, enemyId: id, color: definition.color });
   }
@@ -581,8 +672,7 @@ export class CoopSimulation {
     if (!boss) return;
     const definition = ENEMY_TYPES.titan;
     const isFinal = boss.kind === 'singularity';
-    const baseHealth = isFinal ? 34_000 : boss.kind === 'void_architect' ? 9_500 : 4_800;
-    const health = Math.round(baseHealth * this.partyScale(.70));
+    const health = coopBossHealth(boss.kind, this.players.size);
     const id = this.nextEntityId++;
     this.enemies.push({ id, x: boss.x, y: boss.y, health, maxHealth: health, type: 'titan', color: isFinal ? '#f8fafc' : boss.kind === 'void_architect' ? '#e879f9' : '#fb7185', radius: isFinal ? 150 : 88, damage: (isFinal ? 68 : 42) * this.partyScale(.18), speed: isFinal ? .72 : .82, experienceValue: isFinal ? 3_000 : 700, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: false, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500 });
     this.bossEnemyId = id;
@@ -643,7 +733,7 @@ export class CoopSimulation {
   }
 
   private updateHazards() {
-    this.hazards = this.hazards.filter(hazard => this.elapsedMs <= hazard.resolvesAtMs + 350 && this.enemies.some(enemy => enemy.id === hazard.enemyId && !enemy.dying));
+    this.hazards = this.hazards.filter(hazard => this.elapsedMs <= hazard.resolvesAtMs + 350 && this.activeEnemyIds.has(hazard.enemyId));
     for (const hazard of this.hazards) {
       if (hazard.resolved || this.elapsedMs < hazard.resolvesAtMs) continue;
       hazard.resolved = true;
@@ -657,6 +747,10 @@ export class CoopSimulation {
           resolveWorldCollisions(position, PLAYER_RADIUS); player.x = position.x; player.y = position.y;
         } else this.damagePlayer(player, hazard.damage, hazard.x, hazard.y);
       }
+      if (hazard.kind === 'lunge' || hazard.kind === 'ambush') {
+        const source = this.enemies.find(enemy => enemy.id === hazard.enemyId && !enemy.dying);
+        if (source && isWorldPositionClear(hazard.x, hazard.y, source.radius)) { source.x = hazard.x; source.y = hazard.y; }
+      }
     }
   }
 
@@ -665,7 +759,7 @@ export class CoopSimulation {
     for (let index = 0; index < count && this.enemies.length < COOP_MAX_ENEMIES; index++) {
       const angle = index / Math.max(1, count) * Math.PI * 2 + this.random() * .35;
       const position = this.safeFallbackPosition(boss.x + Math.cos(angle) * (boss.radius + 170), boss.y + Math.sin(angle) * (boss.radius + 170), definition.radius);
-      this.enemies.push({ id: this.nextEntityId++, x: position.x, y: position.y, health: definition.health * this.partyScale(.45), maxHealth: definition.health * this.partyScale(.45), type: 'elite', color: definition.color, radius: definition.radius, damage: definition.damage, speed: definition.speed, experienceValue: definition.xp, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: false, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500 });
+      this.enemies.push({ id: this.nextEntityId++, x: position.x, y: position.y, health: definition.health * this.partyScale(.45), maxHealth: definition.health * this.partyScale(.45), type: 'elite', color: definition.color, radius: definition.radius, damage: definition.damage, speed: definition.speed, experienceValue: definition.xp, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: false, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500, nextAttackAtMs: this.elapsedMs + enemyOpeningDelay('elite') });
     }
   }
 
@@ -676,12 +770,16 @@ export class CoopSimulation {
         if (this.elapsedMs < module.nextTriggerAtMs) continue;
         module.nextTriggerAtMs = this.elapsedMs + passiveCooldownMs(module.id, module.rank);
         const radius = passiveRadius(module.id, module.rank);
-        const targets = this.enemies.filter(enemy => !enemy.dying && Math.hypot(enemy.x - player.x, enemy.y - player.y) <= radius);
-        for (const enemy of targets) {
+        const candidates = this.enemySpatialIndex.query(player.x, player.y, radius + MAX_ENEMY_RADIUS, this.nearbyEnemies);
+        let targetCount = 0;
+        for (const enemy of candidates) {
+          const dx = enemy.x - player.x, dy = enemy.y - player.y;
+          if (enemy.dying || dx * dx + dy * dy > radius * radius) continue;
+          targetCount++;
           if (module.id === 'frost_aura') enemy.slowMultiplier = Math.min(enemy.slowMultiplier, .58 - (module.rank - 1) * .07);
           this.applyDamage(enemy, passiveDamage(module.id, module.rank), player.id, module.id);
         }
-        if (module.id === 'neural_pulse' || targets.length > 0) this.emitCombatEvent({ kind: 'passive_triggered', x: player.x, y: player.y, playerId: player.id, weaponId: module.id, color: COOP_PASSIVE_BY_ID[module.id].color });
+        if (module.id === 'neural_pulse' || targetCount > 0) this.emitCombatEvent({ kind: 'passive_triggered', x: player.x, y: player.y, playerId: player.id, weaponId: module.id, color: COOP_PASSIVE_BY_ID[module.id].color });
       }
     }
   }
@@ -873,7 +971,7 @@ export class CoopSimulation {
   private finishReload(player: CoopPlayer, weapon: CoopWeaponRuntime) { weapon.state = 'ready'; weapon.reloadStartedAtMs = undefined; weapon.reloadEndsAtMs = undefined; player.isReloading = false; player.weaponActionEndsAtMs = undefined; this.emitCombatEvent({ kind: 'reload_finished', x: player.x, y: player.y, playerId: player.id, weaponId: weapon.weaponId, color: COOP_FIREARM_BY_ID[weapon.weaponId].visual.muzzleColor }); }
   private cancelReload(weapon: CoopWeaponRuntime) { weapon.state = 'ready'; weapon.reloadStartedAtMs = undefined; weapon.reloadEndsAtMs = undefined; }
 
-  private tryCastWeapon(player: CoopPlayer, triggerPressed: boolean) {
+  private tryCastWeapon(player: CoopPlayer, triggerPressed: boolean, actionId = 0) {
     const weapon = this.weapon(player), definition = COOP_FIREARM_BY_ID[weapon.weaponId];
     if (player.isSwitching || weapon.state === 'switching' || weapon.state === 'bolt_cycle') return;
     if (weapon.state === 'reloading') {
@@ -884,16 +982,44 @@ export class CoopSimulation {
     if (this.elapsedMs < weapon.nextFireAtMs) return;
     weapon.magazineAmmo--; weapon.nextFireAtMs = this.elapsedMs + firearmFireInterval(definition, weapon.level); player.shotSequence++;
     const stats = this.runStats.get(player.id); if (stats) stats.shotsFired += definition.pelletCount || 1;
-    this.emitCombatEvent({ kind: 'weapon_fired', x: player.x, y: player.y, playerId: player.id, weaponId: weapon.weaponId, color: definition.visual.muzzleColor });
+    this.emitCombatEvent({ kind: 'weapon_fired', x: player.x, y: player.y, playerId: player.id, weaponId: weapon.weaponId, color: definition.visual.muzzleColor, actionId });
     const count = definition.pelletCount || 1;
     for (let pellet = 0; pellet < count; pellet++) {
       const spread = definition.pelletCount ? definition.spreadRadians! : firearmSpread(definition, player.isAiming);
       const centered = count === 1 ? deterministicSigned(player.shotSequence, pellet, weapon.weaponId) : (pellet / Math.max(1, count - 1) - .5) * 2 + deterministicSigned(player.shotSequence, pellet, weapon.weaponId) * .18;
       const angle = player.angle + centered * spread, pitch = player.aimPitch + deterministicSigned(player.shotSequence, pellet + 71, weapon.weaponId) * spread * .28;
-      this.projectiles.push({ id: this.nextEntityId++, ownerId: player.id, weaponId: weapon.weaponId, x: player.x + Math.cos(angle) * 26, y: player.y + Math.sin(angle) * 26, angle, pitch, z: 24 + player.z, radius: definition.projectileRadius, lifeMs: weapon.weaponId === 'sniper_rifle' ? 1500 : 1100, velocity: definition.projectileVelocity, verticalVelocity: Math.sin(pitch) * definition.projectileVelocity, damage: firearmDamage(definition, weapon.level), penetration: definition.penetration, damageIntervalMs: 1, nextDamageAt: this.elapsedMs });
+      const projectile: CoopProjectile = { id: this.nextEntityId++, ownerId: player.id, weaponId: weapon.weaponId, x: player.x + Math.cos(angle) * 26, y: player.y + Math.sin(angle) * 26, angle, pitch, z: 24 + player.z, radius: definition.projectileRadius, lifeMs: weapon.weaponId === 'sniper_rifle' ? 1500 : 1100, velocity: definition.projectileVelocity, verticalVelocity: Math.sin(pitch) * definition.projectileVelocity, damage: firearmDamage(definition, weapon.level), penetration: definition.penetration, damageIntervalMs: 1, nextDamageAt: this.elapsedMs };
+      this.fastForwardShot(projectile, this.inputAgeMs.get(player.id) || 0);
+      if (projectile.lifeMs > 0 && projectile.penetration > 0) this.projectiles.push(projectile);
     }
     if (weapon.weaponId === 'sniper_rifle') { weapon.state = 'bolt_cycle'; weapon.boltCycleEndsAtMs = this.elapsedMs + SNIPER_BOLT_MS; player.weaponActionEndsAtMs = weapon.boltCycleEndsAtMs; }
     if (weapon.magazineAmmo === 0 && weapon.reserveAmmo > 0) this.startReload(player);
+  }
+
+  /** Advance a newly accepted remote shot through a short, bounded history
+   * window. Small substeps prevent a compensated projectile tunnelling through
+   * a target, while the host still owns all hit and damage decisions. */
+  private fastForwardShot(projectile: CoopProjectile, ageMs: number) {
+    let remaining = Math.min(COOP_MAX_SHOT_COMPENSATION_MS, Math.max(0, ageMs));
+    while (remaining > 0 && projectile.penetration > 0) {
+      const stepMs = Math.min(12, remaining), seconds = stepMs / 1000;
+      const horizontalVelocity = projectile.velocity * Math.cos(projectile.pitch);
+      projectile.x += Math.cos(projectile.angle) * horizontalVelocity * seconds;
+      projectile.y += Math.sin(projectile.angle) * horizontalVelocity * seconds;
+      projectile.z += projectile.verticalVelocity * seconds;
+      projectile.lifeMs -= stepMs;
+      const candidates = this.enemySpatialIndex.query(projectile.x, projectile.y, projectile.radius + MAX_ENEMY_RADIUS, this.nearbyEnemies);
+      for (const enemy of candidates) {
+        const dx = enemy.x - projectile.x, dy = enemy.y - projectile.y;
+        const hitRadius = enemy.radius + projectile.radius;
+        if (enemy.dying || dx * dx + dy * dy >= hitRadius * hitRadius) continue;
+        if (projectile.z < -projectile.radius || projectile.z > ENEMY_HIT_HEIGHT + enemy.radius + projectile.radius) continue;
+        this.applyDamage(enemy, projectile.damage, projectile.ownerId, projectile.weaponId);
+        if (projectile.penetration !== 999) projectile.penetration--;
+        if (projectile.penetration <= 0) break;
+      }
+      remaining -= stepMs;
+    }
   }
 
   /** The only co-op path allowed to damage an enemy. It creates presentation
@@ -922,28 +1048,33 @@ export class CoopSimulation {
     enemy.health = 0;
     enemy.dying = true;
     enemy.killedByPlayerId = playerId;
-    enemy.deathUntilMs = this.elapsedMs + DEATH_PRESENTATION_MS;
-    enemy.deathRemainingMs = DEATH_PRESENTATION_MS;
+    enemy.deathUntilMs = this.elapsedMs + COOP_ENEMY_DEATH_PRESENTATION_MS;
+    enemy.deathRemainingMs = COOP_ENEMY_DEATH_PRESENTATION_MS;
     this.kills++;
     const stats = this.runStats.get(playerId); if (stats) stats.kills++;
     this.emitCombatEvent({ kind: 'enemy_killed', x: enemy.x, y: enemy.y, enemyId: enemy.id, playerId, killedByPlayerId: playerId, color: enemy.color, weaponId });
     this.spawnGem(enemy.x, enemy.y, enemy.experienceValue, playerId);
     const killer = this.players.get(playerId);
-    if (killer && (enemy.type === 'elite' || enemy.type === 'titan' || this.random() < 0.46)) this.spawnAmmoCache(enemy.x, enemy.y, killer, enemy.type === 'elite' || enemy.type === 'titan', playerId);
+    if (killer && (enemy.type === 'elite' || enemy.type === 'titan' || this.random() < enemyAmmoDropChance(enemy.type))) this.spawnAmmoCache(enemy.x, enemy.y, killer, enemy.type === 'elite' || enemy.type === 'titan', playerId);
 
     const guaranteedDrop = getGuaranteedEnemyDrop(enemy.type);
     if (guaranteedDrop) this.spawnItem(enemy.x, enemy.y, guaranteedDrop, playerId);
     if (enemy.isHolder) {
       this.spawnItem(enemy.x, enemy.y, rollHolderItem(() => this.random()), playerId);
     } else {
-      const coin = rollCoinDrop(enemy.type, 1, 0.48, () => this.random());
-    if (coin) this.spawnItem(enemy.x, enemy.y, coin, playerId);
+      const coin = rollCoinDrop(enemy.type, 1, 0.22, () => this.random());
+      if (coin) this.spawnItem(enemy.x, enemy.y, coin, playerId);
     }
     if (enemy.id === this.bossEnemyId) this.onBossKilled(enemy);
     if (this.runDirector.completeEliteTarget(enemy.id)) this.onObjectiveCompleted(this.squadCentre());
   }
 
   private spawnGem(x: number, y: number, value: number, killedByPlayerId?: string) {
+    if (this.gems.length >= COOP_MAX_WORLD_GEMS) {
+      const merge = closestDrop(this.gems, x, y);
+      if (merge) { merge.value += value; this.emitCombatEvent({ kind: 'drop_spawned', x: merge.x, y: merge.y, playerId: killedByPlayerId, amount: value, color: merge.color }); }
+      return;
+    }
     const gem: CoopGemSnapshot = { id: this.nextEntityId++, x, y, value, color: EXPERIENCE_GEM_COLOR };
     this.gems.push(gem);
     this.emitCombatEvent({ kind: 'drop_spawned', x, y, playerId: killedByPlayerId, amount: value, color: gem.color });
@@ -951,6 +1082,20 @@ export class CoopSimulation {
 
   private spawnItem(x: number, y: number, type: ItemType, killedByPlayerId?: string) {
     const definition = ITEM_TYPES[type];
+    if (this.items.length >= COOP_MAX_WORLD_ITEMS) {
+      const merge = closestDrop(this.items.filter(item => item.type === type), x, y);
+      if (merge) { merge.value += definition.value; this.emitCombatEvent({ kind: 'drop_spawned', x: merge.x, y: merge.y, playerId: killedByPlayerId, itemType: type, amount: definition.value, color: merge.color }); }
+      else if (type === 'data_core' && killedByPlayerId) {
+        // A guaranteed elite reward must never disappear because the field is
+        // saturated with unrelated pickups. Bank it to its killer immediately.
+        const player = this.players.get(killedByPlayerId);
+        if (player) {
+          player.pendingDataCores += definition.value;
+          this.emitCombatEvent({ kind: 'pickup_collected', x, y, playerId: killedByPlayerId, itemType: type, amount: definition.value, color: definition.color });
+        }
+      }
+      return;
+    }
     const item: CoopItemSnapshot = { id: this.nextEntityId++, x, y, type, value: definition.value, color: definition.color };
     this.items.push(item);
     this.emitCombatEvent({ kind: 'drop_spawned', x, y, playerId: killedByPlayerId, itemType: type, amount: item.value, color: item.color });
@@ -960,7 +1105,13 @@ export class CoopSimulation {
     const selected = this.weapon(player);
     const weapon = player.weaponStates.reduce((lowest, candidate) => candidate.reserveAmmo / COOP_FIREARM_BY_ID[candidate.weaponId].maxReserve < lowest.reserveAmmo / COOP_FIREARM_BY_ID[lowest.weaponId].maxReserve ? candidate : lowest, selected);
     const definition = COOP_FIREARM_BY_ID[weapon.weaponId];
-    const cache: CoopAmmoCacheSnapshot = { id: this.nextEntityId++, x, y, ammoType: definition.ammoType, amount: elite ? Math.ceil(definition.magazineSize * 2) : Math.max(1, Math.ceil(definition.magazineSize * .60)), color: definition.visual.muzzleColor };
+    const amount = elite ? Math.ceil(definition.magazineSize * 2) : Math.max(1, Math.ceil(definition.magazineSize * .60));
+    if (this.ammoCaches.length >= COOP_MAX_AMMO_CACHES) {
+      const merge = closestDrop(this.ammoCaches.filter(cache => cache.ammoType === definition.ammoType), x, y);
+      if (merge) { merge.amount += amount; this.emitCombatEvent({ kind: 'drop_spawned', x: merge.x, y: merge.y, playerId: killedByPlayerId, amount, color: merge.color, ammoType: merge.ammoType }); }
+      return;
+    }
+    const cache: CoopAmmoCacheSnapshot = { id: this.nextEntityId++, x, y, ammoType: definition.ammoType, amount, color: definition.visual.muzzleColor };
     this.ammoCaches.push(cache);
     this.emitCombatEvent({ kind: 'drop_spawned', x, y, playerId: killedByPlayerId, amount: cache.amount, color: cache.color, ammoType: cache.ammoType });
   }
@@ -1060,28 +1211,66 @@ export class CoopSimulation {
     this.combatEvents.push({ id: this.nextCombatEventId++, tick: this.simulationTick, atMs: this.elapsedMs, ...event });
   }
 
-  private spawnEnemy(type: keyof typeof ENEMY_TYPES, targetPlayerId: string, packetId: number, openingPosition?: { x: number; y: number }) {
+  private spawnEnemy(type: keyof typeof ENEMY_TYPES, targetPlayerId: string, packetId: number, openingPosition?: { x: number; y: number }, healthMultiplier = 1, damageMultiplier = 1) {
     const definition = ENEMY_TYPES[type];
     const players = this.encounterPlayers();
     const clusters = buildEncounterClusters(players, this.enemies);
     const cluster = clusters.find(candidate => candidate.playerIds.includes(targetPlayerId)) || clusters[0];
     const position = openingPosition || (cluster && this.spawnTopology.find(cluster, players, definition.radius, this.enemies)) || this.safeFallback(targetPlayerId, definition.radius);
     this.enemies.push({
-      id: this.nextEntityId++, x: position.x, y: position.y, health: definition.health, maxHealth: definition.health,
-      type, color: definition.color, radius: definition.radius, damage: definition.damage, speed: definition.speed,
-      experienceValue: definition.xp, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1,
+      id: this.nextEntityId++, x: position.x, y: position.y, health: definition.health * healthMultiplier, maxHealth: definition.health * healthMultiplier,
+      type, color: definition.color, radius: definition.radius, damage: definition.damage * damageMultiplier, speed: definition.speed,
+      experienceValue: Math.round(definition.xp * (.75 + healthMultiplier * .25)), hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1,
       isHolder: false, dying: false, deathRemainingMs: 0,
       targetPlayerId, spawnPacketId: packetId, targetLeaseUntilMs: this.elapsedMs + 2_500,
+      nextAttackAtMs: this.elapsedMs + enemyOpeningDelay(type),
     });
   }
 
   /** Match-clock encounter pacing remains host-only; firearm input never
    * influences spawning or targeting. */
   private scheduleEncounters() {
-    const capacity = Math.max(0, COOP_MAX_ENEMIES - this.enemies.length);
-    const orders = this.encounterDirector.schedule(this.elapsedMs, this.enemies, this.encounterPlayers(), capacity);
-    for (const order of orders) this.spawnEnemy(order.type, order.targetPlayerId, order.packetId);
+    const encounterCount = this.encounterEnemies().length;
+    const capacity = Math.max(0, Math.min(
+      COOP_MAX_ENEMIES - this.enemies.length,
+      COOP_MAX_ENCOUNTER_ENEMIES - encounterCount,
+    ));
+    // Contract elites and bosses consume global capacity, but their separate
+    // scenario budget must not stall or inflate finite round accounting.
+    const orders = this.encounterDirector.schedule(this.elapsedMs, this.encounterEnemies(), this.encounterPlayers(), capacity);
+    for (const packet of groupEncounterOrders(orders)) this.spawnEncounterPacket(packet);
     for (const event of this.encounterDirector.drainRoundEvents()) this.handleRoundEvent(event);
+  }
+
+  private spawnEncounterPacket(orders: EncounterOrder[]) {
+    const players = this.encounterPlayers();
+    const clusters = buildEncounterClusters(players, this.enemies);
+    const cluster = clusters.find(candidate => candidate.id === orders[0]?.clusterId) || clusters[0];
+    const largestRadius = Math.max(...orders.map(order => ENEMY_TYPES[order.type].radius));
+    const centre = cluster && this.spawnTopology.find(cluster, players, largestRadius + 55, this.enemies);
+    const placed: Array<{ x: number; y: number; radius: number }> = [];
+    for (const order of orders) {
+      const radius = ENEMY_TYPES[order.type].radius;
+      const position = centre && cluster ? this.packetMemberPosition(centre, cluster, order, radius, placed) : undefined;
+      if (position) placed.push({ ...position, radius });
+      this.spawnEnemy(order.type, order.targetPlayerId, order.packetId, position, order.healthMultiplier, order.damageMultiplier);
+    }
+  }
+
+  /** Tanks and melee screen the near edge; ranged support enters behind them.
+   * Rotated fallbacks keep the pack collision-clear in narrow city corridors. */
+  private packetMemberPosition(centre: { x: number; y: number }, cluster: { x: number; y: number }, order: EncounterOrder, radius: number, placed: readonly { x: number; y: number; radius: number }[]) {
+    const toward = Math.atan2(cluster.y - centre.y, cluster.x - centre.x);
+    const depth = order.type === 'ranged' ? -105 : order.type === 'tank' || order.type === 'elite' ? 52 : 24;
+    const lateral = (order.formationIndex - (order.formationSize - 1) / 2) * 72;
+    for (const rotation of [0, .45, -.45, .9, -.9, Math.PI]) {
+      const x = centre.x + Math.cos(toward + rotation) * depth + Math.cos(toward + Math.PI / 2 + rotation) * lateral;
+      const y = centre.y + Math.sin(toward + rotation) * depth + Math.sin(toward + Math.PI / 2 + rotation) * lateral;
+      if (!isWorldPositionClear(x, y, radius + 6)) continue;
+      if (placed.some(other => Math.hypot(other.x - x, other.y - y) < other.radius + radius + 12)) continue;
+      return { x, y };
+    }
+    return undefined;
   }
 
   private handleRoundEvent(event: EncounterRoundEvent) {
@@ -1103,6 +1292,7 @@ export class CoopSimulation {
   }
 
   private encounterPlayers(): EncounterPlayer[] { return [...this.players.values()].map(({ id, x, y, angle, health }) => ({ id, x, y, angle, health })); }
+  private encounterEnemies() { return this.enemies.filter(enemy => enemy.spawnPacketId !== undefined); }
 
   private safeFallback(targetPlayerId: string, radius: number) {
     const target = this.players.get(targetPlayerId) || this.closestLivingPlayer(COOP_WORLD_SIZE / 2, COOP_WORLD_SIZE / 2);
@@ -1172,3 +1362,29 @@ function turnTowards(current: number, target: number, maxTurn: number) {
 function clamp(value: number, min: number, max: number) { return Math.max(min, Math.min(max, value)); }
 function isPassiveModule(value: unknown): value is CoopPassiveModuleId { return typeof value === 'string' && value in COOP_PASSIVE_BY_ID; }
 function maxArmorHp(tier: number) { return tier >= 2 ? 100 : tier >= 1 ? 50 : 0; }
+function groupEncounterOrders(orders: readonly EncounterOrder[]) {
+  const packets = new Map<number, EncounterOrder[]>();
+  for (const order of orders) {
+    const packet = packets.get(order.packetId) || [];
+    packet.push(order);
+    packets.set(order.packetId, packet);
+  }
+  return [...packets.values()];
+}
+function enemyOpeningDelay(type: keyof typeof ENEMY_TYPES) {
+  return ENEMY_ATTACK_PROFILES[type]?.openingDelayMs || 0;
+}
+function enemyAmmoDropChance(type: keyof typeof ENEMY_TYPES) {
+  if (type === 'tank') return .30;
+  if (type === 'fast' || type === 'ranged' || type === 'phantom') return .18;
+  return .10;
+}
+function closestDrop<T extends { x: number; y: number }>(drops: readonly T[], x: number, y: number): T | undefined {
+  let closest: T | undefined;
+  let closestDistance = Infinity;
+  for (const drop of drops) {
+    const distance = (drop.x - x) ** 2 + (drop.y - y) ** 2;
+    if (distance < closestDistance) { closest = drop; closestDistance = distance; }
+  }
+  return closest;
+}

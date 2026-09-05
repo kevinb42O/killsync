@@ -50,11 +50,13 @@ export class HostedLobby {
   private timer = 0;
   private busy = new Set<string>();
   private completed = new Set<string>();
+  private offers = new Map<string, string>();
   private statusListener?: (status: string) => void;
   private closed = false;
   private playerCount = 1;
   private state: 'waiting' | 'in_game' = 'waiting';
   private lastHeartbeat = 0;
+  private readonly requests = new Set<AbortController>();
 
   private constructor(room: PublicLobby, token: string) { this.room = room; this.token = token; }
 
@@ -68,28 +70,42 @@ export class HostedLobby {
   start(session: ManualWebRTCSession) {
     const poll = async () => {
       if (this.closed) return;
+      const controller = new AbortController();
+      this.requests.add(controller);
       try {
         if (Date.now() - this.lastHeartbeat > 10_000) this.update(this.playerCount, this.state);
-        const { joins } = await request<{ joins: Array<{ requestId: string; guestName: string; offer?: string; answer?: string }> }>(`/rooms/${this.room.id}/joins`, { headers: auth(this.token) });
+        const { joins } = await request<{ joins: Array<{ requestId: string; guestName: string; offer?: string; answer?: string }> }>(`/rooms/${this.room.id}/joins`, { headers: auth(this.token), signal: controller.signal });
+        if (this.closed) return;
         for (const join of joins) {
           if (join.answer && this.busy.has(join.requestId) && !this.completed.has(join.requestId)) {
             this.completed.add(join.requestId);
             await session.acceptAnswer(join.answer);
+            if (this.closed) return;
             this.busy.delete(join.requestId);
+            this.offers.delete(join.requestId);
             this.statusListener?.(`${join.guestName} is joining…`);
           } else if (!join.offer && !this.busy.has(join.requestId)) {
             this.busy.add(join.requestId);
             this.statusListener?.(`${join.guestName} is joining…`);
-            const offer = await session.createOffer();
-            await request(`/rooms/${this.room.id}/joins/${join.requestId}/offer`, { method: 'POST', headers: auth(this.token), body: JSON.stringify({ offer }) });
+            try {
+              const offer = this.offers.get(join.requestId) || await session.createOffer();
+              this.offers.set(join.requestId, offer);
+              if (this.closed) return;
+              await request(`/rooms/${this.room.id}/joins/${join.requestId}/offer`, { method: 'POST', headers: auth(this.token), body: JSON.stringify({ offer }), signal: controller.signal });
+            } catch (error) {
+              this.busy.delete(join.requestId);
+              throw error;
+            }
           }
         }
       } catch (error) {
-        this.statusListener?.('Server is reconnecting…');
+        if (!this.closed) this.statusListener?.('Server is reconnecting…');
+      } finally {
+        this.requests.delete(controller);
+        if (!this.closed) this.timer = window.setTimeout(() => void poll(), POLL_MS);
       }
     };
     void poll();
-    this.timer = window.setInterval(() => void poll(), POLL_MS);
   }
 
   update(playerCount: number, state: 'waiting' | 'in_game') {
@@ -102,7 +118,9 @@ export class HostedLobby {
 
   close() {
     this.closed = true;
-    window.clearInterval(this.timer);
+    window.clearTimeout(this.timer);
+    for (const controller of this.requests) controller.abort();
+    this.requests.clear();
     void request(`/rooms/${this.room.id}`, { method: 'DELETE', headers: auth(this.token) }).catch(() => undefined);
   }
 }
@@ -111,6 +129,7 @@ export class LobbyJoin {
   private closed = false;
   private timer = 0;
   private acceptedOffer = false;
+  private activeRequest?: AbortController;
   private constructor(private readonly roomId: string, private readonly requestId: string, private readonly token: string) {}
 
   static async create(roomId: string, guestName: string, spectate: boolean = false) {
@@ -128,27 +147,35 @@ export class LobbyJoin {
         onTimeout();
         return;
       }
+      const controller = new AbortController();
+      this.activeRequest = controller;
       try {
-        const data = await request<{ offer?: string }>(`/rooms/${this.roomId}/joins/${this.requestId}`, { headers: auth(this.token) });
+        const data = await request<{ offer?: string }>(`/rooms/${this.roomId}/joins/${this.requestId}`, { headers: auth(this.token), signal: controller.signal });
+        if (this.closed) return;
         if (!data.offer) return;
         this.acceptedOffer = true;
         onStatus('Joining match…');
         const answer = await session.acceptOffer(data.offer);
-        await request(`/rooms/${this.roomId}/joins/${this.requestId}/answer`, { method: 'POST', headers: auth(this.token), body: JSON.stringify({ answer }) });
+        if (this.closed) return;
+        await request(`/rooms/${this.roomId}/joins/${this.requestId}/answer`, { method: 'POST', headers: auth(this.token), body: JSON.stringify({ answer }), signal: controller.signal });
+        if (this.closed) return;
         onStatus('Ready — waiting for the host to start.');
-        window.clearInterval(this.timer);
       } catch (error) {
         this.acceptedOffer = false;
-        onError('Couldn’t join this server. Try another one.');
+        if (!this.closed) onError('Couldn’t join this server. Try another one.');
+      } finally {
+        if (this.activeRequest === controller) this.activeRequest = undefined;
+        if (!this.closed && !this.acceptedOffer) this.timer = window.setTimeout(() => void poll(), POLL_MS);
       }
     };
     void poll();
-    this.timer = window.setInterval(() => void poll(), POLL_MS);
   }
 
   close() {
     this.closed = true;
-    window.clearInterval(this.timer);
+    window.clearTimeout(this.timer);
+    this.activeRequest?.abort();
+    this.activeRequest = undefined;
     void request(`/rooms/${this.roomId}/joins/${this.requestId}`, { method: 'DELETE', headers: auth(this.token) }).catch(() => undefined);
   }
 }

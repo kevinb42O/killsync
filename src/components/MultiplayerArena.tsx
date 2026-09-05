@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Crosshair, Radio, Users, Coins, ShoppingCart, ShieldPlus } from 'lucide-react';
+import { ArrowLeft, Coins, ShoppingCart, ShieldPlus } from 'lucide-react';
 import { COOP_REVIVE_RANGE, COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, CoopPlayerSeed, CoopSimulation, CoopSnapshot, quantizeAngle, quantizePitch } from '../game/multiplayer/CoopSimulation';
 import { MultiplayerRendererBridge } from '../game/multiplayer/MultiplayerRendererBridge';
 import { interpolateCoopSnapshot } from '../game/multiplayer/snapshotInterpolation';
@@ -11,10 +11,14 @@ import { COOP_PASSIVE_BY_ID, passiveRankCost } from '../game/multiplayer/CoopPas
 import { getCoopSlideBinding, getMovementBindings, type ControlScheme } from '../game/controls';
 import { LocalPlayerPrediction } from '../game/multiplayer/LocalPlayerPrediction';
 import { advancePlayerMovement, COOP_STEP_MS } from '../game/multiplayer/playerMovement';
+import { HostSimulationClock } from '../game/multiplayer/HostSimulationClock';
+import { createInterestSnapshot } from '../game/multiplayer/snapshotInterest';
 import './multiplayer.css';
 
 const INPUT_INTERVAL_MS = COOP_STEP_MS;
 const SNAPSHOT_INTERVAL_MS = 50;
+/** React HUD work does not need to run at the 20 Hz network snapshot rate. */
+const HUD_INTERVAL_MS = 100;
 
 /**
  * The first playable direct-connection arena. It intentionally stays separate
@@ -142,7 +146,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         squad: snapshot.players.map(player => ({ id: player.id, label: player.label, color: player.color, health: player.health, maxHealth: player.maxHealth, lifeState: player.lifeState, downedRemainingMs: player.downedRemainingMs, reviveProgressMs: player.reviveProgressMs, reviverId: player.reviverId })),
       });
     }
-    launch.session.broadcastState({ type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Math.round(now), payload: snapshot });
+    launch.session.broadcastState(
+      { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Date.now(), payload: snapshot },
+      peerId => createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]),
+    );
     launch.hostedLobby?.update(snapshot.players.length, 'in_game');
     setConnectionMessage('New run started — the squad connection is still live.');
     setCombatNotice({ text: 'NEW RUN — SQUAD LINK PRESERVED', color: '#5eead4' });
@@ -187,7 +194,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         else if (event.kind === 'round_completed') setCombatNotice({ text: `ROUND ${event.amount} CLEAR — RESUPPLY`, color: '#5eead4' });
       }
     };
+    let lastHudSyncAt = -Infinity;
     const syncHud = (snapshot: CoopSnapshot, connected: boolean = true) => {
+      const now = performance.now();
+      if (now - lastHudSyncAt < HUD_INTERVAL_MS) return;
+      lastHudSyncAt = now;
       const local = snapshot.players.find(player => player.id === (isSpectator ? spectatorTargetRef.current : launch.localPlayerId))
         || (isSpectator ? snapshot.players[0] : undefined);
       if (!local) return;
@@ -249,10 +260,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         else if (state === 'connecting' || state === 'disconnected') { setConnectionStatus('reconnecting'); setConnectionMessage('Reconnecting…'); }
         else if (state === 'failed' || state === 'closed') { setConnectionStatus('disconnected'); setConnectionMessage('Connection lost.'); }
       },
-      onInput: (peerId, frame) => {
+      onInput: (peerId, frame, estimatedOneWayMs) => {
         if (launch.role !== 'host') return;
         const playerId = hostPlayerIdByPeer[peerId];
-        if (playerId) simulationRef.current?.setInput(playerId, frame);
+        if (playerId) simulationRef.current?.setInput(playerId, frame, estimatedOneWayMs + INPUT_INTERVAL_MS / 2);
       },
       onState: (frame) => {
         if (launch.role === 'host') return;
@@ -321,6 +332,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     const slideBinding = getCoopSlideBinding(controlScheme);
     let firing = false;
     let sequence = inputRef.current.sequence;
+    let fireActionId = inputRef.current.fireActionId || 0;
     const updateInput = () => {
       const movement = (movementBindings.up.some(key => keys.has(key)) ? 1 : 0)
         | (movementBindings.down.some(key => keys.has(key)) ? 2 : 0)
@@ -329,7 +341,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       inputRef.current = {
         ...inputRef.current,
         sequence: ++sequence,
-        clientTime: Math.round(performance.now()),
+        clientTime: Date.now(),
         movement,
         firing,
         sprinting: keys.has('shift'),
@@ -341,7 +353,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     const clearJumpInput = () => {
       if (!inputRef.current.jumpPressed && !inputRef.current.reloadPressed) return;
-      inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(performance.now()), jumpPressed: false, reloadPressed: false };
+      inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: false, reloadPressed: false };
     };
       const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') return;
@@ -352,7 +364,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       soundManager.activate();
       if (event.code === 'Space') {
         event.preventDefault();
-        if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(performance.now()), jumpPressed: true };
+        if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: true };
         return;
       }
       const key = event.key.toLowerCase();
@@ -379,7 +391,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       }
       if (key === 'r') {
         event.preventDefault();
-        if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(performance.now()), reloadPressed: true };
+        if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), reloadPressed: true };
         return;
       }
       if (/^[1-9]$/.test(key)) {
@@ -392,7 +404,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       updateInput();
     };
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === 'r') { inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(performance.now()), reloadPressed: false }; return; }
+      if (event.key.toLowerCase() === 'r') { inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), reloadPressed: false }; return; }
       keys.delete(event.key.toLowerCase());
       updateInput();
     };
@@ -423,11 +435,19 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         renderer.requestPointerLock();
         return;
       }
-      if (event.button === 2) { inputRef.current = { ...inputRef.current, aiming: true, sequence: ++sequence, clientTime: Math.round(performance.now()) }; return; }
+      if (event.button === 2) { inputRef.current = { ...inputRef.current, aiming: true, sequence: ++sequence, clientTime: Date.now() }; return; }
       if (event.button !== 0) return;
       renderer.requestPointerLock();
+      fireActionId++;
       firing = true;
       updateInput();
+      inputRef.current = { ...inputRef.current, fireActionId };
+      const weaponId = COOP_WEAPON_SLOTS[inputRef.current.selectedSlot];
+      const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
+      const weapon = local?.weaponStates[inputRef.current.selectedSlot];
+      if (weaponId && local?.lifeState === 'alive' && weapon?.state === 'ready' && weapon.magazineAmmo > 0 && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
+        renderer.predictLocalFire(weaponId, fireActionId);
+      }
     };
     const onMouseUp = (event: MouseEvent) => {
       if (stationOpenRef.current) {
@@ -441,7 +461,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         updateInput();
         return;
       }
-      if (event.button === 2) { inputRef.current = { ...inputRef.current, aiming: false, sequence: ++sequence, clientTime: Math.round(performance.now()) }; return; }
+      if (event.button === 2) { inputRef.current = { ...inputRef.current, aiming: false, sequence: ++sequence, clientTime: Date.now() }; return; }
       if (event.button !== 0) return;
       firing = false;
       updateInput();
@@ -477,38 +497,34 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     let accumulator = 0;
     let stateAccumulator = 0;
     let inputAccumulator = 0;
+    const hostClock = launch.role === 'host' ? new HostSimulationClock(INPUT_INTERVAL_MS, (now) => {
+      const simulation = simulationRef.current!;
+      inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
+      simulation.setInput(launch.localPlayerId, inputRef.current);
+      simulation.tick(INPUT_INTERVAL_MS);
+      clearJumpInput();
+      const snapshot = simulation.createSnapshot();
+      publishSnapshot(snapshot, now);
+      accumulator = 0;
+      stateAccumulator += INPUT_INTERVAL_MS;
+      if (stateAccumulator >= SNAPSHOT_INTERVAL_MS) {
+        stateAccumulator %= SNAPSHOT_INTERVAL_MS;
+        const state: MultiplayerStateFrame = { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Date.now(), payload: snapshot };
+        session.broadcastState(state, peerId => createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]));
+        syncHud(snapshot);
+      }
+    }) : undefined;
+    hostClock?.start();
     const frame = (now: number) => {
       const elapsed = Math.min(100, now - lastTime);
       lastTime = now;
       accumulator += elapsed;
       inputAccumulator += elapsed;
-      stateAccumulator += elapsed;
       if (stationOpenRef.current) clearControls();
-      if (launch.role === 'host') {
-        const simulation = simulationRef.current!;
-        let simulationAdvanced = false;
-        while (accumulator >= INPUT_INTERVAL_MS) {
-          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(now), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
-          simulation.setInput(launch.localPlayerId, inputRef.current);
-          simulation.tick(INPUT_INTERVAL_MS);
-          accumulator -= INPUT_INTERVAL_MS;
-          simulationAdvanced = true;
-          clearJumpInput();
-        }
-        if (simulationAdvanced) {
-          publishSnapshot(simulation.createSnapshot(), now);
-        }
-        if (stateAccumulator >= SNAPSHOT_INTERVAL_MS) {
-          stateAccumulator %= SNAPSHOT_INTERVAL_MS;
-          const snapshot = snapshotRef.current || simulation.createSnapshot();
-          const state: MultiplayerStateFrame = { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Math.round(now), payload: snapshot };
-          session.broadcastState(state);
-          syncHud(snapshot);
-        }
-      } else if (launch.role === 'guest') {
+      if (launch.role === 'guest') {
         while (inputAccumulator >= INPUT_INTERVAL_MS) {
           inputAccumulator -= INPUT_INTERVAL_MS;
-          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(now), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
+          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
           prediction.step(inputRef.current);
           session.sendInput(inputRef.current);
           clearJumpInput();
@@ -537,6 +553,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     animationFrame = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(animationFrame);
+      hostClock?.stop();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('mousemove', onMouseMove);
@@ -581,6 +598,32 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     : undefined;
   const run = matchSnapshot?.run;
   const encounter = matchSnapshot?.encounter;
+  const activeWeaponId = COOP_WEAPON_SLOTS[hud.selectedSlot];
+  const activeWeapon = COOP_WEAPON_DETAILS[activeWeaponId];
+  const activeWeaponState = hud.weapons[hud.selectedSlot];
+  const squadmates = hud.squad.filter(player => player.id !== launch.localPlayerId);
+  const objectiveHud = run ? (() => {
+    const base = {
+      title: run.objective?.title || run.boss?.name || run.notice,
+      label: run.phase.replace('_', ' '),
+      detail: '',
+      progress: undefined as number | undefined,
+      tone: 'cyan' as 'cyan' | 'rose' | 'amber' | 'emerald' | 'fuchsia',
+    };
+    if (run.boss) return { ...base, label: `Boss · Phase ${run.boss.phase}`, detail: `${Math.ceil(run.boss.health).toLocaleString()} HP`, progress: run.boss.health / Math.max(1, run.boss.maxHealth) * 100, tone: 'rose' as const };
+    if (run.exfil) return { ...base, label: 'Extraction', detail: `${Math.ceil(run.exfil.remainingMs / 1000)}s`, progress: run.exfil.holdProgressMs / Math.max(1, run.exfil.holdRequiredMs) * 100, tone: 'amber' as const };
+    if (run.objective) {
+      const distance = localSnapshot ? `${Math.round(Math.hypot(run.objective.x - localSnapshot.x, run.objective.y - localSnapshot.y))}m` : '';
+      const state = run.objective.kind === 'uplink'
+        ? run.objective.contested ? 'Contested' : run.objective.occupants ? 'Uploading' : 'Reach uplink'
+        : 'Target tracked';
+      return { ...base, label: state, detail: distance, progress: run.objective.progress / Math.max(1, run.objective.required) * 100, tone: run.objective.contested ? 'rose' as const : 'emerald' as const };
+    }
+    if (run.insertionRemainingMs !== undefined && run.insertionDurationMs !== undefined) return { ...base, label: 'Insertion', detail: `${Math.ceil(run.insertionRemainingMs / 1000)}s`, progress: (1 - run.insertionRemainingMs / Math.max(1, run.insertionDurationMs)) * 100, tone: 'cyan' as const };
+    if (encounter?.phase === 'combat') return { ...base, label: `Round ${encounter.round}`, detail: `${encounter.enemiesRemaining} hostiles`, progress: encounter.spawnedThisRound / Math.max(1, encounter.roundTotal) * 100, tone: 'fuchsia' as const };
+    if (encounter?.phase === 'intermission') return { ...base, label: `Round ${encounter.round} clear`, detail: `${Math.ceil(encounter.intermissionRemainingMs / 1000)}s`, progress: (1 - encounter.intermissionRemainingMs / 20_000) * 100, tone: 'emerald' as const };
+    return base;
+  })() : null;
 
   // The station can be disabled, or the player can leave its interaction
   // radius, between network snapshots. Do not leave an invisible modal
@@ -593,60 +636,38 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     <div className="coop-arena absolute inset-0 z-[110] bg-[#05080e]">
       <div ref={sceneRef} className="absolute inset-0 h-full w-full" />
       {damageFlash && <div className="pointer-events-none absolute inset-0 z-20 border-[min(8vw,100px)] border-rose-500/35 bg-rose-500/10 animate-pulse" />}
-      <div className="coop-vitals pointer-events-none absolute left-5 top-5 border border-cyan-300/35 bg-black/65 px-4 py-3 backdrop-blur-sm">
-        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200"><Radio size={13} /> {isSpectator ? 'Spectator' : `Direct Co-op · ${launch.role}`}</div>
-        <div className="mt-2 flex gap-4 text-xs font-mono text-white/75"><span><Users size={12} className="mr-1 inline text-fuchsia-300" />{hud.players}</span><span>KILLS {hud.kills}</span><span className="text-white/40">TICK {hud.tick}</span></div>
-        <div className="mt-3 w-48">
-          <div className="flex justify-between text-[9px] font-mono text-rose-100/80"><span>HP</span><span>{Math.ceil(hud.health)}/{Math.ceil(hud.maxHealth)}</span></div>
-          <div className="mt-1 h-1.5 overflow-hidden bg-rose-950/70"><div className="h-full bg-rose-400 transition-[width] duration-100" style={{ width: `${Math.max(0, Math.min(100, hud.health / Math.max(1, hud.maxHealth) * 100))}%` }} /></div>
-          <div className="mt-2 flex justify-between text-[9px] font-mono text-cyan-100/80"><span>LV {hud.level} · XP {Math.floor(hud.experience)}/{Math.floor(hud.experienceToNextLevel)}</span><span className="text-amber-200">¤ {hud.coins}</span></div>
-          <div className="mt-1 h-1 overflow-hidden bg-cyan-950/70"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, Math.min(100, hud.experience / Math.max(1, hud.experienceToNextLevel) * 100))}%` }} /></div>
-          <div className="mt-2 text-[9px] font-mono uppercase tracking-wider text-white/55">Data cores <span className="text-white">{hud.cores}</span></div>
-          {hud.invulnerableRemainingMs > 0 && <div className="mt-2 text-[9px] font-black uppercase tracking-wider text-emerald-200">Revive shield {Math.ceil(hud.invulnerableRemainingMs / 1000)}s</div>}
-        </div>
+      <div className="coop-vitals pointer-events-none absolute">
+        <div className="coop-vitals__topline"><span>LV {hud.level}</span><span>{hud.kills} KILLS</span><span>{hud.players} LIVE</span></div>
+        <div className="coop-vitals__health"><span>{Math.ceil(hud.health)}</span><div className="coop-meter"><i style={{ width: `${Math.max(0, Math.min(100, hud.health / Math.max(1, hud.maxHealth) * 100))}%` }} /></div></div>
+        <div className="coop-vitals__lower"><span>XP {Math.floor(hud.experience / Math.max(1, hud.experienceToNextLevel) * 100)}%</span><span className="coop-vitals__currency">¤ {hud.coins}</span>{hud.cores > 0 && <span>{hud.cores} CORES</span>}</div>
+        <div className="coop-xp"><i style={{ width: `${Math.max(0, Math.min(100, hud.experience / Math.max(1, hud.experienceToNextLevel) * 100))}%` }} /></div>
+        {localSnapshot && (localSnapshot.armorHp > 0 || localSnapshot.selfRevives > 0 || localSnapshot.passiveModules.length > 0) && <div className="coop-vitals__equipment"><ShieldPlus size={11} /> {Math.ceil(localSnapshot.armorHp)} ARMOR{localSnapshot.selfRevives > 0 ? ' · REBOOT READY' : ''}</div>}
+        {hud.invulnerableRemainingMs > 0 && <div className="coop-vitals__shield">SHIELDED {Math.ceil(hud.invulnerableRemainingMs / 1000)}s</div>}
       </div>
-      <div className="coop-squad pointer-events-none absolute left-5 top-56 w-52 border border-white/15 bg-black/60 p-2 backdrop-blur-sm">
-        <div className="mb-1 text-[9px] font-black uppercase tracking-[0.16em] text-white/45">Squad status</div>
-        {hud.squad.map(player => {
+      {squadmates.length > 0 && <div className="coop-squad pointer-events-none absolute">
+        {squadmates.map(player => {
           const status = player.lifeState === 'alive' ? `${Math.ceil(player.health)}/${Math.ceil(player.maxHealth)}` : player.lifeState === 'downed' ? (player.downedRemainingMs > 0 ? `DOWN ${Math.ceil(player.downedRemainingMs / 1000)}s` : 'DOWN · REVIVABLE') : 'OUT';
-          return <div key={player.id} className="mb-1 border-l-2 bg-white/[0.035] px-2 py-1" style={{ borderColor: player.color }}>
-            <div className="flex items-center justify-between gap-2 text-[9px] font-mono"><span className="truncate text-white/80">{player.label}</span><span className={player.lifeState === 'alive' ? 'text-emerald-200' : player.lifeState === 'downed' ? 'text-amber-200' : 'text-rose-300'}>{status}</span></div>
-            {player.lifeState === 'downed' && <div className="mt-1 h-1 overflow-hidden bg-white/10"><div className="h-full bg-amber-300" style={{ width: `${Math.max(0, player.reviveProgressMs / 3000 * 100)}%` }} /></div>}
+          return <div key={player.id} className={`coop-squadmate coop-squadmate--${player.lifeState}`}>
+            <span className="coop-squadmate__signal" style={{ backgroundColor: player.color, color: player.color }} />
+            <span className="coop-squadmate__name">{player.label}</span><span className="coop-squadmate__status">{status}</span>
+            <span className="coop-squadmate__meter"><i style={{ width: `${player.lifeState === 'downed' ? Math.max(0, player.reviveProgressMs / 3000 * 100) : Math.max(0, player.health / Math.max(1, player.maxHealth) * 100)}%`, backgroundColor: player.lifeState === 'downed' ? '#fbbf24' : player.color }} /></span>
           </div>;
         })}
-      </div>
-      <div className="coop-view-label pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 border border-white/15 bg-black/60 px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-white/70 backdrop-blur-sm">{isSpectator ? 'Third-person spectator' : hud.lifeState === 'downed' ? 'Third-person revive spectator' : launch.soloTest ? 'Solo test' : 'First-person co-op'}</div>
-      {isSpectator && <div className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 border border-fuchsia-300/45 bg-black/75 px-4 py-2 text-center backdrop-blur-sm"><div className="text-[9px] font-black uppercase tracking-[0.25em] text-fuchsia-200">Spectating</div><div className="mt-1 text-xs font-black uppercase tracking-wider text-white">{spectatorTarget?.label || 'Acquiring target'}</div><div className="mt-1 text-[9px] uppercase tracking-wider text-white/50">Mouse to orbit · left click next player</div></div>}
-      {run && <div className="coop-objective pointer-events-none absolute left-1/2 top-16 w-[min(460px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/25 bg-black/70 px-4 py-3 text-center backdrop-blur-sm">
-        <div className="text-[9px] font-black uppercase tracking-[0.22em] text-cyan-200">{run.phase.replace('_', ' ')}</div>
-        <div className="mt-1 text-xs font-black uppercase tracking-wider text-white">{run.objective?.title || run.boss?.name || run.notice}</div>
-        {run.objective && <><div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono"><span className={run.objective.contested ? 'text-rose-300' : 'text-emerald-200'}>{run.objective.kind === 'uplink' ? run.objective.contested ? 'CONTESTED' : run.objective.occupants ? `UPLOADING ${Math.floor(run.objective.progress)}%` : 'AWAITING OPERATOR' : 'TARGET TRACKED'}</span>{localSnapshot && <span className="flex items-center gap-1 text-white/70"><ArrowLeft size={12} style={{ transform: `rotate(${Math.atan2(run.objective.y - localSnapshot.y, run.objective.x - localSnapshot.x) - localSnapshot.angle + Math.PI / 2}rad)` }} />{Math.round(Math.hypot(run.objective.x - localSnapshot.x, run.objective.y - localSnapshot.y))}m</span>}</div><div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className={`h-full transition-[width] ${run.objective.contested ? 'bg-rose-400' : 'bg-emerald-300'}`} style={{ width: `${Math.min(100, run.objective.progress / run.objective.required * 100)}%` }} /></div></>}
-        {run.boss && <><div className="mt-2 flex justify-between text-[9px] font-mono text-rose-100"><span>PHASE {run.boss.phase}</span><span>{Math.ceil(run.boss.health).toLocaleString()} / {Math.ceil(run.boss.maxHealth).toLocaleString()}</span></div><div className="mt-1 h-1.5 overflow-hidden bg-rose-950/80"><div className="h-full bg-rose-400 transition-[width]" style={{ width: `${Math.max(0, run.boss.health / Math.max(1, run.boss.maxHealth) * 100)}%` }} /></div></>}
-        {run.insertionRemainingMs !== undefined && run.insertionDurationMs !== undefined && <><div className="mt-2 flex justify-between text-[9px] font-mono text-cyan-100"><span>HOSTILES ARRIVE</span><span>{Math.ceil(run.insertionRemainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, 1 - run.insertionRemainingMs / Math.max(1, run.insertionDurationMs)) * 100}%` }} /></div></>}
-        {run.exfil && <><div className="mt-2 flex justify-between text-[9px] font-mono text-amber-100"><span>EXFIL HOLD</span><span>{Math.ceil(run.exfil.remainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-amber-950/80"><div className="h-full bg-amber-300 transition-[width]" style={{ width: `${run.exfil.holdProgressMs / run.exfil.holdRequiredMs * 100}%` }} /></div></>}
-        {encounter?.phase === 'combat' && <><div className="mt-3 flex justify-between text-[9px] font-mono text-fuchsia-100"><span>ROUND {encounter.round} · TIER {encounter.tier}</span><span>{encounter.enemiesRemaining} HOSTILES</span></div><div className="mt-1 h-1.5 overflow-hidden bg-fuchsia-950/80"><div className="h-full bg-fuchsia-300 transition-[width]" style={{ width: `${Math.min(100, encounter.spawnedThisRound / Math.max(1, encounter.roundTotal) * 100)}%` }} /></div></>}
-        {encounter?.phase === 'intermission' && <><div className="mt-3 flex justify-between text-[9px] font-mono text-emerald-100"><span>ROUND {encounter.round} CLEAR · RESUPPLY</span><span>NEXT ROUND {encounter.round + 1}</span></div><div className="mt-1 h-1.5 overflow-hidden bg-emerald-950/80"><div className="h-full bg-emerald-300 transition-[width]" style={{ width: `${Math.max(0, encounter.intermissionRemainingMs / 20_000 * 100)}%` }} /></div><div className="mt-1 text-[9px] text-emerald-100/65">Hostiles return in {Math.ceil(encounter.intermissionRemainingMs / 1000)}s · ammo cache and credits deployed</div></>}
+      </div>}
+      {isSpectator && <div className="coop-spectating pointer-events-none absolute"><span>SPECTATING</span><b>{spectatorTarget?.label || 'Acquiring target'}</b><small>CLICK · NEXT PLAYER</small></div>}
+      {objectiveHud && <div className={`coop-objective coop-objective--${objectiveHud.tone} pointer-events-none absolute`}>
+        <div className="coop-objective__meta"><span>{objectiveHud.label}</span><span>{objectiveHud.detail}</span></div>
+        <div className="coop-objective__title">{objectiveHud.title}</div>
+        {objectiveHud.progress !== undefined && <div className="coop-objective__meter"><i style={{ width: `${Math.max(0, Math.min(100, objectiveHud.progress))}%` }} /></div>}
       </div>}
       {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[43%] -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
       {revivingTarget && <div className="pointer-events-none absolute left-1/2 top-[56%] z-20 w-[min(330px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/55 bg-black/80 px-4 py-3 text-center shadow-[0_0_24px_rgba(34,211,238,.18)] backdrop-blur-md"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">Hold F · Reviving {revivingTarget.label}</div><div className="mt-2 h-2 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, revivingTarget.reviveProgressMs / 3000 * 100)}%` }} /></div><div className="mt-1 text-[9px] font-mono text-cyan-100/70">{Math.round(revivingTarget.reviveProgressMs / 3000 * 100)}%</div></div>}
       {!isSpectator && (hud.selectedSlot === 3 && hud.isAiming ? <div className="pointer-events-none absolute inset-0 z-10 rounded-full border-[min(17vw,220px)] border-black/90"><div className="absolute left-1/2 top-1/2 h-[64vh] w-px -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-px w-[64vh] -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100" /></div> : <div className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2"><span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-cyan-100/80" /><span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-cyan-100/80" /></div>)}
-      {!isSpectator && <div className="coop-weapons pointer-events-none absolute bottom-16 left-1/2 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1.5 overflow-hidden border border-white/15 bg-black/60 p-1.5 backdrop-blur-sm">
-        {visibleWeaponSlots(hud.selectedSlot).map(index => {
-          const weaponId = COOP_WEAPON_SLOTS[index];
-          const weapon = COOP_WEAPON_DETAILS[weaponId];
-          const active = hud.selectedSlot === index;
-          const state = hud.weapons[index];
-          return <div key={weaponId} data-selected={active} className={`min-w-[118px] border px-2 py-1.5 text-center transition ${active ? 'border-cyan-200 bg-cyan-300/15 text-white' : 'border-white/10 text-white/35'}`}>
-            <div className="text-[9px] font-mono font-bold" style={{ color: active ? weapon.color : undefined }}>{weapon.key} {weapon.shortName} · LV {state?.level || 1}</div>
-            <div className="mt-0.5 text-[10px] font-mono text-white/75">{state?.magazineAmmo ?? '-'} <span className="text-white/35">|</span> {state?.reserveAmmo ?? '-'}</div>
-            {active && hud.isReloading && <div className="mt-1 h-0.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 animate-pulse" style={{ width: '68%' }} /></div>}
-          </div>;
-        })}
-        <div className="self-center px-1 text-[9px] font-mono text-white/35">{hud.selectedSlot + 1}/{COOP_WEAPON_SLOTS.length}</div>
-      </div>}
-      {!isSpectator && localSnapshot && <div className="coop-armor pointer-events-none absolute bottom-28 left-5 max-w-56 border border-white/10 bg-black/60 px-3 py-2 text-[9px] font-mono uppercase tracking-wider text-white/60 backdrop-blur-sm">
-        <div className="flex items-center gap-2 text-cyan-100"><ShieldPlus size={12} /> Armor {Math.ceil(localSnapshot.armorHp)} · Reboot {localSnapshot.selfRevives ? 'READY' : 'NONE'}</div>
-        {localSnapshot.passiveModules.length > 0 && <div className="mt-1 text-white/65">{localSnapshot.passiveModules.map(module => `${COOP_SHOP_ITEMS[module.id].name} ${'I'.repeat(module.rank)}`).join(' · ')}</div>}
+      {!isSpectator && activeWeapon && <div className="coop-weapons pointer-events-none absolute">
+        <div className="coop-weapons__name" style={{ color: activeWeapon.color }}><span>{activeWeapon.shortName}</span><small>LV {activeWeaponState?.level || 1}</small></div>
+        <div className="coop-weapons__ammo"><b>{activeWeaponState?.magazineAmmo ?? '—'}</b><span>/ {activeWeaponState?.reserveAmmo ?? '—'}</span></div>
+        <div className="coop-weapons__slots">{COOP_WEAPON_SLOTS.map((weaponId, index) => <span key={weaponId} data-selected={hud.selectedSlot === index}>{index + 1}</span>)}</div>
+        {hud.isReloading && <div className="coop-weapons__reload">RELOADING</div>}
       </div>}
       {matchSnapshot && localSnapshot && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} />}
       {stationOpen && nearbyStation && <div className="absolute inset-0 z-[80] bg-black/55 backdrop-blur-[2px]" aria-hidden="true" />}
@@ -668,13 +689,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         {!stationOpen && <p className="mt-3 text-[10px] text-white/50">Press <span className="font-black text-cyan-100">F</span> to interact. It prioritizes reviving a nearby teammate.</p>}
         {stationOpen && <><div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-2">{nearbyStation.stock.map(itemId => { const item = COOP_SHOP_ITEMS[itemId]; const passive = itemId in COOP_PASSIVE_BY_ID ? itemId as keyof typeof COOP_PASSIVE_BY_ID : undefined; const owned = passive && localSnapshot.passiveModules.find(module => module.id === passive); const cost = passive && owned ? passiveRankCost(passive, owned.rank) : item.cost; const affordable = localSnapshot.coins >= cost; return <button key={itemId} disabled={!affordable} onClick={() => purchaseStationItem(nearbyStation.id, itemId)} className="flex w-full items-center justify-between gap-4 border border-white/10 bg-white/[0.035] px-4 py-3 text-left transition hover:border-cyan-200/50 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"><span><span className="block text-xs font-bold text-white">{item.name}{owned ? ` · Rank ${owned.rank + 1}` : ''}</span><span className="mt-1 block text-[10px] leading-relaxed text-white/45">{item.description}</span></span><span className="shrink-0 text-xs font-mono text-amber-200"><Coins className="mr-1 inline" size={12} />{cost}</span></button>; })}</div>{stationMessage && <div className="mt-3 shrink-0 border border-cyan-200/20 bg-cyan-400/10 px-3 py-2 text-[10px] text-cyan-100">{stationMessage}</div>}<div className="mt-3 shrink-0 text-center text-[10px] text-white/40">Mouse wheel scrolls this list only · press <span className="font-black text-cyan-100">F</span> to close</div></>}
       </div>}
-      {launch.role === 'host' && !launch.soloTest && <div className="coop-lobby absolute bottom-[164px] right-5 w-[min(310px,calc(100vw-2.5rem))] border border-fuchsia-300/30 bg-black/75 p-4 text-[10px] backdrop-blur-md"><div className="flex items-center gap-2 font-black uppercase tracking-[0.18em] text-fuchsia-200"><Users size={13} /> Match lobby · {hud.players}/4</div><p className="mt-2 leading-relaxed text-white/50">{connectionMessage}</p></div>}
       {!isSpectator && hud.lifeState === 'downed' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/35"><div className="w-[min(420px,calc(100vw-2rem))] border border-amber-300/50 bg-black/80 p-6 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.3em] text-amber-200">You are downed</div><div className="mt-3 text-4xl font-black text-white">{hud.downedRemainingMs > 0 ? `${Math.ceil(hud.downedRemainingMs / 1000)}s` : 'REVIVABLE'}</div><div className="mt-3 text-xs text-white/60">Watching <span className="font-black text-fuchsia-200">{downedSpectatorTarget?.label || 'your squad'}</span> in third person. Left click cycles living teammates.</div><div className="mt-2 text-xs text-white/60">A teammate must stand close and hold <span className="font-black text-cyan-200">F</span> for 3 seconds. Your body remains until the squad is wiped.</div>{hud.reviverId && <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-emerald-200">Revive in progress · {Math.round(hud.reviveProgressMs / 3000 * 100)}%</div>}<div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, hud.reviveProgressMs / 3000 * 100)}%` }} /></div></div></div>}
       {!isSpectator && hud.lifeState === 'eliminated' && hud.matchState === 'active' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/45"><div className="border border-rose-300/40 bg-black/80 px-6 py-5 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.28em] text-rose-200">Eliminated</div><div className="mt-3 text-xs text-white/60">Your squad can still finish the encounter.</div></div></div>}
       {hud.matchState !== 'active' && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="w-[min(440px,calc(100vw-2rem))] border border-rose-300/45 bg-[#10070b] p-7 text-center shadow-[0_0_60px_rgba(244,63,94,.2)]"><div className="text-[10px] font-black uppercase tracking-[0.32em] text-rose-200">{hud.matchState === 'solo_defeat' ? 'Run ended' : 'Squad wiped'}</div><h2 className="mt-3 text-3xl font-black text-white">{hud.matchState === 'solo_defeat' ? 'SYSTEM FAILURE' : 'NO OPERATIVES REMAIN'}</h2><p className="mt-3 text-xs leading-relaxed text-white/60">Kills confirmed: {hud.kills}. {launch.role === 'host' ? 'Retry instantly without reconnecting the squad.' : 'Waiting for the host to start the next run.'}</p><div className="mt-6 flex justify-center gap-3">{launch.role === 'host' && <button onClick={retryRun} className="border border-emerald-300/55 bg-emerald-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-100 transition hover:bg-emerald-400/20">Retry run</button>}<button onClick={onExit} className="border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 transition hover:bg-cyan-400/20">Return to lobby</button></div></div></div>}
       {matchSnapshot?.results && <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#03070c]/90 p-4 backdrop-blur-xl"><div className="w-[min(760px,calc(100vw-2rem))] border border-cyan-300/35 bg-[#07111b] p-6 shadow-[0_0_60px_rgba(34,211,238,.16)]"><div className="text-center"><div className={`text-[10px] font-black uppercase tracking-[0.32em] ${matchSnapshot.results.success ? 'text-cyan-200' : 'text-rose-200'}`}>{matchSnapshot.results.success ? 'Squad extracted' : 'Run failed'}</div><h2 className="mt-2 text-3xl font-black text-white">{matchSnapshot.results.success ? 'SECTOR BREACH COMPLETE' : 'SIGNAL LOST'}</h2><p className="mt-2 text-xs text-white/55">{Math.ceil(matchSnapshot.results.durationMs / 60000)} min · {matchSnapshot.results.contractsCompleted} contracts · {matchSnapshot.results.bossesDefeated} bosses</p></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{matchSnapshot.results.players.map(player => <div key={player.playerId} className="border border-white/10 bg-white/[.035] p-3"><div className="flex items-center justify-between"><span className="font-black text-white" style={{ color: player.color }}>{player.label}</span><span className="text-[9px] font-black uppercase tracking-wider text-amber-200">{player.medal}</span></div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]"><span><b className="block text-white">{player.kills}</b><i className="not-italic text-white/45">Kills</i></span><span><b className="block text-white">{Math.round(player.firearmDamage + player.passiveDamage)}</b><i className="not-italic text-white/45">Damage</i></span><span><b className="block text-white">{player.revives}</b><i className="not-italic text-white/45">Revives</i></span></div></div>)}</div><div className="mt-6 text-center"><div className="mb-3 text-[10px] text-white/45">{launch.role === 'host' ? 'Retry starts a new run without reconnecting anyone.' : 'The host can retry without reconnecting anyone.'}</div>{launch.role === 'host' && <button onClick={retryRun} className="mr-3 border border-emerald-300/55 bg-emerald-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/20">Retry run</button>}<button onClick={onExit} className="border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 hover:bg-cyan-400/20">Return to lobby</button></div></div></div>}
       {connectionStatus !== 'connected' && <div className={`absolute left-1/2 top-20 z-30 -translate-x-1/2 border px-4 py-3 text-center text-xs backdrop-blur-sm ${connectionStatus === 'reconnecting' ? 'border-amber-300/45 bg-amber-950/80 text-amber-100' : 'border-red-300/45 bg-red-950/80 text-red-100'}`}><div>{connectionMessage}</div>{connectionStatus === 'disconnected' && <button onClick={onExit} className="mt-2 border border-red-200/35 px-3 py-1 text-[10px] font-black uppercase tracking-wider hover:bg-red-300/10">Back to servers</button>}</div>}
-      <button onClick={onExit} className="coop-exit absolute right-5 top-5 flex items-center gap-2 border border-white/15 bg-black/65 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white/70 backdrop-blur-sm transition hover:border-white/35 hover:text-white"><ArrowLeft size={13} /> Leave arena</button>
+      <button onClick={onExit} aria-label="Leave arena" className="coop-exit absolute"><ArrowLeft size={13} /><span>Leave</span></button>
     </div>
   );
 }
@@ -683,18 +703,20 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
  * camera-relative radar while adding squad and shared-run markers. */
 function CoopMinimap({ snapshot, localPlayer }: { snapshot: CoopSnapshot; localPlayer: CoopSnapshot['players'][number] }) {
   const range = 2_400;
+  const radarCenter = 56;
+  const radarRadius = 47;
   const point = (x: number, y: number) => {
     const dx = x - localPlayer.x, dy = y - localPlayer.y;
     const angle = Math.atan2(dy, dx) - localPlayer.angle;
-    const radius = Math.min(1, Math.hypot(dx, dy) / range) * 62;
-    return { left: 72 + Math.sin(angle) * radius, top: 72 - Math.cos(angle) * radius };
+    const radius = Math.min(1, Math.hypot(dx, dy) / range) * radarRadius;
+    return { left: radarCenter + Math.sin(angle) * radius, top: radarCenter - Math.cos(angle) * radius };
   };
   const threats = [...snapshot.enemies].sort((left, right) => Math.hypot(left.x - localPlayer.x, left.y - localPlayer.y) - Math.hypot(right.x - localPlayer.x, right.y - localPlayer.y)).slice(0, 40);
   const objective = snapshot.run.objective;
   const boss = snapshot.run.boss;
   const exfil = snapshot.run.exfil;
-  return <div className="pointer-events-none absolute bottom-5 right-5 z-[85]">
-    <div className="relative h-36 w-36 overflow-hidden rounded-full border border-cyan-400/45 bg-black/80 shadow-[0_0_28px_rgba(0,240,255,.28)] backdrop-blur-md">
+  return <div className="coop-minimap pointer-events-none absolute">
+    <div className="coop-minimap__disc relative overflow-hidden rounded-full border border-cyan-400/30 bg-black/65 shadow-[0_0_20px_rgba(0,240,255,.16)] backdrop-blur-sm">
       <div className="absolute inset-2 rounded-full border border-cyan-400/20" /><div className="absolute inset-7 rounded-full border border-cyan-400/15" />
       <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-cyan-400/25" /><div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-cyan-400/25" />
       {threats.map(enemy => { const position = point(enemy.x, enemy.y); return <span key={enemy.id} className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${enemy.type === 'titan' ? 'h-3 w-3 bg-rose-500 shadow-[0_0_10px_#fb7185]' : 'h-1.5 w-1.5 bg-rose-400/90'}`} style={position} />; })}
@@ -704,13 +726,12 @@ function CoopMinimap({ snapshot, localPlayer }: { snapshot: CoopSnapshot; localP
       {boss && <span title={boss.name} className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-rose-100 bg-rose-500 shadow-[0_0_14px_#fb7185] animate-pulse" style={point(boss.x, boss.y)} />}
       {exfil && <span title="Extraction" className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-amber-100 bg-amber-300 shadow-[0_0_13px_#fbbf24]" style={point(exfil.x, exfil.y)} />}
       <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"><span className="h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_9px_#22d3ee]" /><span className="absolute -top-2 h-0 w-0 border-x-[3px] border-x-transparent border-b-[6px] border-b-white" /></div>
-      <div className="absolute bottom-1.5 left-0 right-0 text-center font-mono text-[8px] font-bold uppercase tracking-widest text-cyan-300/75">Squad Radar</div>
     </div>
   </div>;
 }
 
 function createInput(): MultiplayerInputFrame {
-  return { type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence: 0, clientTime: 0, movement: 0, aimAngle: 0, aimPitch: quantizePitch(0), selectedSlot: 0, firing: false, reloadPressed: false, aiming: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, dashPressed: false };
+  return { type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence: 0, clientTime: Date.now(), movement: 0, aimAngle: 0, aimPitch: quantizePitch(0), selectedSlot: 0, firing: false, fireActionId: 0, reloadPressed: false, aiming: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, dashPressed: false };
 }
 
 function parseSnapshot(payload: unknown): CoopSnapshot | null {
@@ -768,11 +789,25 @@ function drawArena(canvas: HTMLCanvasElement | null, snapshot: CoopSnapshot | nu
   ctx.strokeStyle = 'rgba(34,211,238,0.10)'; ctx.lineWidth = 1;
   for (let x = (-local.x * scale) % 80; x < rect.width; x += 80) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, rect.height); ctx.stroke(); }
   for (let y = (-local.y * scale) % 80; y < rect.height; y += 80) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(rect.width, y); ctx.stroke(); }
+  for (const hazard of snapshot.hazards || []) {
+    const point = project(hazard.x, hazard.y);
+    const progress = Math.max(0, Math.min(1, (snapshot.elapsedMs - hazard.startsAtMs) / Math.max(1, hazard.resolvesAtMs - hazard.startsAtMs)));
+    ctx.save(); ctx.strokeStyle = hazard.color; ctx.fillStyle = `${hazard.color}18`; ctx.lineWidth = 2 + progress * 2; ctx.globalAlpha = .55 + progress * .4;
+    ctx.beginPath(); ctx.arc(point.x, point.y, Math.max(8, hazard.radius * scale), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (hazard.kind === 'artillery' || hazard.kind === 'shockwave') {
+      ctx.beginPath(); ctx.arc(point.x, point.y, Math.max(4, hazard.radius * scale * (hazard.kind === 'shockwave' ? progress : .42)), 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
   for (const projectile of snapshot.projectiles) drawProjectile(ctx, project(projectile.x, projectile.y), projectile, scale);
   ctx.shadowBlur = 0;
   for (const enemy of snapshot.enemies) {
-    const point = project(enemy.x, enemy.y); ctx.fillStyle = '#fb7185'; ctx.beginPath(); ctx.arc(point.x, point.y, 10, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#24070d'; ctx.fillRect(point.x - 12, point.y - 17, 24, 3); ctx.fillStyle = '#fda4af'; ctx.fillRect(point.x - 12, point.y - 17, 24 * (enemy.health / enemy.maxHealth), 3);
+    const point = project(enemy.x, enemy.y); drawFallbackEnemy(ctx, point, enemy, scale);
+    if (enemy.health < enemy.maxHealth) {
+      const width = enemy.type === 'titan' ? 34 : 24;
+      ctx.fillStyle = '#24070d'; ctx.fillRect(point.x - width / 2, point.y - Math.max(15, enemy.radius * scale) - 8, width, 3);
+      ctx.fillStyle = enemy.color; ctx.fillRect(point.x - width / 2, point.y - Math.max(15, enemy.radius * scale) - 8, width * (enemy.health / enemy.maxHealth), 3);
+    }
   }
   for (const player of snapshot.players) {
     const point = project(player.x, player.y); ctx.strokeStyle = player.color; ctx.lineWidth = 4; ctx.shadowColor = player.color; ctx.shadowBlur = 14;
@@ -781,6 +816,24 @@ function drawArena(canvas: HTMLCanvasElement | null, snapshot: CoopSnapshot | nu
     ctx.fillStyle = '#041018'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText(player.label, point.x, point.y + 3);
     ctx.fillStyle = '#031019'; ctx.fillRect(point.x - 18, point.y - 25, 36, 4); ctx.fillStyle = '#34d399'; ctx.fillRect(point.x - 18, point.y - 25, 36 * (player.health / player.maxHealth), 4);
   }
+}
+
+function drawFallbackEnemy(ctx: CanvasRenderingContext2D, point: { x: number; y: number }, enemy: CoopSnapshot['enemies'][number], scale: number) {
+  const radius = Math.max(8, Math.min(28, enemy.radius * scale));
+  ctx.save(); ctx.translate(point.x, point.y); ctx.rotate(enemy.facingAngle || 0);
+  ctx.fillStyle = '#111b22'; ctx.strokeStyle = enemy.color; ctx.lineWidth = enemy.type === 'titan' ? 3 : 2;
+  ctx.shadowColor = enemy.color; ctx.shadowBlur = enemy.hitFlashMs > 0 ? 20 : 9;
+  ctx.beginPath();
+  if (enemy.type === 'fast') { ctx.moveTo(radius, 0); ctx.lineTo(-radius, radius * .65); ctx.lineTo(-radius * .45, 0); ctx.lineTo(-radius, -radius * .65); }
+  else if (enemy.type === 'tank') ctx.rect(-radius, -radius * .72, radius * 2, radius * 1.44);
+  else if (enemy.type === 'ranged') { ctx.moveTo(radius, 0); ctx.lineTo(0, radius); ctx.lineTo(-radius, 0); ctx.lineTo(0, -radius); }
+  else if (enemy.type === 'elite') for (let index = 0; index < 6; index++) { const angle = index / 6 * Math.PI * 2; const x = Math.cos(angle) * radius, y = Math.sin(angle) * radius; if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+  else if (enemy.type === 'phantom') { ctx.arc(0, 0, radius, Math.PI, 0); ctx.lineTo(radius, radius * .7); ctx.lineTo(radius * .35, radius * .3); ctx.lineTo(-radius * .35, radius * .7); ctx.lineTo(-radius, radius * .3); }
+  else if (enemy.type === 'titan') for (let index = 0; index < 12; index++) { const angle = index / 12 * Math.PI * 2; const distance = index % 2 ? radius * .58 : radius; const x = Math.cos(angle) * distance, y = Math.sin(angle) * distance; if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+  else ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = enemy.hitFlashMs > 0 ? '#ffffff' : enemy.color; ctx.beginPath(); ctx.arc(radius * .42, 0, Math.max(2, radius * .16), 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 
 function drawProjectile(ctx: CanvasRenderingContext2D, point: { x: number; y: number }, projectile: CoopSnapshot['projectiles'][number], scale: number) {

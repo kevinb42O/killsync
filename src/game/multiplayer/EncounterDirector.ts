@@ -24,9 +24,14 @@ export interface EncounterCluster {
 
 export interface EncounterOrder {
   packetId: number;
+  packId: EncounterPackId;
   clusterId: string;
   targetPlayerId: string;
   type: EnemyType;
+  formationIndex: number;
+  formationSize: number;
+  healthMultiplier: number;
+  damageMultiplier: number;
 }
 
 export interface EncounterDirectorSnapshot {
@@ -44,24 +49,35 @@ export interface EncounterDirectorSnapshot {
   activeThreat: number;
   clusterCount: number;
   packetsIssued: number;
+  roundThreatBudget?: number;
+  spawnedThreat?: number;
 }
 
 export type EncounterRoundPhase = 'insertion' | 'combat' | 'intermission';
 export type EncounterRoundEvent = { kind: 'round_started' | 'round_completed'; round: number; tier: number };
 
 const CLUSTER_LINK_DISTANCE = 1_250;
-const MAX_ORDERS_PER_TICK = 3;
+const MAX_ORDERS_PER_TICK = 5;
 export const COOP_INTERMISSION_MS = 20_000;
 const ROUND_TIERS: readonly EnemyType[] = ['basic', 'fast', 'ranged', 'tank', 'phantom', 'elite'];
-const THREAT_COST: Record<EnemyType, number> = {
-  basic: 1,
-  fast: 1.25,
-  ranged: 1.6,
-  tank: 3.5,
-  phantom: 2.4,
-  elite: 6,
-  titan: 15,
-};
+export const ENEMY_THREAT_COST: Record<EnemyType, number> = Object.fromEntries(
+  (Object.keys(ENEMY_TYPES) as EnemyType[]).map(type => [type, ENEMY_TYPES[type].threat]),
+) as Record<EnemyType, number>;
+
+export type EncounterPackId = 'patrol' | 'rush' | 'fireteam' | 'bulwark' | 'crossfire' | 'hunters' | 'command';
+type EncounterPack = { id: EncounterPackId; minTier: number; weight: number; members: readonly EnemyType[] };
+
+/** Authored packs keep support units behind a readable frontline instead of
+ * drawing each unlocked archetype from one uniform bag. */
+export const ENCOUNTER_PACKS: readonly EncounterPack[] = [
+  { id: 'patrol', minTier: 1, weight: 5, members: ['basic', 'basic', 'basic'] },
+  { id: 'rush', minTier: 2, weight: 4, members: ['fast', 'fast', 'basic'] },
+  { id: 'fireteam', minTier: 3, weight: 4, members: ['basic', 'basic', 'ranged'] },
+  { id: 'bulwark', minTier: 4, weight: 3, members: ['tank', 'basic', 'basic'] },
+  { id: 'crossfire', minTier: 4, weight: 2, members: ['tank', 'ranged', 'ranged'] },
+  { id: 'hunters', minTier: 5, weight: 2.5, members: ['phantom', 'fast', 'fast'] },
+  { id: 'command', minTier: 6, weight: 1.4, members: ['elite', 'tank', 'ranged', 'basic'] },
+] as const;
 
 /**
  * Deterministic, round-based host-side encounter pacing. A round has a finite
@@ -83,6 +99,8 @@ export class EncounterDirector {
   private round = 1;
   private roundTotal = 0;
   private spawnedThisRound = 0;
+  private spawnedThreat = 0;
+  private roundThreatBudget = 0;
   private intermissionEndsAtMs = 0;
   private readonly roundEvents: EncounterRoundEvent[] = [];
 
@@ -95,7 +113,7 @@ export class EncounterDirector {
     this.tick++;
     this.lastElapsedMs = elapsedMs;
     const clusters = buildEncounterClusters(players, activeEnemies);
-    this.activeThreat = activeEnemies.filter(enemy => !enemy.dying).reduce((sum, enemy) => sum + THREAT_COST[enemy.type], 0);
+    this.activeThreat = activeEnemies.filter(enemy => !enemy.dying).reduce((sum, enemy) => sum + ENEMY_THREAT_COST[enemy.type], 0);
     this.activeEnemyCount = activeEnemies.filter(enemy => !enemy.dying).length;
     if (clusters.length === 0) return [];
 
@@ -116,20 +134,29 @@ export class EncounterDirector {
     }
     if (capacity <= 0 || elapsedMs < this.nextSpawnAtMs || this.spawnedThisRound >= this.roundTotal) return [];
 
-    const orders: EncounterOrder[] = [];
-    const batchSize = Math.min(MAX_ORDERS_PER_TICK, capacity, this.roundTotal - this.spawnedThisRound);
-    while (orders.length < batchSize) {
-      const cluster = this.chooseCluster(clusters);
-      if (!cluster) break;
-      // Each new round visibly introduces its new tier at the first spawn,
-      // then mixes every previously introduced tier for the rest of the wave.
-      const type = this.spawnedThisRound === 0 ? ROUND_TIERS[this.tier - 1] : this.chooseRoundEnemyType();
-      const targetPlayerId = cluster.playerIds[Math.floor(this.random() * cluster.playerIds.length)];
-      orders.push(this.order(cluster, targetPlayerId, type));
-      this.activeThreat += THREAT_COST[type];
-      this.activeEnemyCount++;
-      this.spawnedThisRound++;
+    const remaining = Math.min(capacity, this.roundTotal - this.spawnedThisRound, MAX_ORDERS_PER_TICK);
+    const pack = this.choosePack(remaining);
+    if (!pack) return [];
+    const packThreat = pack.members.reduce((sum, type) => sum + ENEMY_THREAT_COST[type], 0);
+    // Threat is a real concurrency gate now. Allow the opening packet through
+    // so a round cannot deadlock on fractional budget arithmetic.
+    if (this.spawnedThisRound > 0 && this.activeThreat + packThreat > this.desiredThreat + 1.5) {
+      this.nextSpawnAtMs = elapsedMs + 240;
+      return [];
     }
+    const cluster = this.chooseCluster(clusters);
+    if (!cluster) return [];
+    const packetId = this.nextPacketId++;
+    const healthMultiplier = encounterHealthMultiplier(this.round, players.length);
+    const damageMultiplier = encounterDamageMultiplier(this.round);
+    const orders = pack.members.map((type, formationIndex) => {
+      const targetPlayerId = cluster.playerIds[Math.floor(this.random() * cluster.playerIds.length)];
+      return this.order(packetId, pack.id, cluster, targetPlayerId, type, formationIndex, pack.members.length, healthMultiplier, damageMultiplier);
+    });
+    this.activeThreat += packThreat;
+    this.activeEnemyCount += orders.length;
+    this.spawnedThisRound += orders.length;
+    this.spawnedThreat += packThreat;
     this.nextSpawnAtMs = elapsedMs + spawnCadenceMs(this.round);
     return orders;
   }
@@ -152,6 +179,8 @@ export class EncounterDirector {
       activeThreat: round2(this.activeThreat),
       clusterCount,
       packetsIssued: this.packetsIssued,
+      roundThreatBudget: round2(this.roundThreatBudget),
+      spawnedThreat: round2(this.spawnedThreat),
     };
   }
 
@@ -159,16 +188,18 @@ export class EncounterDirector {
 
   private beginRound(elapsedMs: number, playerCount: number) {
     this.phase = 'combat';
-    this.roundTotal = Math.min(64, 8 + this.round * 4 + Math.max(0, playerCount - 1) * 4);
+    this.roundTotal = Math.min(64, 10 + this.round * 5 + Math.max(0, playerCount - 1) * 6);
     this.spawnedThisRound = 0;
-    this.desiredThreat = this.roundTotal;
+    this.spawnedThreat = 0;
+    this.roundThreatBudget = round2(this.roundTotal * (1 + (this.tier - 1) * .16));
+    this.desiredThreat = round2(Math.min(48, 6 + this.round * 2.4) * (1 + Math.max(0, playerCount - 1) * .45));
     this.nextSpawnAtMs = elapsedMs;
     this.roundEvents.push({ kind: 'round_started', round: this.round, tier: this.tier });
   }
 
-  private order(cluster: EncounterCluster, targetPlayerId: string, type: EnemyType): EncounterOrder {
+  private order(packetId: number, packId: EncounterPackId, cluster: EncounterCluster, targetPlayerId: string, type: EnemyType, formationIndex: number, formationSize: number, healthMultiplier: number, damageMultiplier: number): EncounterOrder {
     this.packetsIssued++;
-    return { packetId: this.nextPacketId++, clusterId: cluster.id, targetPlayerId, type };
+    return { packetId, packId, clusterId: cluster.id, targetPlayerId, type, formationIndex, formationSize, healthMultiplier, damageMultiplier };
   }
 
   private chooseCluster(clusters: readonly EncounterCluster[]): EncounterCluster | undefined {
@@ -180,9 +211,32 @@ export class EncounterDirector {
     return cluster;
   }
 
-  private chooseRoundEnemyType(): EnemyType {
-    const available = ROUND_TIERS.slice(0, this.tier);
-    return available[Math.floor(this.random() * available.length)];
+  private choosePack(remaining: number): EncounterPack | undefined {
+    if (remaining <= 0) return undefined;
+    if (this.spawnedThisRound === 0) {
+      const introduced = ROUND_TIERS[this.tier - 1];
+      const members = [introduced, ...Array(Math.min(2, remaining - 1)).fill('basic')] as EnemyType[];
+      return { id: this.tier === 1 ? 'patrol' : this.tier === 2 ? 'rush' : this.tier === 3 ? 'fireteam' : this.tier === 4 ? 'bulwark' : this.tier === 5 ? 'hunters' : 'command', minTier: this.tier, weight: 1, members };
+    }
+    const available = ENCOUNTER_PACKS.filter(pack =>
+      pack.minTier <= this.tier
+      && pack.members.length <= remaining
+      && this.packFitsRoundBudget(pack, remaining),
+    );
+    if (available.length === 0) return { id: 'patrol', minTier: 1, weight: 1, members: ['basic'] };
+    const totalWeight = available.reduce((sum, pack) => sum + pack.weight, 0);
+    let roll = this.random() * totalWeight;
+    for (const pack of available) { roll -= pack.weight; if (roll <= 0) return pack; }
+    return available[available.length - 1];
+  }
+
+  /** Reserve one baseline threat point for every roster slot after this pack.
+   * This makes roundThreatBudget an actual composition constraint instead of
+   * diagnostic-only metadata, while always leaving a Drone fallback. */
+  private packFitsRoundBudget(pack: Pick<EncounterPack, 'members'>, remaining: number) {
+    const packThreat = pack.members.reduce((sum, type) => sum + ENEMY_THREAT_COST[type], 0);
+    const futureBaseline = Math.max(0, remaining - pack.members.length);
+    return this.spawnedThreat + packThreat + futureBaseline <= this.roundThreatBudget + .001;
   }
 
   private random(): number {
@@ -211,7 +265,7 @@ export function buildEncounterClusters(players: readonly EncounterPlayer[], enem
     }
     const playerIds = members.map(member => member.id).sort();
     const activeThreat = enemies.filter(enemy => !enemy.dying && enemy.targetPlayerId !== undefined && playerIds.includes(enemy.targetPlayerId))
-      .reduce((sum, enemy) => sum + THREAT_COST[enemy.type], 0);
+      .reduce((sum, enemy) => sum + ENEMY_THREAT_COST[enemy.type], 0);
     clusters.push({
       id: playerIds.join('+'), playerIds,
       x: members.reduce((sum, member) => sum + member.x, 0) / members.length,
@@ -222,10 +276,20 @@ export function buildEncounterClusters(players: readonly EncounterPlayer[], enem
   return clusters;
 }
 
-export function enemyThreat(type: EnemyType) { return THREAT_COST[type]; }
+export function enemyThreat(type: EnemyType) { return ENEMY_THREAT_COST[type]; }
+
+/** Co-op gains most difficulty through composition and count. Modest health
+ * scaling preserves weapon feedback; damage never scales with party size. */
+export function encounterHealthMultiplier(round: number, playerCount: number) {
+  return round2(Math.min(1.85, 1 + Math.max(0, round - 1) * .065 + Math.max(0, playerCount - 1) * .10));
+}
+
+export function encounterDamageMultiplier(round: number) {
+  return round2(Math.min(1.45, 1 + Math.max(0, round - 1) * .035));
+}
 
 function spawnCadenceMs(round: number) {
-  return Math.max(420, 1_050 - round * 55);
+  return Math.max(480, 1_000 - round * 45);
 }
 
 function round2(value: number) { return Math.round(value * 100) / 100; }

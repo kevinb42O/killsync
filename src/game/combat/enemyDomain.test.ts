@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   BOSS_DEFINITIONS,
+  bountyEnemyMultipliers,
   ENEMY_TYPES,
+  ENEMY_ATTACK_PROFILES,
   calculateDifficultyMultiplier,
+  chooseSoloSpawnPack,
+  chooseSoloSpawnBearing,
   chooseWeightedEnemy,
   createBossStats,
   createEnemyStats,
   getEnemySpawnCandidates,
+  getEnemyAttackProfile,
   getNextBossMilestone,
   getGuaranteedEnemyDrop,
   getPickupEffect,
@@ -17,6 +22,7 @@ import {
   rollHolderItem,
   rollTreasureTier,
   shouldDropTreasure,
+  supplyGuardMultipliers,
   resolveEnemyDamage,
 } from './enemyDomain';
 
@@ -63,6 +69,49 @@ describe('enemy domain', () => {
     });
   });
 
+  it('builds authored solo formations without exceeding the spawn budget', () => {
+    expect(chooseSoloSpawnPack(() => 0, 0, ['basic'], 3)).toEqual({ id: 'swarm', members: ['basic', 'basic', 'basic'] });
+    const fireteam = chooseSoloSpawnPack(() => .55, 8 * 60_000, ['basic', 'fast', 'tank', 'ranged'], 3);
+    expect(fireteam.members).toHaveLength(3);
+    expect(fireteam.members.every(type => ['basic', 'fast', 'tank', 'ranged'].includes(type))).toBe(true);
+    expect(chooseSoloSpawnPack(() => 0, 0, ['basic'], 0).members).toEqual([]);
+  });
+
+  it('keeps ordinary perspective spawns outside the forward view cone', () => {
+    expect(chooseSoloSpawnBearing(() => .25, false, 1)).toBeCloseTo(Math.PI / 2);
+    for (const roll of [0, .25, .5, .75, 1]) {
+      const forward = -.7;
+      const bearing = chooseSoloSpawnBearing(() => roll, true, forward);
+      const angularDelta = Math.acos(Math.cos(bearing - forward));
+      expect(angularDelta).toBeGreaterThanOrEqual(Math.PI * .55 - 0.0001);
+    }
+  });
+
+  it('keeps every special attack reactable and bounded by its authored range', () => {
+    for (const [type, profile] of Object.entries(ENEMY_ATTACK_PROFILES)) {
+      expect(profile!.windupMs, `${type} windup`).toBeGreaterThanOrEqual(480);
+      expect(profile!.cooldownMs, `${type} cooldown`).toBeGreaterThan(profile!.windupMs);
+      expect(profile!.radius, `${type} radius`).toBeGreaterThan(0);
+      expect(profile!.maxRange, `${type} range`).toBeGreaterThanOrEqual(profile!.minRange);
+      expect(ENEMY_TYPES[type as keyof typeof ENEMY_TYPES].damage * profile!.damageMultiplier, `${type} burst`).toBeLessThanOrEqual(33);
+    }
+    expect(getEnemyAttackProfile('ranged', 400)?.kind).toBe('artillery');
+    expect(getEnemyAttackProfile('ranged', 100)).toBeUndefined();
+    expect(getEnemyAttackProfile('basic', 100)).toBeUndefined();
+  });
+
+  it('keeps timed event enemies killable and prevents adaptive one-shots', () => {
+    const earlyBounty = bountyEnemyMultipliers(1.5, 1);
+    expect(ENEMY_TYPES.elite.health * earlyBounty.health).toBeLessThan(450);
+    expect(ENEMY_TYPES.elite.damage * earlyBounty.damage * ENEMY_ATTACK_PROFILES.elite!.damageMultiplier).toBeLessThan(35);
+    const lateBounty = bountyEnemyMultipliers(8, 2);
+    expect(lateBounty.health).toBeLessThanOrEqual(3.4);
+    expect(lateBounty.damage).toBeLessThanOrEqual(1.9);
+    const lateGuard = supplyGuardMultipliers(8, 2);
+    expect(lateGuard.health).toBeLessThanOrEqual(3);
+    expect(lateGuard.damage).toBeLessThanOrEqual(1.65);
+  });
+
   it('uses the fixed boss schedule and applies only boss-specific reward multipliers', () => {
     expect(getNextBossMilestone(119_999, new Set())).toBeUndefined();
     expect(getNextBossMilestone(120_000, new Set())).toBe(2);
@@ -79,7 +128,8 @@ describe('enemy domain', () => {
 
   it('reproduces item-holder, coin, and treasure drop decisions with caller-owned random sources', () => {
     expect(rollHolderItem(() => 0)).toBe('hp');
-    expect(rollHolderItem(() => 0.99999)).toBe('data_core');
+    expect(rollHolderItem(() => 0.99999)).toBe('bomb');
+    expect(Array.from({ length: 101 }, (_, index) => rollHolderItem(() => index / 100))).not.toContain('data_core');
     expect(rollCoinDrop('boss', 1, 0.15, () => 1)).toBe('coin_diamond');
     expect(rollCoinDrop('elite', 1, 0.15, () => 0.2)).toBe('coin_gold');
     expect(rollCoinDrop('elite', 1, 0.15, () => 0.4)).toBe('coin_silver');

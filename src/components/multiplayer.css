@@ -1,25 +1,94 @@
-@media (max-width: 1100px) {
-  .coop-objective { width: min(390px, calc(100% - 500px)); }
+.coop-arena {
+  --hud-cyan: #67e8f9;
+  font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 760px) {
-  .coop-vitals { left: 12px; top: 12px; padding: 10px; }
-  .coop-vitals > div:last-child { width: 164px; }
-  .coop-vitals > div:nth-child(2) { gap: 10px; }
-  .coop-squad { left: 12px; top: 214px; width: 186px; }
-  .coop-view-label { display: none; }
-  .coop-objective { top: 48px; left: auto; right: 12px; transform: none; translate: none; width: calc(100% - 222px); padding: 10px; }
-  .coop-objective > div { letter-spacing: 0; overflow-wrap: anywhere; }
+.coop-vitals {
+  left: 22px;
+  top: 20px;
+  width: 228px;
+  padding: 10px 16px 11px 13px;
+  border-left: 2px solid rgba(103, 232, 249, 0.72);
+  background: linear-gradient(90deg, rgba(1, 8, 18, 0.86), rgba(1, 8, 18, 0.34) 74%, transparent);
+  filter: drop-shadow(0 5px 16px rgba(0, 0, 0, 0.32));
+}
+
+.coop-vitals__topline,
+.coop-vitals__lower,
+.coop-objective__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(226, 232, 240, 0.62);
+  font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.coop-vitals__topline span:first-child { color: var(--hud-cyan); }
+.coop-vitals__health { display: grid; grid-template-columns: 32px 1fr; align-items: center; gap: 8px; margin-top: 9px; color: #fff; font: 800 16px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.coop-meter, .coop-xp, .coop-squadmate__meter, .coop-objective__meter { display: block; overflow: hidden; background: rgba(255, 255, 255, 0.09); }
+.coop-meter { height: 4px; }
+.coop-meter i { display: block; height: 100%; background: #fb7185; box-shadow: 0 0 9px rgba(251, 113, 133, 0.7); transition: width 100ms linear; }
+.coop-vitals__lower { justify-content: flex-start; margin-top: 7px; }
+.coop-vitals__currency { color: #fde68a; }
+.coop-xp { height: 2px; margin-top: 5px; }
+.coop-xp i { display: block; height: 100%; background: var(--hud-cyan); transition: width 100ms linear; }
+.coop-vitals__equipment, .coop-vitals__shield { display: flex; align-items: center; gap: 6px; margin-top: 7px; color: rgba(207, 250, 254, 0.68); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; }
+.coop-vitals__shield { color: #a7f3d0; }
+
+.coop-squad { left: 22px; top: 126px; width: 208px; }
+.coop-squadmate { position: relative; display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 7px; margin-bottom: 7px; padding: 3px 7px 6px 4px; color: rgba(255, 255, 255, 0.74); background: linear-gradient(90deg, rgba(2, 8, 18, 0.68), rgba(2, 8, 18, 0)); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.coop-squadmate__signal { width: 5px; height: 5px; border-radius: 50%; box-shadow: 0 0 7px currentColor; }
+.coop-squadmate__name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.coop-squadmate__status { color: rgba(255, 255, 255, 0.48); font-size: 8px; }
+.coop-squadmate__meter { position: absolute; right: 7px; bottom: 2px; left: 18px; height: 1px; }
+.coop-squadmate__meter i { display: block; height: 100%; transition: width 100ms linear; }
+.coop-squadmate--downed .coop-squadmate__status { color: #fde68a; }
+.coop-squadmate--eliminated { opacity: 0.42; }
+
+.coop-objective { --objective-color: #67e8f9; top: 20px; left: 50%; width: min(390px, calc(100vw - 560px)); min-width: 260px; padding: 7px 18px 10px; transform: translateX(-50%); text-align: center; background: linear-gradient(90deg, transparent, rgba(1, 8, 18, 0.6) 18%, rgba(1, 8, 18, 0.6) 82%, transparent); filter: drop-shadow(0 5px 14px rgba(0, 0, 0, 0.35)); }
+.coop-objective--rose { --objective-color: #fb7185; }
+.coop-objective--amber { --objective-color: #fbbf24; }
+.coop-objective--emerald { --objective-color: #6ee7b7; }
+.coop-objective--fuchsia { --objective-color: #e879f9; }
+.coop-objective__meta { color: var(--objective-color); }
+.coop-objective__title { overflow: hidden; margin-top: 5px; color: rgba(255, 255, 255, 0.9); font-size: 11px; font-weight: 900; letter-spacing: 0.09em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.coop-objective__meter { height: 2px; margin-top: 7px; }
+.coop-objective__meter i { display: block; height: 100%; background: var(--objective-color); box-shadow: 0 0 9px var(--objective-color); transition: width 100ms linear; }
+
+.coop-spectating { top: 92px; left: 50%; display: flex; align-items: baseline; gap: 8px; transform: translateX(-50%); text-shadow: 0 2px 8px #000; }
+.coop-spectating span, .coop-spectating small { color: rgba(255,255,255,.45); font: 800 8px/1 ui-monospace, monospace; letter-spacing: .12em; }
+.coop-spectating b { color: #f0abfc; font-size: 10px; text-transform: uppercase; }
+
+.coop-weapons { bottom: 22px; left: 22px; width: 190px; padding: 10px 13px 9px; border-left: 2px solid rgba(103, 232, 249, 0.6); background: linear-gradient(90deg, rgba(1, 8, 18, 0.82), rgba(1, 8, 18, 0.24) 82%, transparent); filter: drop-shadow(0 5px 16px rgba(0, 0, 0, 0.35)); }
+.coop-weapons__name { display: flex; align-items: baseline; gap: 7px; font: 900 9px/1 ui-monospace, monospace; letter-spacing: .08em; }
+.coop-weapons__name small { color: rgba(255,255,255,.42); font-size: 7px; }
+.coop-weapons__ammo { display: flex; align-items: baseline; gap: 6px; margin-top: 5px; color: #fff; font-family: ui-monospace, monospace; }
+.coop-weapons__ammo b { font-size: 25px; line-height: 1; }
+.coop-weapons__ammo span { color: rgba(255,255,255,.45); font-size: 10px; }
+.coop-weapons__slots { display: flex; gap: 5px; margin-top: 8px; }
+.coop-weapons__slots span { display: grid; width: 15px; height: 12px; place-items: center; border-bottom: 1px solid rgba(255,255,255,.17); color: rgba(255,255,255,.28); font: 700 7px/1 ui-monospace, monospace; }
+.coop-weapons__slots span[data-selected="true"] { border-color: var(--hud-cyan); color: var(--hud-cyan); }
+.coop-weapons__reload { position: absolute; right: 15px; bottom: 9px; color: #fda4af; font: 900 7px/1 ui-monospace, monospace; letter-spacing: .1em; animation: coop-pulse .65s infinite alternate; }
+
+.coop-exit { top: 19px; right: 20px; z-index: 90; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 0; color: rgba(255, 255, 255, 0.42); background: rgba(2, 8, 18, 0.25); font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; transition: color 160ms, background 160ms; }
+.coop-exit:hover { color: #fff; background: rgba(2, 8, 18, 0.72); }
+.coop-minimap { right: 20px; bottom: 20px; z-index: 85; opacity: .76; }
+.coop-minimap__disc { width: 112px; height: 112px; }
+
+@keyframes coop-pulse { to { opacity: .35; } }
+
+@media (max-width: 900px) {
+  .coop-objective { top: 18px; left: auto; right: 74px; width: calc(100% - 350px); min-width: 220px; transform: none; }
+}
+
+@media (max-width: 620px) {
+  .coop-vitals { top: 12px; left: 12px; width: 190px; }
+  .coop-squad { top: 108px; left: 12px; width: 176px; }
+  .coop-objective { top: 88px; right: 12px; width: calc(100% - 36px); min-width: 0; }
+  .coop-weapons { bottom: 12px; left: 12px; }
+  .coop-minimap { right: 12px; bottom: 12px; }
   .coop-exit { top: 12px; right: 12px; }
-  .coop-lobby { right: 12px; bottom: 174px; width: 180px; padding: 10px; }
-  .coop-weapons { left: 12px; bottom: 24px; translate: none; transform: none; width: 132px; }
-  .coop-weapons > div:not([data-selected="true"]) { display: none; }
-  .coop-weapons > div[data-selected="true"] { min-width: 0; width: 100%; }
-  .coop-armor { left: 12px; bottom: 90px; max-width: calc(100% - 180px); padding: 8px; }
-}
-
-@media (max-width: 480px) {
-  .coop-objective { top: 218px; left: 12px; right: 12px; width: auto; }
-  .coop-squad { display: none; }
-  .coop-objective > div:first-child { display: none; }
 }
