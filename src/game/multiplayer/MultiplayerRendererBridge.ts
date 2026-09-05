@@ -8,6 +8,7 @@ import { COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, CoopCombatEvent, CoopSnapshot }
 import { CoopFirearmVisualRig } from '../rendering/coopFirearmVisuals';
 import type { CoopFirearmId } from '../combat/coopFirearms';
 import { COOP_PASSIVE_BY_ID, passiveRadius, type CoopPassiveModuleId } from './CoopPassiveModules';
+import { CoopTacticalVisuals } from '../rendering/CoopTacticalVisuals';
 
 type PresentationParticle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; z?: number };
 type RemotePlayerPresentation = {
@@ -27,6 +28,7 @@ type RemotePlayerPresentation = {
  */
 export class MultiplayerRendererBridge {
   private readonly renderer = new Renderer3D();
+  private readonly tacticalVisuals = new CoopTacticalVisuals(this.renderer.scene);
   private readonly remotePlayers = new Map<string, RemotePlayerPresentation>();
   private readonly passiveMeshes = new Map<string, THREE.Group>();
   private readonly localFirearm = new CoopFirearmVisualRig(true);
@@ -36,6 +38,8 @@ export class MultiplayerRendererBridge {
   private readonly handleCanvasPointerDown = () => this.requestPointerLock();
   private lastHitSoundAt = -Infinity;
   private presentationShake = 0;
+  private lastSnapshotTick = -1;
+  private visualElapsedMs = 0;
 
   constructor() {
     this.renderState = {
@@ -72,6 +76,11 @@ export class MultiplayerRendererBridge {
 
   render(snapshot: CoopSnapshot | null, localPlayerId: string, deltaMs: number, spectatorTargetId?: string | null, forceFirstPerson: boolean = false) {
     if (!snapshot) return;
+    if (snapshot.tick < this.lastSnapshotTick) {
+      this.seenCombatEventIds.clear(); this.combatParticles.length = 0; this.presentationShake = 0;
+    }
+    this.visualElapsedMs = snapshot.tick !== this.lastSnapshotTick ? snapshot.elapsedMs : Math.min(snapshot.elapsedMs + 100, this.visualElapsedMs + deltaMs);
+    this.lastSnapshotTick = snapshot.tick;
     // A revive is an authoritative life-state change. It must win over any
     // previous spectator target in the same frame so the player cannot remain
     // stuck in third person after standing back up.
@@ -125,6 +134,7 @@ export class MultiplayerRendererBridge {
     this.renderState.screenShake = this.presentationShake;
     this.syncRemotePlayers(snapshot, isSpectating ? spectatorTargetId! : localPlayerId);
     this.syncPassiveModules(snapshot);
+    this.tacticalVisuals.update(snapshot, this.visualElapsedMs);
 
     const engine = this.renderState as unknown as GameEngine;
     this.renderer.prepareFrame(engine, deltaMs);
@@ -135,6 +145,7 @@ export class MultiplayerRendererBridge {
     this.exitPointerLock();
     this.renderer.renderer.domElement.removeEventListener('pointerdown', this.handleCanvasPointerDown);
     this.localFirearm.dispose();
+    this.tacticalVisuals.dispose();
     for (const remote of this.remotePlayers.values()) { remote.firearm.dispose(); disposeNameplate(remote.nameplate); this.renderer.scene.remove(remote.mesh); }
     this.remotePlayers.clear();
     for (const mesh of this.passiveMeshes.values()) { this.renderer.scene.remove(mesh); disposeGroup(mesh); }
@@ -165,6 +176,9 @@ export class MultiplayerRendererBridge {
       radius: enemy.radius, health: enemy.health, maxHealth: enemy.maxHealth, color: enemy.color,
       damage: enemy.damage, speed: enemy.speed * 88, experienceValue: enemy.experienceValue, type: enemy.type as Enemy['type'],
       hitFlash: enemy.hitFlashMs, slowMultiplier: enemy.slowMultiplier,
+      presentationFacingAngle: enemy.facingAngle,
+      presentationDeathProgress: enemy.dying ? 1 - enemy.deathRemainingMs / 220 : 0,
+      presentationAttackCharge: enemy.attackWindupUntilMs && enemy.attackWindupUntilMs > this.visualElapsedMs ? 1 - Math.min(1, (enemy.attackWindupUntilMs - this.visualElapsedMs) / 1600) : 0,
     };
   }
 

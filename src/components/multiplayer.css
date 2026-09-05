@@ -1,0 +1,25 @@
+@media (max-width: 1100px) {
+  .coop-objective { width: min(390px, calc(100% - 500px)); }
+}
+
+@media (max-width: 760px) {
+  .coop-vitals { left: 12px; top: 12px; padding: 10px; }
+  .coop-vitals > div:last-child { width: 164px; }
+  .coop-vitals > div:nth-child(2) { gap: 10px; }
+  .coop-squad { left: 12px; top: 214px; width: 186px; }
+  .coop-view-label { display: none; }
+  .coop-objective { top: 48px; left: auto; right: 12px; transform: none; translate: none; width: calc(100% - 222px); padding: 10px; }
+  .coop-objective > div { letter-spacing: 0; overflow-wrap: anywhere; }
+  .coop-exit { top: 12px; right: 12px; }
+  .coop-lobby { right: 12px; bottom: 174px; width: 180px; padding: 10px; }
+  .coop-weapons { left: 12px; bottom: 24px; translate: none; transform: none; width: 132px; }
+  .coop-weapons > div:not([data-selected="true"]) { display: none; }
+  .coop-weapons > div[data-selected="true"] { min-width: 0; width: 100%; }
+  .coop-armor { left: 12px; bottom: 90px; max-width: calc(100% - 180px); padding: 8px; }
+}
+
+@media (max-width: 480px) {
+  .coop-objective { top: 218px; left: 12px; right: 12px; width: auto; }
+  .coop-squad { display: none; }
+  .coop-objective > div:first-child { display: none; }
+}

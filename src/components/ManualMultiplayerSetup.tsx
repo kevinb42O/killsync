@@ -15,6 +15,7 @@ export interface MultiplayerLaunch {
   peerPlayerIds: Record<string, string>;
   hostedLobby?: HostedLobby;
   lobbyJoin?: LobbyJoin;
+  soloTest?: boolean;
 }
 
 export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => void; onLaunch: (launch: MultiplayerLaunch) => void }) {
@@ -101,7 +102,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
       onEvent: (peerId, event) => {
         if (event.event === 'ready' && role === 'host') {
           const player = parsePlayer(event.payload);
-          if (!player) return;
+          if (!player || peerPlayerIdsRef.current[peerId] || player.id === localPlayerRef.current.id || guestPlayersRef.current.some(guest => guest.id === player.id) || guestPlayersRef.current.length >= 3) return;
           peerPlayerIdsRef.current[peerId] = player.id;
           const next = guestPlayersRef.current.some(item => item.id === player.id)
             ? guestPlayersRef.current
@@ -261,6 +262,16 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
     onLaunch({ role: 'host', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: { ...peerPlayerIdsRef.current }, hostedLobby: hostedLobbyRef.current || undefined });
   };
 
+  const launchSolo = () => {
+    if (!applyNickname()) return;
+    sessionRef.current?.close();
+    sessionRef.current = new ManualWebRTCSession({ role: 'host', iceServers: [] });
+    guestPlayersRef.current = [];
+    peerPlayerIdsRef.current = {};
+    handedOffRef.current = true;
+    onLaunch({ role: 'host', session: sessionRef.current, localPlayerId: localPlayerRef.current.id, players: [localPlayerRef.current], peerPlayerIds: {}, soloTest: true });
+  };
+
   const close = () => {
     window.clearTimeout(connectionTimeoutRef.current);
     sessionRef.current?.close(); hostedLobbyRef.current?.close(); joinRef.current?.close(); onClose();
@@ -268,7 +279,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
 
   return (
     <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/85 p-4 backdrop-blur-xl">
-      <section className="w-full max-w-3xl overflow-hidden border border-cyan-400/35 bg-[#070c13] shadow-[0_0_70px_rgba(0,240,255,0.18)]">
+      <section className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto border border-cyan-400/35 bg-[#070c13] shadow-[0_0_70px_rgba(0,240,255,0.18)]">
         <header className="flex items-start justify-between border-b border-cyan-400/20 bg-cyan-500/[0.06] px-6 py-5">
           <div className="flex items-center gap-4"><div className="flex h-11 w-11 items-center justify-center border border-cyan-300/50 bg-cyan-400/10 text-cyan-200"><Radio size={21} /></div><h2 className="text-xl font-black tracking-[0.16em] text-white">MULTIPLAYER</h2></div>
           <button onClick={close} aria-label="Close multiplayer" className="p-2 text-white/45 transition hover:bg-white/10 hover:text-white"><X size={19} /></button>
@@ -277,6 +288,8 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
           <div>
             {mode === 'choose' && <>
               <label className="mb-5 block border border-cyan-300/25 bg-cyan-400/[0.045] p-3"><span className="block text-[9px] font-black uppercase tracking-[0.18em] text-cyan-200">Your name</span><input value={nickname} onChange={event => { setNickname(event.target.value); setError(null); }} onBlur={() => setNickname(normalizeNickname(nickname))} maxLength={16} autoComplete="nickname" placeholder="Enter name" className="mt-2 w-full border-b border-white/15 bg-transparent pb-1 text-sm font-black uppercase tracking-wider text-white outline-none placeholder:text-white/25 focus:border-cyan-300" /></label>
+              <button disabled={loading || !nicknameValid} onClick={launchSolo} className="mb-4 flex w-full items-center justify-center gap-2 border border-emerald-300/45 bg-emerald-400/15 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/25 disabled:opacity-45"><ChevronRight size={16} /> Solo test</button>
+              <button disabled={loading || !nicknameValid} onClick={() => void hostSquad()} className="mb-4 flex w-full items-center justify-center gap-2 border border-cyan-300/35 bg-cyan-400/10 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-cyan-100 hover:bg-cyan-400/20 disabled:opacity-45"><Server size={16} /> Host public squad</button>
               <div className="border border-cyan-300/35 bg-cyan-400/[0.08] p-4">
                 <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200">Direct co-op · free browser-to-browser</div>
                 <p className="mt-2 text-xs leading-relaxed text-white/65">No game server or account needed. The host sends an offer; each friend sends back an answer.</p>
@@ -289,6 +302,7 @@ export function ManualMultiplayerSetup({ onClose, onLaunch }: { onClose: () => v
             {mode === 'guest' && <div className="border border-fuchsia-300/25 bg-fuchsia-400/[0.04] p-5"><div className="text-sm font-black uppercase tracking-wider text-white">CONNECTING</div></div>}
             {mode === 'direct_host' && <div className="space-y-4 border border-cyan-300/25 bg-cyan-400/[0.04] p-5"><div><div className="text-sm font-black uppercase tracking-wider text-white">HOST DIRECT MATCH</div><p className="mt-2 text-xs leading-relaxed text-white/60">Copy this offer to one friend. For another friend, create a fresh offer after connecting the first.</p></div><textarea readOnly value={offerCode} aria-label="Host offer code" className="h-24 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-cyan-100 outline-none" /><button onClick={() => void navigator.clipboard?.writeText(offerCode)} className="border border-cyan-300/45 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100">Copy offer</button><label className="block text-[10px] font-black uppercase tracking-[0.14em] text-white/60">Friend’s answer<textarea value={answerCode} onChange={event => { setAnswerCode(event.target.value); setError(null); }} aria-label="Friend answer code" className="mt-2 h-24 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] normal-case tracking-normal text-white outline-none focus:border-cyan-300" /></label><button disabled={loading || !answerCode.trim()} onClick={() => void acceptDirectAnswer()} className="border border-emerald-300/45 bg-emerald-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-100 disabled:opacity-45">Connect friend</button>{connectedPeers(peers) > 0 && <><button disabled={loading} onClick={() => void createAdditionalDirectOffer()} className="ml-2 border border-cyan-300/45 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-cyan-100 disabled:opacity-45">Add another friend</button><button onClick={launchHost} className="ml-2 border border-emerald-300/45 bg-emerald-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-100">Start match · {guestPlayers.length + 1} players</button></>}</div>}
             {mode === 'direct_guest' && <div className="space-y-4 border border-fuchsia-300/25 bg-fuchsia-400/[0.04] p-5"><div><div className="text-sm font-black uppercase tracking-wider text-white">JOIN DIRECT MATCH</div><p className="mt-2 text-xs leading-relaxed text-white/60">Paste the host’s offer, create your answer, then send the answer back to the host.</p></div>{!answerCode && <><textarea value={offerCode} onChange={event => { setOfferCode(event.target.value); setError(null); }} aria-label="Host offer code" placeholder="Paste host offer" className="h-28 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-white outline-none focus:border-fuchsia-300" /><button disabled={loading || !offerCode.trim()} onClick={() => void createDirectAnswer()} className="border border-fuchsia-300/45 bg-fuchsia-400/15 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-fuchsia-100 disabled:opacity-45">Create answer</button></>}{answerCode && <><textarea readOnly value={answerCode} aria-label="Your answer code" className="h-28 w-full resize-none border border-white/15 bg-black/30 p-2 font-mono text-[10px] text-fuchsia-100 outline-none" /><button onClick={() => void navigator.clipboard?.writeText(answerCode)} className="border border-fuchsia-300/45 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-fuchsia-100">Copy answer</button></>}</div>}
+            {mode === 'direct_host' && connectedPeers(peers) === 0 && <button disabled={loading} onClick={launchHost} className="mt-4 flex items-center gap-2 border border-emerald-300/45 bg-emerald-400/15 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/25 disabled:opacity-45"><ChevronRight size={16} /> Start match solo</button>}
             {status && <p className="mt-5 text-xs font-medium leading-relaxed text-cyan-100/75">{status}</p>}
             {error && <p role="alert" className="mt-3 border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</p>}
           </div>

@@ -69,6 +69,15 @@ describe('CoopSimulation firearm authority', () => {
 });
 
 describe('CoopSimulation encounter authority', () => {
+  it('keeps authoritative entity ids instead of copying topology node ids', () => {
+    const simulation = sim();
+    const nextId = simulation['nextEntityId'];
+    for (let index = 0; index < 20; index++) simulation['spawnEnemy']('basic', 'host', index);
+    const ids = simulation.createSnapshot().enemies.map(enemy => enemy.id);
+    expect(ids).toEqual(Array.from({ length: 20 }, (_, index) => nextId + index));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('keeps the opening insertion enemy-free, then hands off to round-one topology spawns', () => {
     const simulation = sim();
     const player = simulation.createSnapshot().players[0];
@@ -99,6 +108,18 @@ describe('CoopSimulation encounter authority', () => {
 });
 
 describe('CoopSimulation player lifecycle', () => {
+  it('freezes gameplay after successful extraction', () => {
+    const simulation = sim();
+    simulation['finishRun'](true);
+    const previous = simulation.createSnapshot();
+    simulation.setInput('host', input({ movement: 1, firing: true }));
+    simulation.tick(50);
+    const current = simulation.createSnapshot();
+    expect(current.players).toEqual(previous.players);
+    expect(current.projectiles).toHaveLength(0);
+    expect(current.results?.success).toBe(true);
+  });
+
   it('ends a solo arena instead of leaving a zero-HP frozen match', () => {
     const simulation = sim();
     const host = (simulation as any).players.get('host');

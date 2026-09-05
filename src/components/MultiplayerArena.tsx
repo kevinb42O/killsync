@@ -9,9 +9,12 @@ import { MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERS
 import { COOP_SHOP_ITEMS, type CoopShopItemId } from '../game/multiplayer/CoopBuyStation';
 import { COOP_PASSIVE_BY_ID, passiveRankCost } from '../game/multiplayer/CoopPassiveModules';
 import { getCoopSlideBinding, getMovementBindings, type ControlScheme } from '../game/controls';
+import { LocalPlayerPrediction } from '../game/multiplayer/LocalPlayerPrediction';
+import { advancePlayerMovement, COOP_STEP_MS } from '../game/multiplayer/playerMovement';
+import './multiplayer.css';
 
-const INPUT_INTERVAL_MS = 50;
-const SNAPSHOT_INTERVAL_MS = 100;
+const INPUT_INTERVAL_MS = COOP_STEP_MS;
+const SNAPSHOT_INTERVAL_MS = 50;
 
 /**
  * The first playable direct-connection arena. It intentionally stays separate
@@ -21,10 +24,13 @@ const SNAPSHOT_INTERVAL_MS = 100;
 export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: MultiplayerLaunch; controlScheme: ControlScheme; onExit: () => void }) {
   const sceneRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<MultiplayerRendererBridge | null>(null);
-  const simulationRef = useRef<CoopSimulation | null>(launch.role === 'host' ? new CoopSimulation(launch.players) : null);
-  const snapshotRef = useRef<CoopSnapshot | null>(launch.role === 'host' ? simulationRef.current!.createSnapshot() : null);
+  const simulationRef = useRef<CoopSimulation | null>(null);
+  if (launch.role === 'host' && !simulationRef.current) simulationRef.current = new CoopSimulation(launch.players);
+  const snapshotRef = useRef<CoopSnapshot | null>(null);
+  if (simulationRef.current && !snapshotRef.current) snapshotRef.current = simulationRef.current.createSnapshot();
   const presentationRef = useRef({ previous: snapshotRef.current as CoopSnapshot | null, current: snapshotRef.current as CoopSnapshot | null, receivedAt: performance.now(), durationMs: INPUT_INTERVAL_MS });
   const inputRef = useRef<MultiplayerInputFrame>(createInput());
+  const networkTickRef = useRef(0);
   const displayedCombatEventsRef = useRef(new Set<number>());
   const sessionCloseTimerRef = useRef(0);
   const spectatorTargetRef = useRef<string | null>(null);
@@ -136,7 +142,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         squad: snapshot.players.map(player => ({ id: player.id, label: player.label, color: player.color, health: player.health, maxHealth: player.maxHealth, lifeState: player.lifeState, downedRemainingMs: player.downedRemainingMs, reviveProgressMs: player.reviveProgressMs, reviverId: player.reviverId })),
       });
     }
-    launch.session.broadcastState({ type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: snapshot.tick, sentAt: Math.round(now), payload: snapshot });
+    launch.session.broadcastState({ type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Math.round(now), payload: snapshot });
     launch.hostedLobby?.update(snapshot.players.length, 'in_game');
     setConnectionMessage('New run started — the squad connection is still live.');
     setCombatNotice({ text: 'NEW RUN — SQUAD LINK PRESERVED', color: '#5eead4' });
@@ -144,6 +150,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
 
   useEffect(() => {
     const session = launch.session;
+    const prediction = new LocalPlayerPrediction(launch.localPlayerId);
     // React development mode intentionally mounts, cleans up, then remounts
     // effects once. Defer irreversible peer teardown so the remount can cancel
     // it; a real arena exit has no following mount and closes the session.
@@ -203,13 +210,15 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     const publishSnapshot = (snapshot: CoopSnapshot, now: number) => {
       const timeline = presentationRef.current;
+      const restarted = timeline.current && snapshot.tick < timeline.current.tick;
       const elapsedSinceLastSnapshot = now - timeline.receivedAt;
-      timeline.previous = timeline.current || snapshot;
+      timeline.previous = restarted ? snapshot : timeline.current || snapshot;
+      if (restarted) displayedCombatEventsRef.current.clear();
       timeline.current = snapshot;
       timeline.receivedAt = now;
-      timeline.durationMs = Math.max(35, Math.min(140, elapsedSinceLastSnapshot || INPUT_INTERVAL_MS));
+      timeline.durationMs = Math.max(20, Math.min(100, elapsedSinceLastSnapshot || INPUT_INTERVAL_MS));
       snapshotRef.current = snapshot;
-      if (launch.role === 'host') syncHud(snapshot);
+      if (launch.role === 'guest') prediction.reconcile(snapshot);
     };
     const presentationSnapshot = (now: number) => {
       const timeline = presentationRef.current;
@@ -265,10 +274,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         if (event.event === 'ready' && launch.role === 'host') {
           const candidate = parsePlayer(event.payload);
           const simulation = simulationRef.current;
-          if (!candidate || !simulation) return;
+          if (!candidate || !simulation || launch.peerPlayerIds[peerId]) return;
           const player: CoopPlayerSeed = { ...candidate, color: nextGuestColor(simulation.getPlayerSeeds().length - 1) };
-          launch.peerPlayerIds[peerId] = player.id;
           if (!simulation.addPlayer(player)) return;
+          launch.peerPlayerIds[peerId] = player.id;
           const players = simulation.getPlayerSeeds();
           session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: players });
           publishSnapshot(simulation.createSnapshot(), performance.now());
@@ -311,7 +320,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     const movementBindings = getMovementBindings(controlScheme);
     const slideBinding = getCoopSlideBinding(controlScheme);
     let firing = false;
-    let sequence = 0;
+    let sequence = inputRef.current.sequence;
     const updateInput = () => {
       const movement = (movementBindings.up.some(key => keys.has(key)) ? 1 : 0)
         | (movementBindings.down.some(key => keys.has(key)) ? 2 : 0)
@@ -331,8 +340,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       };
     };
     const clearJumpInput = () => {
-      if (!inputRef.current.jumpPressed) return;
-      inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(performance.now()), jumpPressed: false };
+      if (!inputRef.current.jumpPressed && !inputRef.current.reloadPressed) return;
+      inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(performance.now()), jumpPressed: false, reloadPressed: false };
     };
       const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') return;
@@ -347,6 +356,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         return;
       }
       const key = event.key.toLowerCase();
+      if (stationOpenRef.current && key !== 'f') return;
       if (key === 'f') {
         event.preventDefault();
         const snapshot = snapshotRef.current;
@@ -446,13 +456,21 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       inputRef.current = { ...inputRef.current, selectedSlot };
       setHud(current => ({ ...current, selectedSlot }));
     };
+    const clearControls = () => {
+      keys.clear(); firing = false; updateInput();
+      inputRef.current = { ...inputRef.current, aiming: false, jumpPressed: false, reloadPressed: false };
+    };
+    const onVisibilityChange = () => { if (document.hidden) clearControls(); };
+    const onContextMenu = (event: MouseEvent) => event.preventDefault();
+    window.addEventListener('blur', clearControls);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('wheel', onWheel, { passive: false });
-    window.addEventListener('contextmenu', event => event.preventDefault());
+    window.addEventListener('contextmenu', onContextMenu);
 
     let animationFrame = 0;
     let lastTime = performance.now();
@@ -465,11 +483,13 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       accumulator += elapsed;
       inputAccumulator += elapsed;
       stateAccumulator += elapsed;
+      if (stationOpenRef.current) clearControls();
       if (launch.role === 'host') {
         const simulation = simulationRef.current!;
-        simulation.setInput(launch.localPlayerId, inputRef.current);
         let simulationAdvanced = false;
         while (accumulator >= INPUT_INTERVAL_MS) {
+          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(now), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
+          simulation.setInput(launch.localPlayerId, inputRef.current);
           simulation.tick(INPUT_INTERVAL_MS);
           accumulator -= INPUT_INTERVAL_MS;
           simulationAdvanced = true;
@@ -479,18 +499,31 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           publishSnapshot(simulation.createSnapshot(), now);
         }
         if (stateAccumulator >= SNAPSHOT_INTERVAL_MS) {
-          stateAccumulator = 0;
+          stateAccumulator %= SNAPSHOT_INTERVAL_MS;
           const snapshot = snapshotRef.current || simulation.createSnapshot();
-          const state: MultiplayerStateFrame = { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: snapshot.tick, sentAt: Math.round(now), payload: snapshot };
+          const state: MultiplayerStateFrame = { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Math.round(now), payload: snapshot };
           session.broadcastState(state);
           syncHud(snapshot);
         }
-      } else if (launch.role === 'guest' && inputAccumulator >= INPUT_INTERVAL_MS) {
-        inputAccumulator = 0;
-        session.sendInput(inputRef.current);
-        clearJumpInput();
+      } else if (launch.role === 'guest') {
+        while (inputAccumulator >= INPUT_INTERVAL_MS) {
+          inputAccumulator -= INPUT_INTERVAL_MS;
+          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Math.round(now), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
+          prediction.step(inputRef.current);
+          session.sendInput(inputRef.current);
+          clearJumpInput();
+        }
       }
-      const frameSnapshot = presentationSnapshot(now);
+      let frameSnapshot = presentationSnapshot(now);
+      if (frameSnapshot && launch.role === 'guest') frameSnapshot = prediction.present(frameSnapshot, inputRef.current, inputAccumulator, elapsed);
+      if (frameSnapshot && launch.role === 'host' && snapshotRef.current?.matchState === 'active') {
+        const local = snapshotRef.current.players.find(player => player.id === launch.localPlayerId);
+        if (local?.lifeState === 'alive') {
+          const motion = { ...local, verticalVelocity: 0, lastJumpSequence: -1, slideAngle: local.angle, ...local.motion };
+          advancePlayerMovement(motion, { ...inputRef.current, jumpPressed: false }, accumulator);
+          frameSnapshot = { ...frameSnapshot, players: frameSnapshot.players.map(player => player.id === local.id ? { ...player, x: motion.x, y: motion.y, z: motion.z } : player) };
+        }
+      }
       // Camera role switches are state transitions, not presentation values.
       // Source them from the latest network snapshot so the downed operator is
       // never selected for even one lingering interpolation frame.
@@ -510,6 +543,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('blur', clearControls);
+      window.removeEventListener('contextmenu', onContextMenu);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       document.removeEventListener('pointerlockchange', syncPointerLock);
       renderer.destroy();
       rendererRef.current = null;
@@ -554,10 +590,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   }, [nearbyStation]);
 
   return (
-    <div className="absolute inset-0 z-[110] bg-[#05080e]">
+    <div className="coop-arena absolute inset-0 z-[110] bg-[#05080e]">
       <div ref={sceneRef} className="absolute inset-0 h-full w-full" />
       {damageFlash && <div className="pointer-events-none absolute inset-0 z-20 border-[min(8vw,100px)] border-rose-500/35 bg-rose-500/10 animate-pulse" />}
-      <div className="pointer-events-none absolute left-5 top-5 border border-cyan-300/35 bg-black/65 px-4 py-3 backdrop-blur-sm">
+      <div className="coop-vitals pointer-events-none absolute left-5 top-5 border border-cyan-300/35 bg-black/65 px-4 py-3 backdrop-blur-sm">
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200"><Radio size={13} /> {isSpectator ? 'Spectator' : `Direct Co-op · ${launch.role}`}</div>
         <div className="mt-2 flex gap-4 text-xs font-mono text-white/75"><span><Users size={12} className="mr-1 inline text-fuchsia-300" />{hud.players}</span><span>KILLS {hud.kills}</span><span className="text-white/40">TICK {hud.tick}</span></div>
         <div className="mt-3 w-48">
@@ -569,7 +605,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           {hud.invulnerableRemainingMs > 0 && <div className="mt-2 text-[9px] font-black uppercase tracking-wider text-emerald-200">Revive shield {Math.ceil(hud.invulnerableRemainingMs / 1000)}s</div>}
         </div>
       </div>
-      <div className="pointer-events-none absolute left-5 top-40 w-52 border border-white/15 bg-black/60 p-2 backdrop-blur-sm">
+      <div className="coop-squad pointer-events-none absolute left-5 top-56 w-52 border border-white/15 bg-black/60 p-2 backdrop-blur-sm">
         <div className="mb-1 text-[9px] font-black uppercase tracking-[0.16em] text-white/45">Squad status</div>
         {hud.squad.map(player => {
           const status = player.lifeState === 'alive' ? `${Math.ceil(player.health)}/${Math.ceil(player.maxHealth)}` : player.lifeState === 'downed' ? (player.downedRemainingMs > 0 ? `DOWN ${Math.ceil(player.downedRemainingMs / 1000)}s` : 'DOWN · REVIVABLE') : 'OUT';
@@ -579,12 +615,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           </div>;
         })}
       </div>
-      <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 border border-white/15 bg-black/60 px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-white/70 backdrop-blur-sm">{isSpectator ? 'Third-person spectator' : hud.lifeState === 'downed' ? 'Third-person revive spectator' : 'First-person co-op'}</div>
+      <div className="coop-view-label pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 border border-white/15 bg-black/60 px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-white/70 backdrop-blur-sm">{isSpectator ? 'Third-person spectator' : hud.lifeState === 'downed' ? 'Third-person revive spectator' : launch.soloTest ? 'Solo test' : 'First-person co-op'}</div>
       {isSpectator && <div className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 border border-fuchsia-300/45 bg-black/75 px-4 py-2 text-center backdrop-blur-sm"><div className="text-[9px] font-black uppercase tracking-[0.25em] text-fuchsia-200">Spectating</div><div className="mt-1 text-xs font-black uppercase tracking-wider text-white">{spectatorTarget?.label || 'Acquiring target'}</div><div className="mt-1 text-[9px] uppercase tracking-wider text-white/50">Mouse to orbit · left click next player</div></div>}
-      {run && <div className="pointer-events-none absolute left-1/2 top-16 w-[min(460px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/25 bg-black/70 px-4 py-3 text-center backdrop-blur-sm">
+      {run && <div className="coop-objective pointer-events-none absolute left-1/2 top-16 w-[min(460px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/25 bg-black/70 px-4 py-3 text-center backdrop-blur-sm">
         <div className="text-[9px] font-black uppercase tracking-[0.22em] text-cyan-200">{run.phase.replace('_', ' ')}</div>
         <div className="mt-1 text-xs font-black uppercase tracking-wider text-white">{run.objective?.title || run.boss?.name || run.notice}</div>
-        {run.objective && <><div className="mt-1 text-[10px] text-white/55">{run.objective.description}</div><div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.min(100, run.objective.progress / run.objective.required * 100)}%` }} /></div></>}
+        {run.objective && <><div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono"><span className={run.objective.contested ? 'text-rose-300' : 'text-emerald-200'}>{run.objective.kind === 'uplink' ? run.objective.contested ? 'CONTESTED' : run.objective.occupants ? `UPLOADING ${Math.floor(run.objective.progress)}%` : 'AWAITING OPERATOR' : 'TARGET TRACKED'}</span>{localSnapshot && <span className="flex items-center gap-1 text-white/70"><ArrowLeft size={12} style={{ transform: `rotate(${Math.atan2(run.objective.y - localSnapshot.y, run.objective.x - localSnapshot.x) - localSnapshot.angle + Math.PI / 2}rad)` }} />{Math.round(Math.hypot(run.objective.x - localSnapshot.x, run.objective.y - localSnapshot.y))}m</span>}</div><div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className={`h-full transition-[width] ${run.objective.contested ? 'bg-rose-400' : 'bg-emerald-300'}`} style={{ width: `${Math.min(100, run.objective.progress / run.objective.required * 100)}%` }} /></div></>}
         {run.boss && <><div className="mt-2 flex justify-between text-[9px] font-mono text-rose-100"><span>PHASE {run.boss.phase}</span><span>{Math.ceil(run.boss.health).toLocaleString()} / {Math.ceil(run.boss.maxHealth).toLocaleString()}</span></div><div className="mt-1 h-1.5 overflow-hidden bg-rose-950/80"><div className="h-full bg-rose-400 transition-[width]" style={{ width: `${Math.max(0, run.boss.health / Math.max(1, run.boss.maxHealth) * 100)}%` }} /></div></>}
         {run.insertionRemainingMs !== undefined && run.insertionDurationMs !== undefined && <><div className="mt-2 flex justify-between text-[9px] font-mono text-cyan-100"><span>HOSTILES ARRIVE</span><span>{Math.ceil(run.insertionRemainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, 1 - run.insertionRemainingMs / Math.max(1, run.insertionDurationMs)) * 100}%` }} /></div></>}
         {run.exfil && <><div className="mt-2 flex justify-between text-[9px] font-mono text-amber-100"><span>EXFIL HOLD</span><span>{Math.ceil(run.exfil.remainingMs / 1000)}s</span></div><div className="mt-1 h-1.5 overflow-hidden bg-amber-950/80"><div className="h-full bg-amber-300 transition-[width]" style={{ width: `${run.exfil.holdProgressMs / run.exfil.holdRequiredMs * 100}%` }} /></div></>}
@@ -594,13 +630,13 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[43%] -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
       {revivingTarget && <div className="pointer-events-none absolute left-1/2 top-[56%] z-20 w-[min(330px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/55 bg-black/80 px-4 py-3 text-center shadow-[0_0_24px_rgba(34,211,238,.18)] backdrop-blur-md"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">Hold F · Reviving {revivingTarget.label}</div><div className="mt-2 h-2 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, revivingTarget.reviveProgressMs / 3000 * 100)}%` }} /></div><div className="mt-1 text-[9px] font-mono text-cyan-100/70">{Math.round(revivingTarget.reviveProgressMs / 3000 * 100)}%</div></div>}
       {!isSpectator && (hud.selectedSlot === 3 && hud.isAiming ? <div className="pointer-events-none absolute inset-0 z-10 rounded-full border-[min(17vw,220px)] border-black/90"><div className="absolute left-1/2 top-1/2 h-[64vh] w-px -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-px w-[64vh] -translate-x-1/2 -translate-y-1/2 bg-white/70" /><div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100" /></div> : <div className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2"><span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-cyan-100/80" /><span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-cyan-100/80" /></div>)}
-      {!isSpectator && <div className="pointer-events-none absolute bottom-16 left-1/2 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1.5 overflow-hidden border border-white/15 bg-black/60 p-1.5 backdrop-blur-sm">
+      {!isSpectator && <div className="coop-weapons pointer-events-none absolute bottom-16 left-1/2 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1.5 overflow-hidden border border-white/15 bg-black/60 p-1.5 backdrop-blur-sm">
         {visibleWeaponSlots(hud.selectedSlot).map(index => {
           const weaponId = COOP_WEAPON_SLOTS[index];
           const weapon = COOP_WEAPON_DETAILS[weaponId];
           const active = hud.selectedSlot === index;
           const state = hud.weapons[index];
-          return <div key={weaponId} className={`min-w-[118px] border px-2 py-1.5 text-center transition ${active ? 'border-cyan-200 bg-cyan-300/15 text-white' : 'border-white/10 text-white/35'}`}>
+          return <div key={weaponId} data-selected={active} className={`min-w-[118px] border px-2 py-1.5 text-center transition ${active ? 'border-cyan-200 bg-cyan-300/15 text-white' : 'border-white/10 text-white/35'}`}>
             <div className="text-[9px] font-mono font-bold" style={{ color: active ? weapon.color : undefined }}>{weapon.key} {weapon.shortName} · LV {state?.level || 1}</div>
             <div className="mt-0.5 text-[10px] font-mono text-white/75">{state?.magazineAmmo ?? '-'} <span className="text-white/35">|</span> {state?.reserveAmmo ?? '-'}</div>
             {active && hud.isReloading && <div className="mt-1 h-0.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 animate-pulse" style={{ width: '68%' }} /></div>}
@@ -608,7 +644,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         })}
         <div className="self-center px-1 text-[9px] font-mono text-white/35">{hud.selectedSlot + 1}/{COOP_WEAPON_SLOTS.length}</div>
       </div>}
-      {!isSpectator && localSnapshot && <div className="pointer-events-none absolute bottom-28 left-5 max-w-56 border border-white/10 bg-black/60 px-3 py-2 text-[9px] font-mono uppercase tracking-wider text-white/60 backdrop-blur-sm">
+      {!isSpectator && localSnapshot && <div className="coop-armor pointer-events-none absolute bottom-28 left-5 max-w-56 border border-white/10 bg-black/60 px-3 py-2 text-[9px] font-mono uppercase tracking-wider text-white/60 backdrop-blur-sm">
         <div className="flex items-center gap-2 text-cyan-100"><ShieldPlus size={12} /> Armor {Math.ceil(localSnapshot.armorHp)} · Reboot {localSnapshot.selfRevives ? 'READY' : 'NONE'}</div>
         {localSnapshot.passiveModules.length > 0 && <div className="mt-1 text-white/65">{localSnapshot.passiveModules.map(module => `${COOP_SHOP_ITEMS[module.id].name} ${'I'.repeat(module.rank)}`).join(' · ')}</div>}
       </div>}
@@ -632,14 +668,13 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         {!stationOpen && <p className="mt-3 text-[10px] text-white/50">Press <span className="font-black text-cyan-100">F</span> to interact. It prioritizes reviving a nearby teammate.</p>}
         {stationOpen && <><div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-2">{nearbyStation.stock.map(itemId => { const item = COOP_SHOP_ITEMS[itemId]; const passive = itemId in COOP_PASSIVE_BY_ID ? itemId as keyof typeof COOP_PASSIVE_BY_ID : undefined; const owned = passive && localSnapshot.passiveModules.find(module => module.id === passive); const cost = passive && owned ? passiveRankCost(passive, owned.rank) : item.cost; const affordable = localSnapshot.coins >= cost; return <button key={itemId} disabled={!affordable} onClick={() => purchaseStationItem(nearbyStation.id, itemId)} className="flex w-full items-center justify-between gap-4 border border-white/10 bg-white/[0.035] px-4 py-3 text-left transition hover:border-cyan-200/50 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"><span><span className="block text-xs font-bold text-white">{item.name}{owned ? ` · Rank ${owned.rank + 1}` : ''}</span><span className="mt-1 block text-[10px] leading-relaxed text-white/45">{item.description}</span></span><span className="shrink-0 text-xs font-mono text-amber-200"><Coins className="mr-1 inline" size={12} />{cost}</span></button>; })}</div>{stationMessage && <div className="mt-3 shrink-0 border border-cyan-200/20 bg-cyan-400/10 px-3 py-2 text-[10px] text-cyan-100">{stationMessage}</div>}<div className="mt-3 shrink-0 text-center text-[10px] text-white/40">Mouse wheel scrolls this list only · press <span className="font-black text-cyan-100">F</span> to close</div></>}
       </div>}
-      {launch.role === 'host' && <div className="absolute bottom-[164px] right-5 w-[min(310px,calc(100vw-2.5rem))] border border-fuchsia-300/30 bg-black/75 p-4 text-[10px] backdrop-blur-md"><div className="flex items-center gap-2 font-black uppercase tracking-[0.18em] text-fuchsia-200"><Users size={13} /> Match lobby · {hud.players}/4</div><p className="mt-2 leading-relaxed text-white/50">{connectionMessage}</p></div>}
+      {launch.role === 'host' && !launch.soloTest && <div className="coop-lobby absolute bottom-[164px] right-5 w-[min(310px,calc(100vw-2.5rem))] border border-fuchsia-300/30 bg-black/75 p-4 text-[10px] backdrop-blur-md"><div className="flex items-center gap-2 font-black uppercase tracking-[0.18em] text-fuchsia-200"><Users size={13} /> Match lobby · {hud.players}/4</div><p className="mt-2 leading-relaxed text-white/50">{connectionMessage}</p></div>}
       {!isSpectator && hud.lifeState === 'downed' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/35"><div className="w-[min(420px,calc(100vw-2rem))] border border-amber-300/50 bg-black/80 p-6 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.3em] text-amber-200">You are downed</div><div className="mt-3 text-4xl font-black text-white">{hud.downedRemainingMs > 0 ? `${Math.ceil(hud.downedRemainingMs / 1000)}s` : 'REVIVABLE'}</div><div className="mt-3 text-xs text-white/60">Watching <span className="font-black text-fuchsia-200">{downedSpectatorTarget?.label || 'your squad'}</span> in third person. Left click cycles living teammates.</div><div className="mt-2 text-xs text-white/60">A teammate must stand close and hold <span className="font-black text-cyan-200">F</span> for 3 seconds. Your body remains until the squad is wiped.</div>{hud.reviverId && <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-emerald-200">Revive in progress · {Math.round(hud.reviveProgressMs / 3000 * 100)}%</div>}<div className="mt-2 h-1.5 overflow-hidden bg-white/10"><div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${Math.max(0, hud.reviveProgressMs / 3000 * 100)}%` }} /></div></div></div>}
       {!isSpectator && hud.lifeState === 'eliminated' && hud.matchState === 'active' && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/45"><div className="border border-rose-300/40 bg-black/80 px-6 py-5 text-center backdrop-blur-md"><div className="text-xs font-black uppercase tracking-[0.28em] text-rose-200">Eliminated</div><div className="mt-3 text-xs text-white/60">Your squad can still finish the encounter.</div></div></div>}
       {hud.matchState !== 'active' && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="w-[min(440px,calc(100vw-2rem))] border border-rose-300/45 bg-[#10070b] p-7 text-center shadow-[0_0_60px_rgba(244,63,94,.2)]"><div className="text-[10px] font-black uppercase tracking-[0.32em] text-rose-200">{hud.matchState === 'solo_defeat' ? 'Run ended' : 'Squad wiped'}</div><h2 className="mt-3 text-3xl font-black text-white">{hud.matchState === 'solo_defeat' ? 'SYSTEM FAILURE' : 'NO OPERATIVES REMAIN'}</h2><p className="mt-3 text-xs leading-relaxed text-white/60">Kills confirmed: {hud.kills}. {launch.role === 'host' ? 'Retry instantly without reconnecting the squad.' : 'Waiting for the host to start the next run.'}</p><div className="mt-6 flex justify-center gap-3">{launch.role === 'host' && <button onClick={retryRun} className="border border-emerald-300/55 bg-emerald-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-100 transition hover:bg-emerald-400/20">Retry run</button>}<button onClick={onExit} className="border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 transition hover:bg-cyan-400/20">Return to lobby</button></div></div></div>}
       {matchSnapshot?.results && <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#03070c]/90 p-4 backdrop-blur-xl"><div className="w-[min(760px,calc(100vw-2rem))] border border-cyan-300/35 bg-[#07111b] p-6 shadow-[0_0_60px_rgba(34,211,238,.16)]"><div className="text-center"><div className={`text-[10px] font-black uppercase tracking-[0.32em] ${matchSnapshot.results.success ? 'text-cyan-200' : 'text-rose-200'}`}>{matchSnapshot.results.success ? 'Squad extracted' : 'Run failed'}</div><h2 className="mt-2 text-3xl font-black text-white">{matchSnapshot.results.success ? 'SECTOR BREACH COMPLETE' : 'SIGNAL LOST'}</h2><p className="mt-2 text-xs text-white/55">{Math.ceil(matchSnapshot.results.durationMs / 60000)} min · {matchSnapshot.results.contractsCompleted} contracts · {matchSnapshot.results.bossesDefeated} bosses</p></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{matchSnapshot.results.players.map(player => <div key={player.playerId} className="border border-white/10 bg-white/[.035] p-3"><div className="flex items-center justify-between"><span className="font-black text-white" style={{ color: player.color }}>{player.label}</span><span className="text-[9px] font-black uppercase tracking-wider text-amber-200">{player.medal}</span></div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]"><span><b className="block text-white">{player.kills}</b><i className="not-italic text-white/45">Kills</i></span><span><b className="block text-white">{Math.round(player.firearmDamage + player.passiveDamage)}</b><i className="not-italic text-white/45">Damage</i></span><span><b className="block text-white">{player.revives}</b><i className="not-italic text-white/45">Revives</i></span></div></div>)}</div><div className="mt-6 text-center"><div className="mb-3 text-[10px] text-white/45">{launch.role === 'host' ? 'Retry starts a new run without reconnecting anyone.' : 'The host can retry without reconnecting anyone.'}</div>{launch.role === 'host' && <button onClick={retryRun} className="mr-3 border border-emerald-300/55 bg-emerald-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/20">Retry run</button>}<button onClick={onExit} className="border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-100 hover:bg-cyan-400/20">Return to lobby</button></div></div></div>}
-      <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 border border-white/15 bg-black/60 px-4 py-2 text-center text-[10px] font-mono uppercase tracking-wider text-white/60 backdrop-blur-sm">{isSpectator ? <>Mouse look · left click next player · {mouseLocked ? 'camera active' : 'click world for camera'}</> : <><Crosshair size={12} className="mr-2 inline text-cyan-300" />{controlScheme === 'AZERTY' ? 'ZQSD' : 'WASD'} move · {getCoopSlideBinding(controlScheme).toUpperCase()} slide · Shift sprint · R reload · F revive / interact · RMB aim · 1–5 switch · {mouseLocked ? 'mouse locked · look around' : 'click world to lock mouse'} · hold LMB fire</>}</div>
       {connectionStatus !== 'connected' && <div className={`absolute left-1/2 top-20 z-30 -translate-x-1/2 border px-4 py-3 text-center text-xs backdrop-blur-sm ${connectionStatus === 'reconnecting' ? 'border-amber-300/45 bg-amber-950/80 text-amber-100' : 'border-red-300/45 bg-red-950/80 text-red-100'}`}><div>{connectionMessage}</div>{connectionStatus === 'disconnected' && <button onClick={onExit} className="mt-2 border border-red-200/35 px-3 py-1 text-[10px] font-black uppercase tracking-wider hover:bg-red-300/10">Back to servers</button>}</div>}
-      <button onClick={onExit} className="absolute right-5 top-5 flex items-center gap-2 border border-white/15 bg-black/65 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white/70 backdrop-blur-sm transition hover:border-white/35 hover:text-white"><ArrowLeft size={13} /> Leave arena</button>
+      <button onClick={onExit} className="coop-exit absolute right-5 top-5 flex items-center gap-2 border border-white/15 bg-black/65 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white/70 backdrop-blur-sm transition hover:border-white/35 hover:text-white"><ArrowLeft size={13} /> Leave arena</button>
     </div>
   );
 }

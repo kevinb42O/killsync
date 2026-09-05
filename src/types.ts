@@ -67,6 +67,9 @@ export interface Enemy extends Entity {
   type: EnemyType | 'boss';
   slowMultiplier?: number;
   hitFlash?: number;
+  presentationFacingAngle?: number;
+  presentationDeathProgress?: number;
+  presentationAttackCharge?: number;
 }
 
 export interface Projectile extends Entity {

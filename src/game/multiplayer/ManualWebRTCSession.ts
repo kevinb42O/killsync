@@ -10,6 +10,7 @@ import {
   MultiplayerWireMessage,
   MULTIPLAYER_PROTOCOL_VERSION,
 } from './protocol';
+import { encodeSnapshotPackets, MAX_SNAPSHOT_BYTES, SnapshotAssembler } from './snapshotTransport';
 
 const MAX_SIGNAL_BYTES = 48_000;
 const ICE_GATHER_TIMEOUT_MS = 7_000;
@@ -48,6 +49,8 @@ export class ManualWebRTCSession {
   private onState?: ManualWebRTCSessionOptions['onState'];
   private onEvent?: ManualWebRTCSessionOptions['onEvent'];
   private onError?: ManualWebRTCSessionOptions['onError'];
+  private latestStateTick = -1;
+  private readonly snapshotAssembler = new SnapshotAssembler();
 
   constructor(options: ManualWebRTCSessionOptions) {
     this.role = options.role;
@@ -142,9 +145,11 @@ export class ManualWebRTCSession {
   }
 
   broadcastState(frame: MultiplayerStateFrame) {
-    const message = JSON.stringify(frame);
+    if (this.peers.size === 0) return;
+    const packets = encodeSnapshotPackets(JSON.stringify(frame), frame.tick);
     for (const peer of this.peers.values()) {
-      this.send(peer.stateChannel, message);
+      if (peer.stateChannel?.readyState !== 'open' || peer.stateChannel.bufferedAmount > 64_000) continue;
+      for (const packet of packets) if (!this.send(peer.stateChannel, packet, false)) break;
     }
   }
 
@@ -208,6 +213,7 @@ export class ManualWebRTCSession {
   }
 
   private bindChannel(peer: ManagedPeer, channel: RTCDataChannel, kind: 'input' | 'state' | 'reliable') {
+    channel.binaryType = 'arraybuffer';
     channel.onmessage = (event) => this.receiveMessage(peer.peerId, kind, event.data);
     channel.onopen = () => this.notifyPeers();
     channel.onclose = () => this.notifyPeers();
@@ -215,13 +221,17 @@ export class ManualWebRTCSession {
   }
 
   private receiveMessage(peerId: string, kind: 'input' | 'state' | 'reliable', raw: unknown) {
-    if (typeof raw !== 'string' || raw.length > 64_000) return;
+    if ((kind === 'state' && this.role !== 'guest') || (kind === 'input' && this.role !== 'host')) return;
+    if (kind === 'state' && raw instanceof ArrayBuffer) raw = this.snapshotAssembler.push(raw, Date.now());
+    if (typeof raw !== 'string' || raw.length > (kind === 'state' ? MAX_SNAPSHOT_BYTES : 64_000)) return;
     try {
       const message: unknown = JSON.parse(raw);
       if (!isMultiplayerWireMessage(message)) return;
       if (kind === 'input' && message.type === 'input') {
         this.onInput?.(peerId, clampInputFrame(message));
       } else if (kind === 'state' && message.type === 'state') {
+        if (!Number.isSafeInteger(message.tick) || message.tick <= this.latestStateTick) return;
+        this.latestStateTick = message.tick;
         this.onState?.(message);
       } else if (kind === 'reliable' && message.type === 'event') {
         this.onEvent?.(peerId, message);
@@ -231,10 +241,16 @@ export class ManualWebRTCSession {
     }
   }
 
-  private send(channel: RTCDataChannel | undefined, message: string): boolean {
+  private send(channel: RTCDataChannel | undefined, message: string | ArrayBuffer, checkBackpressure = true): boolean {
     if (channel?.readyState !== 'open') return false;
-    channel.send(message);
-    return true;
+    if (checkBackpressure && channel.label !== 'reliable' && channel.bufferedAmount > 64_000) return false;
+    try {
+      if (typeof message === 'string') channel.send(message);
+      else channel.send(message);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private notifyPeers() {

@@ -8,6 +8,7 @@ import { compressVisualRadius, getProjectileVisualId } from './projectilePresent
 import { EvolutionProfile, getEvolutionProfile } from './evolutions';
 import { getWorldDistrictAt, getWorldObstacles, WORLD_DISTRICTS, WORLD_TRANSIT_LINES } from './world/WorldLayout';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
+import { animateCoopEnemyRig, createCoopEnemyRig } from './rendering/coopEnemyVisuals';
 
 const COLOR_CACHE = new Map<string, THREE.Color>();
 
@@ -1967,6 +1968,11 @@ export class Renderer3D {
         this.enemyMeshes.set(enemy.id, mesh);
       }
 
+      if (mesh.userData.coopRig) {
+        animateCoopEnemyRig(mesh as THREE.Group, enemy, this.camera, now);
+        continue;
+      }
+
       // Position in 3D (x = 2D.x, z = 2D.y, y = elevation)
       const baseHeight = enemy.type === 'titan' ? 36 : (enemy.type === 'phantom' ? 24 : 14);
       const floatBob = enemy.type === 'phantom' ? Math.sin(now * 0.005 + (parseInt(enemy.id, 36) || 0)) * 8 : 0;
@@ -2007,6 +2013,7 @@ export class Renderer3D {
     for (const [id, mesh] of this.enemyMeshes.entries()) {
       if (!activeEnemyIds.has(id)) {
         this.scene.remove(mesh);
+        this.disposeEffectMesh(mesh);
         this.enemyMeshes.delete(id);
       }
     }
@@ -2425,6 +2432,7 @@ export class Renderer3D {
   }
 
   private createEnemyMesh(enemy: Enemy): THREE.Object3D {
+    if (enemy.id.startsWith('coop-enemy-')) return createCoopEnemyRig(enemy);
     const group = new THREE.Group();
     const radius = enemy.radius || 15;
     const color = parseHexColor(enemy.color, 0xff3366);

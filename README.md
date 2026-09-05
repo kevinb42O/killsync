@@ -21,6 +21,16 @@ View your app in AI Studio: https://ai.studio/apps/4f35457b-60aa-4227-a2dc-e6c71
 
 ## Public co-op squads
 
+For local multiplayer testing without a second browser or another player, open
+**Multiplayer**, enter your name, and choose **Solo test**. This runs the same
+co-op simulation without a signaling server or connection-code exchange.
+**Host public squad** can also start with one player; direct hosting offers
+**Start match solo** after creating its connection offer.
+
+See [MULTIPLAYER_AUDIT.md](MULTIPLAYER_AUDIT.md) for the audit, implemented fixes,
+verification results, and prioritized follow-up work. Multiplayer protocol 11
+requires both peers to reload after updating.
+
 The **Co-op squads** menu lists live public lobbies and connects players with a
 single click. The lobby service only carries room metadata and short-lived
 WebRTC offers/answers; combat traffic stays on the peer connection.

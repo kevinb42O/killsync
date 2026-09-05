@@ -6,8 +6,8 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v10 adds spectator handshakes for live matches. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 10;
+/** v11 keeps transport ticks monotonic across run retries. */
+export const MULTIPLAYER_PROTOCOL_VERSION = 11;
 
 export type MultiplayerRole = 'host' | 'guest';
 
@@ -77,16 +77,19 @@ export const isMultiplayerWireMessage = (value: unknown): value is MultiplayerWi
     && (message.type === 'input' || message.type === 'state' || message.type === 'event');
 };
 
+const boundedInteger = (value: number, maximum: number) => Number.isFinite(value) ? Math.max(0, Math.min(maximum, Math.trunc(value))) : 0;
+
 export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputFrame => ({
-  ...frame,
-  movement: Math.max(0, Math.min(15, Math.trunc(frame.movement))),
-  aimAngle: Math.max(0, Math.min(65535, Math.trunc(frame.aimAngle))),
-  aimPitch: Math.max(0, Math.min(65535, Math.trunc(frame.aimPitch))),
+  type: 'input',
+  version: MULTIPLAYER_PROTOCOL_VERSION,
+  movement: boundedInteger(frame.movement, 15),
+  aimAngle: boundedInteger(frame.aimAngle, 65535),
+  aimPitch: boundedInteger(frame.aimPitch, 65535),
   // The simulation clamps this against the real live weapon catalogue. Keep
   // the transport future-proof without letting malformed packets grow unbound.
-  selectedSlot: Math.max(0, Math.min(31, Math.trunc(frame.selectedSlot))),
-  sequence: Math.max(0, Math.trunc(frame.sequence)),
-  clientTime: Math.max(0, Math.trunc(frame.clientTime)),
+  selectedSlot: boundedInteger(frame.selectedSlot, 31),
+  sequence: boundedInteger(frame.sequence, Number.MAX_SAFE_INTEGER),
+  clientTime: boundedInteger(frame.clientTime, Number.MAX_SAFE_INTEGER),
   firing: Boolean(frame.firing),
   reloadPressed: Boolean(frame.reloadPressed),
   aiming: Boolean(frame.aiming),

@@ -3,6 +3,8 @@
  * browser, or transport code so the entire session arc can be tested with a
  * fixed seed.
  */
+import { findClearRunPosition } from './runPlacement';
+
 export type CoopRunPhase = 'insertion' | 'contract' | 'mini_boss' | 'final_boss' | 'exfil' | 'success' | 'failed';
 export type CoopObjectiveKind = 'uplink' | 'elite_hunt';
 export type CoopBossKind = 'neural_overlord' | 'void_architect' | 'singularity';
@@ -19,6 +21,8 @@ export interface CoopObjectiveSnapshot {
   /** For Elite Hunt this points at the tracked enemy; for Uplink it is absent. */
   targetEnemyId?: number;
   completed: boolean;
+  contested?: boolean;
+  occupants?: number;
 }
 
 export interface CoopBossSnapshot {
@@ -55,7 +59,8 @@ export interface CoopRunSnapshot {
   notice: string;
 }
 
-export const COOP_INSERTION_DURATION_MS = 60_000;
+export const COOP_INSERTION_DURATION_MS = 12_000;
+export const COOP_UPLINK_RADIUS = 155;
 const EXFIL_MS = 90_000;
 const EXFIL_HOLD_MS = 12_000;
 
@@ -88,9 +93,9 @@ export class CoopRunDirector {
     if (this.phase !== 'insertion' && this.phase !== 'mini_boss') return;
     const kind = this.contractIndex === 0 ? 'uplink' : 'elite_hunt';
     const offset = this.offset(this.contractIndex + 1, 560);
-    const x = centre.x + offset.x, y = centre.y + offset.y;
+    const { x, y } = findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, COOP_UPLINK_RADIUS);
     this.objective = kind === 'uplink'
-      ? { id: this.nextId++, kind, title: 'SECURE THE UPLINK', description: 'Hold the uplink with your squad.', x, y, progress: 0, required: 100, completed: false }
+      ? { id: this.nextId++, kind, title: 'SECURE THE UPLINK', description: 'DISTRICT UPLINK', x, y, progress: 0, required: 100, completed: false, contested: false, occupants: 0 }
       : { id: this.nextId++, kind, title: 'HUNT THE ELITE', description: 'Destroy the marked Elite Guard.', x, y, progress: 0, required: 1, completed: false };
     this.phase = 'contract';
     this.notice = this.objective.title;
@@ -98,6 +103,19 @@ export class CoopRunDirector {
 
   setEliteTarget(enemyId: number) {
     if (this.phase === 'contract' && this.objective?.kind === 'elite_hunt') this.objective.targetEnemyId = enemyId;
+  }
+
+  trackEliteTarget(enemyId: number, x: number, y: number) {
+    if (this.objective?.targetEnemyId !== enemyId) return;
+    this.objective.x = x; this.objective.y = y;
+  }
+
+  updateUplink(deltaMs: number, occupants: number, contested: boolean) {
+    if (this.objective?.kind !== 'uplink' || this.phase !== 'contract') return false;
+    this.objective.occupants = occupants;
+    this.objective.contested = contested;
+    if (contested || occupants <= 0) return false;
+    return this.addUplinkProgress(Math.max(0, deltaMs) / 300 * (1 + Math.min(1.5, (occupants - 1) * .5)));
   }
 
   addUplinkProgress(amount: number) {
@@ -117,13 +135,15 @@ export class CoopRunDirector {
 
   private completeObjective() {
     if (!this.objective) return;
+    const offset = this.offset(this.contractIndex + 4, 620);
+    const position = findClearRunPosition({ x: this.objective.x + offset.x, y: this.objective.y + offset.y }, 170);
     this.objective.completed = true;
     this.objective = undefined;
     this.phase = 'mini_boss';
     const kind: CoopBossKind = this.contractIndex === 0 ? 'neural_overlord' : 'void_architect';
     this.notice = 'CONTRACT COMPLETE — THREAT INBOUND';
     // Simulation sets final health/position after it scales to the live squad.
-    this.boss = { id: this.nextId++, kind, name: bossName(kind), health: 0, maxHealth: 0, phase: 1, x: 0, y: 0 };
+    this.boss = { id: this.nextId++, kind, name: bossName(kind), health: 0, maxHealth: 0, phase: 1, ...position };
   }
 
   activateBoss(health: number, x: number, y: number) {
@@ -153,7 +173,7 @@ export class CoopRunDirector {
       this.boss = undefined;
       const offset = this.offset(7, 330);
       this.phase = 'exfil';
-      this.exfil = { x: centre.x + offset.x, y: centre.y + offset.y, radius: 100, holdProgressMs: 0, holdRequiredMs: EXFIL_HOLD_MS, remainingMs: EXFIL_MS };
+      this.exfil = { ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 120), radius: 100, holdProgressMs: 0, holdRequiredMs: EXFIL_HOLD_MS, remainingMs: EXFIL_MS };
       this.notice = 'EXFILL BEACON DEPLOYED — MOVE NOW';
       return 'exfil' as const;
     }
@@ -164,7 +184,7 @@ export class CoopRunDirector {
     if (this.phase !== 'mini_boss' || this.contractIndex !== 2) return false;
     const offset = this.offset(6, 720);
     this.phase = 'final_boss';
-    this.boss = { id: this.nextId++, kind: 'singularity', name: bossName('singularity'), health: 0, maxHealth: 0, phase: 1, x: centre.x + offset.x, y: centre.y + offset.y };
+    this.boss = { id: this.nextId++, kind: 'singularity', name: bossName('singularity'), health: 0, maxHealth: 0, phase: 1, ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 170) };
     this.notice = 'FINAL BREACH — THE SINGULARITY ARRIVES';
     return true;
   }
