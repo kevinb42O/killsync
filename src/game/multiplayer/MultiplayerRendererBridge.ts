@@ -266,16 +266,17 @@ export class MultiplayerRendererBridge {
       player.weapons[0] = this.createSelectedWeapon(selectedWeaponId, local.selectedWeaponLevel);
       player.weapons.length = 1;
     }
-    // When spectating we keep viewMode FIRST_PERSON so that Renderer3D
-    // renders the camera without the old low-detail thirdPersonPlayerGroup.
-    // The spectated player is instead rendered by their CoopOperatorRig
-    // (see syncRemotePlayers below). We drive renderer.yaw from the network
-    // angle so the chase-behind rig faces the correct direction.
+    // When spectating we want the third-person chase camera (to orbit around
+    // the spectated player) but NOT the old low-poly thirdPersonPlayerGroup.
+    // presentationSpectating hides that box model while the spectated player's
+    // rich CoopOperatorRig (rendered by syncRemotePlayers) takes its place.
+    // We also drive renderer.yaw from the network angle so the camera faces
+    // the direction the spectated player is actually moving/looking.
+    this.renderer.presentationSpectating = isSpectating;
     if (isSpectating) {
-      // Convert game angle (atan2 XY) → Three.js yaw so camera & rig align.
       this.renderer.yaw = Math.atan2(-Math.cos(local.angle), -Math.sin(local.angle));
     }
-    this.renderState.viewMode = 'FIRST_PERSON';
+    this.renderState.viewMode = isSpectating ? 'THIRD_PERSON' : 'FIRST_PERSON';
     this.renderState.gameTime = snapshot.elapsedMs;
     this.syncRenderEnemies(snapshot);
     this.syncRenderProjectiles(snapshot);

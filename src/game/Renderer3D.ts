@@ -72,6 +72,12 @@ export class Renderer3D {
   presentationScoped: boolean = false;
   /** 0–1 host-derived reload progress for the visible legacy plasma handgun. */
   presentationHandgunReloadProgress: number = 0;
+  /**
+   * When true (dead-player spectating), the THIRD_PERSON chase camera runs
+   * but thirdPersonPlayerGroup is hidden — the spectated player's CoopOperatorRig
+   * is already in the scene and serves as the visible avatar instead.
+   */
+  presentationSpectating: boolean = false;
 
   // Viewmodel Sway & Inertia
   swayX: number = 0;
@@ -1930,7 +1936,9 @@ export class Renderer3D {
       this.thirdPersonPlayerGroup.visible = false;
     } else if (viewMode === 'THIRD_PERSON') {
       this.fpsWeaponGroup.visible = false;
-      this.thirdPersonPlayerGroup.visible = true;
+      // Hide the old box-mesh self-avatar when spectating — the spectated
+      // player's CoopOperatorRig is already in the scene and looks far better.
+      this.thirdPersonPlayerGroup.visible = !this.presentationSpectating;
 
       // Third Person High FOV (92° standard, 108° dash)
       const targetFov = engine.isDashing ? 94 : (this.presentationSprinting ? 86 : 78);
