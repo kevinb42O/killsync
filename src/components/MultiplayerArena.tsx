@@ -1378,18 +1378,231 @@ function drawFallbackEnemy(ctx: CanvasRenderingContext2D, point: { x: number; y:
 }
 
 function drawProjectile(ctx: CanvasRenderingContext2D, point: { x: number; y: number }, projectile: CoopSnapshot['projectiles'][number], scale: number) {
-  const radius = Math.max(4, projectile.radius * scale);
   const weapon = COOP_WEAPON_DETAILS[projectile.weaponId];
+  const color = weapon.color;
   ctx.save();
-  ctx.strokeStyle = weapon.color;
-  ctx.fillStyle = weapon.color;
-  ctx.shadowColor = weapon.color;
-  ctx.shadowBlur = 14;
   ctx.translate(point.x, point.y);
   ctx.rotate(projectile.angle);
-  ctx.fillRect(-radius * 1.5, -radius / 2, radius * 3, radius);
-  ctx.globalAlpha = 0.45;
-  ctx.fillRect(-radius * 5, -radius / 5, radius * 4, radius * .4);
+
+  switch (projectile.weaponId) {
+    case 'plasma_gun': {
+      // Glowing cyan plasma orb with a tight energy streak behind it
+      const r = Math.max(4.5, projectile.radius * scale);
+      // Streak / tail
+      const tail = ctx.createLinearGradient(-r * 6, 0, 0, 0);
+      tail.addColorStop(0, 'rgba(103,232,249,0)');
+      tail.addColorStop(0.6, 'rgba(103,232,249,0.28)');
+      tail.addColorStop(1, 'rgba(180,245,255,0.72)');
+      ctx.fillStyle = tail;
+      ctx.beginPath();
+      ctx.moveTo(-r * 6, -r * 0.35);
+      ctx.lineTo(0, -r * 0.55);
+      ctx.lineTo(0, r * 0.55);
+      ctx.lineTo(-r * 6, r * 0.35);
+      ctx.fill();
+      // Outer glow orb
+      const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.2);
+      outerGlow.addColorStop(0, 'rgba(180,245,255,0.55)');
+      outerGlow.addColorStop(0.5, 'rgba(103,232,249,0.30)');
+      outerGlow.addColorStop(1, 'rgba(103,232,249,0)');
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = outerGlow;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      // Core orb
+      const core = ctx.createRadialGradient(-r * 0.25, -r * 0.25, 0, 0, 0, r);
+      core.addColorStop(0, '#ffffff');
+      core.addColorStop(0.35, '#b4f5ff');
+      core.addColorStop(1, '#67e8f9');
+      ctx.shadowBlur = 24;
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'assault_rifle': {
+      // Slim elongated tracer with a blazing white-hot core
+      const r = Math.max(3, projectile.radius * scale);
+      // Long outer glow trail
+      const outerTrail = ctx.createLinearGradient(-r * 9, 0, r * 2.5, 0);
+      outerTrail.addColorStop(0, 'rgba(52,211,153,0)');
+      outerTrail.addColorStop(0.55, 'rgba(52,211,153,0.18)');
+      outerTrail.addColorStop(1, 'rgba(167,243,208,0.65)');
+      ctx.fillStyle = outerTrail;
+      ctx.beginPath();
+      ctx.ellipse(-r * 3.5, 0, r * 5.5, r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Bright needle body
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      const needle = ctx.createLinearGradient(-r * 5, 0, r * 2.5, 0);
+      needle.addColorStop(0, 'rgba(52,211,153,0)');
+      needle.addColorStop(0.4, '#34d399');
+      needle.addColorStop(0.88, '#a7f3d0');
+      needle.addColorStop(1, '#ffffff');
+      ctx.fillStyle = needle;
+      ctx.beginPath();
+      ctx.moveTo(-r * 5, -r * 0.32);
+      ctx.lineTo(r * 2.5, -r * 0.18);
+      ctx.lineTo(r * 2.5, r * 0.18);
+      ctx.lineTo(-r * 5, r * 0.32);
+      ctx.fill();
+      // Hot-white core line
+      ctx.shadowBlur = 20;
+      ctx.strokeStyle = '#e0fff5';
+      ctx.lineWidth = Math.max(1, r * 0.28);
+      ctx.beginPath();
+      ctx.moveTo(-r * 2, 0);
+      ctx.lineTo(r * 2.5, 0);
+      ctx.stroke();
+      break;
+    }
+    case 'combat_shotgun': {
+      // Wide smoldering pellet with a short smoky orange burst
+      const r = Math.max(5, projectile.radius * scale * 1.6);
+      // Smoke smear behind
+      const smoke = ctx.createLinearGradient(-r * 4, 0, 0, 0);
+      smoke.addColorStop(0, 'rgba(251,146,60,0)');
+      smoke.addColorStop(0.5, 'rgba(251,146,60,0.14)');
+      smoke.addColorStop(1, 'rgba(253,186,116,0.45)');
+      ctx.fillStyle = smoke;
+      ctx.beginPath();
+      ctx.ellipse(-r * 2, 0, r * 2, r * 0.9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Outer glow ring
+      const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.9);
+      glow.addColorStop(0, 'rgba(253,186,116,0.5)');
+      glow.addColorStop(0.6, 'rgba(251,146,60,0.22)');
+      glow.addColorStop(1, 'rgba(251,146,60,0)');
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.9, 0, Math.PI * 2);
+      ctx.fill();
+      // Pellet core — squashed circle (wide pellet shape)
+      const pellet = ctx.createRadialGradient(-r * 0.2, -r * 0.2, 0, 0, 0, r);
+      pellet.addColorStop(0, '#fff7ed');
+      pellet.addColorStop(0.3, '#fed7aa');
+      pellet.addColorStop(1, '#fb923c');
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = pellet;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * 0.75, 0, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'sniper_rifle': {
+      // Long needle with blinding bright core, extended ghostly light trail
+      const r = Math.max(3, projectile.radius * scale);
+      // Very long ghost trail
+      const ghostTrail = ctx.createLinearGradient(-r * 18, 0, 0, 0);
+      ghostTrail.addColorStop(0, 'rgba(196,181,253,0)');
+      ghostTrail.addColorStop(0.6, 'rgba(196,181,253,0.12)');
+      ghostTrail.addColorStop(1, 'rgba(221,214,254,0.55)');
+      ctx.fillStyle = ghostTrail;
+      ctx.beginPath();
+      ctx.moveTo(-r * 18, -r * 0.22);
+      ctx.lineTo(r * 3.5, -r * 0.45);
+      ctx.lineTo(r * 3.5, r * 0.45);
+      ctx.lineTo(-r * 18, r * 0.22);
+      ctx.fill();
+      // Mid glow
+      const midGlow = ctx.createLinearGradient(-r * 7, 0, r * 3.5, 0);
+      midGlow.addColorStop(0, 'rgba(196,181,253,0)');
+      midGlow.addColorStop(0.3, 'rgba(196,181,253,0.35)');
+      midGlow.addColorStop(1, 'rgba(233,213,255,0.8)');
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 22;
+      ctx.fillStyle = midGlow;
+      ctx.beginPath();
+      ctx.moveTo(-r * 7, -r * 0.35);
+      ctx.lineTo(r * 3.5, -r * 0.22);
+      ctx.lineTo(r * 3.5, r * 0.22);
+      ctx.lineTo(-r * 7, r * 0.35);
+      ctx.fill();
+      // White-hot penetrator tip
+      ctx.shadowBlur = 30;
+      ctx.shadowColor = '#ffffff';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(1.5, r * 0.38);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-r * 2, 0);
+      ctx.lineTo(r * 3.5, 0);
+      ctx.stroke();
+      // Violet glow tip dot
+      const tip = ctx.createRadialGradient(r * 2.5, 0, 0, r * 2.5, 0, r * 1.2);
+      tip.addColorStop(0, '#ffffff');
+      tip.addColorStop(0.4, '#ede9fe');
+      tip.addColorStop(1, 'rgba(196,181,253,0)');
+      ctx.fillStyle = tip;
+      ctx.beginPath();
+      ctx.arc(r * 2.5, 0, r * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'smg': {
+      // Tiny rapid-fire dart with a fizzing neon-lime tail
+      const r = Math.max(3, projectile.radius * scale);
+      // Sparky fizz tail — multiple offset streaks for rapid-fire feel
+      for (let i = 0; i < 3; i++) {
+        const offset = (i - 1) * r * 0.38;
+        const sparkLen = r * (3.5 + i * 1.1);
+        const spark = ctx.createLinearGradient(-sparkLen, offset, 0, offset);
+        spark.addColorStop(0, 'rgba(163,230,53,0)');
+        spark.addColorStop(0.7, 'rgba(163,230,53,0.22)');
+        spark.addColorStop(1, 'rgba(217,249,157,0.6)');
+        ctx.fillStyle = spark;
+        ctx.fillRect(-sparkLen, offset - r * 0.18, sparkLen, r * 0.36);
+      }
+      // Outer glow
+      const smgGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2);
+      smgGlow.addColorStop(0, 'rgba(217,249,157,0.48)');
+      smgGlow.addColorStop(0.5, 'rgba(163,230,53,0.22)');
+      smgGlow.addColorStop(1, 'rgba(163,230,53,0)');
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = smgGlow;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Compact dart body
+      ctx.shadowBlur = 16;
+      const dart = ctx.createLinearGradient(-r * 2.5, 0, r * 1.5, 0);
+      dart.addColorStop(0, '#84cc16');
+      dart.addColorStop(0.6, '#bef264');
+      dart.addColorStop(1, '#f7fee7');
+      ctx.fillStyle = dart;
+      ctx.beginPath();
+      ctx.moveTo(-r * 2.5, -r * 0.45);
+      ctx.lineTo(r * 1.5, -r * 0.28);
+      ctx.lineTo(r * 1.5, r * 0.28);
+      ctx.lineTo(-r * 2.5, r * 0.45);
+      ctx.fill();
+      break;
+    }
+    default: {
+      // Fallback: simple glowing pill for any future weapon
+      const r = Math.max(4, projectile.radius * scale);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 2, r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const trail = ctx.createLinearGradient(-r * 5, 0, -r, 0);
+      trail.addColorStop(0, `${color}00`);
+      trail.addColorStop(1, `${color}66`);
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = trail;
+      ctx.fillRect(-r * 5, -r * 0.22, r * 4, r * 0.44);
+    }
+  }
+
   ctx.restore();
 }
 
