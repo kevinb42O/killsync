@@ -4,6 +4,10 @@
 
 # Run and deploy your AI Studio app
 
+**Current game version:** v0.1.0
+
+**Multiplayer protocol:** 23 (both players must run the same version)
+
 This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/4f35457b-60aa-4227-a2dc-e6c714a217c7
@@ -28,7 +32,7 @@ co-op simulation without a signaling server or connection-code exchange.
 **Start match solo** after creating its connection offer.
 
 See [MULTIPLAYER_AUDIT.md](MULTIPLAYER_AUDIT.md) for the audit, implemented fixes,
-verification results, and prioritized follow-up work. Multiplayer protocol 11
+verification results, and prioritized follow-up work. Multiplayer protocol 23
 requires both peers to reload after updating.
 
 The **Co-op squads** menu lists live public lobbies and connects players with a

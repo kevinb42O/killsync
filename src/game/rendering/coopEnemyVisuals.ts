@@ -39,6 +39,140 @@ const GEOMETRY = {
 const sharedDark = new THREE.MeshStandardMaterial({ color: '#0b1218', metalness: .72, roughness: .48 });
 sharedDark.userData.coopEnemyShared = true;
 const deathTransform = new THREE.Object3D();
+const BATCHED_TYPES = ['basic', 'fast', 'ranged', 'tank', 'phantom'] as const;
+type BatchedEnemyType = typeof BATCHED_TYPES[number];
+const BATCH_CAPACITY = 90 * 24;
+type EnemyBatch = { mesh: THREE.InstancedMesh; count: number };
+
+/**
+ * Submits the complete opaque portion of ordinary co-op rigs as instanced
+ * component batches. Their original transparent health/spawn/death effects stay
+ * attached to the per-enemy rig, and combat-critical material states can opt out
+ * for a frame without reconstructing any resources.
+ */
+export class CoopEnemyBatchRenderer {
+  private readonly batches = new Map<string, EnemyBatch>();
+  private readonly batchedIds = new Set<string>();
+  private readonly color = new THREE.Color();
+  private activeInstances = 0;
+
+  constructor(private readonly scene: THREE.Scene) {}
+
+  beginFrame() {
+    this.batchedIds.clear();
+    for (const batch of this.batches.values()) batch.count = 0;
+  }
+
+  /** Restore opaque rig nodes before the normal animation function runs. */
+  prepareRig(root: THREE.Object3D) {
+    root.traverse(node => {
+      if (node instanceof THREE.Mesh && isOpaqueBatchMaterial(node.material)) node.visible = true;
+    });
+  }
+
+  add(enemy: Enemy, root: THREE.Object3D) {
+    if (!enemy.id.startsWith('coop-enemy-') || !isBatchedType(enemy.type)) return false;
+    const type = enemy.type;
+    root.updateMatrixWorld(true);
+    root.traverse(node => {
+      if (!(node instanceof THREE.Mesh) || !isOpaqueBatchMaterial(node.material)) return;
+      const effectivelyVisible = isVisibleThrough(node, root);
+      if (effectivelyVisible) this.addMesh(type, node, node.material);
+      // The corresponding instance now owns the opaque draw. Transparent
+      // children remain on the authored rig for exact per-enemy feedback.
+      node.visible = false;
+    });
+    this.batchedIds.add(enemy.id);
+    return true;
+  }
+
+  endFrame(): ReadonlySet<string> {
+    for (const batch of this.batches.values()) {
+      batch.mesh.count = batch.count;
+      batch.mesh.visible = batch.count > 0;
+      if (batch.count > 0) {
+        batch.mesh.instanceMatrix.needsUpdate = true;
+        if (batch.mesh.instanceColor) batch.mesh.instanceColor.needsUpdate = true;
+      }
+    }
+    this.activeInstances = this.batchedIds.size;
+    return this.batchedIds;
+  }
+
+  get activeEnemyCount() { return this.activeInstances; }
+  get activeDrawBatchCount() {
+    let count = 0;
+    for (const batch of this.batches.values()) if (batch.count > 0) count++;
+    return count;
+  }
+
+  dispose() {
+    for (const batch of this.batches.values()) {
+      this.scene.remove(batch.mesh); (batch.mesh.material as THREE.Material).dispose();
+    }
+    this.batches.clear(); this.batchedIds.clear();
+  }
+
+  private addMesh(type: BatchedEnemyType, source: THREE.Mesh, material: THREE.Material & { color?: THREE.Color }) {
+    const role = material.userData.coopEnemyShared ? 'shared' : material.type;
+    // Keep visually distinct material variants in separate batches. The current
+    // rigs use type-stable palettes, but including these authored properties
+    // prevents a future skin or modifier from inheriting the first enemy's
+    // emissive/metallic response merely because it shares geometry.
+    const key = `${type}:${source.geometry.uuid}:${role}:${materialSignature(material)}`;
+    let batch = this.batches.get(key);
+    if (!batch) {
+      const batchMaterial = material.clone() as THREE.Material & { color?: THREE.Color };
+      batchMaterial.color?.set(0xffffff);
+      const mesh = new THREE.InstancedMesh(source.geometry, batchMaterial, BATCH_CAPACITY);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.frustumCulled = false; mesh.visible = false; mesh.count = 0;
+      this.scene.add(mesh);
+      batch = { mesh, count: 0 };
+      this.batches.set(key, batch);
+    }
+    if (batch.count >= BATCH_CAPACITY) return;
+    batch.mesh.setMatrixAt(batch.count, source.matrixWorld);
+    batch.mesh.setColorAt(batch.count, this.color.copy(material.color || WHITE));
+    batch.count++;
+  }
+}
+
+const WHITE = new THREE.Color(0xffffff);
+
+function materialSignature(material: THREE.Material & { color?: THREE.Color }) {
+  const standard = material as THREE.Material & {
+    emissive?: THREE.Color;
+    emissiveIntensity?: number;
+    metalness?: number;
+    roughness?: number;
+  };
+  return [
+    material.color?.getHexString() ?? '-',
+    standard.emissive?.getHexString() ?? '-',
+    standard.emissiveIntensity ?? '-',
+    standard.metalness ?? '-',
+    standard.roughness ?? '-',
+  ].join(':');
+}
+
+function isOpaqueBatchMaterial(material: THREE.Material | THREE.Material[]): material is THREE.Material & { color?: THREE.Color } {
+  return !Array.isArray(material) && !material.transparent;
+}
+
+function isVisibleThrough(node: THREE.Object3D, root: THREE.Object3D) {
+  let current: THREE.Object3D | null = node;
+  while (current) {
+    if (!current.visible) return false;
+    if (current === root) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function isBatchedType(type: Enemy['type']): type is BatchedEnemyType {
+  return (BATCHED_TYPES as readonly Enemy['type'][]).includes(type);
+}
 
 export function createCoopEnemyRig(enemy: Enemy): THREE.Group {
   const root = new THREE.Group(), hull = new THREE.Group(), details = new THREE.Group();
@@ -160,10 +294,15 @@ export function animateCoopEnemyRig(root: THREE.Group, enemy: Enemy, camera: THR
   });
   rig.rotor.rotation.z = phase * (enemy.type === 'phantom' ? 1.2 : .55);
   rig.rotor.scale.setScalar(1 + charging * .38);
-  rig.armor.emissive.set(enemy.hitFlash && enemy.hitFlash > 0 ? '#ffffff' : enemy.color);
-  rig.armor.emissiveIntensity = enemy.hitFlash && enemy.hitFlash > 0 ? 2.2 : .11 + charging * .8 + (death > 0 ? (1 - death) * 1.7 : 0);
-  rig.glow.color.set(death > 0 ? '#ffffff' : charging > 0 ? '#fff7d6' : enemy.color);
-  rig.core.scale.setScalar(1 + Math.sin(phase * 2.4) * .09 + charging * .42 + (death > 0 ? Math.sin(death * Math.PI) * 1.15 : 0));
+  const hit = Boolean(enemy.hitFlash && enemy.hitFlash > 0);
+  const bossHit = hit && enemy.type === 'titan';
+  // Large bosses retain their dark silhouette on impact. Their existing crown,
+  // rotor, trim, and core carry the confirmation pulse instead of bleaching the
+  // entire armor material white behind the player's reticle.
+  rig.armor.emissive.set(hit && !bossHit ? '#ffffff' : enemy.color);
+  rig.armor.emissiveIntensity = hit && !bossHit ? 2.2 : bossHit ? .72 : .11 + charging * .8 + (death > 0 ? (1 - death) * 1.7 : 0);
+  rig.glow.color.set(death > 0 ? '#ffffff' : bossHit ? '#ffe7a3' : hit ? '#ffffff' : charging > 0 ? '#fff7d6' : enemy.color);
+  rig.core.scale.setScalar(1 + Math.sin(phase * 2.4) * .09 + charging * .42 + (bossHit ? .42 : 0) + (death > 0 ? Math.sin(death * Math.PI) * 1.15 : 0));
   const distanceToCamera = camera.position.distanceTo(root.position);
   rig.details.visible = death < .78 && (distanceToCamera < 1_200 || enemy.type === 'elite' || enemy.type === 'titan');
   rig.health.visible = death <= 0 && enemy.health > 0 && enemy.health < enemy.maxHealth && (distanceToCamera < 1_100 || enemy.type === 'elite' || enemy.type === 'titan');

@@ -4,16 +4,18 @@
  * fixed seed.
  */
 import { findClearRunPosition } from './runPlacement';
+import type { RunPlacementExclusion } from './runPlacement';
+import type { CoopTextKey } from './i18n';
 
-export type CoopRunPhase = 'insertion' | 'contract' | 'mini_boss' | 'final_boss' | 'exfil' | 'success' | 'failed';
+export type CoopRunPhase = 'insertion' | 'contract' | 'mini_boss' | 'checkpoint' | 'final_boss' | 'exfil' | 'success' | 'failed';
 export type CoopObjectiveKind = 'uplink' | 'elite_hunt';
 export type CoopBossKind = 'neural_overlord' | 'void_architect' | 'singularity';
 
 export interface CoopObjectiveSnapshot {
   id: number;
   kind: CoopObjectiveKind;
-  title: string;
-  description: string;
+  titleKey: CoopTextKey;
+  descriptionKey: CoopTextKey;
   x: number;
   y: number;
   progress: number;
@@ -28,7 +30,7 @@ export interface CoopObjectiveSnapshot {
 export interface CoopBossSnapshot {
   id: number;
   kind: CoopBossKind;
-  name: string;
+  nameKey: CoopTextKey;
   health: number;
   maxHealth: number;
   phase: number;
@@ -49,14 +51,15 @@ export interface CoopRunSnapshot {
   phase: CoopRunPhase;
   elapsedMs: number;
   contractIndex: number;
+  bossesDefeated: number;
   objective?: CoopObjectiveSnapshot;
   boss?: CoopBossSnapshot;
   exfil?: CoopExfilSnapshot;
   /** Safe staging window before the normal encounter director is released. */
   insertionRemainingMs?: number;
   insertionDurationMs?: number;
-  /** Human-readable system text, rendered as a transient HUD objective. */
-  notice: string;
+  /** Semantic text key localized independently by each client. */
+  noticeKey: CoopTextKey;
 }
 
 export const COOP_INSERTION_DURATION_MS = 12_000;
@@ -68,6 +71,8 @@ export const COOP_BOSS_BASE_HEALTH: Readonly<Record<CoopBossKind, number>> = Obj
 });
 const EXFIL_MS = 90_000;
 const EXFIL_HOLD_MS = 12_000;
+export const COOP_CHECKPOINT_DECISION_MS = 20_000;
+export const COOP_CHECKPOINT_HOLD_MS = 5_000;
 
 /** Total boss durability grows, while durability per operator falls modestly.
  * This rewards adding teammates without making a four-player focus-fire squad
@@ -87,13 +92,14 @@ export function coopObjectiveEliteHealth(baseHealth: number, playerCount: number
 export class CoopRunDirector {
   private phase: CoopRunPhase = 'insertion';
   private contractIndex = 0;
+  private bossesDefeated = 0;
   private objective?: CoopObjectiveSnapshot;
   private boss?: CoopBossSnapshot;
   private exfil?: CoopExfilSnapshot;
-  private notice = 'DROP IN — SECURE THE DISTRICT';
+  private noticeKey: CoopTextKey = 'objective.dropIn';
   private nextId = 1;
 
-  constructor(private readonly seed: number) {}
+  constructor(private readonly seed: number, private readonly stationExclusions: readonly RunPlacementExclusion[] = []) {}
 
   get currentPhase() { return this.phase; }
   get currentObjective() { return this.objective; }
@@ -111,12 +117,12 @@ export class CoopRunDirector {
     if (this.phase !== 'insertion' && this.phase !== 'mini_boss') return;
     const kind = this.contractIndex === 0 ? 'uplink' : 'elite_hunt';
     const offset = this.offset(this.contractIndex + 1, 560);
-    const { x, y } = findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, COOP_UPLINK_RADIUS);
+    const { x, y } = findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, COOP_UPLINK_RADIUS, this.stationExclusions);
     this.objective = kind === 'uplink'
-      ? { id: this.nextId++, kind, title: 'SECURE THE UPLINK', description: 'DISTRICT UPLINK', x, y, progress: 0, required: 100, completed: false, contested: false, occupants: 0 }
-      : { id: this.nextId++, kind, title: 'HUNT THE ELITE', description: 'Destroy the marked Elite Guard.', x, y, progress: 0, required: 1, completed: false };
+      ? { id: this.nextId++, kind, titleKey: 'objective.secureUplink', descriptionKey: 'objective.districtUplink', x, y, progress: 0, required: 100, completed: false, contested: false, occupants: 0 }
+      : { id: this.nextId++, kind, titleKey: 'objective.huntElite', descriptionKey: 'objective.huntEliteDescription', x, y, progress: 0, required: 1, completed: false };
     this.phase = 'contract';
-    this.notice = this.objective.title;
+    this.noticeKey = this.objective.titleKey;
   }
 
   setEliteTarget(enemyId: number) {
@@ -154,20 +160,20 @@ export class CoopRunDirector {
   private completeObjective() {
     if (!this.objective) return;
     const offset = this.offset(this.contractIndex + 4, 620);
-    const position = findClearRunPosition({ x: this.objective.x + offset.x, y: this.objective.y + offset.y }, 170);
+    const position = findClearRunPosition({ x: this.objective.x + offset.x, y: this.objective.y + offset.y }, 170, this.stationExclusions);
     this.objective.completed = true;
     this.objective = undefined;
     this.phase = 'mini_boss';
     const kind: CoopBossKind = this.contractIndex === 0 ? 'neural_overlord' : 'void_architect';
-    this.notice = 'CONTRACT COMPLETE — THREAT INBOUND';
+    this.noticeKey = 'objective.contractComplete';
     // Simulation sets final health/position after it scales to the live squad.
-    this.boss = { id: this.nextId++, kind, name: bossName(kind), health: 0, maxHealth: 0, phase: 1, ...position };
+    this.boss = { id: this.nextId++, kind, nameKey: bossNameKey(kind), health: 0, maxHealth: 0, phase: 1, ...position };
   }
 
   activateBoss(health: number, x: number, y: number) {
     if (!this.boss) return;
     this.boss.health = health; this.boss.maxHealth = health; this.boss.x = x; this.boss.y = y;
-    this.notice = `${this.boss.name} DETECTED`;
+    this.noticeKey = 'objective.bossDetected';
   }
 
   updateBoss(health: number, x: number, y: number) {
@@ -180,20 +186,43 @@ export class CoopRunDirector {
   completeBoss(centre: { x: number; y: number }) {
     if (this.phase === 'mini_boss') {
       this.boss = undefined;
+      this.bossesDefeated++;
       this.contractIndex++;
       if (this.contractIndex <= 2) {
-        this.notice = 'BUY STATION ONLINE — PREPARE FOR NEXT CONTRACT';
-        return 'station' as const;
+        const offset = this.offset(this.contractIndex + 9, 260);
+        this.phase = 'checkpoint';
+        this.exfil = { ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 120, this.stationExclusions), radius: 100, holdProgressMs: 0, holdRequiredMs: COOP_CHECKPOINT_HOLD_MS, remainingMs: COOP_CHECKPOINT_DECISION_MS };
+        this.noticeKey = 'objective.exfilMove';
+        return 'checkpoint' as const;
       }
       return undefined;
     }
     if (this.phase === 'final_boss') {
       this.boss = undefined;
+      this.bossesDefeated++;
       const offset = this.offset(7, 330);
       this.phase = 'exfil';
-      this.exfil = { ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 120), radius: 100, holdProgressMs: 0, holdRequiredMs: EXFIL_HOLD_MS, remainingMs: EXFIL_MS };
-      this.notice = 'EXFILL BEACON DEPLOYED — MOVE NOW';
+      this.exfil = { ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 120, this.stationExclusions), radius: 100, holdProgressMs: 0, holdRequiredMs: EXFIL_HOLD_MS, remainingMs: EXFIL_MS };
+      this.noticeKey = 'objective.exfilMove';
       return 'exfil' as const;
+    }
+    return undefined;
+  }
+
+  /** A unanimous early-extraction vote expressed spatially: every living
+   * operator must hold the beacon. If the window expires, the squad breaches
+   * deeper and the authored campaign continues unchanged. */
+  updateCheckpoint(deltaMs: number, livingInZone: number, livingPlayers: number) {
+    if (this.phase !== 'checkpoint' || !this.exfil) return undefined;
+    this.exfil.remainingMs = Math.max(0, this.exfil.remainingMs - Math.max(0, deltaMs));
+    if (livingPlayers > 0 && livingInZone === livingPlayers) this.exfil.holdProgressMs = Math.min(this.exfil.holdRequiredMs, this.exfil.holdProgressMs + Math.max(0, deltaMs));
+    else this.exfil.holdProgressMs = Math.max(0, this.exfil.holdProgressMs - Math.max(0, deltaMs) * .5);
+    if (this.exfil.holdProgressMs >= this.exfil.holdRequiredMs) {
+      this.phase = 'success'; this.noticeKey = 'objective.extracted'; return 'success' as const;
+    }
+    if (livingPlayers <= 0) { this.phase = 'failed'; this.noticeKey = 'objective.squadWiped'; return 'failed' as const; }
+    if (this.exfil.remainingMs <= 0) {
+      this.phase = 'mini_boss'; this.exfil = undefined; this.noticeKey = 'objective.stationPrepare'; return 'continue' as const;
     }
     return undefined;
   }
@@ -202,8 +231,8 @@ export class CoopRunDirector {
     if (this.phase !== 'mini_boss' || this.contractIndex !== 2) return false;
     const offset = this.offset(6, 720);
     this.phase = 'final_boss';
-    this.boss = { id: this.nextId++, kind: 'singularity', name: bossName('singularity'), health: 0, maxHealth: 0, phase: 1, ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 170) };
-    this.notice = 'FINAL BREACH — THE SINGULARITY ARRIVES';
+    this.boss = { id: this.nextId++, kind: 'singularity', nameKey: bossNameKey('singularity'), health: 0, maxHealth: 0, phase: 1, ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 170, this.stationExclusions) };
+    this.noticeKey = 'objective.finalBreach';
     return true;
   }
 
@@ -218,22 +247,22 @@ export class CoopRunDirector {
       this.exfil.holdProgressMs = Math.max(0, this.exfil.holdProgressMs - deltaMs * .25);
     }
     if (this.exfil.holdProgressMs >= this.exfil.holdRequiredMs) {
-      this.phase = 'success'; this.notice = 'SQUAD EXTRACTED'; return 'success' as const;
+      this.phase = 'success'; this.noticeKey = 'objective.extracted'; return 'success' as const;
     }
     if (this.exfil.remainingMs <= 0 || livingPlayers <= 0) {
-      this.phase = 'failed'; this.notice = 'EXFILL WINDOW LOST'; return 'failed' as const;
+      this.phase = 'failed'; this.noticeKey = 'objective.exfilLost'; return 'failed' as const;
     }
     return undefined;
   }
 
-  fail() { if (this.phase !== 'success') { this.phase = 'failed'; this.notice = 'SQUAD WIPED'; } }
+  fail() { if (this.phase !== 'success') { this.phase = 'failed'; this.noticeKey = 'objective.squadWiped'; } }
 
   snapshot(elapsedMs: number): CoopRunSnapshot {
     return {
-      phase: this.phase, elapsedMs, contractIndex: this.contractIndex,
+      phase: this.phase, elapsedMs, contractIndex: this.contractIndex, bossesDefeated: this.bossesDefeated,
       objective: this.objective && { ...this.objective },
       boss: this.boss && { ...this.boss },
-      exfil: this.exfil && { ...this.exfil }, notice: this.notice,
+      exfil: this.exfil && { ...this.exfil }, noticeKey: this.noticeKey,
       insertionRemainingMs: this.phase === 'insertion' ? Math.max(0, COOP_INSERTION_DURATION_MS - elapsedMs) : undefined,
       insertionDurationMs: this.phase === 'insertion' ? COOP_INSERTION_DURATION_MS : undefined,
     };
@@ -245,6 +274,6 @@ export class CoopRunDirector {
   }
 }
 
-function bossName(kind: CoopBossKind) {
-  return kind === 'neural_overlord' ? 'NEURAL OVERLORD' : kind === 'void_architect' ? 'VOID ARCHITECT' : 'THE SINGULARITY';
+function bossNameKey(kind: CoopBossKind): CoopTextKey {
+  return `boss.${kind}` as CoopTextKey;
 }

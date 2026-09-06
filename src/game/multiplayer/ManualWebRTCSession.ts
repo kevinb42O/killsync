@@ -65,7 +65,7 @@ export class ManualWebRTCSession {
   private onEvent?: ManualWebRTCSessionOptions['onEvent'];
   private onError?: ManualWebRTCSessionOptions['onError'];
   private latestStateTick = -1;
-  private readonly snapshotAssembler = new SnapshotAssembler();
+  private readonly snapshotAssemblers = new Map<string, SnapshotAssembler>();
 
   constructor(options: ManualWebRTCSessionOptions) {
     this.role = options.role;
@@ -106,7 +106,10 @@ export class ManualWebRTCSession {
     const peerId = createId('peer');
     const peer = this.createPeer(peerId);
     peer.inputChannel = peer.connection.createDataChannel('input', { ordered: false, maxRetransmits: 0 });
-    peer.stateChannel = peer.connection.createDataChannel('state', { ordered: false, maxRetransmits: 0 });
+    // Snapshots may be processed out of order by tick, but every fragment of a
+    // chosen snapshot must arrive. Unreliable fragmentation made the entire
+    // frame unusable when any one packet was lost.
+    peer.stateChannel = peer.connection.createDataChannel('state', { ordered: false });
     peer.reliableChannel = peer.connection.createDataChannel('reliable', { ordered: true });
     this.bindChannel(peer, peer.inputChannel, 'input');
     this.bindChannel(peer, peer.stateChannel, 'state');
@@ -187,6 +190,7 @@ export class ManualWebRTCSession {
       peer.connection.close();
     }
     this.peers.clear();
+    this.snapshotAssemblers.clear();
     this.notifyPeers();
   }
 
@@ -196,6 +200,7 @@ export class ManualWebRTCSession {
       existing.connection.close();
       this.peers.delete(peerId);
     }
+    this.snapshotAssemblers.delete(peerId);
     const connection = new RTCPeerConnection({ iceServers: this.iceServers });
     const peer: ManagedPeer = { peerId, connection, estimatedOneWayMs: 0, latencySampledAt: 0 };
     this.peers.set(peerId, peer);
@@ -238,7 +243,14 @@ export class ManualWebRTCSession {
 
   private receiveMessage(peerId: string, kind: 'input' | 'state' | 'reliable', raw: unknown) {
     if ((kind === 'state' && this.role !== 'guest') || (kind === 'input' && this.role !== 'host')) return;
-    if (kind === 'state' && raw instanceof ArrayBuffer) raw = this.snapshotAssembler.push(raw, Date.now());
+    if (kind === 'state' && raw instanceof ArrayBuffer) {
+      let assembler = this.snapshotAssemblers.get(peerId);
+      if (!assembler) {
+        assembler = new SnapshotAssembler();
+        this.snapshotAssemblers.set(peerId, assembler);
+      }
+      raw = assembler.push(raw, Date.now());
+    }
     if (typeof raw !== 'string' || raw.length > (kind === 'state' ? MAX_SNAPSHOT_BYTES : 64_000)) return;
     try {
       const message: unknown = JSON.parse(raw);

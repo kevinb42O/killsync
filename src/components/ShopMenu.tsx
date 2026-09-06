@@ -71,6 +71,9 @@ export const ShopMenu: React.FC<ShopMenuProps> = ({ playerCoins, inventory, onBu
 
   return (
     <motion.div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Black Market"
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -95,6 +98,7 @@ export const ShopMenu: React.FC<ShopMenuProps> = ({ playerCoins, inventory, onBu
               <span className="text-xl font-mono font-bold text-yellow-400">{playerCoins.toLocaleString()}</span>
             </div>
             <button
+              autoFocus
               onClick={() => {
                 soundManager.playUIClick();
                 onLeave();

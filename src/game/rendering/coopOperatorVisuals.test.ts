@@ -110,6 +110,29 @@ describe('CoopOperatorVisuals', () => {
     disposeCoopOperatorRig(rigB);
   });
 
+  it('gives premium skins distinct high-metal, animated material treatments', () => {
+    const standard = createCoopOperatorRig('#22d3ee', 'Standard', 'neon_vanguard');
+    const premium = createCoopOperatorRig('#f472b6', 'Premium', 'black_ice');
+
+    expect(premium.skin.tier).toBe('premium');
+    expect(premium.armorMaterial.metalness).toBeGreaterThan(standard.armorMaterial.metalness);
+    expect(premium.armorMaterial.roughness).toBeLessThan(standard.armorMaterial.roughness);
+    expect(premium.glowMaterial.color.getHexString()).toBe('7dd3fc');
+    expect(standard.premiumEffect).toBeUndefined();
+    expect(premium.premiumEffect?.children).toHaveLength(2);
+    expect(premium.premiumEffect?.children[1]).toBeInstanceOf(THREE.Points);
+    updateCoopOperatorRig(premium, createMockPlayer({ skinId: 'black_ice' }), 250, 16.666);
+    const firstPulse = premium.armorMaterial.emissiveIntensity;
+    const firstOrbit = premium.premiumEffect!.rotation.y;
+    updateCoopOperatorRig(premium, createMockPlayer({ skinId: 'black_ice' }), 750, 16.666);
+    expect(premium.armorMaterial.emissiveIntensity).not.toBe(firstPulse);
+    expect(premium.premiumEffect!.rotation.y).not.toBe(firstOrbit);
+    expect(premium.premiumAuraMaterial!.opacity).toBeGreaterThan(0);
+
+    disposeCoopOperatorRig(standard);
+    disposeCoopOperatorRig(premium);
+  });
+
   it('preserves pill shape compression when crouching or sliding', () => {
     const rig = createCoopOperatorRig('#34d399', 'Rogue');
     const player = createMockPlayer({ crouching: true });
@@ -191,6 +214,19 @@ describe('CoopOperatorVisuals', () => {
     expect(rig.thrusterCoreFlames).toBeDefined();
     expect(rig.thrusterCoreFlames!.length).toBe(2);
 
+    disposeCoopOperatorRig(rig);
+  });
+
+  it('briefly intensifies the existing jet flames for a double jump', () => {
+    const rig = createCoopOperatorRig('#f59e0b', 'Jet');
+    const airborne = createMockPlayer({ z: 30, motion: { verticalVelocity: 100, lastJumpSequence: 1, lastDoubleJumpSequence: -1, slideAngle: 0 } });
+    updateCoopOperatorRig(rig, airborne, 1000, 16.666);
+    const normalFlame = rig.thrusterFlames[0].scale.y;
+
+    updateCoopOperatorRig(rig, { ...airborne, motion: { ...airborne.motion!, lastDoubleJumpSequence: 2 } }, 1017, 16.666);
+
+    expect(rig.thrusterFlames[0].scale.y).toBeGreaterThan(normalFlame * 1.4);
+    expect(rig.thrusterCoreFlames![0].visible).toBe(true);
     disposeCoopOperatorRig(rig);
   });
 

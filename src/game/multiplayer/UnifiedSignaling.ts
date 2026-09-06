@@ -547,7 +547,7 @@ export class AutoLobbyJoin {
   }
 
   async connect(
-    onOfferReceived: (offer: string) => Promise<string>, // returns SDP answer
+    onOfferReceived: (offer: string) => Promise<string | undefined>, // returns SDP answer, or undefined when another signaling path won
     onStatus: (status: string) => void,
     onError: (err: string) => void,
     timeoutMs = 25_000
@@ -584,6 +584,11 @@ export class AutoLobbyJoin {
 
           const answer = await onOfferReceived(offer);
           if (this.closed) return;
+          if (!answer) {
+            clearTimeout(timer);
+            resolve();
+            return;
+          }
 
           // Send answer back to host with an immediate burst for WAN packet-loss protection
           const answerTopic = `${ROOM_TOPIC_PREFIX}${this.roomId}/joins/${this.requestId}/answer`;

@@ -1,4 +1,4 @@
-# KILLSYNC: Neon Requiem — Game Documentation
+# KILLSYNC — Game Documentation
 
 > **For AI agents & developers.** Update this document whenever game functionality changes.
 
@@ -43,6 +43,19 @@ MENU → PLAYING → LEVEL_UP → PLAYING
 - **PERMANENT_UPGRADES** — "Neural Lab" shop.
 - **MULTIPLAYER_SETUP** — Manual WebRTC offer/answer exchange for direct friends-only co-op.
 - **MULTIPLAYER_PLAYING** — Direct peer-to-peer, host-authoritative co-op arena.
+
+### Co-op Tactical Insertion
+
+Entering a fresh co-op run now mounts the 3D arena behind a staged tactical
+deployment overlay. The sequence presents the operation, seeded district ID,
+first objective, localized controls, and live squad roster before releasing the
+normal HUD. Gameplay input is neutral while the overlay is active. Players can
+use the final **Click to deploy** action to acquire pointer lock; the sequence
+also releases automatically after 5.2 seconds so it can never conceal the end
+of the 12-second enemy-free insertion window. In-progress spectators receive a
+short 1.65-second live-signal synchronization variant instead of the new-run
+briefing. `prefers-reduced-motion` removes shutters, scans, and HUD travel while
+preserving the same readiness timing and information.
 
 ## Operator System
 
@@ -123,6 +136,55 @@ might, area, speed, cooldown, growth, amount, health, luck, regen, god_mode, ins
 
 Portal at (100, 100). Enter 250-unit zone → 30s timer. **Leaving cancels timer.** Touch portal when ready → exit run.
 
+## Co-op Operator Imprints
+
+Co-op has a persistent, operator-specific extraction progression layer. The
+five Imprint stats are host-authoritative and clamped when received from a peer:
+
+| Stat | Per rank | Cap | Authoritative effect |
+|------|----------|-----|----------------------|
+| Power | +4% | 10 | Firearm and offensive support-module damage |
+| Vitality | +7 HP | 10 | Starting and maximum health |
+| Mobility | +2% | 8 | Walk, sprint, crouch, and slide translation speed |
+| Handling | -3% duration | 10 | Reload and weapon-switch time, capped at -25% |
+| Reach | +12% | 10 | Personal XP/item/ammo attraction radius |
+
+- Elite and boss Data Cores are shared with every non-eliminated squad member.
+- XP gems are squad XP, so Reach cannot steal levels from a teammate.
+- Successful extraction settles cores exactly once by run id, then exposes
+  them as spendable Calibration Points on the debrief and deployment screens.
+- Every fresh operator and every post-wipe generation begins with exactly one
+  baseline Calibration Point. Reopening the menu and duplicate run settlement
+  cannot grant it again, so deliberate wipes never accumulate free power.
+- Careers created before the baseline system receive the same point through a
+  one-time schema migration, so existing players are not stranded at zero.
+- Players can allocate points from the deployment menu before hosting, joining,
+  or starting solo practice. Allocation locks after a squad connection begins,
+  and the selected ranks are copied into the launch seed sent to the host.
+- Rank costs escalate: ranks 1–3 cost 1, 4–6 cost 2, 7–8 cost 3, and 9–10 cost 4.
+- Extracted ranks and unspent points persist into the next deployment.
+- A confirmed solo defeat or total squad wipe destroys the combat Imprint,
+  clears its earned ranks/unspent points, advances its generation, and restores
+  only that generation's single baseline choice.
+- Missing or abandoning an extraction while at least one operator survives
+  ends the run and forfeits unextracted Data Cores, but preserves installed
+  Imprint ranks. Only full squad elimination triggers the destructive reset.
+- Career totals, highest depth, account progress, operators, achievements, and
+  other existing permanent unlocks survive a wipe.
+- Weapon levels, credits, armor, ammunition, masks, self-revives, Foundry
+  upgrades, and support modules remain run-only.
+- Imprints cannot change during combat. A guest can synchronize a settled or
+  newly allocated Imprint after results so the host can reuse it on retry.
+- The multiplayer deployment menu shows the selected operator's generation,
+  rating, unspent points, best depth, all five ranks, exact next-rank effects
+  and costs, allocation state, and the wipe warning.
+
+Co-op offers unanimous early extraction after both mini-bosses. The checkpoint
+is available for 20 seconds and requires every living operator to remain in the
+zone for 5 seconds. If the squad does not commit unanimously, the portal closes
+and the campaign automatically breaches deeper. The final extraction retains
+its normal one-player activation and 90-second emergency timer.
+
 ## Rendering Pipeline
 
 1. Fill background + gradient
@@ -142,6 +204,7 @@ Portal at (100, 100). Enter 250-unit zone → 30s timer. **Leaving cancels timer
 | `permanentUpgrades` | `{id: level}` map |
 | `selectedOperator` | Active operator ID |
 | `unlockedOperators` | Array of unlocked IDs |
+| `killsync.coop.imprints.v1` | Versioned co-op career, generations, ranks, Calibration Points, and settled run ids |
 
 ## Input
 
@@ -172,35 +235,128 @@ contracts, two mini-bosses, a three-phase final boss, and a timed extraction.
 Enemy snapshots use the real `ENEMY_TYPES` definitions, allowing the production
 3D renderer to keep their existing class-specific appearances as the match
 escalates.
-The host simulation also shares the production 12 km city bounds and
-`WorldLayout` collision resolver, so squads and enemies collide with the same
-buildings the existing `Renderer3D` presents.
+The host simulation shares the production 12 km city layout and
+`WorldLayout` building resolver, so squads and enemies collide with the same
+architecture the existing `Renderer3D` presents. In co-op, that city is a
+floating megastructure: the rendered deck and architecture stop at its visible
+edge, and an operative who crosses the footprint falls and is eliminated
+instead of being stopped by an invisible boundary clamp. Elimination remains
+immediate and host-authoritative. The roughly five-second tumbling fall and
+third-person camera appear only on the fallen operator's own client. Teammates
+hide that operator immediately and receive a message directing them to buy the
+operator back. This presentation does not add a `falling` simulation state,
+delay death, or affect movement, combat, revival, or networking.
 Use **1–5** to jump between firearms, or the mouse wheel to cycle them; every
 cast is explicit and host-authoritative. Buy Stations award personal run-credit
 choices—ammo, healing, armor, a personal self-revive, and up to two support
-modules. The initial support roster is Orbit Drones, Data Scythe, Void Aura,
+modules. Its Reinforcements category can also redeploy a fully eliminated
+teammate for 900 credits at 50% health. A downed, still-revivable teammate is
+never eligible for that purchase and must be restored through the normal revive
+flow. The initial support roster is Orbit Drones, Data Scythe, Void Aura,
 Frost Aura, and Neural Pulse; these are intentionally a safe subset of the
 single-player arsenal rather than a claim that every single-player weapon is
 already network-ready.
 
-The co-op arena is **first-person only** and reuses the production
-pointer-lock viewmodel from `Renderer3D`. There is no multiplayer chase-camera
-or **V** camera toggle. Click the arena once to lock the mouse. The camera and
+The co-op arena uses first person during gameplay and reuses the production
+pointer-lock viewmodel from `Renderer3D`; its only third-person exception is the
+client-only fall presentation after stepping off the platform. There is no
+player-controlled multiplayer chase camera or **V** camera toggle. Opening any modal releases pointer lock and focuses its
+first action. Closing a modal focuses the WebGL canvas and attempts to restore
+pointer lock from the same user gesture. If a browser rejects that recapture,
+a centered **Click to resume control** action remains available in both solo
+perspective modes and co-op. The camera and
 rendering are client presentation only; the host still decides movement,
 weapon casts, hits, and enemy outcomes.
+
+Co-op English and Russian copy is resolved per client through the typed
+multiplayer catalog. This includes matchmaking/signaling, objectives, combat
+notices, HUD phases and units, Imprint stats and debriefs, Buy Station
+reinforcements, Foundry ammo metadata, gas states, results, and accessibility
+labels. Host messages carry semantic state; they do not impose the host's
+display language on other squad members.
 Movement is camera-relative: **Z** moves forward where you are
 looking, **S** moves back, and **Q/D** strafe left/right (with arrow keys also
 available). **W** is reserved for the slide/crouch action on the AZERTY layout.
 **Shift** is a held sprint with a replicated speed/FOV change, while **Space**
 sends a single host-validated jump pulse. Jump height and grounded state are
 part of the shared snapshot, so every peer receives the same grounded state
-and the same first-person camera lift.
+and the same first-person camera lift. While airborne, pressing **Space** as
+you touch solid city architecture or a Hardlight Barricade performs a
+wall-jump, even while facing or moving away from it. Only one wall-jump is
+available per airborne cycle; landing on the real floor restores it.
+Away from a wall, that air action becomes a bounded double-jump jet burst.
+Wall contact takes priority, so the same input becomes a directional wall-jump
+instead. A double jump and wall-jump cannot be chained in one airborne cycle.
+The second impulse is capped below a stacked pair of full jumps and grants no
+horizontal acceleration or damage immunity. Other players see the existing
+dual jetpack flames flare more intensely during its brief ignition.
+Ground jumps, double jumps, and wall-jumps have distinct audio signatures:
+mechanical push-off, two-stage mid-air ignition, and a spatialized wall-contact
+scrape with lateral thrust respectively.
+The first-person camera banks away from side walls and adds a restrained pitch
+kick when rebounding from a wall ahead or behind. The lean follows the
+authoritative collision normal and eases back without changing the player's aim.
 Hold the **W-labelled key** while standing still to crouch. To slide, hold
 **Shift**, supply any movement direction, then press and hold **W**. The host
 locks that direction at the instant the slide begins, makes it substantially
 faster than sprint, and keeps it going even when movement keys remain held or
 the camera turns. Releasing **W** immediately stands the player up and returns
 to the normal movement input; jumping also ends the slide.
+
+### Co-op Field Engineering
+
+Tap **B** to equip the last Field Fabricator blueprint; hold B to expose the
+four-blueprint palette. **1–4** or Shift+mouse-wheel selects a blueprint, the
+mouse wheel rotates it, and Alt temporarily disables endpoint snapping. Left
+click deploys; right click or Escape returns to the firearm. Placement is
+allowed on any valid nearby surface. Objectives, stations, bosses, extraction,
+and intermission rallies grant a visible 60-second tactical lifetime bonus.
+Placement remains host-authoritative: the host validates range, world clearance,
+protected terminals, overlap, personal charges, and squad caps.
+
+- **Hardlight Barricade (1 charge):** a jumpable, destructible obstacle. It
+  redirects ordinary enemies; Phantoms phase through it, Goliaths break it
+  quickly, and Titans crush it.
+- **Arc Fence (1 charge):** a non-blocking control line. Enemies inside move at
+  38% speed and receive an archetype-scaled shock at most once per 1.1 seconds.
+  Normal enemies are briefly stunned; elites and tanks resist most of the stun,
+  Titans resist it completely, and Phantoms phase through the field. Every
+  discharge consumes a little coil integrity. Pressing E spends a charge to
+  overcharge it for rapid, stronger shocks.
+- **Recovery Relay (2 charges):** a fragile medical dome that restores 7.5 HP
+  per second to living squad members inside its 120-unit field and makes nearby
+  revives 25% faster. Multiple relay fields do not stack. It does not revive by
+  itself, refill ammunition, block toxic gas, or protect against hazards.
+  Passive healing and the E-powered squad healing surge both display the exact
+  HP restored to each affected player; the local HUD also confirms whenever the
+  operator is standing inside an active recovery field.
+- **Specter Decoy (1 charge):** projects a false operator that attracts normal,
+  fast, ranged, tank, and elite enemies. Phantoms and Titans ignore it. Pressing
+  E amplifies its attraction range temporarily.
+
+Structures can be operated by teammates. Hold **F** near a damaged structure to
+repair it, press **R** while aiming at an intact barricade or fence to rotate it,
+or press **C** to relocate a pristine owned structure to the current hologram.
+Press **X** to dismantle an owned structure; a pristine structure dismantled
+within 15 seconds while no enemy is nearby refunds its cost. Barricades can be
+permanently reinforced with E.
+
+Each operator starts with two personal charges and stores at most four. One
+charge regenerates every 40 seconds while alive; elite and Titan kills recover
+14 seconds of that timer. Cleared rounds still grant a charge and repair every
+surviving structure by 25%. Players maintain at most two active
+structures and the squad at most eight. Structures last two minutes or until
+destroyed. A structure left more than 900 units from every living squad member
+expires after a 20-second grace period. Shockwaves and other hazards damage structures, so building
+creates temporary time and positioning rather than permanent safety.
+
+Nearby structures combine automatically. Relay fields repair linked barricades,
+Arc Fences electrify linked barricades, and two Arc Fences create a damaging
+powered corridor. Barricades and fences snap end-to-end for readable defensive
+runs. Each blueprint uses a distinct saturated energy identity—cyan barricade,
+violet fence, emerald relay, and pink decoy—across its armor tint, light, field,
+placement hologram, and network links. Structure links, health bars, integrity, lifetime, ownership, tactical
+bonus, and ability states are replicated and presented to the squad.
 
 The authoritative simulation remains at 30 Hz and the network state stream at
 20 Hz, while the client interpolates snapshots on every animation frame. High

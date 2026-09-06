@@ -13,7 +13,7 @@ function gunfireProfile(weaponId: string): GunfireProfile {
   switch (weaponId) {
     case 'assault_rifle': return { volume: 0.27, playbackRate: 0.98, duration: 0.28 };
     case 'combat_shotgun': return { volume: 0.42, playbackRate: 0.78, duration: 0.44 };
-    case 'sniper_rifle': return { volume: 0.38, playbackRate: 0.70, duration: 0.42 };
+    case 'arc_launcher': return { volume: 0.24, playbackRate: 1.34, duration: 0.26 };
     case 'smg': return { volume: 0.20, playbackRate: 1.12, duration: 0.22 };
     case 'plasma_gun': return { volume: 0.25, playbackRate: 1.18, duration: 0.24 };
     default: return { volume: 0.27, playbackRate: 1, duration: 0.3 };
@@ -24,7 +24,7 @@ function reloadProfile(weaponId: string): ReloadProfile {
   switch (weaponId) {
     case 'combat_shotgun': return { asset: 'shotgun', volume: .82, playbackRate: 1 };
     case 'plasma_gun': return { asset: 'handgun', volume: .92, playbackRate: 1.08 };
-    case 'sniper_rifle': return { asset: 'rifle', volume: 1.08, playbackRate: .82 };
+    case 'arc_launcher': return { asset: 'rifle', volume: .82, playbackRate: 1.18 };
     case 'smg': return { asset: 'rifle', volume: .92, playbackRate: 1.10 };
     default: return { asset: 'rifle', volume: 1.16, playbackRate: 1 };
   }
@@ -54,6 +54,10 @@ export class SoundManager {
   private towerChargeFilter: BiquadFilterNode | null = null;
   private isTowerChargingActive: boolean = false;
   private currentTowerPitch: number = 220;
+  private stationCaptureOsc: OscillatorNode | null = null;
+  private stationCaptureGain: GainNode | null = null;
+  private stationCaptureFilter: BiquadFilterNode | null = null;
+  private stationCaptureWasActive = false;
 
   /**
    * Call this from a direct input handler before the first shot. Browsers only
@@ -250,6 +254,7 @@ export class SoundManager {
       // The asset is normally preloaded on arena mount. Keep firing audible if
       // a first shot races a slow asset fetch or an older browser cannot decode it.
       this.playShoot();
+      if (weaponId === 'arc_launcher') this.playArcDischarge();
       return;
     }
 
@@ -263,6 +268,14 @@ export class SoundManager {
     source.connect(gain);
     gain.connect(this.masterGain);
     source.start(this.ctx.currentTime, 0, Math.min(profile.duration, this.gunfireBuffer.duration));
+    if (weaponId === 'arc_launcher') this.playArcDischarge();
+  }
+
+  private playArcDischarge() {
+    // A short rising discharge distinguishes Arc cells from ballistic fire
+    // without adding the harsh sustained whine used by the old objectives.
+    this.playTone(170, 'sine', .13, .09, 620, .004);
+    this.playTone(760, 'triangle', .09, .035, -210, .003);
   }
 
   /** Plays a firearm-specific CC0 reload recording after a host-approved reload. */
@@ -381,6 +394,26 @@ export class SoundManager {
     this.playTone(800, 'sine', 0.12, 0.08, -400, 0.005);
   }
 
+  /** Restrained telemetry bed for the co-op arena handoff. It is intentionally
+   * short and synthetic so a suspended AudioContext can fail silently without
+   * changing deployment timing. */
+  playDeploymentSync() {
+    this.playTone(96, 'sine', .7, .08, 34, .08);
+    this.playNoise(.18, .025, 1800);
+    [720, 880, 1040].forEach((frequency, index) => {
+      setTimeout(() => this.playTone(frequency, 'sine', .08, .025, 90, .005), 760 + index * 160);
+    });
+  }
+
+  /** Final insertion impact: a low mechanical hit followed by a clean squad
+   * link chirp. */
+  playDeploymentRelease() {
+    this.playKick(.32, .32);
+    this.playNoise(.16, .10, 650);
+    this.playTone(180, 'sawtooth', .18, .08, -90, .004);
+    setTimeout(() => this.playTone(1320, 'sine', .12, .09, 360, .006), 95);
+  }
+
   playChestOpen() {
     this.playTone(400, 'sine', 0.1, 0.1, 200, 0.01);
     this.playTone(600, 'sine', 0.1, 0.1, 300, 0.05);
@@ -478,6 +511,90 @@ export class SoundManager {
     liftGain.connect(this.masterGain);
     liftOsc.start(t);
     liftOsc.stop(t + 0.18);
+  }
+
+  /** Mid-air jet relight: a two-stage electronic ignition with no boot impact. */
+  playDoubleJump() {
+    this.ensureRunning();
+    if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+
+    const ignition = this.ctx.createOscillator();
+    const ignitionGain = this.ctx.createGain();
+    ignition.type = 'sawtooth';
+    ignition.frequency.setValueAtTime(190, t);
+    ignition.frequency.exponentialRampToValueAtTime(760, t + .16);
+    ignitionGain.gain.setValueAtTime(.01, t);
+    ignitionGain.gain.linearRampToValueAtTime(.16, t + .018);
+    ignitionGain.gain.exponentialRampToValueAtTime(.001, t + .17);
+    ignition.connect(ignitionGain); ignitionGain.connect(this.masterGain);
+    ignition.start(t); ignition.stop(t + .17);
+
+    // The delayed second chirp makes the air relight unmistakably different
+    // from the single mechanical push-off used by a ground jump.
+    const confirmation = this.ctx.createOscillator();
+    const confirmationGain = this.ctx.createGain();
+    confirmation.type = 'square';
+    confirmation.frequency.setValueAtTime(690, t + .045);
+    confirmation.frequency.exponentialRampToValueAtTime(1080, t + .13);
+    confirmationGain.gain.setValueAtTime(.001, t + .045);
+    confirmationGain.gain.linearRampToValueAtTime(.075, t + .06);
+    confirmationGain.gain.exponentialRampToValueAtTime(.001, t + .14);
+    confirmation.connect(confirmationGain); confirmationGain.connect(this.masterGain);
+    confirmation.start(t + .045); confirmation.stop(t + .14);
+
+    if (!this.noiseBuffer) this.noiseBuffer = this.createNoiseBuffer();
+    if (this.noiseBuffer) {
+      const exhaust = this.ctx.createBufferSource(); exhaust.buffer = this.noiseBuffer;
+      const filter = this.ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.Q.value = 1.8;
+      filter.frequency.setValueAtTime(720, t); filter.frequency.exponentialRampToValueAtTime(2600, t + .15);
+      const gain = this.ctx.createGain(); gain.gain.setValueAtTime(.12, t); gain.gain.exponentialRampToValueAtTime(.001, t + .18);
+      exhaust.connect(filter); filter.connect(gain); gain.connect(this.masterGain);
+      exhaust.start(t); exhaust.stop(t + .18);
+    }
+  }
+
+  /** Wall-contact snap and lateral thrust. Pan points toward the contacted wall. */
+  playWallJump(pan = 0) {
+    this.ensureRunning();
+    if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    const panner = typeof this.ctx.createStereoPanner === 'function' ? this.ctx.createStereoPanner() : undefined;
+    if (panner) {
+      panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), t);
+      panner.connect(this.masterGain);
+    }
+    const output = panner || this.masterGain;
+
+    const contact = this.ctx.createOscillator();
+    const contactGain = this.ctx.createGain();
+    contact.type = 'triangle';
+    contact.frequency.setValueAtTime(620, t);
+    contact.frequency.exponentialRampToValueAtTime(85, t + .065);
+    contactGain.gain.setValueAtTime(.2, t);
+    contactGain.gain.exponentialRampToValueAtTime(.001, t + .07);
+    contact.connect(contactGain); contactGain.connect(output);
+    contact.start(t); contact.stop(t + .07);
+
+    const lateralJet = this.ctx.createOscillator();
+    const lateralGain = this.ctx.createGain();
+    lateralJet.type = 'sawtooth';
+    lateralJet.frequency.setValueAtTime(135, t);
+    lateralJet.frequency.exponentialRampToValueAtTime(390, t + .14);
+    lateralGain.gain.setValueAtTime(.12, t);
+    lateralGain.gain.exponentialRampToValueAtTime(.001, t + .16);
+    lateralJet.connect(lateralGain); lateralGain.connect(output);
+    lateralJet.start(t); lateralJet.stop(t + .16);
+
+    if (!this.noiseBuffer) this.noiseBuffer = this.createNoiseBuffer();
+    if (this.noiseBuffer) {
+      const scrape = this.ctx.createBufferSource(); scrape.buffer = this.noiseBuffer;
+      const filter = this.ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.Q.value = 3.2;
+      filter.frequency.setValueAtTime(2400, t); filter.frequency.exponentialRampToValueAtTime(650, t + .11);
+      const gain = this.ctx.createGain(); gain.gain.setValueAtTime(.14, t); gain.gain.exponentialRampToValueAtTime(.001, t + .12);
+      scrape.connect(filter); filter.connect(gain); gain.connect(output);
+      scrape.start(t); scrape.stop(t + .12);
+    }
   }
 
   /**
@@ -591,94 +708,136 @@ export class SoundManager {
     }, 320);
   }
 
-  /**
-   * Continuous charging hum for the Tower/Uplink mission.
-   * While holding in the capture circle, emits a rising sci-fi drone/whine whose
-   * pitch tracks capture progress (220 Hz -> 960 Hz).
-   * Leaving the circle cleanly disables the sound; re-entering resumes at the
-   * pitch where we left.
-   */
+  /** Restrained uplink signal hum. One filtered sine layer replaces the old
+   * three-oscillator 220–960 Hz whine and its fast LFO modulation. */
   updateTowerCharge(isCharging: boolean, progressRatio: number) {
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
     const clampedRatio = Math.max(0, Math.min(1, progressRatio));
-    const targetPitch = 220 + (960 - 220) * Math.pow(clampedRatio, 1.15);
+    const targetPitch = 125 + 75 * Math.pow(clampedRatio, 1.1);
     this.currentTowerPitch = targetPitch;
 
     if (isCharging) {
       if (!this.towerChargeGain || !this.towerChargeOsc) {
-        // Construct the continuous charging synthesizer graph
+        // One low sine layer leaves room for weapons, enemies and voice chat.
         this.towerChargeGain = this.ctx.createGain();
         this.towerChargeGain.gain.setValueAtTime(0, t);
         this.towerChargeGain.connect(this.masterGain);
 
         this.towerChargeFilter = this.ctx.createBiquadFilter();
         this.towerChargeFilter.type = 'lowpass';
-        this.towerChargeFilter.frequency.setValueAtTime(Math.max(600, targetPitch * 2.2), t);
-        this.towerChargeFilter.Q.value = 2.5;
+        this.towerChargeFilter.frequency.setValueAtTime(320, t);
+        this.towerChargeFilter.Q.value = .65;
         this.towerChargeFilter.connect(this.towerChargeGain);
 
         this.towerChargeOsc = this.ctx.createOscillator();
-        this.towerChargeOsc.type = 'triangle';
+        this.towerChargeOsc.type = 'sine';
         this.towerChargeOsc.frequency.setValueAtTime(targetPitch, t);
         this.towerChargeOsc.connect(this.towerChargeFilter);
         this.towerChargeOsc.start(t);
 
-        this.towerChargeSubOsc = this.ctx.createOscillator();
-        this.towerChargeSubOsc.type = 'sine';
-        this.towerChargeSubOsc.frequency.setValueAtTime(targetPitch * 1.5, t);
-        const subGain = this.ctx.createGain();
-        subGain.gain.value = 0.38;
-        this.towerChargeSubOsc.connect(subGain);
-        subGain.connect(this.towerChargeFilter);
-        this.towerChargeSubOsc.start(t);
-
-        this.towerChargeLfo = this.ctx.createOscillator();
-        this.towerChargeLfo.type = 'sine';
-        this.towerChargeLfo.frequency.setValueAtTime(3.5 + 12.5 * clampedRatio, t);
-        this.towerChargeLfoGain = this.ctx.createGain();
-        this.towerChargeLfoGain.gain.value = 40;
-        this.towerChargeLfo.connect(this.towerChargeLfoGain);
-        this.towerChargeLfoGain.connect(this.towerChargeFilter.frequency);
-        this.towerChargeLfo.start(t);
       }
 
       // Smoothly fade in if not currently active
       if (!this.isTowerChargingActive && this.towerChargeGain) {
         this.towerChargeGain.gain.cancelScheduledValues(t);
         this.towerChargeGain.gain.setValueAtTime(this.towerChargeGain.gain.value, t);
-        this.towerChargeGain.gain.linearRampToValueAtTime(0.18, t + 0.08);
+        this.towerChargeGain.gain.linearRampToValueAtTime(.022, t + .4);
         this.isTowerChargingActive = true;
       }
 
       // Continuously glide frequency and filter to match real-time upload progress
-      if (this.towerChargeOsc && this.towerChargeSubOsc && this.towerChargeFilter && this.towerChargeLfo) {
+      if (this.towerChargeOsc) {
         this.towerChargeOsc.frequency.cancelScheduledValues(t);
         this.towerChargeOsc.frequency.setValueAtTime(this.towerChargeOsc.frequency.value, t);
-        this.towerChargeOsc.frequency.linearRampToValueAtTime(targetPitch, t + 0.06);
-
-        this.towerChargeSubOsc.frequency.cancelScheduledValues(t);
-        this.towerChargeSubOsc.frequency.setValueAtTime(this.towerChargeSubOsc.frequency.value, t);
-        this.towerChargeSubOsc.frequency.linearRampToValueAtTime(targetPitch * 1.5, t + 0.06);
-
-        this.towerChargeFilter.frequency.cancelScheduledValues(t);
-        this.towerChargeFilter.frequency.setValueAtTime(this.towerChargeFilter.frequency.value, t);
-        this.towerChargeFilter.frequency.linearRampToValueAtTime(Math.max(600, targetPitch * 2.2), t + 0.06);
-
-        this.towerChargeLfo.frequency.cancelScheduledValues(t);
-        this.towerChargeLfo.frequency.setValueAtTime(this.towerChargeLfo.frequency.value, t);
-        this.towerChargeLfo.frequency.linearRampToValueAtTime(3.5 + 12.5 * clampedRatio, t + 0.06);
+        this.towerChargeOsc.frequency.linearRampToValueAtTime(targetPitch, t + .16);
       }
     } else {
       // Disables charging sound smoothly (fade to 0), retaining pitch position
       if (this.isTowerChargingActive && this.towerChargeGain) {
         this.towerChargeGain.gain.cancelScheduledValues(t);
         this.towerChargeGain.gain.setValueAtTime(this.towerChargeGain.gain.value, t);
-        this.towerChargeGain.gain.linearRampToValueAtTime(0, t + 0.07);
+        this.towerChargeGain.gain.linearRampToValueAtTime(0, t + .18);
         this.isTowerChargingActive = false;
       }
     }
+  }
+
+  /** Continuous but restrained station cue. Capture previously reused the
+   * uplink's piercing 220–960 Hz multi-oscillator whine; this is one filtered
+   * sine layer in the 105–175 Hz range, audible without dominating combat. */
+  updateStationCapture(isCapturing: boolean, progressRatio: number) {
+    this.ensureRunning();
+    if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
+    const now = this.ctx.currentTime;
+    const ratio = Math.max(0, Math.min(1, progressRatio));
+    const targetPitch = 105 + ratio * 70;
+
+    if (isCapturing && (!this.stationCaptureOsc || !this.stationCaptureGain || !this.stationCaptureFilter)) {
+      this.stationCaptureGain = this.ctx.createGain();
+      this.stationCaptureGain.gain.setValueAtTime(0, now);
+      this.stationCaptureGain.connect(this.masterGain);
+      this.stationCaptureFilter = this.ctx.createBiquadFilter();
+      this.stationCaptureFilter.type = 'lowpass';
+      this.stationCaptureFilter.frequency.setValueAtTime(360, now);
+      this.stationCaptureFilter.Q.value = .7;
+      this.stationCaptureFilter.connect(this.stationCaptureGain);
+      this.stationCaptureOsc = this.ctx.createOscillator();
+      this.stationCaptureOsc.type = 'sine';
+      this.stationCaptureOsc.frequency.setValueAtTime(targetPitch, now);
+      this.stationCaptureOsc.connect(this.stationCaptureFilter);
+      this.stationCaptureOsc.start(now);
+    }
+
+    if (isCapturing) {
+      if (!this.stationCaptureWasActive && this.stationCaptureGain) {
+        this.stationCaptureGain.gain.cancelScheduledValues(now);
+        this.stationCaptureGain.gain.setValueAtTime(this.stationCaptureGain.gain.value, now);
+        // Slow, low-level fade prevents an audible onset thump when entering.
+        this.stationCaptureGain.gain.linearRampToValueAtTime(.028, now + .45);
+        this.stationCaptureWasActive = true;
+      }
+      if (this.stationCaptureOsc) {
+        this.stationCaptureOsc.frequency.cancelScheduledValues(now);
+        this.stationCaptureOsc.frequency.setValueAtTime(this.stationCaptureOsc.frequency.value, now);
+        this.stationCaptureOsc.frequency.linearRampToValueAtTime(targetPitch, now + .12);
+      }
+    } else if (this.stationCaptureWasActive && this.stationCaptureGain) {
+      this.stationCaptureGain.gain.cancelScheduledValues(now);
+      this.stationCaptureGain.gain.setValueAtTime(this.stationCaptureGain.gain.value, now);
+      this.stationCaptureGain.gain.linearRampToValueAtTime(0, now + .14);
+      this.stationCaptureWasActive = false;
+    }
+  }
+
+  stopStationCapture() {
+    if (this.stationCaptureGain && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.stationCaptureGain.gain.cancelScheduledValues(now);
+      this.stationCaptureGain.gain.setValueAtTime(0, now);
+    }
+    try {
+      this.stationCaptureOsc?.stop();
+      this.stationCaptureOsc?.disconnect();
+      this.stationCaptureFilter?.disconnect();
+      this.stationCaptureGain?.disconnect();
+    } catch {}
+    this.stationCaptureOsc = null;
+    this.stationCaptureFilter = null;
+    this.stationCaptureGain = null;
+    this.stationCaptureWasActive = false;
+  }
+
+  /** Short, unmistakable confirmation that the captured terminal has become
+   * an operational Buy Station. Kept well below the objective fanfare. */
+  playStationCaptured() {
+    this.stopStationCapture();
+    this.ensureRunning();
+    if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
+    this.playTone(330, 'sine', .22, .065, 55, .025);
+    setTimeout(() => this.playTone(440, 'sine', .28, .055, 70, .025), 115);
+    setTimeout(() => this.playTone(660, 'triangle', .34, .035, -45, .035), 235);
   }
 
   /** Fully clean up continuous tower charging sound nodes. */

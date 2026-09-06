@@ -37,6 +37,10 @@ function apiUrl(path: string) {
   return `${configured || ''}/api/multiplayer${path}`;
 }
 
+function hasHttpSignalingFallback() {
+  return Boolean(import.meta.env.VITE_MULTIPLAYER_SIGNALING_URL?.trim());
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(apiUrl(path), {
     ...init,
@@ -62,6 +66,10 @@ export async function listPublicLobbies(): Promise<PublicLobby[]> {
     state: l.state,
     pingMs: l.pingMs,
   }));
+
+  // Direct browser deployments use MQTT only for signaling. Do not probe a
+  // same-origin API that does not exist (and cannot race the broker join).
+  if (!hasHttpSignalingFallback()) return brokerLobbies;
 
   try {
     const response = await request<{ rooms: PublicLobby[] }>('/rooms');
@@ -98,6 +106,7 @@ export async function listPublicLobbies(): Promise<PublicLobby[]> {
 }
 
 export async function fetchIceServers(): Promise<RTCIceServer[]> {
+  if (!hasHttpSignalingFallback()) return DEFAULT_PUBLIC_STUN_SERVERS;
   try {
     const response = await request<{ iceServers: RTCIceServer[] }>('/ice-servers');
     if (response.iceServers && response.iceServers.length > 0) {
@@ -136,14 +145,16 @@ export class HostedLobby {
     const auto = new AutoHostedLobby(hostName, code, roomId);
 
     let localToken: string | undefined;
-    try {
-      const response = await request<{ room: PublicLobby; hostToken: string }>('/rooms', {
-        method: 'POST',
-        body: JSON.stringify({ id: roomId, hostName, maxPlayers: 4, code }),
-      });
-      localToken = response.hostToken;
-    } catch {
-      // Local backend optional; broker carries the squad
+    if (hasHttpSignalingFallback()) {
+      try {
+        const response = await request<{ room: PublicLobby; hostToken: string }>('/rooms', {
+          method: 'POST',
+          body: JSON.stringify({ id: roomId, hostName, maxPlayers: 4, code }),
+        });
+        localToken = response.hostToken;
+      } catch {
+        // Local backend optional; broker carries the squad
+      }
     }
 
     const room: PublicLobby = {
@@ -263,6 +274,7 @@ export class LobbyJoin {
   private closed = false;
   private timer = 0;
   private acceptedOffer = false;
+  private acceptedOfferSource?: 'broker' | 'http';
   private activeRequest?: AbortController;
   private readonly autoJoin?: AutoLobbyJoin;
 
@@ -285,15 +297,17 @@ export class LobbyJoin {
 
     let localRequestId: string | undefined;
     let localToken: string | undefined;
-    try {
-      const response = await request<{ requestId: string; joinToken: string }>(`/rooms/${targetRoomId}/joins`, {
-        method: 'POST',
-        body: JSON.stringify({ guestName, spectate }),
-      });
-      localRequestId = response.requestId;
-      localToken = response.joinToken;
-    } catch {
-      // Local backend optional; broker handles connection
+    if (hasHttpSignalingFallback()) {
+      try {
+        const response = await request<{ requestId: string; joinToken: string }>(`/rooms/${targetRoomId}/joins`, {
+          method: 'POST',
+          body: JSON.stringify({ guestName, spectate }),
+        });
+        localRequestId = response.requestId;
+        localToken = response.joinToken;
+      } catch {
+        // Local backend optional; broker handles connection
+      }
     }
 
     return new LobbyJoin(targetRoomId, localRequestId, localToken, autoJoin);
@@ -311,9 +325,15 @@ export class LobbyJoin {
     if (this.autoJoin) {
       this.autoJoin.connect(
         async (offer) => {
-          this.acceptedOffer = true;
+          if (!this.claimOffer('broker')) return undefined;
+          this.activeRequest?.abort();
           onStatus('Direct peer link established. Finalizing handshake…');
-          return session.acceptOffer(offer);
+          try {
+            return await session.acceptOffer(offer);
+          } catch (error) {
+            this.releaseOffer('broker');
+            throw error;
+          }
         },
         onStatus,
         (errMsg) => {
@@ -348,9 +368,9 @@ export class LobbyJoin {
           headers: auth(this.token!),
           signal: controller.signal,
         });
-        if (this.closed) return;
+        if (this.closed || this.acceptedOffer) return;
         if (!data.offer) return;
-        this.acceptedOffer = true;
+        if (!this.claimOffer('http')) return;
         onStatus('Joining match…');
         const answer = await session.acceptOffer(data.offer);
         if (this.closed) return;
@@ -363,7 +383,7 @@ export class LobbyJoin {
         if (this.closed) return;
         onStatus('Ready — waiting for the host to deploy.');
       } catch {
-        this.acceptedOffer = false;
+        this.releaseOffer('http');
         if (!this.closed) onError('Couldn’t join this squad. Try another one.');
       } finally {
         if (this.activeRequest === controller) this.activeRequest = undefined;
@@ -385,6 +405,19 @@ export class LobbyJoin {
         headers: auth(this.token),
       }).catch(() => undefined);
     }
+  }
+
+  private claimOffer(source: 'broker' | 'http') {
+    if (this.acceptedOfferSource) return this.acceptedOfferSource === source;
+    this.acceptedOfferSource = source;
+    this.acceptedOffer = true;
+    return true;
+  }
+
+  private releaseOffer(source: 'broker' | 'http') {
+    if (this.acceptedOfferSource !== source) return;
+    this.acceptedOfferSource = undefined;
+    this.acceptedOffer = false;
   }
 }
 

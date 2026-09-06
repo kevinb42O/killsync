@@ -18,4 +18,22 @@ describe('per-peer snapshot interest', () => {
     expect(view.enemies.map(enemy => enemy.id)).toEqual([1]);
     expect(view.gems).toHaveLength(MAX_VISIBLE_GEMS);
   });
+
+  it('keeps every living teammate neighbourhood available while downed or spectating', () => {
+    const simulation = new CoopSimulation([
+      { id: 'downed', label: 'Downed', color: '#fff' },
+      { id: 'alpha', label: 'Alpha', color: '#0ff' },
+      { id: 'bravo', label: 'Bravo', color: '#f0f' },
+    ]);
+    const snapshot = simulation.createSnapshot();
+    Object.assign(snapshot.players.find(player => player.id === 'downed')!, { x: 1_000, y: 1_000, lifeState: 'downed' });
+    Object.assign(snapshot.players.find(player => player.id === 'alpha')!, { x: 4_000, y: 4_000, lifeState: 'alive' });
+    Object.assign(snapshot.players.find(player => player.id === 'bravo')!, { x: 9_000, y: 9_000, lifeState: 'alive' });
+    const enemy = (id: number, x: number, y: number) => ({ id, x, y, health: 1, maxHealth: 1, type: 'basic' as const, color: '#fff', radius: 10, damage: 1, speed: 1, experienceValue: 1, hitFlashMs: 0, slowMultiplier: 1, isHolder: false, dying: false, deathRemainingMs: 0 });
+    snapshot.enemies = [enemy(1, 4_010, 4_000), enemy(2, 9_010, 9_000), enemy(3, 1_010, 1_000)];
+
+    expect(createInterestSnapshot(snapshot, 'downed').enemies.map(candidate => candidate.id)).toEqual([1, 2]);
+    expect(createInterestSnapshot(snapshot).enemies.map(candidate => candidate.id)).toEqual([1, 2]);
+    expect(createInterestSnapshot(snapshot, 'alpha').enemies.map(candidate => candidate.id)).toEqual([1]);
+  });
 });

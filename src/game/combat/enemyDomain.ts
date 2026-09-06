@@ -7,7 +7,7 @@
 
 export type EnemyType = 'basic' | 'fast' | 'tank' | 'ranged' | 'elite' | 'phantom' | 'titan';
 export type EnemyVisual = 'circle' | 'triangle' | 'square' | 'diamond' | 'hexagon' | 'ghost' | 'star';
-export type ItemType = 'hp' | 'coin_bronze' | 'coin_silver' | 'coin_gold' | 'coin_diamond' | 'magnet' | 'bomb' | 'data_core';
+export type ItemType = 'hp' | 'coin_bronze' | 'coin_silver' | 'coin_gold' | 'coin_diamond' | 'magnet' | 'bomb' | 'data_core' | 'self_revive';
 export type TreasureTier = 'rare' | 'epic' | 'legendary';
 
 export interface EnemyDefinition {
@@ -134,6 +134,7 @@ export const ITEM_TYPES: Record<ItemType, { color: string; value: number; weight
   magnet: { color: '#00ccff', value: 1, weight: 0.1, shape: 'magnet' },
   bomb: { color: '#ff8800', value: 100, weight: 0.1, shape: 'bomb' },
   data_core: { color: '#ffffff', value: 1, weight: 0, shape: 'star' },
+  self_revive: { color: '#fb7185', value: 1, weight: 0, shape: 'reboot' },
 };
 
 export const ENEMY_UNLOCK_MINUTES: Record<EnemyType, number> = {

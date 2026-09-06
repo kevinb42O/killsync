@@ -28,6 +28,19 @@ export interface WorldCollisionResult {
   blockedY: boolean;
 }
 
+export interface WorldWallContact {
+  normalX: number;
+  normalY: number;
+}
+
+export interface WorldRayHit {
+  x: number;
+  y: number;
+  z: number;
+  distance: number;
+  obstacle: WorldObstacle;
+}
+
 export const WORLD_SECTOR_SIZE = 500;
 const WORLD_CENTER_SECTOR_X = (Math.ceil(GAME_WIDTH / WORLD_SECTOR_SIZE) - 1) / 2;
 const WORLD_CENTER_SECTOR_Y = (Math.ceil(GAME_HEIGHT / WORLD_SECTOR_SIZE) - 1) / 2;
@@ -43,12 +56,17 @@ export interface WorldTransitLine {
   color: number;
 }
 
+/** The lowest authored overhead surface must remain comfortably above the
+ * highest legal first-person jump camera. Keep this shared with rendering and
+ * the movement clearance regression test instead of scattering magic heights. */
+export const WORLD_SKYBRIDGE_ELEVATION = 320;
+
 // These routes deliberately span almost the full arena. They make the city
 // feel larger than a collection of nearby blocks while their ground supports
 // remain real collision objects.
 export const WORLD_TRANSIT_LINES: WorldTransitLine[] = [
-  { id: 'aurora-line', axis: 'x', coordinate: Math.round(GAME_HEIGHT * 0.56), start: WORLD_EDGE_MARGIN, end: GAME_WIDTH - WORLD_EDGE_MARGIN, elevation: 230, color: 0x38bdf8 },
-  { id: 'violet-line', axis: 'y', coordinate: Math.round(GAME_WIDTH * 0.76), start: WORLD_EDGE_MARGIN, end: GAME_HEIGHT - WORLD_EDGE_MARGIN, elevation: 270, color: 0xc084fc },
+  { id: 'aurora-line', axis: 'x', coordinate: Math.round(GAME_HEIGHT * 0.56), start: WORLD_EDGE_MARGIN, end: GAME_WIDTH - WORLD_EDGE_MARGIN, elevation: 320, color: 0x38bdf8 },
+  { id: 'violet-line', axis: 'y', coordinate: Math.round(GAME_WIDTH * 0.76), start: WORLD_EDGE_MARGIN, end: GAME_HEIGHT - WORLD_EDGE_MARGIN, elevation: 360, color: 0xc084fc },
 ];
 
 export const WORLD_DISTRICTS: Record<WorldDistrictId, WorldDistrict> = {
@@ -159,7 +177,7 @@ export function getWorldObstacles(): WorldObstacle[] {
       y: GAME_HEIGHT / 2 - 28,
       width: 56,
       height: 56,
-      elevation: 150,
+      elevation: WORLD_SKYBRIDGE_ELEVATION,
       district: getWorldDistrictAt(x, GAME_HEIGHT / 2).id,
       kind: 'bridge_pylon',
     });
@@ -206,7 +224,94 @@ export function isWorldPositionClear(x: number, y: number, radius: number): bool
   );
 }
 
-export function resolveWorldCollisions(position: { x: number; y: number }, radius: number): WorldCollisionResult {
+/** Returns the outward normal of a nearby solid surface without moving the
+ * body. Unlike collision resolution, this remains true at resting contact, so
+ * a player can jump away from a wall without continuing to press into it. */
+export function getWorldWallContact(x: number, y: number, radius: number, tolerance = 3): WorldWallContact | undefined {
+  let nearest: WorldWallContact | undefined;
+  let nearestDistance = Infinity;
+  for (const obstacle of getNearbyWorldObstacles(x, y, radius + tolerance + 4)) {
+    const nearestX = Math.max(obstacle.x, Math.min(x, obstacle.x + obstacle.width));
+    const nearestY = Math.max(obstacle.y, Math.min(y, obstacle.y + obstacle.height));
+    const dx = x - nearestX, dy = y - nearestY;
+    const distance = Math.hypot(dx, dy);
+    if (distance > radius + tolerance || distance >= nearestDistance) continue;
+    if (distance > .0001) {
+      nearest = { normalX: dx / distance, normalY: dy / distance };
+    } else {
+      const sides = [
+        { distance: Math.abs(x - obstacle.x), normalX: -1, normalY: 0 },
+        { distance: Math.abs(obstacle.x + obstacle.width - x), normalX: 1, normalY: 0 },
+        { distance: Math.abs(y - obstacle.y), normalX: 0, normalY: -1 },
+        { distance: Math.abs(obstacle.y + obstacle.height - y), normalX: 0, normalY: 1 },
+      ];
+      nearest = sides.reduce((best, side) => side.distance < best.distance ? side : best);
+    }
+    nearestDistance = distance;
+  }
+  return nearest;
+}
+
+/** Returns the first solid city obstacle struck by a sightline. Distances are
+ * measured across the ground plane, matching the simulation's x/y space, and
+ * verticalSlope is the change in elevation per unit of horizontal travel. */
+export function raycastWorldObstacles(
+  originX: number,
+  originY: number,
+  originZ: number,
+  directionX: number,
+  directionY: number,
+  verticalSlope: number,
+  maxDistance: number,
+): WorldRayHit | undefined {
+  const directionLength = Math.hypot(directionX, directionY);
+  if (directionLength < .0001 || maxDistance <= 0) return undefined;
+  const dx = directionX / directionLength;
+  const dy = directionY / directionLength;
+  const centerX = originX + dx * maxDistance * .5;
+  const centerY = originY + dy * maxDistance * .5;
+  let nearest: WorldRayHit | undefined;
+
+  for (const obstacle of getNearbyWorldObstacles(centerX, centerY, maxDistance * .5 + 8)) {
+    const xInterval = raySlabInterval(originX, dx, obstacle.x, obstacle.x + obstacle.width);
+    const yInterval = raySlabInterval(originY, dy, obstacle.y, obstacle.y + obstacle.height);
+    if (!xInterval || !yInterval) continue;
+    const entry = Math.max(0, xInterval[0], yInterval[0]);
+    const exit = Math.min(maxDistance, xInterval[1], yInterval[1]);
+    if (entry > exit || entry >= (nearest?.distance ?? Infinity)) continue;
+
+    const entryZ = originZ + verticalSlope * entry;
+    let distance: number | undefined;
+    if (entryZ >= 0 && entryZ <= obstacle.elevation) {
+      distance = entry;
+    } else if (verticalSlope < 0 && entryZ > obstacle.elevation) {
+      const roofDistance = (obstacle.elevation - originZ) / verticalSlope;
+      if (roofDistance >= entry && roofDistance <= exit) distance = roofDistance;
+    }
+    if (distance === undefined || distance >= (nearest?.distance ?? Infinity)) continue;
+    nearest = {
+      x: originX + dx * distance,
+      y: originY + dy * distance,
+      z: Math.max(0, Math.min(obstacle.elevation, originZ + verticalSlope * distance)),
+      distance,
+      obstacle,
+    };
+  }
+  return nearest;
+}
+
+function raySlabInterval(origin: number, direction: number, minimum: number, maximum: number): [number, number] | undefined {
+  if (Math.abs(direction) < .000001) return origin >= minimum && origin <= maximum ? [-Infinity, Infinity] : undefined;
+  const first = (minimum - origin) / direction;
+  const second = (maximum - origin) / direction;
+  return first < second ? [first, second] : [second, first];
+}
+
+export function resolveWorldCollisions(
+  position: { x: number; y: number },
+  radius: number,
+  clampToWorld = true,
+): WorldCollisionResult {
   let collided = false;
   let blockedX = false;
   let blockedY = false;
@@ -243,7 +348,9 @@ export function resolveWorldCollisions(position: { x: number; y: number }, radiu
     }
     if (!resolvedSomething) break;
   }
-  position.x = Math.max(radius, Math.min(GAME_WIDTH - radius, position.x));
-  position.y = Math.max(radius, Math.min(GAME_HEIGHT - radius, position.y));
+  if (clampToWorld) {
+    position.x = Math.max(radius, Math.min(GAME_WIDTH - radius, position.x));
+    position.y = Math.max(radius, Math.min(GAME_HEIGHT - radius, position.y));
+  }
   return { collided, blockedX, blockedY };
 }

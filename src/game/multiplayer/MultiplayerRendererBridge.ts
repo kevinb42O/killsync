@@ -18,8 +18,35 @@ import {
   disposeCoopOperatorRig,
 } from '../rendering/coopOperatorVisuals';
 import { OperatorTrailSystem } from '../rendering/OperatorTrailSystem';
+import type { CoopTextKey, CoopTextParams } from './i18n';
+import { CoopStructureVisuals } from '../rendering/CoopStructureVisuals';
+import { snapCoopStructurePose, type CoopStructureType } from './CoopFieldEngineering';
+import { ProjectileMuzzlePresentation } from './ProjectileMuzzlePresentation';
+import { raycastWorldObstacles } from '../world/WorldLayout';
+import { WALL_JUMP_MAX_CAMERA_ROLL, wallJumpCameraLean } from './wallJumpPresentation';
+import { getCoopSkin } from './CoopSkins';
+import { ProjectileImpactVisuals } from '../rendering/ProjectileImpactVisuals';
 
-type PresentationParticle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; z?: number };
+type PresentationParticle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; z?: number; vz?: number; gravity?: number };
+type TransientArc = { group: THREE.Group; life: number; maxLife: number };
+type FallingPresentation = { startedAtMs: number; x: number; y: number; angle: number };
+type PassiveMeshData = {
+  rank: number;
+  orbit?: THREE.Group;
+  orbitMaterials: THREE.Material[];
+  perimeter?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  pulse?: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  lastTriggerAtMs: number;
+};
+const FALL_PRESENTATION_MS = 5_000;
+const FALL_PRESENTATION_GRAVITY = 145;
+
+/** The first-person owner normally has no world rig. Once their camera is
+ * spectating a teammate, their own downed body must join the world rigs so it
+ * remains visible from the chase camera. */
+export function shouldRenderPlayerRig(playerId: string, localPlayerId: string, spectating: boolean, falling: boolean) {
+  return playerId !== localPlayerId || spectating || falling;
+}
 
 /**
  * Presents the network snapshot through the established production Renderer3D.
@@ -28,8 +55,13 @@ type PresentationParticle = { x: number; y: number; vx: number; vy: number; life
  * rendering contract already used by the single-player game.
  */
 export class MultiplayerRendererBridge {
-  private readonly renderer = new Renderer3D();
+  private readonly renderer = new Renderer3D({
+    floatingPlatform: true,
+    coopEnemyBatching: !(import.meta.env.DEV && new URLSearchParams(window.location.search).get('coopBatch') === '0'),
+  });
   private readonly tacticalVisuals = new CoopTacticalVisuals(this.renderer.scene);
+  private readonly structureVisuals = new CoopStructureVisuals(this.renderer.scene);
+  private readonly projectileImpactVisuals = new ProjectileImpactVisuals(this.renderer.scene);
   private readonly remotePlayers = new Map<string, CoopOperatorRig>();
   private readonly passiveMeshes = new Map<string, THREE.Group>();
   private readonly localFirearm = new CoopFirearmVisualRig(true);
@@ -38,13 +70,24 @@ export class MultiplayerRendererBridge {
   private readonly combatParticles: PresentationParticle[] = [];
   private readonly renderEnemies: Enemy[] = [];
   private readonly renderEnemyById = new Map<number, Enemy>();
+  private readonly activeRenderEnemyIds = new Set<number>();
   private readonly renderProjectiles: Projectile[] = [];
   private readonly renderProjectileById = new Map<number, Projectile>();
+  private readonly activeRenderProjectileIds = new Set<number>();
+  private readonly newlyObservedProjectileIds = new Set<number>();
+  private readonly projectileMuzzlePresentation = new ProjectileMuzzlePresentation();
+  private readonly transientArcs: TransientArc[] = [];
+  private readonly lightningPool: THREE.Group[] = [];
+  private readonly lightningPoints = Array.from({ length: 35 }, () => new THREE.Vector3());
+  private readonly lightningPointViews = Array.from({ length: 36 }, (_, count) => this.lightningPoints.slice(0, count));
+  private readonly lightningFrom = new THREE.Vector3();
+  private readonly lightningTo = new THREE.Vector3();
   private readonly renderGems: ExperienceGem[] = [];
   private readonly renderGemById = new Map<number, ExperienceGem>();
   private readonly renderItems: WorldItem[] = [];
   private readonly renderItemById = new Map<string, WorldItem>();
   private readonly renderState: Record<string, unknown>;
+  private interactionBlocked = false;
   private readonly handleCanvasPointerDown = () => this.requestPointerLock();
   private lastHitSoundAt = -Infinity;
   private presentationShake = 0;
@@ -54,6 +97,13 @@ export class MultiplayerRendererBridge {
   private lastLocalZ = 0;
   private localWasAirborne = false;
   private localAirborneTimeMs = 0;
+  private lastPresentedWallJumpSequence = -1;
+  private lastPresentedDoubleJumpSequence = -1;
+  private wallJumpRoll = 0;
+  private wallJumpPitch = 0;
+  private wallJumpRollTarget = 0;
+  private wallJumpPitchTarget = 0;
+  private readonly fallingPresentations = new Map<string, FallingPresentation>();
 
   constructor() {
     this.renderState = {
@@ -83,23 +133,81 @@ export class MultiplayerRendererBridge {
     this.renderer.renderer.domElement.addEventListener('pointerdown', this.handleCanvasPointerDown);
   }
   preloadGunfire() { soundManager.preloadGunfire(); }
-  requestPointerLock() { this.renderer.requestPointerLock(); }
+  requestPointerLock() {
+    if (this.interactionBlocked) return;
+    const canvas = this.renderer.renderer.domElement;
+    canvas.tabIndex = -1;
+    canvas.focus({ preventScroll: true });
+    this.renderer.requestPointerLock();
+  }
   exitPointerLock() { this.renderer.exitPointerLock(); }
+  focusCanvas() {
+    const canvas = this.renderer.renderer.domElement;
+    canvas.tabIndex = -1;
+    canvas.focus({ preventScroll: true });
+  }
+  setInteractionBlocked(blocked: boolean) {
+    this.interactionBlocked = blocked;
+    if (blocked) this.exitPointerLock();
+  }
   get isPointerLocked() { return this.renderer.isPointerLocked; }
   canLocalJump() { return this.lastLocalZ <= 0.08; }
   getAimAngle() { return Math.atan2(-Math.cos(this.renderer.yaw), -Math.sin(this.renderer.yaw)); }
   getAimPitch() { return this.renderer.pitch; }
+  getViewportSize() {
+    const canvas = this.renderer.renderer.domElement;
+    return { width: canvas.clientWidth || canvas.width, height: canvas.clientHeight || canvas.height };
+  }
+  /** Projects the current co-op enemy roster in one camera update. A small NDC
+   * guard band prevents edge cues flickering over bodies crossing the bezel. */
+  getOffscreenEnemyIds(enemies: ReadonlyArray<{ id: number; x: number; y: number; radius: number }>) {
+    const camera = this.renderer.camera;
+    camera.updateMatrixWorld(true);
+    const projected = new THREE.Vector3();
+    const offscreen = new Set<number>();
+    for (const enemy of enemies) {
+      projected.set(enemy.x, Math.max(12, enemy.radius * .72), enemy.y).project(camera);
+      const guard = Math.min(.13, .035 + enemy.radius / 700);
+      const visible = projected.z >= -1 && projected.z <= 1
+        && Math.abs(projected.x) <= 1 + guard
+        && Math.abs(projected.y) <= 1 + guard;
+      if (!visible) offscreen.add(enemy.id);
+    }
+    return offscreen;
+  }
+  getPerformanceStats() { return this.renderer.getPerformanceStats(); }
+  getBuildPose(snapshot: CoopSnapshot | null, localPlayerId: string, type: CoopStructureType, rotationOffset = 0, snapping = true) {
+    const local = snapshot?.players.find(player => player.id === localPlayerId);
+    if (!local) return undefined;
+    const aim = this.getAimAngle();
+    const distance = type === 'recovery_relay' || type === 'decoy_beacon' ? 165 : 220;
+    const pose = {
+      x: Math.round(local.x + Math.cos(aim) * distance),
+      y: Math.round(local.y + Math.sin(aim) * distance),
+      angle: type === 'recovery_relay' || type === 'decoy_beacon' ? 0 : aim + Math.PI / 2 + rotationOffset,
+    };
+    return snapCoopStructurePose(type, pose.x, pose.y, pose.angle, snapshot?.structures || [], snapping);
+  }
+  setBuildPreview(type: CoopStructureType | undefined, pose?: { x: number; y: number; angle: number }, valid = true) {
+    this.structureVisuals.setPreview(type, pose?.x, pose?.y, pose?.angle, valid);
+  }
 
   /** Calculates the world coordinates and target context for a tactical ping. */
-  calculatePingTarget(snapshot: CoopSnapshot | null, localPlayerId: string): { x: number; y: number; z: number; kind: CoopPingKind; label: string } {
+  calculatePingTarget(snapshot: CoopSnapshot | null, localPlayerId: string): { x: number; y: number; z: number; kind: CoopPingKind; labelKey: CoopTextKey; labelParams?: CoopTextParams } {
     const local = snapshot?.players.find(p => p.id === localPlayerId) || snapshot?.players[0];
-    if (!local) return { x: 0, y: 0, z: 0, kind: 'location', label: 'Waypoint' };
+    if (!local) return { x: 0, y: 0, z: 0, kind: 'location', labelKey: 'ping.waypoint' };
 
     const yaw = this.renderer.yaw;
     const pitch = this.renderer.pitch;
     const forwardX = -Math.sin(yaw);
     const forwardY = -Math.cos(yaw);
     const aimAngle = this.getAimAngle();
+    const camHeight = 36 + (local.z || 0);
+    const verticalSlope = Math.tan(pitch);
+    const groundDistance = verticalSlope < 0 ? camHeight / -verticalSlope : Infinity;
+    const sightDistance = Math.min(2600, groundDistance);
+    const worldHit = raycastWorldObstacles(local.x, local.y, camHeight, forwardX, forwardY, verticalSlope, sightDistance);
+    const isBeforeWorldHit = (distance: number) => distance <= (worldHit?.distance ?? Infinity) + 1;
 
     if (snapshot) {
       // 1. Boss
@@ -111,8 +219,8 @@ export class MultiplayerRendererBridge {
         const angle = Math.atan2(dy, dx);
         let diff = Math.abs(angle - aimAngle);
         if (diff > Math.PI) diff = 2 * Math.PI - diff;
-        if (diff < 0.16 && dist < 2600) {
-          return { x: boss.x, y: boss.y, z: 20, kind: 'boss', label: boss.name.toUpperCase() };
+        if (diff < 0.16 && dist < 2600 && isBeforeWorldHit(dist)) {
+          return { x: boss.x, y: boss.y, z: 20, kind: 'boss', labelKey: boss.nameKey };
         }
       }
 
@@ -125,19 +233,19 @@ export class MultiplayerRendererBridge {
         const angle = Math.atan2(dy, dx);
         let diff = Math.abs(angle - aimAngle);
         if (diff > Math.PI) diff = 2 * Math.PI - diff;
-        if (diff < 0.18 && dist < 2400) {
-          return { x: teammate.x, y: teammate.y, z: 5, kind: 'revive', label: `REVIVE ${teammate.label.toUpperCase()}` };
+        if (diff < 0.18 && dist < 2400 && isBeforeWorldHit(dist)) {
+          return { x: teammate.x, y: teammate.y, z: 5, kind: 'revive', labelKey: 'ping.revive', labelParams: { name: teammate.label.toUpperCase() } };
         }
       }
 
       // 3. Nearest Hostile within aim cone
-      let bestEnemy: { x: number; y: number; kind: CoopPingKind; label: string; score: number } | null = null;
+      let bestEnemy: { x: number; y: number; kind: CoopPingKind; labelKey: CoopTextKey; labelParams: CoopTextParams; score: number } | null = null;
       for (const enemy of snapshot.enemies) {
         if (enemy.dying) continue;
         const dx = enemy.x - local.x;
         const dy = enemy.y - local.y;
         const dist = Math.hypot(dx, dy);
-        if (dist > 1800) continue;
+        if (dist > 1800 || !isBeforeWorldHit(dist)) continue;
         const angle = Math.atan2(dy, dx);
         let diff = Math.abs(angle - aimAngle);
         if (diff > Math.PI) diff = 2 * Math.PI - diff;
@@ -148,31 +256,44 @@ export class MultiplayerRendererBridge {
               x: enemy.x,
               y: enemy.y,
               kind: 'enemy',
-              label: `HOSTILE (${enemy.type.toUpperCase()})`,
+              labelKey: 'ping.hostile',
+              labelParams: {},
               score,
             };
           }
         }
       }
       if (bestEnemy) {
-        return { x: bestEnemy.x, y: bestEnemy.y, z: 12, kind: bestEnemy.kind, label: bestEnemy.label };
+        return { x: bestEnemy.x, y: bestEnemy.y, z: 12, kind: bestEnemy.kind, labelKey: bestEnemy.labelKey, labelParams: bestEnemy.labelParams };
       }
 
-      // 4. Buy Station
+      // 4. Squad engineering. A normal ping on a structure communicates the
+      // defensive position without introducing a second ping vocabulary.
+      for (const structure of snapshot.structures || []) {
+        if (structure.state === 'destroying') continue;
+        const dx = structure.x - local.x, dy = structure.y - local.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - aimAngle);
+        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff < .16 && dist < 1_600 && isBeforeWorldHit(dist)) return { x: structure.x, y: structure.y, z: 18, kind: 'location', labelKey: `build.${structure.type}.name` as CoopTextKey };
+      }
+
+      // 5. Buy Station
       for (const station of snapshot.buyStations) {
-        if (!station.active) continue;
+        if (station.state !== 'active') continue;
         const dx = station.x - local.x;
         const dy = station.y - local.y;
         const dist = Math.hypot(dx, dy);
         const angle = Math.atan2(dy, dx);
         let diff = Math.abs(angle - aimAngle);
         if (diff > Math.PI) diff = 2 * Math.PI - diff;
-        if (diff < 0.16 && dist < 2200) {
-          return { x: station.x, y: station.y, z: 10, kind: 'station', label: 'BUY STATION' };
+        if (diff < 0.16 && dist < 2200 && isBeforeWorldHit(dist)) {
+          return { x: station.x, y: station.y, z: 10, kind: 'station', labelKey: 'ping.station' };
         }
       }
 
-      // 5. Objective / Uplink
+      // 6. Objective / Uplink
       const objective = snapshot.run.objective;
       if (objective) {
         const dx = objective.x - local.x;
@@ -181,21 +302,33 @@ export class MultiplayerRendererBridge {
         const angle = Math.atan2(dy, dx);
         let diff = Math.abs(angle - aimAngle);
         if (diff > Math.PI) diff = 2 * Math.PI - diff;
-        if (diff < 0.18 && dist < 2500) {
-          return { x: objective.x, y: objective.y, z: 15, kind: 'objective', label: objective.title.toUpperCase() };
+        if (diff < 0.18 && dist < 2500 && isBeforeWorldHit(dist)) {
+          return { x: objective.x, y: objective.y, z: 15, kind: 'objective', labelKey: objective.titleKey };
         }
       }
     }
 
-    // 6. Ground plane projection or forward look position
+    // 7. The first solid surface under the crosshair. This is deliberately
+    // resolved after contextual targets so a visible enemy or objective keeps
+    // its richer ping, but no target can be selected through the obstacle.
+    if (worldHit) {
+      return {
+        x: Math.round(worldHit.x),
+        y: Math.round(worldHit.y),
+        z: Math.round(worldHit.z),
+        kind: 'location',
+        labelKey: 'ping.waypoint',
+      };
+    }
+
+    // 8. Ground plane projection or forward look position
     let targetDist = 650;
     if (pitch < -0.06) {
-      const camHeight = 36 + (local.z || 0);
       targetDist = Math.max(50, Math.min(1200, camHeight / Math.tan(-pitch)));
     }
     const pingX = Math.round(local.x + forwardX * targetDist);
     const pingY = Math.round(local.y + forwardY * targetDist);
-    return { x: pingX, y: pingY, z: 0, kind: 'location', label: 'WAYPOINT' };
+    return { x: pingX, y: pingY, z: 0, kind: 'location', labelKey: 'ping.waypoint' };
   }
 
   /**
@@ -213,26 +346,84 @@ export class MultiplayerRendererBridge {
     const snapshotChanged = snapshot.tick !== this.lastSnapshotTick;
     if (snapshot.tick < this.lastSnapshotTick) {
       this.seenCombatEventIds.clear(); this.combatParticles.length = 0; this.presentationShake = 0;
+      this.projectileImpactVisuals.clear();
+      this.fallingPresentations.clear();
+      this.projectileMuzzlePresentation.clear();
+      this.lastPresentedWallJumpSequence = -1;
+      this.lastPresentedDoubleJumpSequence = -1;
+      this.wallJumpRoll = this.wallJumpPitch = this.wallJumpRollTarget = this.wallJumpPitchTarget = 0;
     }
     this.visualElapsedMs = snapshot.tick !== this.lastSnapshotTick ? snapshot.elapsedMs : Math.min(snapshot.elapsedMs + 100, this.visualElapsedMs + deltaMs);
     this.lastSnapshotTick = snapshot.tick;
+    this.registerFallingPresentation(snapshot, localPlayerId);
     // A revive is an authoritative life-state change. It must win over any
     // previous spectator target in the same frame so the player cannot remain
     // stuck in third person after standing back up.
-    const isSpectating = !forceFirstPerson && Boolean(spectatorTargetId && spectatorTargetId !== localPlayerId);
+    const localFall = this.activeFall(localPlayerId);
+    const isFallingLocal = Boolean(localFall);
+    const isSpectating = !isFallingLocal && !forceFirstPerson && Boolean(spectatorTargetId && spectatorTargetId !== localPlayerId);
     const local = (isSpectating ? snapshot.players.find(player => player.id === spectatorTargetId) : undefined)
       || snapshot.players.find(player => player.id === localPlayerId) || snapshot.players[0];
     if (!local) return;
+    const localSkin = getCoopSkin(local.skinId);
+    this.renderer.setCoopSuitPalette({
+      primary: localSkin.palette.glow,
+      secondary: localSkin.palette.armor,
+      dark: localSkin.palette.undersuit,
+      glow: localSkin.palette.glow,
+      visor: localSkin.palette.visor,
+      metalness: localSkin.material.metalness,
+      roughness: localSkin.material.roughness,
+      emissiveIntensity: localSkin.material.emissiveIntensity * (localSkin.material.animatedEmissive ? 1 + Math.sin(snapshot.elapsedMs * .004) * .28 : 1),
+      premium: localSkin.tier === 'premium',
+      signature: localSkin.tier === 'premium' ? localSkin.id as 'black_ice' | 'royal_inferno' : undefined,
+    });
     const selectedWeaponId = COOP_WEAPON_SLOTS[local.selectedSlot] || 'plasma_gun';
     const weaponState = local.weaponStates[local.selectedSlot];
     const player = this.renderState.player as Player;
-    player.position.x = local.x; player.position.y = local.y;
-    player.velocity.x = Math.cos(local.angle) * 0.01; player.velocity.y = Math.sin(local.angle) * 0.01;
+    player.position.x = localFall?.x ?? local.x; player.position.y = localFall?.y ?? local.y;
+    const presentedAngle = localFall?.angle ?? local.angle;
+    player.velocity.x = Math.cos(presentedAngle) * 0.01; player.velocity.y = Math.sin(presentedAngle) * 0.01;
     player.health = local.health; player.maxHealth = local.maxHealth;
     player.level = local.level; player.experience = local.experience; player.experienceToNextLevel = local.experienceToNextLevel;
     player.coins = local.coins; player.pendingDataCores = local.pendingDataCores;
-    this.renderer.presentationVerticalOffset = local.z;
-    const currentZ = local.z;
+    const fallingZ = localFall ? this.fallHeight(localFall) : undefined;
+    this.renderer.presentationVerticalOffset = fallingZ ?? local.z;
+    const currentZ = fallingZ ?? local.z;
+    const wallJumpSequence = local.motion?.lastWallJumpSequence ?? -1;
+    if (!isSpectating && !isFallingLocal && currentZ > .08 && wallJumpSequence >= 0 && wallJumpSequence !== this.lastPresentedWallJumpSequence) {
+      const lean = wallJumpCameraLean(
+        local.motion?.wallJumpDirectionX || 0,
+        local.motion?.wallJumpDirectionY || 0,
+        this.getAimAngle(),
+      );
+      this.wallJumpRollTarget = lean.roll;
+      this.wallJumpPitchTarget = lean.pitch;
+      this.presentationShake = Math.max(this.presentationShake, 1.2);
+      soundManager.playWallJump(lean.roll / WALL_JUMP_MAX_CAMERA_ROLL);
+    }
+    // A spectated teammate's sequence must not replace the controlled
+    // player's sequence or replay an old lean when first person resumes.
+    if (!isSpectating) this.lastPresentedWallJumpSequence = wallJumpSequence;
+    const doubleJumpSequence = local.motion?.lastDoubleJumpSequence ?? -1;
+    if (!isSpectating && !isFallingLocal && currentZ > .08 && doubleJumpSequence >= 0 && doubleJumpSequence !== this.lastPresentedDoubleJumpSequence) {
+      // Visible third-person operator rigs intensify their existing dual
+      // flames. Keep the local cue in audio and camera feedback: a world-space
+      // orange burst at the player's XY used the generic particle elevation,
+      // which put it near the floor beneath the first-person camera.
+      soundManager.playDoubleJump();
+      this.presentationShake = Math.max(this.presentationShake, .9);
+    }
+    if (!isSpectating) this.lastPresentedDoubleJumpSequence = doubleJumpSequence;
+    const leanBlend = 1 - Math.exp(-32 * Math.max(0, deltaMs) / 1000);
+    this.wallJumpRoll += (this.wallJumpRollTarget - this.wallJumpRoll) * leanBlend;
+    this.wallJumpPitch += (this.wallJumpPitchTarget - this.wallJumpPitch) * leanBlend;
+    const leanRecovery = Math.exp(-Math.max(0, deltaMs) / 155);
+    this.wallJumpRollTarget *= leanRecovery;
+    this.wallJumpPitchTarget *= leanRecovery;
+    if (isSpectating || isFallingLocal) this.wallJumpRoll = this.wallJumpPitch = 0;
+    this.renderer.presentationCameraRoll = this.wallJumpRoll;
+    this.renderer.presentationCameraPitchOffset = this.wallJumpPitch;
     if (currentZ > 0.08) {
       this.localAirborneTimeMs += deltaMs;
       this.localWasAirborne = true;
@@ -251,7 +442,7 @@ export class MultiplayerRendererBridge {
     // The host owns spread and reload eligibility; this only presents the
     // replicated aim state through the renderer's existing ADS camera rig.
     this.renderer.isAimingDownSights = local.isAiming;
-    this.renderer.presentationScoped = local.isAiming && selectedWeaponId === 'sniper_rifle';
+    this.renderer.presentationScoped = false;
     this.renderer.weaponRoot.visible = selectedWeaponId === 'plasma_gun';
     this.renderer.presentationHandgunReloadProgress = selectedWeaponId === 'plasma_gun' && weaponState?.state === 'reloading'
       && weaponState.reloadStartedAtMs !== undefined && weaponState.reloadEndsAtMs !== undefined
@@ -272,14 +463,15 @@ export class MultiplayerRendererBridge {
     // rich CoopOperatorRig (rendered by syncRemotePlayers) takes its place.
     // We also drive renderer.yaw from the network angle so the camera faces
     // the direction the spectated player is actually moving/looking.
-    this.renderer.presentationSpectating = isSpectating;
-    if (isSpectating) {
-      this.renderer.yaw = Math.atan2(-Math.cos(local.angle), -Math.sin(local.angle));
+    const useThirdPerson = isSpectating || isFallingLocal;
+    this.renderer.presentationSpectating = useThirdPerson;
+    if (useThirdPerson) {
+      this.renderer.yaw = Math.atan2(-Math.cos(presentedAngle), -Math.sin(presentedAngle));
     }
-    this.renderState.viewMode = isSpectating ? 'THIRD_PERSON' : 'FIRST_PERSON';
+    this.renderState.viewMode = useThirdPerson ? 'THIRD_PERSON' : 'FIRST_PERSON';
     this.renderState.gameTime = snapshot.elapsedMs;
     this.syncRenderEnemies(snapshot);
-    this.syncRenderProjectiles(snapshot);
+    this.syncRenderProjectiles(snapshot, localPlayerId);
     if (snapshotChanged) this.syncStaticRenderEntities(snapshot);
     this.renderState.enemies = this.renderEnemies;
     this.renderState.projectiles = this.renderProjectiles;
@@ -288,8 +480,11 @@ export class MultiplayerRendererBridge {
     // Reuse the production city props for co-op terminals and extraction. The
     // host supplies only compact snapshot positions; presentation stays local.
     if (snapshotChanged) {
-      this.renderState.shops = snapshot.buyStations.filter(station => station.active).map(station => ({ id: `coop-station-${station.id}`, position: { x: station.x, y: station.y }, radius: station.radius }));
-      this.renderState.exfillPortal = snapshot.run.exfil ? { position: { x: snapshot.run.exfil.x, y: snapshot.run.exfil.y }, radius: snapshot.run.exfil.radius, active: snapshot.run.phase === 'exfil' } : null;
+      // The production Buy Station model does not exist until authoritative
+      // capture completes. In that snapshot the capture prop is removed and
+      // this shop appears at the exact same coordinates.
+      this.renderState.shops = snapshot.buyStations.filter(station => station.state === 'active').map(station => ({ id: `coop-station-${station.id}`, position: { x: station.x, y: station.y }, radius: station.radius }));
+      this.renderState.exfillPortal = snapshot.run.exfil ? { position: { x: snapshot.run.exfil.x, y: snapshot.run.exfil.y }, radius: snapshot.run.exfil.radius, active: snapshot.run.phase === 'exfil' || snapshot.run.phase === 'checkpoint' } : null;
     }
     this.renderState.gasZone = snapshot.gasZone;
 
@@ -298,13 +493,14 @@ export class MultiplayerRendererBridge {
       if (Math.random() < 0.35 && this.combatParticles.length < 320) {
         const angle = Math.random() * Math.PI * 2;
         const dist = 30 + Math.random() * 180;
+        const maxLife = 600 + Math.random() * 400;
         this.combatParticles.push({
           x: local.x + Math.cos(angle) * dist,
           y: local.y + Math.sin(angle) * dist,
           vx: (Math.random() - 0.5) * 8,
           vy: (Math.random() - 0.5) * 8,
-          life: 0,
-          maxLife: 600 + Math.random() * 400,
+          life: maxLife,
+          maxLife,
           color: Math.random() < 0.65 ? '#4ade80' : '#a3e635',
           size: 2.5 + Math.random() * 3,
           z: 6 + Math.random() * 34,
@@ -312,36 +508,78 @@ export class MultiplayerRendererBridge {
       }
     }
 
+    // Build/update passive meshes before consuming their trigger events so a
+    // module bought and triggered in the same snapshot can animate at once.
+    this.syncPassiveModules(snapshot, local.id, !useThirdPerson);
     this.consumeCombatEvents(snapshot.combatEvents, localPlayerId, deltaMs);
+    this.projectileImpactVisuals.update(deltaMs);
     this.renderState.particles = this.combatParticles;
     this.renderState.screenShake = this.presentationShake;
     // Always pass the true localPlayerId so every teammate (including the
     // spectated player) gets their rich CoopOperatorRig rendered. The caller
     // no longer uses the old thirdPersonPlayerGroup for spectating.
-    this.syncRemotePlayers(snapshot, localPlayerId);
-    this.syncPassiveModules(snapshot);
+    this.syncRemotePlayers(snapshot, localPlayerId, isSpectating);
+    this.structureVisuals.update(snapshot.structures || [], snapshot.elapsedMs);
     this.tacticalVisuals.update(snapshot, this.visualElapsedMs);
-    this.trailSystem.update(snapshot.players, snapshot.elapsedMs, deltaMs);
+    // Never render a ground trail for the operator whose camera we currently
+    // own. Those rings are useful for teammates, but become a translucent
+    // near-camera floor layer during jumps and spectator transitions.
+    this.trailSystem.update(snapshot.players, snapshot.elapsedMs, deltaMs, local.id);
 
     // Continuous Tower Mission (Uplink) charging sound
     const objective = snapshot.run?.objective;
+    const captureStation = snapshot.buyStations.find(station => station.state === 'capturing'
+      && local.lifeState === 'alive' && Math.hypot(local.x - station.x, local.y - station.y) <= station.captureRadius + 31);
+    const captureFoundry = snapshot.weaponFoundry?.state === 'capturing' && local.lifeState === 'alive'
+      && Math.hypot(local.x - snapshot.weaponFoundry.x, local.y - snapshot.weaponFoundry.y) <= snapshot.weaponFoundry.captureRadius + 31
+      ? snapshot.weaponFoundry : undefined;
     const isUplink = objective?.kind === 'uplink' && !objective.completed;
     const inUplinkCircle = Boolean(isUplink && local.lifeState === 'alive'
       && Math.hypot(local.x - objective.x, local.y - objective.y) <= COOP_UPLINK_RADIUS);
-    const progressRatio = isUplink && objective.required > 0 ? objective.progress / objective.required : 0;
-    soundManager.updateTowerCharge(inUplinkCircle, progressRatio);
+    const activeCapture = captureStation || captureFoundry;
+    const captureProgressRatio = activeCapture
+      ? activeCapture.captureProgressMs / Math.max(1, activeCapture.captureRequiredMs)
+      : 0;
+    const uplinkProgressRatio = isUplink && objective.required > 0 ? objective.progress / objective.required : 0;
+    // Station capture uses a restrained pulse; never layer it with the uplink
+    // drone when both zones happen to be relevant in the same snapshot.
+    soundManager.updateStationCapture(Boolean(activeCapture && !activeCapture.contested), captureProgressRatio);
+    soundManager.updateTowerCharge(!activeCapture && inUplinkCircle, uplinkProgressRatio);
 
     const engine = this.renderState as unknown as GameEngine;
     this.renderer.prepareFrame(engine, deltaMs);
+    if (!useThirdPerson && this.newlyObservedProjectileIds.size > 0) {
+      const muzzle = selectedWeaponId === 'plasma_gun'
+        ? this.renderer.projectViewmodelPointToWorld(this.renderer.weaponMuzzlePoint)
+        : this.renderer.projectViewmodelPointToWorld(this.localFirearm.getMuzzlePoint());
+      for (const id of this.newlyObservedProjectileIds) {
+        const projectile = this.renderProjectileById.get(id);
+        if (!projectile || projectile.ownerId !== localPlayerId) continue;
+        const pitch = projectile.presentationPitch || 0;
+        this.projectileMuzzlePresentation.anchor(id, projectile, muzzle, {
+          x: Math.cos(projectile.rotation) * Math.cos(pitch),
+          y: Math.sin(pitch),
+          z: Math.sin(projectile.rotation) * Math.cos(pitch),
+        });
+      }
+    }
+    for (const id of this.projectileMuzzlePresentation.activeIds()) {
+      const projectile = this.renderProjectileById.get(id);
+      if (projectile) this.projectileMuzzlePresentation.present(id, projectile, deltaMs);
+      else this.projectileMuzzlePresentation.forget(id);
+    }
     this.renderer.render(engine, deltaMs);
   }
 
   destroy() {
+    soundManager.stopStationCapture();
     soundManager.stopTowerCharge();
     this.exitPointerLock();
     this.renderer.renderer.domElement.removeEventListener('pointerdown', this.handleCanvasPointerDown);
     this.localFirearm.dispose();
     this.tacticalVisuals.dispose();
+    this.structureVisuals.dispose();
+    this.projectileImpactVisuals.dispose();
     this.trailSystem.dispose();
     for (const remote of this.remotePlayers.values()) {
       disposeCoopOperatorRig(remote);
@@ -350,6 +588,10 @@ export class MultiplayerRendererBridge {
     this.remotePlayers.clear();
     for (const mesh of this.passiveMeshes.values()) { this.renderer.scene.remove(mesh); disposeGroup(mesh); }
     this.passiveMeshes.clear();
+    for (const arc of this.transientArcs) this.disposeLightning(arc.group);
+    this.transientArcs.length = 0;
+    for (const lightning of this.lightningPool) this.disposeLightning(lightning);
+    this.lightningPool.length = 0;
     this.renderer.destroy();
   }
 
@@ -372,7 +614,7 @@ export class MultiplayerRendererBridge {
 
   /** Keep renderer-contract objects stable across display frames. */
   private syncRenderEnemies(snapshot: CoopSnapshot) {
-    const active = new Set<number>();
+    const active = this.activeRenderEnemyIds; active.clear();
     this.renderEnemies.length = 0;
     for (const source of snapshot.enemies) {
       active.add(source.id);
@@ -394,13 +636,19 @@ export class MultiplayerRendererBridge {
     for (const id of this.renderEnemyById.keys()) if (!active.has(id)) this.renderEnemyById.delete(id);
   }
 
-  private syncRenderProjectiles(snapshot: CoopSnapshot) {
-    const active = new Set<number>();
+  private syncRenderProjectiles(snapshot: CoopSnapshot, localPlayerId: string) {
+    const active = this.activeRenderProjectileIds; active.clear();
+    this.newlyObservedProjectileIds.clear();
     this.renderProjectiles.length = 0;
     for (const source of snapshot.projectiles) {
+      if (source.weaponId === 'arc_launcher') continue;
       active.add(source.id);
       let projectile = this.renderProjectileById.get(source.id);
-      if (!projectile) { projectile = this.toProjectile(source); this.renderProjectileById.set(source.id, projectile); }
+      if (!projectile) {
+        projectile = this.toProjectile(source);
+        this.renderProjectileById.set(source.id, projectile);
+        if (source.ownerId === localPlayerId) this.newlyObservedProjectileIds.add(source.id);
+      }
       else {
         const horizontalVelocity = Math.cos(source.pitch) * source.velocity;
         projectile.position.x = source.x; projectile.position.y = source.y;
@@ -412,6 +660,54 @@ export class MultiplayerRendererBridge {
       this.renderProjectiles.push(projectile);
     }
     for (const id of this.renderProjectileById.keys()) if (!active.has(id)) this.renderProjectileById.delete(id);
+  }
+
+  private createLightning(color: string) {
+    const pooled = this.lightningPool.pop();
+    if (pooled) {
+      pooled.visible = true;
+      const halo = pooled.getObjectByName('arc-halo') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+      halo.material.color.set(color);
+      return pooled;
+    }
+    const group = new THREE.Group(); group.name = 'coop-arc-lightning';
+    const halo = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .46, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, toneMapped: false }));
+    halo.name = 'arc-halo'; group.add(halo);
+    const core = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: '#f0f9ff', transparent: true, opacity: .98, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, toneMapped: false }));
+    core.name = 'arc-core'; group.add(core);
+    this.renderer.scene.add(group);
+    return group;
+  }
+
+  private updateLightning(group: THREE.Group, from: THREE.Vector3Like, to: THREE.Vector3Like, seed: number, phase: number) {
+    const dx = to.x - from.x, dz = to.z - from.z, distance = Math.hypot(dx, dz);
+    const segments = Math.max(8, Math.min(34, Math.ceil(distance / 45)));
+    const nx = distance > .001 ? -dz / distance : 0, nz = distance > .001 ? dx / distance : 0;
+    const points = this.lightningPoints;
+    for (let index = 0; index <= segments; index++) {
+      const t = index / segments, envelope = Math.sin(t * Math.PI);
+      const wave = Math.sin(seed * 1.731 + index * 12.989 + phase * .031) + Math.cos(seed * .317 + index * 5.133 - phase * .023) * .55;
+      const lateral = wave * Math.min(18, 5 + distance * .012) * envelope;
+      const vertical = Math.sin(seed * .719 + index * 8.77 + phase * .027) * Math.min(12, 3 + distance * .008) * envelope;
+      points[index].set(from.x + dx * t + nx * lateral, from.y + (to.y - from.y) * t + vertical, from.z + dz * t + nz * lateral);
+    }
+    const curve = new THREE.CatmullRomCurve3(this.lightningPointViews[segments + 1]);
+    for (const strand of group.children as THREE.Mesh[]) {
+      strand.geometry.dispose();
+      strand.geometry = new THREE.TubeGeometry(curve, segments * 2, strand.name === 'arc-core' ? 2.0 : 7.5, strand.name === 'arc-core' ? 6 : 8, false);
+      (strand.material as THREE.MeshBasicMaterial).opacity = strand.name === 'arc-core' ? .98 : .46;
+    }
+  }
+
+  private disposeLightning(group: THREE.Group) {
+    this.renderer.scene.remove(group);
+    group.traverse(node => { if (node instanceof THREE.Mesh) { node.geometry.dispose(); (node.material as THREE.Material).dispose(); } });
+  }
+
+  private releaseLightning(group: THREE.Group) {
+    group.visible = false;
+    if (this.lightningPool.length < 16) this.lightningPool.push(group);
+    else this.disposeLightning(group);
   }
 
   /** Drops only change on simulation snapshots, not during interpolation. */
@@ -486,12 +782,25 @@ export class MultiplayerRendererBridge {
   private consumeCombatEvents(events: CoopCombatEvent[], localPlayerId: string, deltaMs: number) {
     this.presentationShake = Math.max(0, this.presentationShake - deltaMs * 0.022);
     for (const particle of this.combatParticles) {
-      particle.x += particle.vx * (deltaMs / 16.666);
-      particle.y += particle.vy * (deltaMs / 16.666);
+      const frameScale = deltaMs / 16.666;
+      particle.x += particle.vx * frameScale;
+      particle.y += particle.vy * frameScale;
+      if (particle.z !== undefined) {
+        particle.z = Math.max(.5, particle.z + (particle.vz || 0) * frameScale);
+        if (particle.vz !== undefined) particle.vz -= (particle.gravity || 0) * frameScale;
+      }
       particle.life -= deltaMs;
     }
     for (let index = this.combatParticles.length - 1; index >= 0; index--) {
       if (this.combatParticles[index].life <= 0) this.combatParticles.splice(index, 1);
+    }
+    for (let index = this.transientArcs.length - 1; index >= 0; index--) {
+      const arc = this.transientArcs[index]; arc.life -= deltaMs;
+      const fade = Math.max(0, arc.life / arc.maxLife);
+      const core = arc.group.getObjectByName('arc-core') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+      const halo = arc.group.getObjectByName('arc-halo') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+      core.material.opacity = fade; halo.material.opacity = fade * .34;
+      if (arc.life <= 0) { this.releaseLightning(arc.group); this.transientArcs.splice(index, 1); }
     }
 
     const now = performance.now();
@@ -515,15 +824,33 @@ export class MultiplayerRendererBridge {
     } else if (event.kind === 'player_downed') {
       this.spawnBurst(event.x, event.y, '#fb7185', 14, 800, 5);
       if (event.playerId === localPlayerId) this.presentationShake = Math.max(this.presentationShake, 9);
+    } else if (event.kind === 'player_falling') {
+      this.presentationShake = Math.max(this.presentationShake, event.playerId === localPlayerId ? 11 : 4);
+    } else if (event.kind === 'player_redeployed') {
+      this.spawnBurst(event.x, event.y, '#5eead4', 28, 1100, 6);
+      if (event.playerId === localPlayerId) soundManager.playLevelUp();
     } else if (event.kind === 'objective_completed') {
       this.spawnBurst(event.x, event.y, '#5eead4', 24, 1000, 6);
       this.presentationShake = Math.max(this.presentationShake, 6);
       soundManager.playObjectiveComplete();
+    } else if (event.kind === 'station_online') {
+      this.spawnBurst(event.x, event.y, '#67e8f9', 20, 900, 5);
+      this.presentationShake = Math.max(this.presentationShake, 3);
+      soundManager.playStationCaptured();
+    } else if (event.kind === 'foundry_online') {
+      this.spawnBurst(event.x, event.y, '#f59e0b', 26, 1100, 5.5);
+      this.presentationShake = Math.max(this.presentationShake, 3.5);
+      soundManager.playStationCaptured();
+    } else if (event.kind === 'foundry_upgrade') {
+      this.spawnBurst(event.x, event.y, '#f59e0b', 18, 800, 4.5);
+      if (event.playerId === localPlayerId) soundManager.playLevelUp();
     } else if (event.kind === 'round_started') {
       soundManager.playNewRound();
     } else if (event.kind === 'player_revived') {
       this.spawnBurst(event.x, event.y, '#5eead4', 18, 900, 5.5);
       if (event.playerId === localPlayerId) { this.presentationShake = Math.max(this.presentationShake, 5); soundManager.playLevelUp(); }
+    } else if (event.kind === 'damage_number' && event.playerId === localPlayerId && event.enemyId !== undefined && event.amount) {
+      this.renderer.showEnemyDamageNumber(`coop-enemy-${event.enemyId}`, event.amount, event.color || '#ffffff');
     } else if (event.kind === 'enemy_hit') {
       this.spawnBurst(event.x, event.y, event.color || '#ffffff', 3, 310, 2.5);
       this.presentationShake = Math.max(this.presentationShake, 1.5);
@@ -531,6 +858,14 @@ export class MultiplayerRendererBridge {
         soundManager.playHit();
         this.lastHitSoundAt = now;
       }
+    } else if (event.kind === 'projectile_impact') {
+      this.projectileImpactVisuals.spawn(
+        event.x, event.y, event.z ?? 0,
+        event.normalX || 0, event.normalY || 0, event.normalZ ?? 1,
+        event.color || '#fbbf24', event.weaponId === 'combat_shotgun' ? 13 : 18,
+      );
+      this.spawnProjectileImpact(event);
+      if (event.playerId === localPlayerId) this.presentationShake = Math.max(this.presentationShake, .35);
     } else if (event.kind === 'enemy_killed') {
       this.spawnBurst(event.x, event.y, event.color || '#ff4466', 12, 760, 5.5);
       this.presentationShake = Math.max(this.presentationShake, 5);
@@ -551,11 +886,44 @@ export class MultiplayerRendererBridge {
     } else if (event.kind === 'weapon_upgraded' && event.playerId === localPlayerId) {
       this.spawnBurst(event.x, event.y, event.color || '#67e8f9', 10, 680, 4.5);
       soundManager.playUIHover();
+    } else if (event.kind === 'passive_triggered' && event.playerId && event.weaponId) {
+      // Persistent passives stay deliberately quiet. Their authoritative
+      // trigger is the one moment allowed to bloom, so power is communicated
+      // without laying an animated billboard over combat at all times.
+      const mesh = this.passiveMeshes.get(`${event.playerId}:${event.weaponId}`);
+      if (mesh) (mesh.userData as PassiveMeshData).lastTriggerAtMs = event.atMs;
     } else if ((event.kind === 'reload_started' || event.kind === 'reload_shell_loaded') && event.playerId === localPlayerId) {
       // Reload state is host-authoritative just like firing, so a denied or
       // interrupted reload never emits a misleading magazine sound. The
       // shotgun additionally emits an authoritative seat sound per shell.
       soundManager.playReload(event.weaponId);
+    } else if ((event.kind === 'arc_beam' || event.kind === 'arc_chain') && event.targetX !== undefined && event.targetY !== undefined) {
+      this.spawnArc(event.x, event.y, event.targetX, event.targetY, event.kind === 'arc_beam' ? -1 : (event.chainIndex || 0), event.kind === 'arc_beam' ? 300 : 220);
+    } else if (event.kind === 'fence_triggered' && event.targetX !== undefined && event.targetY !== undefined) {
+      this.spawnArc(event.x, event.y, event.targetX, event.targetY, event.structureId || 0, 260);
+      this.spawnBurst(event.targetX, event.targetY, event.color || '#a78bfa', 9, 430, 4);
+      this.presentationShake = Math.max(this.presentationShake, 1.8);
+      if (now - this.lastHitSoundAt > 90) { soundManager.playHit(); this.lastHitSoundAt = now; }
+    } else if (event.kind === 'structure_built') {
+      this.spawnBurst(event.x, event.y, event.color || '#67e8f9', 18, 700, 4.5);
+      if (event.playerId === localPlayerId) soundManager.playUIHover();
+    } else if (event.kind === 'structure_damaged') {
+      this.spawnBurst(event.x, event.y, '#fbbf24', 7, 420, 3.5);
+    } else if (event.kind === 'structure_destroyed') {
+      this.spawnBurst(event.x, event.y, '#fb7185', 22, 780, 5.5);
+      this.presentationShake = Math.max(this.presentationShake, 4.5);
+      soundManager.playExplosion();
+    } else if (event.kind === 'structure_dismantled') {
+      this.spawnBurst(event.x, event.y, '#67e8f9', 10, 480, 3.5);
+    } else if (event.kind === 'structure_activated') {
+      this.spawnBurst(event.x, event.y, event.color || '#67e8f9', 24, 760, 5);
+      this.presentationShake = Math.max(this.presentationShake, 2.2);
+      if (event.playerId === localPlayerId) soundManager.playLevelUp();
+    } else if (event.kind === 'structure_healed' && event.targetX !== undefined && event.targetY !== undefined) {
+      this.spawnArc(event.x, event.y, event.targetX, event.targetY, event.structureId || 0, 180, event.color || '#22f59a');
+      this.spawnBurst(event.targetX, event.targetY, event.color || '#22f59a', 7, 420, 3.5);
+    } else if (event.kind === 'fabricator_charged' && event.playerId === localPlayerId) {
+      soundManager.playCollect();
     } else if (event.kind === 'weapon_fired') {
       if (event.weaponId) {
         if (event.playerId === localPlayerId) {
@@ -571,8 +939,16 @@ export class MultiplayerRendererBridge {
         }
         else this.remotePlayers.get(event.playerId || '')?.firearm.fire(event.weaponId as CoopFirearmId);
       }
-      this.presentationShake = Math.max(this.presentationShake, event.weaponId === 'sniper_rifle' ? 3.6 : event.weaponId === 'combat_shotgun' ? 2.5 : .8);
+      this.presentationShake = Math.max(this.presentationShake, event.weaponId === 'combat_shotgun' ? 2.5 : event.weaponId === 'arc_launcher' ? 1.25 : .8);
     }
+  }
+
+  private spawnArc(x: number, y: number, targetX: number, targetY: number, chainIndex: number, durationMs: number, color = '#60a5fa') {
+    const lightning = this.createLightning(color);
+    this.lightningFrom.set(x, chainIndex < 0 ? 25 : 38, y);
+    this.lightningTo.set(targetX, 38, targetY);
+    this.updateLightning(lightning, this.lightningFrom, this.lightningTo, 10_000 + chainIndex * 97 + Math.round(x + y), this.visualElapsedMs);
+    this.transientArcs.push({ group: lightning, life: durationMs, maxLife: durationMs });
   }
 
   private spawnBurst(x: number, y: number, color: string, count: number, life: number, size: number) {
@@ -584,18 +960,57 @@ export class MultiplayerRendererBridge {
     }
   }
 
-  private syncRemotePlayers(snapshot: CoopSnapshot, localPlayerId: string) {
+  /** A tiny directional spark/dust fan using the existing Points draw call.
+   * The strict shared cap makes sustained automatic fire constant-cost. */
+  private spawnProjectileImpact(event: CoopCombatEvent) {
+    const available = Math.max(0, 120 - this.combatParticles.length);
+    const count = Math.min(event.weaponId === 'combat_shotgun' ? 3 : 5, available);
+    const nx = event.normalX || 0, ny = event.normalY || 0, nz = event.normalZ ?? 1;
+    const tangentX = -ny, tangentY = nx;
+    const baseZ = Math.max(.8, event.z ?? 0);
+    for (let index = 0; index < count; index++) {
+      const spread = count <= 1 ? 0 : index / (count - 1) - .5;
+      const jitter = (Math.random() - .5) * .22;
+      const speed = .24 + Math.random() * .3;
+      const life = 220 + Math.random() * 190;
+      this.combatParticles.push({
+        x: event.x + nx * 1.5,
+        y: event.y + ny * 1.5,
+        z: baseZ,
+        vx: nx * speed + tangentX * (spread + jitter) * .5,
+        vy: ny * speed + tangentY * (spread + jitter) * .5,
+        vz: nz * speed + (nz > .5 ? .06 + Math.random() * .1 : spread * .18),
+        gravity: nz > .5 ? .022 : .011,
+        life,
+        maxLife: life,
+        color: index === 0 ? '#f8fafc' : event.color || '#fbbf24',
+        size: index === 0 ? 3.2 : 1.6 + Math.random() * 1.2,
+      });
+    }
+  }
+
+  private syncRemotePlayers(snapshot: CoopSnapshot, localPlayerId: string, isSpectating: boolean) {
     const active = new Set<string>();
     for (const player of snapshot.players) {
-      if (player.id === localPlayerId) continue;
+      const fall = this.activeFall(player.id);
+      if (!shouldRenderPlayerRig(player.id, localPlayerId, isSpectating, Boolean(fall))) continue;
       active.add(player.id);
       let remote = this.remotePlayers.get(player.id);
+      if (remote && remote.skin.id !== getCoopSkin(player.skinId).id) {
+        disposeCoopOperatorRig(remote);
+        this.renderer.scene.remove(remote.root);
+        this.remotePlayers.delete(player.id);
+        remote = undefined;
+      }
       if (!remote) {
-        remote = createCoopOperatorRig(player.color, player.label);
+        remote = createCoopOperatorRig(player.color, player.label, player.skinId);
         this.remotePlayers.set(player.id, remote);
         this.renderer.scene.add(remote.root);
       }
-      updateCoopOperatorRig(remote, player, snapshot.elapsedMs, 16.666);
+      if (fall) {
+        const progress = Math.min(1, (performance.now() - fall.startedAtMs) / FALL_PRESENTATION_MS);
+        updateCoopOperatorRig(remote, { ...player, x: fall.x, y: fall.y, z: this.fallHeight(fall), angle: fall.angle }, snapshot.elapsedMs, 16.666, progress);
+      } else updateCoopOperatorRig(remote, player, snapshot.elapsedMs, 16.666);
     }
     for (const [id, remote] of this.remotePlayers) {
       if (active.has(id)) continue;
@@ -605,9 +1020,43 @@ export class MultiplayerRendererBridge {
     }
   }
 
-  /** Render the small, capped passive roster as world-space effects for every
-   * squad member. Gameplay still happens entirely in CoopSimulation. */
-  private syncPassiveModules(snapshot: CoopSnapshot) {
+  /** Only the client that owns the fallen operator renders the cinematic.
+   * Teammates consume the same event as UI copy and remove the eliminated rig. */
+  private registerFallingPresentation(snapshot: CoopSnapshot, localPlayerId: string) {
+    const now = performance.now();
+    for (const event of snapshot.combatEvents) {
+      if (event.kind !== 'player_falling' || event.playerId !== localPlayerId || this.fallingPresentations.has(localPlayerId)) continue;
+      const player = snapshot.players.find(candidate => candidate.id === event.playerId);
+      const networkAgeMs = Math.max(0, snapshot.elapsedMs - event.atMs);
+      this.fallingPresentations.set(localPlayerId, {
+        startedAtMs: now - Math.min(FALL_PRESENTATION_MS, networkAgeMs),
+        x: event.x,
+        y: event.y,
+        angle: player?.angle || 0,
+      });
+    }
+    for (const player of snapshot.players) {
+      if (player.lifeState === 'alive') this.fallingPresentations.delete(player.id);
+    }
+  }
+
+  private activeFall(playerId: string) {
+    const fall = this.fallingPresentations.get(playerId);
+    if (!fall) return undefined;
+    if (performance.now() - fall.startedAtMs < FALL_PRESENTATION_MS) return fall;
+    this.fallingPresentations.delete(playerId);
+    return undefined;
+  }
+
+  private fallHeight(fall: FallingPresentation) {
+    const seconds = Math.max(0, performance.now() - fall.startedAtMs) / 1000;
+    return -.5 * FALL_PRESENTATION_GRAVITY * seconds * seconds;
+  }
+
+  /** Render passive state as low-noise tactical information. The first-person
+   * owner does not need their orbiting geometry repeatedly crossing the
+   * reticle, while teammates only need a restrained identity/readiness cue. */
+  private syncPassiveModules(snapshot: CoopSnapshot, focusPlayerId: string, firstPerson: boolean) {
     const active = new Set<string>();
     for (const player of snapshot.players) {
       if (player.lifeState === 'eliminated') continue;
@@ -621,10 +1070,37 @@ export class MultiplayerRendererBridge {
           mesh = createPassiveMesh(module.id, module.rank);
           this.passiveMeshes.set(key, mesh); this.renderer.scene.add(mesh);
         }
-        mesh.position.set(player.x, 2, player.y);
-        const data = mesh.userData as { orbit?: THREE.Group; pulse?: THREE.Mesh };
+        mesh.position.set(player.x, .7, player.y);
+        const data = mesh.userData as PassiveMeshData;
+        const isFirstPersonOwner = firstPerson && player.id === focusPlayerId;
+        const focus = snapshot.players.find(candidate => candidate.id === focusPlayerId);
+        const focusDistance = focus ? Math.hypot(player.x - focus.x, player.y - focus.y) : 999;
+        // Effects around a nearby teammate are the most likely to fill the
+        // screen. Fade them harder than distant silhouettes.
+        const teammateClarity = THREE.MathUtils.lerp(.22, .55, THREE.MathUtils.smoothstep(focusDistance, 90, 420));
+        const triggerAge = Math.max(0, snapshot.elapsedMs - data.lastTriggerAtMs);
         if (data.orbit) data.orbit.rotation.y = snapshot.elapsedMs * (module.id === 'data_scythe' ? -.0068 : .0044);
-        if (data.pulse) data.pulse.scale.setScalar(1 + Math.sin(snapshot.elapsedMs * .004) * .11);
+        if (data.orbit) data.orbit.visible = !isFirstPersonOwner;
+        for (const material of data.orbitMaterials) {
+          material.opacity = isFirstPersonOwner ? 0 : teammateClarity;
+          material.transparent = true;
+        }
+        if (data.perimeter) {
+          // A hairline boundary gives the owner useful range information but
+          // never paints over enemies or terrain.
+          const recentlyActive = triggerAge < 190;
+          data.perimeter.material.opacity = (isFirstPersonOwner ? .13 : .055 * teammateClarity)
+            + (recentlyActive ? (1 - triggerAge / 190) * (isFirstPersonOwner ? .17 : .08) : 0);
+        }
+        if (data.pulse) {
+          const duration = 520;
+          const progress = triggerAge / duration;
+          data.pulse.visible = progress >= 0 && progress < 1;
+          if (data.pulse.visible) {
+            data.pulse.scale.setScalar(.16 + progress * .84);
+            data.pulse.material.opacity = (1 - progress) ** 1.7 * (isFirstPersonOwner ? .48 : .28 * teammateClarity);
+          }
+        }
       }
     }
     for (const [key, mesh] of this.passiveMeshes) {
@@ -638,30 +1114,60 @@ function createPassiveMesh(id: CoopPassiveModuleId, rank: number) {
   const definition = COOP_PASSIVE_BY_ID[id];
   const color = new THREE.Color(definition.color);
   const group = new THREE.Group(); group.name = `coop-passive:${id}`;
-  const glow = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .72, blending: THREE.AdditiveBlending, depthWrite: false });
   let orbit: THREE.Group | undefined;
-  let pulse: THREE.Mesh | undefined;
+  let perimeter: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial> | undefined;
+  let pulse: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial> | undefined;
+  const orbitMaterials: THREE.Material[] = [];
   if (id === 'orbit_drones' || id === 'data_scythe') {
     orbit = new THREE.Group();
     const count = id === 'orbit_drones' ? 1 + rank : rank;
     const radius = passiveRadius(id, rank);
     for (let index = 0; index < count; index++) {
       const angle = index / count * Math.PI * 2;
+      const shell = new THREE.MeshStandardMaterial({
+        color: color.clone().multiplyScalar(.46), emissive: color, emissiveIntensity: .8,
+        metalness: .72, roughness: .34, transparent: true, opacity: .5, depthWrite: false,
+      });
+      orbitMaterials.push(shell);
       const part = id === 'orbit_drones'
-        ? new THREE.Mesh(new THREE.OctahedronGeometry(7 + rank, 0), glow)
-        : new THREE.Mesh(new THREE.BoxGeometry(7, 4, 28 + rank * 6), glow);
-      part.position.set(Math.cos(angle) * radius, 15, Math.sin(angle) * radius);
+        ? new THREE.Mesh(new THREE.OctahedronGeometry(4.5 + rank * .45, 0), shell)
+        : new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.5, 17 + rank * 2), shell);
+      part.position.set(Math.cos(angle) * radius, id === 'orbit_drones' ? 10 : 6, Math.sin(angle) * radius);
       part.rotation.y = -angle;
       orbit.add(part);
     }
     group.add(orbit);
   } else {
     const radius = passiveRadius(id, rank);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(radius * .92, radius, 48), glow);
-    ring.rotation.x = -Math.PI / 2; ring.position.y = .35; group.add(ring);
-    if (id === 'neural_pulse') pulse = ring;
+    const points = Array.from({ length: 65 }, (_, index) => {
+      const angle = index / 64 * Math.PI * 2;
+      return new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+    });
+    if (id === 'neural_pulse') {
+      pulse = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({
+        color, transparent: true, opacity: 0, depthWrite: false, depthTest: true, toneMapped: false,
+      }));
+      pulse.visible = false;
+      group.add(pulse);
+    } else {
+      // Broken arcs read as a tactical boundary, not a solid magic carpet.
+      const dashPoints: THREE.Vector3[] = [];
+      const dashCount = 20;
+      for (let index = 0; index < dashCount; index++) {
+        const start = index / dashCount * Math.PI * 2;
+        const end = (index + .62) / dashCount * Math.PI * 2;
+        dashPoints.push(
+          new THREE.Vector3(Math.cos(start) * radius, 0, Math.sin(start) * radius),
+          new THREE.Vector3(Math.cos(end) * radius, 0, Math.sin(end) * radius),
+        );
+      }
+      perimeter = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(dashPoints), new THREE.LineBasicMaterial({
+        color, transparent: true, opacity: .1, depthWrite: false, depthTest: true, toneMapped: false,
+      }));
+      group.add(perimeter);
+    }
   }
-  group.userData = { rank, orbit, pulse };
+  group.userData = { rank, orbit, orbitMaterials, perimeter, pulse, lastTriggerAtMs: -Infinity } satisfies PassiveMeshData;
   return group;
 }
 

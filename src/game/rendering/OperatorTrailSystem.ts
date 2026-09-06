@@ -10,12 +10,19 @@ const RING_LIFE_MS = 520;
 /** Minimum movement distance (world units) to qualify for a stamp. */
 const MIN_MOVE_DIST = 4;
 
+/**
+ * Keep the newest ring behind the operator instead of directly beneath the
+ * first-person camera. This is slightly larger than the player's collision
+ * radius, with enough extra room for the ring's outer edge.
+ */
+const TRAIL_BACK_OFFSET = 30;
+
 /** Max concurrent trail rings in the shared pool. */
 const POOL_SIZE = 72;
 
 const WALK_COLOR = new THREE.Color(0x38bdf8);   // Ice blue  — calm walk
 const SPRINT_COLOR = new THREE.Color(0xfbbf24);  // Amber     — sprint
-const SLIDE_COLOR = new THREE.Color(0xf97316);   // Orange    — slide/airborne
+const SLIDE_COLOR = new THREE.Color(0xf97316);   // Orange    — slide
 
 // Shared geometry for all trail rings (cheap RingGeometry, flat on ground)
 const TRAIL_GEOMETRY = new THREE.RingGeometry(5.5, 8.5, 24);
@@ -26,6 +33,7 @@ interface TrailRing {
   mat: THREE.MeshBasicMaterial;
   life: number;
   maxLife: number;
+  ownerId?: string;
 }
 
 interface PlayerTrailState {
@@ -39,7 +47,11 @@ interface PlayerTrailState {
  *
  * Renders subtle, fading ground-ring footprints behind every operator as they
  * move. Colour differentiates movement mode:
- *   Walk/jog → ice blue | Sprint → amber | Slide/airborne → orange
+ *   Walk/jog → ice blue | Sprint → amber | Slide → orange
+ *
+ * Airborne operators do not leave ground trails. Besides being physically
+ * misleading, stamping an additive orange ring below the first-person camera
+ * made jumps read as a brief red flash on the floor.
  *
  * Performance:
  * - Fixed pool of POOL_SIZE ring meshes — zero allocation per frame.
@@ -72,10 +84,17 @@ export class OperatorTrailSystem {
   update(
     players: CoopPlayerSnapshot[],
     elapsedMs: number,
-    deltaMs: number
+    deltaMs: number,
+    hiddenPlayerId?: string,
   ): void {
     // Age all active rings
     for (const ring of this.pool) {
+      if (ring.ownerId === hiddenPlayerId) {
+        ring.life = 0;
+        ring.mesh.visible = false;
+        ring.mat.opacity = 0;
+        continue;
+      }
       if (ring.life <= 0) continue;
       ring.life -= deltaMs;
       if (ring.life <= 0) {
@@ -89,6 +108,12 @@ export class OperatorTrailSystem {
 
     // Stamp new rings for alive, moving players
     for (const player of players) {
+      // The camera-owning operator must not put translucent geometry into its
+      // own floor stack. Teammate trails remain visible world-space cues.
+      if (player.id === hiddenPlayerId) {
+        this.playerState.delete(player.id);
+        continue;
+      }
       if (player.lifeState !== 'alive') {
         this.playerState.delete(player.id);
         continue;
@@ -105,13 +130,30 @@ export class OperatorTrailSystem {
       const dist = Math.sqrt(dx * dx + dy * dy);
       const timeSinceStamp = elapsedMs - state.lastStampMs;
 
+      // Keep the trail origin caught up while airborne, but never stamp the
+      // floor. Resetting the interval also prevents a ring popping on the
+      // exact landing frame from movement accumulated during the jump.
+      if (player.z > 0.4) {
+        state.lastStampMs = elapsedMs;
+        state.lastX = player.x;
+        state.lastY = player.y;
+        continue;
+      }
+
       if (dist < MIN_MOVE_DIST || timeSinceStamp < STAMP_INTERVAL_MS) continue;
 
       state.lastStampMs = elapsedMs;
       state.lastX = player.x;
       state.lastY = player.y;
 
-      this.stamp(player.x, player.y, player.sliding || player.z > 0.4, player.sprinting);
+      const inverseDistance = 1 / dist;
+      this.stamp(
+        player.id,
+        player.x - dx * inverseDistance * TRAIL_BACK_OFFSET,
+        player.y - dy * inverseDistance * TRAIL_BACK_OFFSET,
+        player.sliding,
+        player.sprinting
+      );
     }
 
     // Prune departed players
@@ -129,12 +171,13 @@ export class OperatorTrailSystem {
     this.playerState.clear();
   }
 
-  private stamp(x: number, y: number, isSlide: boolean, isSprint: boolean): void {
+  private stamp(ownerId: string, x: number, y: number, isSlide: boolean, isSprint: boolean): void {
     const ring = this.pool[this.poolHead % POOL_SIZE];
     this.poolHead++;
 
     const color = isSlide ? SLIDE_COLOR : isSprint ? SPRINT_COLOR : WALK_COLOR;
     ring.mat.color.copy(color);
+    ring.ownerId = ownerId;
     ring.life = RING_LIFE_MS;
     ring.maxLife = RING_LIFE_MS;
     ring.mat.opacity = 0.34;

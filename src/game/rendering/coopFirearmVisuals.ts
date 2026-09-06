@@ -9,7 +9,6 @@ const bodyGeometry = new THREE.BoxGeometry(1, 1, 1);
 const roundedBodyGeometry = new RoundedBoxGeometry(1, 1, 1, 2, .08);
 const tubeGeometry = new THREE.CylinderGeometry(.16, .16, 1, 8);
 const detailedTubeGeometry = new THREE.CylinderGeometry(.16, .16, 1, 12);
-const scopeGeometry = new THREE.CylinderGeometry(.26, .31, 1, 10);
 
 const WEAPON_PALETTES: Record<CoopFirearmId, { dark: number; panel: number; steel: number; trim: number; rubber: number }> = {
   // These values deliberately preserve the existing modular handgun. The
@@ -17,7 +16,7 @@ const WEAPON_PALETTES: Record<CoopFirearmId, { dark: number; panel: number; stee
   plasma_gun: { dark: 0x111c2c, panel: 0x38516d, steel: 0x8aa4bb, trim: 0x67e8f9, rubber: 0x0b111c },
   assault_rifle: { dark: 0x0b1b19, panel: 0x245044, steel: 0x8fbeb0, trim: 0x34d399, rubber: 0x07110f },
   combat_shotgun: { dark: 0x21130c, panel: 0x61321b, steel: 0xd0a064, trim: 0xfb923c, rubber: 0x140b07 },
-  sniper_rifle: { dark: 0x161228, panel: 0x41356d, steel: 0xaaa0cf, trim: 0xc4b5fd, rubber: 0x0d0a18 },
+  arc_launcher: { dark: 0x0c1830, panel: 0x1d4f78, steel: 0x8fb9d9, trim: 0x60a5fa, rubber: 0x07101d },
   smg: { dark: 0x121b0d, panel: 0x385322, steel: 0x9caf8e, trim: 0xa3e635, rubber: 0x0a1007 },
 };
 const flashTexture = (() => {
@@ -60,6 +59,7 @@ export class CoopFirearmVisualRig {
     }
   }
   fire(id: CoopFirearmId) { if (id !== this.current) return; const definition = COOP_FIREARM_BY_ID[id]; this.recoil = Math.max(this.recoil, definition.recoil.kick); this.flashLife = 1; }
+  getMuzzlePoint() { return this.parts.get(this.current)!.muzzle; }
   setWeapon(id: CoopFirearmId) { if (id === this.current) return; this.parts.get(this.current)!.root.visible = false; this.current = id; this.parts.get(id)!.root.visible = !(this.firstPerson && id === 'plasma_gun'); this.recoil = .4; }
   update(state: CoopWeaponRuntime, elapsedMs: number, deltaMs: number, aiming: boolean) {
     this.setWeapon(state.weaponId); const parts = this.parts.get(this.current)!; const definition = COOP_FIREARM_BY_ID[this.current];
@@ -89,7 +89,7 @@ export class CoopFirearmVisualRig {
       // looking like the same animation scaled to every weapon.
       parts.magazine.position.y -= arc * (this.firstPerson ? 1.38 : .38);
       parts.magazine.position.z += arc * (this.current === 'smg' ? .72 : .44);
-      parts.magazine.position.x += arc * (this.current === 'sniper_rifle' ? -.22 : .16);
+      parts.magazine.position.x += arc * (this.current === 'arc_launcher' ? -.22 : .16);
       parts.magazine.rotation.x += arc * .72;
       parts.magazine.rotation.z += arc * (this.current === 'smg' ? -.24 : .16);
     }
@@ -100,17 +100,8 @@ export class CoopFirearmVisualRig {
       parts.pump.position.z += isReloading ? Math.sin(reloadProgress * Math.PI) * .62 : 0;
       parts.pump.position.y += isReloading ? Math.sin(reloadProgress * Math.PI) * .11 : 0;
     }
-    if (parts.bolt && parts.boltHome) {
-      const boltProgress = state.state === 'bolt_cycle' && state.boltCycleEndsAtMs !== undefined
-        ? THREE.MathUtils.clamp(1 - (state.boltCycleEndsAtMs - elapsedMs) / 420, 0, 1)
-        : this.current === 'sniper_rifle' && isReloading ? THREE.MathUtils.smoothstep(reloadProgress, .68, .96) : 0;
-      const pull = Math.sin(boltProgress * Math.PI);
-      parts.bolt.position.copy(parts.boltHome);
-      parts.bolt.position.z += pull * .58;
-      parts.bolt.rotation.y = pull * .42;
-    }
     if (this.firstPerson) {
-      const target = definition.adsProfile === 'scope' && aiming ? .15 : aiming ? .42 : 1;
+      const target = aiming ? .42 : 1;
       parts.root.scale.setScalar(target);
       parts.root.position.x = (aiming ? .05 : .22) + reloadPose * .28;
       parts.root.position.y = (aiming ? -.06 : 0) - reloadPose * .68;
@@ -230,39 +221,29 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
     addBox([.95, .48, 1.05], [0, -.20, -7.88], dark);
     addSupportArm(-4.18);
   }
-  if (id === 'sniper_rifle') {
-    // Violet marksman platform: long floating barrel, sculpted stock and a
-    // layered optic with real glass make it feel deliberately precision-built.
-    addBox([1.08, .42, 2.8], [0, .05, 1.20], dark);
-    addBox([.92, .22, 2.4], [0, .40, 1.22], panel);
-    addBox([1.18, .72, .34], [0, -.02, 2.74], rubber);
-    addBox([.54, .62, 1.76], [0, .48, 1.68], rubber);
-    addBox([.18, .18, 1.72], [-.56, -.34, 1.74], steel);
-    addBox([.18, .18, 1.72], [.56, -.34, 1.74], steel);
-    addTube(.20, 7.6, [0, .04, -6.55], steel);
-    addTube(.11, 7.75, [.42, .05, -6.65], accent);
-    addRail(-4.5, 6.8, .52);
-    addSidePlate(-4.65, 3.65, dark);
-    addFasteners(-4.65, 1.40, .18);
-    addEnergyWindow(-1.30, 1.56);
-    addMuzzleCollars(-10.02, .31);
-    const scope = new THREE.Mesh(scopeGeometry, dark);
-    scope.scale.set(2.55, 4.9, 2.55); scope.rotation.x = Math.PI / 2; scope.position.set(0, 1.28, -2.65); root.add(scope);
-    for (const ringZ of [-1.28, -3.95]) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(.56, .09, 8, 18), steel);
-      ring.position.set(0, 1.28, ringZ); root.add(ring);
-      addBox([.18, .48, .30], [0, .84, ringZ], dark);
+  if (id === 'arc_launcher') {
+    // Electric crowd-control platform: a compact accelerator barrel, exposed
+    // charge chamber, and paired induction rings replace the sniper silhouette.
+    chassis.scale.set(1.18, 1.08, .92); chassis.position.z = -1.46;
+    addBox([1.10, .50, 2.25], [0, .02, 1.12], dark);
+    addBox([1.16, .72, .34], [0, -.02, 2.40], rubber);
+    addTube(.32, 4.8, [0, .04, -5.10], steel);
+    addTube(.12, 4.95, [.45, .02, -5.12], accent);
+    addTube(.12, 4.95, [-.45, .02, -5.12], accent);
+    addSidePlate(-4.25, 3.10, dark);
+    addEnergyWindow(-1.42, 1.72);
+    for (const ringZ of [-3.18, -4.58, -5.98]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.66, .105, 10, 24), accentMetal);
+      ring.position.set(0, .03, ringZ); root.add(ring);
+      addBox([1.55, .12, .18], [0, -.68, ringZ], steel);
     }
-    const lens = new THREE.Mesh(new THREE.CircleGeometry(.48, 24), glass);
-    lens.position.set(0, 1.28, -5.13); root.add(lens);
-    const reticle = new THREE.Mesh(new THREE.RingGeometry(.08, .11, 20), accent);
-    reticle.position.set(0, 1.28, -5.145); root.add(reticle);
-    const scopeRing = new THREE.Mesh(new THREE.TorusGeometry(.54, .08, 8, 18), steel);
-    scopeRing.position.set(0, 1.28, -5.18); root.add(scopeRing);
-    magazine = addBox([.82, 1.35, .92], [0, -1.05, -1.78], dark);
-    bolt = addBox([.18, .18, .82], [.84, .28, -2.05], steel);
-    addBox([.34, .34, .34], [1.05, .28, -1.72], accentMetal);
-    addSupportArm(-5.22);
+    const core = addTube(.28, 2.8, [0, .05, -4.58], glass);
+    core.scale.x *= 1.25; core.scale.z *= 1.25;
+    addMuzzleCollars(-7.35, .49);
+    magazine = addBox([.92, 1.55, .92], [0, -1.16, -1.62], dark);
+    addBox([.22, 1.12, .62], [.57, -1.16, -1.62], glass);
+    addReflex(root, dark, steel, glass, accent, -1.82);
+    addSupportArm(-4.36);
   }
   if (id === 'smg') {
     // Acid-lime compact: short vented shroud, skeletal stock and a translucent
@@ -286,7 +267,7 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
     for (let slot = 0; slot < 5; slot++) addBox([.14, .28, .32], [slot % 2 ? .62 : -.62, .02, -2.4 - Math.floor(slot / 2) * .44], accent);
     addSupportArm(-3.42);
   }
-  const muzzleData = mountMuzzle(id === 'sniper_rifle' ? -10.45 : id === 'combat_shotgun' ? -8.85 : id === 'assault_rifle' ? -7.90 : id === 'smg' ? -6.18 : -6.15);
+  const muzzleData = mountMuzzle(id === 'arc_launcher' ? -7.82 : id === 'combat_shotgun' ? -8.85 : id === 'assault_rifle' ? -7.90 : id === 'smg' ? -6.18 : -6.15);
   root.traverse(node => { if (node instanceof THREE.Mesh) { node.castShadow = false; node.receiveShadow = false; } });
   return { root, bolt, magazine, pump, magazineHome: magazine?.position.clone(), magazineRotationHome: magazine?.rotation.clone(), pumpHome: pump?.position.clone(), boltHome: bolt?.position.clone(), muzzle: muzzleData.muzzle, flash: muzzleData.flash, flashMaterial: muzzleData.flashMaterial, accent, suit };
 }

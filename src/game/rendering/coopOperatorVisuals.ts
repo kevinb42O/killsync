@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CoopFirearmVisualRig } from './coopFirearmVisuals';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
+import { getCoopSkin, type CoopSkinDefinition, type CoopSkinId } from '../multiplayer/CoopSkins';
 
 export interface CoopOperatorRig {
   root: THREE.Group;
@@ -28,12 +29,35 @@ export interface CoopOperatorRig {
   glowMaterial: THREE.MeshBasicMaterial;
   downedMarkerMaterial: THREE.MeshBasicMaterial;
   commsLedMaterial: THREE.MeshBasicMaterial;
+  skin: CoopSkinDefinition;
+  ownedMaterials: THREE.Material[];
+  /** Fixed-budget premium signature: one aura mesh plus one 16-point draw call. */
+  premiumEffect?: THREE.Group;
+  premiumAuraMaterial?: THREE.MeshBasicMaterial;
+  premiumParticleMaterial?: THREE.PointsMaterial;
   lastBlinkAtMs: number;
+  lastDoubleJumpSequence: number;
+  doubleJumpFlareRemainingMs: number;
 }
 
 const sharedGeom = <T extends THREE.BufferGeometry>(geom: T): T => {
   geom.userData.coopOperatorShared = true;
   return geom;
+};
+
+const createPremiumOrbitGeometry = () => {
+  const positions = new Float32Array(16 * 3);
+  for (let index = 0; index < 16; index++) {
+    const angle = index / 16 * Math.PI * 4;
+    const offset = index * 3;
+    positions[offset] = Math.cos(angle) * (18 + (index % 3) * 1.7);
+    positions[offset + 1] = -22 + index / 15 * 44;
+    positions[offset + 2] = Math.sin(angle) * (18 + (index % 3) * 1.7);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.computeBoundingSphere();
+  return sharedGeom(geometry);
 };
 
 // Global shared geometries — instantiated once, never duplicated per player.
@@ -89,68 +113,14 @@ const GEOMETRY = {
   // Downed revive markers
   downedRing: sharedGeom(new THREE.TorusGeometry(31, 1.8, 8, 40)),
   downedCross: sharedGeom(new THREE.BoxGeometry(42, 1.4, 2)),
+  premiumOrbit: createPremiumOrbitGeometry(),
 };
-
-// Shared static materials — dark, tactile, physical cyberpunk materials
-const sharedUndersuitMaterial = new THREE.MeshStandardMaterial({
-  color: 0x0f172a, // Deep slate nanoweave
-  metalness: 0.32,
-  roughness: 0.58,
-});
-sharedUndersuitMaterial.userData.coopOperatorShared = true;
-
-const sharedCarbonMaterial = new THREE.MeshStandardMaterial({
-  color: 0x070b12, // Dark ballistic composite
-  metalness: 0.65,
-  roughness: 0.28,
-});
-sharedCarbonMaterial.userData.coopOperatorShared = true;
-
-const sharedVisorGlassMaterial = new THREE.MeshStandardMaterial({
-  color: 0x030712, // Deep smoked polarized glass
-  metalness: 0.95,
-  roughness: 0.08,
-});
-sharedVisorGlassMaterial.userData.coopOperatorShared = true;
-
-const sharedTitaniumMaterial = new THREE.MeshStandardMaterial({
-  color: 0x475569, // Tactical gunmetal titanium
-  metalness: 0.82,
-  roughness: 0.22,
-});
-sharedTitaniumMaterial.userData.coopOperatorShared = true;
-
-const sharedWebbingMaterial = new THREE.MeshStandardMaterial({
-  color: 0x090d16, // Matte ballistic nylon straps
-  metalness: 0.12,
-  roughness: 0.85,
-});
-sharedWebbingMaterial.userData.coopOperatorShared = true;
 
 const sharedWhiteCoreMaterial = new THREE.MeshBasicMaterial({
   color: 0xffffff,
   toneMapped: false,
 });
 sharedWhiteCoreMaterial.userData.coopOperatorShared = true;
-
-// Shared Fire Red/Orange exhaust materials
-const sharedFireOuterMaterial = new THREE.MeshBasicMaterial({
-  color: 0xff3b00, // Vibrant blazing fire red-orange
-  transparent: true,
-  opacity: 0.92,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false,
-});
-sharedFireOuterMaterial.userData.coopOperatorShared = true;
-
-const sharedFireCoreMaterial = new THREE.MeshBasicMaterial({
-  color: 0xfff066, // Superheated hot yellow-white fire core
-  transparent: true,
-  opacity: 0.95,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false,
-});
-sharedFireCoreMaterial.userData.coopOperatorShared = true;
 
 /**
  * Creates an attractive, detailed, highly performant co-op operator 3D rig.
@@ -161,7 +131,7 @@ sharedFireCoreMaterial.userData.coopOperatorShared = true;
  * - Ballistic chest rig with reactive biometric life core
  * - Dual-exhaust jump-jet pack with dynamic ion plasma flare
  */
-export function createCoopOperatorRig(color: string, label: string): CoopOperatorRig {
+export function createCoopOperatorRig(color: string, label: string, skinId?: CoopSkinId): CoopOperatorRig {
   const root = new THREE.Group();
   root.name = `coop-operator:${label}`;
 
@@ -175,21 +145,23 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
 
   // Per-player materials
   const playerColor = new THREE.Color(color);
+  const skin = getCoopSkin(skinId);
+  const { palette, material } = skin;
   const armorMaterial = new THREE.MeshStandardMaterial({
-    color: playerColor,
-    metalness: 0.52,
-    roughness: 0.32,
-    emissive: playerColor,
-    emissiveIntensity: 0.18,
+    color: palette.armor,
+    metalness: material.metalness,
+    roughness: material.roughness,
+    emissive: palette.glow,
+    emissiveIntensity: material.emissiveIntensity,
   });
 
   const glowMaterial = new THREE.MeshBasicMaterial({
-    color: playerColor,
+    color: palette.glow,
     toneMapped: false,
   });
 
   const commsLedMaterial = new THREE.MeshBasicMaterial({
-    color: 0x22c55e, // Online green telemetry beacon
+    color: palette.glow,
     toneMapped: false,
   });
 
@@ -201,8 +173,51 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
     depthWrite: false,
   });
 
+  const undersuitMaterial = new THREE.MeshStandardMaterial({ color: palette.undersuit, metalness: .32, roughness: .58 });
+  const carbonMaterial = new THREE.MeshStandardMaterial({ color: palette.webbing, metalness: skin.tier === 'premium' ? .82 : .65, roughness: skin.tier === 'premium' ? .16 : .28 });
+  const visorGlassMaterial = new THREE.MeshStandardMaterial({ color: palette.visor, emissive: palette.glow, emissiveIntensity: skin.tier === 'premium' ? .3 : .08, metalness: .95, roughness: skin.tier === 'premium' ? .03 : .08 });
+  const titaniumMaterial = new THREE.MeshStandardMaterial({ color: palette.trim, metalness: .88, roughness: skin.tier === 'premium' ? .12 : .22 });
+  const webbingMaterial = new THREE.MeshStandardMaterial({ color: palette.webbing, metalness: .12, roughness: .85 });
+  const fireOuterMaterial = new THREE.MeshBasicMaterial({ color: palette.thrusterOuter, transparent: true, opacity: .92, blending: THREE.AdditiveBlending, depthWrite: false });
+  const fireCoreMaterial = new THREE.MeshBasicMaterial({ color: palette.thrusterCore, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false });
+  const ownedMaterials: THREE.Material[] = [armorMaterial, glowMaterial, commsLedMaterial, downedMarkerMaterial, undersuitMaterial, carbonMaterial, visorGlassMaterial, titaniumMaterial, webbingMaterial, fireOuterMaterial, fireCoreMaterial];
+  let premiumEffect: THREE.Group | undefined;
+  let premiumAuraMaterial: THREE.MeshBasicMaterial | undefined;
+  let premiumParticleMaterial: THREE.PointsMaterial | undefined;
+  if (skin.tier === 'premium') {
+    premiumEffect = new THREE.Group();
+    premiumEffect.name = `premium-signature:${skin.id}`;
+    premiumAuraMaterial = new THREE.MeshBasicMaterial({
+      color: palette.glow,
+      transparent: true,
+      opacity: skin.id === 'black_ice' ? .09 : .075,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.BackSide,
+      toneMapped: false,
+    });
+    const aura = new THREE.Mesh(GEOMETRY.capsuleBody, premiumAuraMaterial);
+    aura.scale.set(1.2, 1.08, 1.2);
+    premiumEffect.add(aura);
+
+    premiumParticleMaterial = new THREE.PointsMaterial({
+      color: skin.id === 'black_ice' ? palette.thrusterCore : palette.trim,
+      size: skin.id === 'black_ice' ? 2.35 : 2.7,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: .88,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    premiumEffect.add(new THREE.Points(GEOMETRY.premiumOrbit, premiumParticleMaterial));
+    premiumEffect.rotation.x = skin.id === 'black_ice' ? .18 : -.12;
+    avatar.add(premiumEffect);
+    ownedMaterials.push(premiumAuraMaterial, premiumParticleMaterial);
+  }
+
   // 1. BASE PILL BODY (Stealth nanoweave undersuit)
-  const bodyMesh = new THREE.Mesh(GEOMETRY.capsuleBody, sharedUndersuitMaterial);
+  const bodyMesh = new THREE.Mesh(GEOMETRY.capsuleBody, undersuitMaterial);
   avatar.add(bodyMesh);
 
   // Aerodynamic cyber-accent racing stripes on the flanks in team color
@@ -216,13 +231,13 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
 
   // 2. TACTICAL HELMET & VISOR
   // Curved smoked visor shield
-  const visorMesh = new THREE.Mesh(GEOMETRY.visorShield, sharedVisorGlassMaterial);
+  const visorMesh = new THREE.Mesh(GEOMETRY.visorShield, visorGlassMaterial);
   visorMesh.position.set(0, 14, 0);
   visorMesh.rotation.y = Math.PI; // Face forward (+Z)
   avatar.add(visorMesh);
 
   // Sculpted brow cowl / forehead armor
-  const browMesh = new THREE.Mesh(GEOMETRY.browCowl, sharedCarbonMaterial);
+  const browMesh = new THREE.Mesh(GEOMETRY.browCowl, carbonMaterial);
   browMesh.position.set(0, 19.5, 9.2);
   browMesh.rotation.x = 0.22;
   avatar.add(browMesh);
@@ -259,27 +274,27 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
 
   // Ocular aperture rings (titanium bezel framing each eye)
   for (const side of [-1, 1]) {
-    const bezel = new THREE.Mesh(GEOMETRY.eyeAperture, sharedTitaniumMaterial);
+    const bezel = new THREE.Mesh(GEOMETRY.eyeAperture, titaniumMaterial);
     bezel.position.set(side * 4.2, 0, 0.2);
     eyesGroup.add(bezel);
   }
 
   // 4. LOWER FACE REBREATHER & COMMS HEADSET
-  const rebreather = new THREE.Mesh(GEOMETRY.rebreather, sharedCarbonMaterial);
+  const rebreather = new THREE.Mesh(GEOMETRY.rebreather, carbonMaterial);
   rebreather.position.set(0, 7.8, 12.6);
   rebreather.rotation.x = -0.15;
   avatar.add(rebreather);
 
   // Intake slats on rebreather
   for (const yOffset of [-1.0, 0.8]) {
-    const slat = new THREE.Mesh(GEOMETRY.rebreatherSlat, sharedTitaniumMaterial);
+    const slat = new THREE.Mesh(GEOMETRY.rebreatherSlat, titaniumMaterial);
     slat.position.set(0, 7.8 + yOffset, 14.2);
     avatar.add(slat);
   }
 
   // Comms ear cups on sides of helmet
   for (const side of [-1, 1]) {
-    const earCup = new THREE.Mesh(GEOMETRY.commsEar, sharedCarbonMaterial);
+    const earCup = new THREE.Mesh(GEOMETRY.commsEar, carbonMaterial);
     earCup.position.set(side * 13.4, 14.2, 1.5);
     earCup.rotation.z = side * Math.PI / 2;
     avatar.add(earCup);
@@ -292,7 +307,7 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
   }
 
   // Radio antenna on left comms cup
-  const antenna = new THREE.Mesh(GEOMETRY.commsAntenna, sharedTitaniumMaterial);
+  const antenna = new THREE.Mesh(GEOMETRY.commsAntenna, titaniumMaterial);
   antenna.position.set(-14.2, 18.5, 1.2);
   antenna.rotation.z = 0.15;
   avatar.add(antenna);
@@ -308,7 +323,7 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
 
   // Tactical webbing harness straps
   for (const side of [-1, 1]) {
-    const strap = new THREE.Mesh(GEOMETRY.chestStrap, sharedWebbingMaterial);
+    const strap = new THREE.Mesh(GEOMETRY.chestStrap, webbingMaterial);
     strap.position.set(side * 7.0, 5.0, 11.2);
     avatar.add(strap);
   }
@@ -319,7 +334,7 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
   biometricCore.rotation.x = Math.PI / 2;
   avatar.add(biometricCore);
 
-  const coreBezel = new THREE.Mesh(GEOMETRY.coreRing, sharedTitaniumMaterial);
+  const coreBezel = new THREE.Mesh(GEOMETRY.coreRing, titaniumMaterial);
   coreBezel.position.set(0, 2.2, 14.0);
   avatar.add(coreBezel);
 
@@ -330,20 +345,20 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
     pauldron.rotation.z = side * -0.22;
     avatar.add(pauldron);
 
-    const pauldronBacking = new THREE.Mesh(GEOMETRY.pauldron, sharedCarbonMaterial);
+    const pauldronBacking = new THREE.Mesh(GEOMETRY.pauldron, carbonMaterial);
     pauldronBacking.scale.set(0.9, 0.85, 1.15);
     pauldronBacking.position.set(side * 14.2, 8.8, 0.5);
     pauldronBacking.rotation.z = side * -0.22;
     avatar.add(pauldronBacking);
 
     // Arm segments connecting shoulder to weapon
-    const upperArm = new THREE.Mesh(GEOMETRY.upperArm, sharedUndersuitMaterial);
+    const upperArm = new THREE.Mesh(GEOMETRY.upperArm, undersuitMaterial);
     upperArm.position.set(side * 13.5, 3.0, 4.0);
     upperArm.rotation.x = 0.35;
     upperArm.rotation.y = side * -0.15;
     avatar.add(upperArm);
 
-    const foreArm = new THREE.Mesh(GEOMETRY.foreArm, sharedCarbonMaterial);
+    const foreArm = new THREE.Mesh(GEOMETRY.foreArm, carbonMaterial);
     foreArm.position.set(side * 11.5, -2.5, 11.0);
     foreArm.rotation.x = 0.72;
     foreArm.rotation.y = side * -0.25;
@@ -351,19 +366,19 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
   }
 
   // 7. TACTICAL UTILITY BELT & GEAR
-  const beltMesh = new THREE.Mesh(GEOMETRY.beltRing, sharedWebbingMaterial);
+  const beltMesh = new THREE.Mesh(GEOMETRY.beltRing, webbingMaterial);
   beltMesh.position.set(0, -9.0, 0);
   beltMesh.rotation.x = Math.PI / 2;
   avatar.add(beltMesh);
 
   // Side pouches / power cells
   for (const side of [-1, 1]) {
-    const pouch = new THREE.Mesh(GEOMETRY.beltPouch, sharedCarbonMaterial);
+    const pouch = new THREE.Mesh(GEOMETRY.beltPouch, carbonMaterial);
     pouch.position.set(side * 13.5, -9.0, 2.5);
     pouch.rotation.y = side * -0.4;
     avatar.add(pouch);
 
-    const cell = new THREE.Mesh(GEOMETRY.powerCell, sharedTitaniumMaterial);
+    const cell = new THREE.Mesh(GEOMETRY.powerCell, titaniumMaterial);
     cell.position.set(side * 12.8, -9.0, -4.5);
     cell.rotation.z = side * 0.2;
     avatar.add(cell);
@@ -383,7 +398,7 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
   thrusterGroup.position.set(0, 3.5, -12.6);
   avatar.add(thrusterGroup);
 
-  const packBody = new THREE.Mesh(GEOMETRY.thrusterBody, sharedCarbonMaterial);
+  const packBody = new THREE.Mesh(GEOMETRY.thrusterBody, carbonMaterial);
   thrusterGroup.add(packBody);
 
   const packTrim = new THREE.Mesh(GEOMETRY.thrusterBody, armorMaterial);
@@ -394,13 +409,13 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
   const thrusterFlames: THREE.Mesh[] = [];
   const thrusterCoreFlames: THREE.Mesh[] = [];
   for (const side of [-1, 1]) {
-    const nozzle = new THREE.Mesh(GEOMETRY.thrusterNozzle, sharedTitaniumMaterial);
+    const nozzle = new THREE.Mesh(GEOMETRY.thrusterNozzle, titaniumMaterial);
     nozzle.position.set(side * 4.6, -6.2, 0);
     nozzle.rotation.x = 0.25;
     thrusterGroup.add(nozzle);
 
     // Outer blazing fire red/orange flame
-    const flame = new THREE.Mesh(GEOMETRY.thrusterFlame, sharedFireOuterMaterial);
+    const flame = new THREE.Mesh(GEOMETRY.thrusterFlame, fireOuterMaterial);
     flame.position.set(side * 4.6, -13.5, -1.8);
     flame.rotation.x = Math.PI - 0.25;
     flame.scale.set(1.0, 0.7, 1.0);
@@ -408,7 +423,7 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
     thrusterFlames.push(flame);
 
     // Inner superheated yellow-white fire core
-    const coreFlame = new THREE.Mesh(GEOMETRY.thrusterCoreFlame, sharedFireCoreMaterial);
+    const coreFlame = new THREE.Mesh(GEOMETRY.thrusterCoreFlame, fireCoreMaterial);
     coreFlame.position.set(side * 4.6, -11.5, -1.3);
     coreFlame.rotation.x = Math.PI - 0.25;
     coreFlame.scale.set(0.9, 0.7, 0.9);
@@ -463,7 +478,14 @@ export function createCoopOperatorRig(color: string, label: string): CoopOperato
     glowMaterial,
     downedMarkerMaterial,
     commsLedMaterial,
+    skin,
+    ownedMaterials,
+    premiumEffect,
+    premiumAuraMaterial,
+    premiumParticleMaterial,
     lastBlinkAtMs: 0,
+    lastDoubleJumpSequence: -1,
+    doubleJumpFlareRemainingMs: 0,
   };
 }
 
@@ -479,10 +501,23 @@ export function updateCoopOperatorRig(
   rig: CoopOperatorRig,
   player: CoopPlayerSnapshot,
   elapsedMs: number,
-  deltaMs: number
+  deltaMs: number,
+  fallProgress?: number,
 ): void {
   const downed = player.lifeState === 'downed';
-  const eliminated = player.lifeState === 'eliminated';
+  const falling = fallProgress !== undefined;
+  const eliminated = player.lifeState === 'eliminated' && !falling;
+
+  rig.armorMaterial.emissiveIntensity = rig.skin.material.emissiveIntensity * (rig.skin.material.animatedEmissive ? 1 + Math.sin(elapsedMs * .004) * .28 : 1);
+  if (rig.premiumEffect && rig.premiumAuraMaterial && rig.premiumParticleMaterial) {
+    const pulse = .5 + .5 * Math.sin(elapsedMs * (rig.skin.id === 'black_ice' ? .0024 : .0042));
+    rig.premiumEffect.visible = !downed && !falling && !eliminated;
+    rig.premiumEffect.rotation.y = elapsedMs * (rig.skin.id === 'black_ice' ? .00038 : -.00062);
+    rig.premiumEffect.rotation.z = Math.sin(elapsedMs * .0012) * (rig.skin.id === 'black_ice' ? .08 : .13);
+    rig.premiumAuraMaterial.opacity = (rig.skin.id === 'black_ice' ? .065 : .055) + pulse * .045;
+    rig.premiumParticleMaterial.opacity = .66 + pulse * .3;
+    rig.premiumParticleMaterial.size = (rig.skin.id === 'black_ice' ? 2.15 : 2.5) + pulse * .45;
+  }
 
   rig.root.visible = !eliminated;
   rig.root.position.set(player.x, player.z, player.y);
@@ -490,11 +525,15 @@ export function updateCoopOperatorRig(
   // Compact crouching / sliding: scales the entire pill avatar cleanly
   const lowProfile = !downed && (player.sliding || player.crouching);
   rig.root.scale.set(1, lowProfile ? 0.62 : 1, lowProfile ? 1.16 : 1);
-  rig.root.rotation.y = Math.PI / 2 - player.angle;
+  rig.root.rotation.y = Math.PI / 2 - player.angle + (falling ? fallProgress * Math.PI * 2.6 : 0);
 
   // Prone posture when downed: rolls the entire articulated chassis to resting ground level
   rig.avatar.position.set(0, downed ? 14 : 29, 0);
-  rig.avatar.rotation.set(0, 0, downed ? Math.PI / 2 : 0);
+  rig.avatar.rotation.set(
+    falling ? fallProgress * Math.PI * 4.2 : 0,
+    falling ? Math.sin(fallProgress * Math.PI * 3) * .55 : 0,
+    downed ? Math.PI / 2 : falling ? fallProgress * Math.PI * 2.8 : 0,
+  );
 
   // Downed revive ring & marker
   rig.downedMarker.visible = downed;
@@ -503,10 +542,11 @@ export function updateCoopOperatorRig(
   }
 
   // Nameplate vertical height (lower when downed)
+  rig.nameplate.visible = !falling;
   rig.nameplate.position.set(0, downed ? 32 : 62, 0);
 
   // Firearm visibility & reload/recoil update
-  rig.firearm.group.visible = !downed;
+  rig.firearm.group.visible = !downed && !falling;
   const weaponState = player.weaponStates[player.selectedSlot];
   if (weaponState && !downed) {
     rig.firearm.update(weaponState, elapsedMs, deltaMs, player.isAiming);
@@ -522,7 +562,7 @@ export function updateCoopOperatorRig(
     rig.pupilRight.visible = hazardStrobe > 0.5;
     rig.glowMaterial.color.setHex(0xf59e0b); // Hazard amber
   } else {
-    rig.glowMaterial.color.set(player.color);
+    rig.glowMaterial.color.set(rig.skin.palette.glow);
 
     // Living micro-blinks: every ~3.6 seconds, rapid eyelid aperture dip
     const blinkCycle = elapsedMs % 3600;
@@ -571,12 +611,19 @@ export function updateCoopOperatorRig(
   const isMoving = player.sprinting || player.sliding || player.z > 0.5;
   const isSliding = player.sliding;
   const isAirborne = player.z > 0.5;
+  const doubleJumpSequence = player.motion?.lastDoubleJumpSequence ?? -1;
+  if (doubleJumpSequence >= 0 && doubleJumpSequence !== rig.lastDoubleJumpSequence) {
+    rig.lastDoubleJumpSequence = doubleJumpSequence;
+    if (isAirborne) rig.doubleJumpFlareRemainingMs = 180;
+  }
+  rig.doubleJumpFlareRemainingMs = Math.max(0, rig.doubleJumpFlareRemainingMs - deltaMs);
+  const doubleJumpFlare = rig.doubleJumpFlareRemainingMs / 180;
 
   for (let i = 0; i < rig.thrusterFlames.length; i++) {
     const flame = rig.thrusterFlames[i];
     const coreFlame = rig.thrusterCoreFlames?.[i];
 
-    if (downed) {
+    if (downed || falling) {
       flame.visible = false;
       if (coreFlame) coreFlame.visible = false;
     } else if (isSliding || isAirborne) {
@@ -584,8 +631,8 @@ export function updateCoopOperatorRig(
       flame.visible = true;
       if (coreFlame) coreFlame.visible = true;
       const flicker = 0.85 + Math.sin(elapsedMs * 0.05 + i) * 0.25;
-      const stretch = (isSliding ? 2.9 : 3.8) * flicker;
-      const girth = (isSliding ? 2.0 : 2.5) * (0.95 + Math.sin(elapsedMs * 0.03) * 0.1);
+      const stretch = (isSliding ? 2.9 : 3.8) * flicker * (1 + doubleJumpFlare * .8);
+      const girth = (isSliding ? 2.0 : 2.5) * (0.95 + Math.sin(elapsedMs * 0.03) * 0.1) * (1 + doubleJumpFlare * .35);
       flame.scale.set(girth, stretch, girth);
       if (coreFlame) coreFlame.scale.set(girth * 0.65, stretch * 0.75, girth * 0.65);
     } else if (isMoving) {
@@ -610,16 +657,13 @@ export function updateCoopOperatorRig(
 
 /**
  * Disposes per-instance operator resources cleanly.
- * Deliberately preserves global shared geometries and static shared materials.
+ * Deliberately preserves global shared geometries.
  */
 export function disposeCoopOperatorRig(rig: CoopOperatorRig): void {
   rig.root.removeFromParent();
   rig.firearm.dispose();
   disposeNameplate(rig.nameplate);
-  rig.armorMaterial.dispose();
-  rig.glowMaterial.dispose();
-  rig.downedMarkerMaterial.dispose();
-  rig.commsLedMaterial.dispose();
+  rig.ownedMaterials.forEach(material => material.dispose());
 }
 
 function createNameplate(label: string, color: string): THREE.Sprite {

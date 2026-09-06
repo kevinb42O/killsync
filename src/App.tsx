@@ -94,6 +94,7 @@ export default function App() {
     return 'MENU';
   });
   const [viewMode, setViewMode] = useState<ViewMode>('TOPDOWN_2D');
+  const [pointerLockActive, setPointerLockActive] = useState(false);
   const [multiplayerLaunch, setMultiplayerLaunch] = useState<MultiplayerLaunch | null>(null);
 
   const [levelUpOptions, setLevelUpOptions] = useState<any[]>([]);
@@ -144,6 +145,13 @@ export default function App() {
     if (engine?.viewMode === 'FIRST_PERSON' || engine?.viewMode === 'THIRD_PERSON') {
       engine.renderer3D?.requestPointerLock();
     }
+  }, []);
+
+  useEffect(() => {
+    const syncPointerLock = () => setPointerLockActive(Boolean(document.pointerLockElement));
+    document.addEventListener('pointerlockchange', syncPointerLock);
+    syncPointerLock();
+    return () => document.removeEventListener('pointerlockchange', syncPointerLock);
   }, []);
   const lastWaveSeenRef = useRef(1);
   const prevKillCountRef = useRef(0);
@@ -732,9 +740,23 @@ export default function App() {
   // when possible; otherwise the player can click the world once.
   useEffect(() => {
     const renderer3D = engineRef.current?.renderer3D;
-    if (!renderer3D) return;
     if (gameState !== 'PLAYING' || (viewMode !== 'FIRST_PERSON' && viewMode !== 'THIRD_PERSON')) {
-      renderer3D.exitPointerLock();
+      renderer3D?.exitPointerLock();
+      if (gameState !== 'MULTIPLAYER_PLAYING') {
+        const focusFrame = window.requestAnimationFrame(() => {
+          const root = appRef.current;
+          let target = root?.querySelector<HTMLElement>(
+            '[role="dialog"] button:not(:disabled), [role="dialog"] input:not(:disabled), [role="dialog"] select:not(:disabled), [role="dialog"] [tabindex="0"]'
+          );
+          if (!target && root) {
+            target = Array.from(root.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]'
+            ) as NodeListOf<HTMLElement>).find((element: HTMLElement) => element.getClientRects().length > 0);
+          }
+          target?.focus({ preventScroll: true });
+        });
+        return () => window.cancelAnimationFrame(focusFrame);
+      }
     }
   }, [gameState, viewMode]);
 
@@ -1477,6 +1499,16 @@ export default function App() {
         }}
       />
 
+      {gameState === 'PLAYING' && viewMode !== 'TOPDOWN_2D' && !pointerLockActive && (
+        <button
+          type="button"
+          onClick={requestGameplayPointerLock}
+          className="absolute left-1/2 top-1/2 z-[99] -translate-x-1/2 -translate-y-1/2 cursor-pointer border border-cyan-300/70 bg-black/85 px-6 py-4 font-mono text-xs font-black uppercase tracking-[.2em] text-cyan-100 shadow-[0_0_36px_rgba(34,211,238,.3)] backdrop-blur-md hover:bg-cyan-950/90 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+        >
+          Click to resume control
+        </button>
+      )}
+
 
       {/* Post-processing effects */}
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]" />
@@ -1663,7 +1695,7 @@ export default function App() {
                   </motion.h1>
                   <div className="flex items-center gap-3 mb-10">
                     <div className="h-px flex-1 bg-gradient-to-r from-red-500/60 via-cyan-400/35 to-transparent" />
-                    <p className="text-white/35 text-[10px] uppercase tracking-[0.4em] font-mono">Neon Requiem</p>
+                    <p className="text-white/35 text-[10px] uppercase tracking-[0.4em] font-mono">Co-op Survival Protocol</p>
                     <div className="h-px w-8 bg-white/10" />
                   </div>
                 </motion.div>
@@ -2119,6 +2151,9 @@ export default function App() {
 
         {gameState === 'PAUSED' && (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Game paused"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2669,6 +2704,9 @@ export default function App() {
 
         {gameState === 'LEVEL_UP' && (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose an upgrade"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2955,6 +2993,7 @@ export default function App() {
                         // Exfill is now a physical world objective. Closing the
                         // wave overlay returns control so the player can reach it.
                         setGameState('PLAYING');
+                        requestGameplayPointerLock();
                       }
                     }}
                     onMouseEnter={() => soundManager.playUIHover()}
@@ -2971,6 +3010,9 @@ export default function App() {
 
         {gameState === 'TREASURE' && treasureReward && (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Treasure reward"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -3357,6 +3399,9 @@ export default function App() {
 
         {gameState === 'EXFILL_SUMMARY' && exfillSummary && (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Extraction summary"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -3470,6 +3515,9 @@ export default function App() {
 
         {gameState === 'GAME_OVER' && (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Game over"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

@@ -6,12 +6,48 @@ import { OPERATOR_DEFINITIONS } from '../constants';
 import { FireSolution, solveMuzzleConvergence } from './aiming';
 import { compressVisualRadius, getProjectileVisualId } from './projectilePresentation';
 import { EvolutionProfile, getEvolutionProfile } from './evolutions';
-import { getWorldDistrictAt, getWorldObstacles, WORLD_DISTRICTS, WORLD_TRANSIT_LINES } from './world/WorldLayout';
+import { getWorldDistrictAt, getWorldObstacles, WORLD_DISTRICTS, WORLD_SKYBRIDGE_ELEVATION, WORLD_TRANSIT_LINES } from './world/WorldLayout';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
-import { animateCoopEnemyRig, createCoopEnemyRig, disposeCoopEnemyRig } from './rendering/coopEnemyVisuals';
+import { animateCoopEnemyRig, CoopEnemyBatchRenderer, createCoopEnemyRig, disposeCoopEnemyRig } from './rendering/coopEnemyVisuals';
 import { ENEMY_ATTACK_PROFILES } from './combat/enemyDomain';
+import { COOP_FIRST_PERSON_EYE_HEIGHT } from './multiplayer/playerMovement';
+import { createFloatingPlatformShell } from './rendering/floatingPlatformShell';
+
+export interface Renderer3DOptions {
+  /** Co-op takes place on a finite floating megastructure. Its edge is open
+   * space and must never be disguised by floor or skyline geometry. */
+  floatingPlatform?: boolean;
+  /** Development A/B escape hatch; production co-op leaves this enabled. */
+  coopEnemyBatching?: boolean;
+}
+
+export interface RendererSuitPalette {
+  primary: string;
+  secondary: string;
+  dark: string;
+  glow: string;
+  visor: string;
+  metalness?: number;
+  roughness?: number;
+  emissiveIntensity?: number;
+  premium?: boolean;
+  signature?: 'black_ice' | 'royal_inferno';
+}
 
 const COLOR_CACHE = new Map<string, THREE.Color>();
+
+interface EnemyDamageNumberVisual {
+  enemyId: string;
+  bornAt: number;
+  sprite: THREE.Sprite;
+  textureKey: string;
+}
+
+interface EnemyDamageNumberTexture {
+  texture: THREE.CanvasTexture;
+  references: number;
+  lastUsed: number;
+}
 
 function parseHexColor(colorStr?: string, fallback: number = 0x00f0ff): THREE.Color {
   if (!colorStr) colorStr = '#' + fallback.toString(16);
@@ -44,6 +80,11 @@ export class Renderer3D {
   camera: THREE.PerspectiveCamera;
   viewmodelScene: THREE.Scene;
   viewmodelCamera: THREE.PerspectiveCamera;
+  private speedLineScene!: THREE.Scene;
+  private speedLineCamera!: THREE.OrthographicCamera;
+  private speedLineMaterial!: THREE.ShaderMaterial;
+  private speedLineMesh!: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
+  private speedLineIntensity = 0;
 
   private readonly WORLD_FOV = 108;
   private readonly WORLD_DASH_FOV = 118;
@@ -68,6 +109,9 @@ export class Renderer3D {
   presentationVerticalOffset: number = 0;
   presentationSprinting: boolean = false;
   presentationSliding: boolean = false;
+  /** Short-lived first-person body lean supplied by wall-jump presentation. */
+  presentationCameraRoll: number = 0;
+  presentationCameraPitchOffset: number = 0;
   /** Co-op sniper scope. World FOV and look speed remain purely presentation. */
   presentationScoped: boolean = false;
   /** 0–1 host-derived reload progress for the visible legacy plasma handgun. */
@@ -91,6 +135,7 @@ export class Renderer3D {
   ambientLight!: THREE.AmbientLight;
   playerPointLight!: THREE.PointLight;
   camKeyLight!: THREE.DirectionalLight;
+  private camKeyTarget!: THREE.Object3D;
   vmFillLight!: THREE.PointLight;
   vmGlowLight!: THREE.PointLight;
   
@@ -98,6 +143,8 @@ export class Renderer3D {
   gridHelper!: THREE.GridHelper;
   floorMesh!: THREE.Mesh;
   boundaryPillars: THREE.Mesh[] = [];
+  private readonly floatingPlatform: boolean;
+  private coopSuitPalette?: RendererSuitPalette;
   gasZoneGroup!: THREE.Group;
   gasWallMesh!: THREE.Mesh;
   gasWallMaterial!: THREE.ShaderMaterial;
@@ -149,6 +196,9 @@ export class Renderer3D {
   armThumb!: THREE.Mesh;
   armWristHoloDisplay!: THREE.Mesh;
   armHoloLines!: THREE.Mesh;
+  coopPremiumViewmodelEffect!: THREE.Group;
+  coopPremiumViewmodelRing!: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+  coopPremiumViewmodelParticles!: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
 
   muzzleFlashMesh!: THREE.Mesh;
   muzzleFlashCone!: THREE.Mesh;
@@ -184,6 +234,12 @@ export class Renderer3D {
   
   // Object pools & 3D caches
   private enemyMeshes = new Map<string, THREE.Object3D>();
+  private coopEnemyBatchRenderer?: CoopEnemyBatchRenderer;
+  private readonly activeEnemyIds = new Set<string>();
+  private readonly activeEnemyAttackIds = new Set<string>();
+  private enemyDamageNumbers: EnemyDamageNumberVisual[] = [];
+  private enemyDamageNumberPool: THREE.Sprite[] = [];
+  private enemyDamageNumberTextures = new Map<string, EnemyDamageNumberTexture>();
   private enemyAttackTelegraphs = new Map<string, THREE.Mesh>();
   private telegraphSharedGeometry = (() => { const g = new THREE.RingGeometry(0.82, 1, 32); g.userData.rendererEnemyShared = true; return g; })();
   private telegraphPool: THREE.Mesh[] = [];
@@ -246,7 +302,87 @@ export class Renderer3D {
   private debugAimPoint!: THREE.Mesh;
   debugAim: boolean = false;
 
-  constructor() {
+  getPerformanceStats() {
+    const info = this.renderer.info;
+    return {
+      drawCalls: info.render.calls,
+      triangles: info.render.triangles,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      batchedEnemies: this.coopEnemyBatchRenderer?.activeEnemyCount || 0,
+      enemyBatches: this.coopEnemyBatchRenderer?.activeDrawBatchCount || 0,
+      enemyCount: this.enemyMeshes.size,
+    };
+  }
+
+  /**
+   * Adds a true world-space damage label to an enemy rig. Because the sprite is
+   * parented to the rig, enemy motion and camera motion are resolved by Three.js
+   * in the same frame instead of being approximated by a DOM overlay.
+   */
+  showEnemyDamageNumber(enemyId: string, amount: number, color: string = '#ffffff') {
+    const roundedAmount = Math.max(1, Math.round(amount));
+    const textureKey = `${roundedAmount}:${color}`;
+    const texture = this.acquireEnemyDamageNumberTexture(textureKey, roundedAmount, color);
+    if (!texture) return;
+    const sprite = this.enemyDamageNumberPool.pop() || new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: true, toneMapped: false }));
+    const material = sprite.material as THREE.SpriteMaterial;
+    material.map = texture;
+    material.opacity = .9;
+    material.needsUpdate = true;
+    sprite.renderOrder = 40;
+    sprite.scale.set(50, 14.6, 1);
+    this.enemyDamageNumbers.push({ enemyId, bornAt: Date.now(), sprite, textureKey });
+    while (this.enemyDamageNumbers.length > 3) this.disposeEnemyDamageNumber(this.enemyDamageNumbers.shift()!);
+  }
+
+  private acquireEnemyDamageNumberTexture(key: string, amount: number, color: string) {
+    const now = Date.now();
+    const cached = this.enemyDamageNumberTextures.get(key);
+    if (cached) {
+      cached.references++;
+      cached.lastUsed = now;
+      return cached.texture;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = 192;
+    canvas.height = 56;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.font = 'italic 850 29px Inter, Arial, sans-serif';
+    context.lineJoin = 'round';
+    context.lineWidth = 6;
+    context.strokeStyle = 'rgba(1, 4, 8, .88)';
+    context.strokeText(`−${amount} HP`, canvas.width / 2, canvas.height / 2);
+    context.shadowColor = color;
+    context.shadowBlur = 3;
+    context.fillStyle = 'rgba(255, 255, 255, .94)';
+    context.fillText(`−${amount} HP`, canvas.width / 2, canvas.height / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    this.enemyDamageNumberTextures.set(key, { texture, references: 1, lastUsed: now });
+    this.trimEnemyDamageNumberTextureCache();
+    return texture;
+  }
+
+  private trimEnemyDamageNumberTextureCache() {
+    if (this.enemyDamageNumberTextures.size <= 24) return;
+    const disposable = [...this.enemyDamageNumberTextures.entries()]
+      .filter(([, entry]) => entry.references === 0)
+      .sort((left, right) => left[1].lastUsed - right[1].lastUsed);
+    while (this.enemyDamageNumberTextures.size > 24 && disposable.length) {
+      const [key, entry] = disposable.shift()!;
+      entry.texture.dispose();
+      this.enemyDamageNumberTextures.delete(key);
+    }
+  }
+
+  constructor(options: Renderer3DOptions = {}) {
+    this.floatingPlatform = options.floatingPlatform ?? false;
     // 1. Initialize Three.js Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0b1830);
@@ -258,6 +394,7 @@ export class Renderer3D {
     // projection so it remains readable at a 130° world FOV.
     this.camera = new THREE.PerspectiveCamera(this.WORLD_FOV, window.innerWidth / window.innerHeight, 0.05, 32000);
     this.scene.add(this.camera);
+    if (this.floatingPlatform && options.coopEnemyBatching !== false) this.coopEnemyBatchRenderer = new CoopEnemyBatchRenderer(this.scene);
     this.viewmodelScene = new THREE.Scene();
     this.viewmodelCamera = new THREE.PerspectiveCamera(this.VIEWMODEL_FOV, window.innerWidth / window.innerHeight, 0.025, 1000);
     this.viewmodelScene.add(this.viewmodelCamera);
@@ -268,10 +405,17 @@ export class Renderer3D {
       antialias: true,
       alpha: false
     });
+    // A frame may contain world, viewmodel, and speed-line passes. Accumulate
+    // renderer statistics across all of them and reset exactly once below.
+    this.renderer.info.autoReset = false;
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.4;
+
+    // Screen-space sprint feedback is rendered in a final transparent pass so
+    // the streaks remain in the player's FOV instead of existing in the world.
+    this.setupSpeedLines();
 
     // 4. Setup Lighting
     this.setupLighting();
@@ -294,6 +438,10 @@ export class Renderer3D {
     window.addEventListener('resize', this.handleResize);
   }
 
+  setCoopSuitPalette(palette?: RendererSuitPalette) {
+    this.coopSuitPalette = palette;
+  }
+
   mount(container: HTMLElement) {
     this.container = container;
     container.appendChild(this.renderer.domElement);
@@ -314,8 +462,75 @@ export class Renderer3D {
     this.camera.updateProjectionMatrix();
     this.viewmodelCamera.aspect = width / height;
     this.viewmodelCamera.updateProjectionMatrix();
+    this.speedLineMaterial.uniforms.aspect.value = width / Math.max(1, height);
     this.renderer.setSize(width, height);
   };
+
+  private setupSpeedLines() {
+    this.speedLineScene = new THREE.Scene();
+    this.speedLineCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.speedLineMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 },
+        intensity: { value: 0 },
+        aspect: { value: window.innerWidth / Math.max(1, window.innerHeight) },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        uniform float intensity;
+        uniform float aspect;
+        varying vec2 vUv;
+
+        float hash(float value) {
+          return fract(sin(value * 127.1) * 43758.5453);
+        }
+
+        void main() {
+          vec2 point = vUv - 0.5;
+          point.x *= aspect;
+          float radius = length(point);
+          float angle = atan(point.y, point.x);
+          float lane = (angle + 3.14159265) / 6.2831853 * 96.0;
+          float laneId = floor(lane);
+          float seed = hash(laneId);
+
+          // Each angular lane owns one outward-moving streak. Random gaps and
+          // varied speed keep the result energetic without forming a sunburst.
+          float phase = fract(time * mix(0.72, 1.35, seed) + hash(laneId + 19.7));
+          float head = mix(0.42, 1.18, phase);
+          float streakLength = mix(0.08, 0.22, hash(laneId + 41.3));
+          float segment = smoothstep(head - streakLength, head - streakLength + 0.025, radius)
+            * (1.0 - smoothstep(head - 0.025, head, radius));
+          float laneDistance = abs(fract(lane) - 0.5);
+          float line = 1.0 - smoothstep(0.015, mix(0.045, 0.085, seed), laneDistance);
+          float sparse = step(0.30, hash(laneId + 73.9));
+          // Keep the center and mid-FOV calm; the cue should live at the far
+          // edge of vision and never compete with targets or the reticle.
+          float peripheral = smoothstep(0.40, 0.64, radius);
+          float edgeFade = 1.0 - smoothstep(0.98, 1.22, radius);
+          float alpha = segment * line * sparse * peripheral * edgeFade * intensity;
+
+          vec3 color = mix(vec3(0.38, 0.88, 1.0), vec3(1.0), seed * 0.7);
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    this.speedLineMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.speedLineMaterial);
+    this.speedLineMesh.frustumCulled = false;
+    this.speedLineScene.add(this.speedLineMesh);
+  }
 
   private setupLighting() {
     // High-Dynamic Ambient Light
@@ -332,21 +547,28 @@ export class Renderer3D {
     magentaLight.position.set(-400, 500, -300);
     this.scene.add(magentaLight);
 
-    // Player Follow Point Light
+    // Player-following fill. Its vertical position is updated with the
+    // presented jump height so airborne lighting does not detach from the rig.
     this.playerPointLight = new THREE.PointLight(0x00f0ff, 5.0, 500, 1.0);
     this.scene.add(this.playerPointLight);
 
-    // Camera Forward Key Light
+    // Camera-forward key. A DirectionalLight target is world-space unless it
+    // shares the camera transform; leaving the default target at world origin
+    // made metallic highlights rotate as the player moved through the arena.
     this.camKeyLight = new THREE.DirectionalLight(0xffffff, 1.8);
-    this.camKeyLight.position.set(0, 2, 5);
-    this.camera.add(this.camKeyLight);
+    this.camKeyLight.position.set(0, 1.5, 2.5);
+    this.camKeyTarget = new THREE.Object3D();
+    this.camKeyTarget.position.set(0, 0, -8);
+    this.camKeyLight.target = this.camKeyTarget;
+    this.camera.add(this.camKeyLight, this.camKeyTarget);
   }
 
   private setupEnvironment() {
     this.setupSkyDome();
     // Cyber Neon Floor Grid
-    const floorSize = Math.max(GAME_WIDTH, GAME_HEIGHT) * 2.5;
-    const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize, 1, 1);
+    const floorWidth = this.floatingPlatform ? GAME_WIDTH : Math.max(GAME_WIDTH, GAME_HEIGHT) * 2.5;
+    const floorHeight = this.floatingPlatform ? GAME_HEIGHT : floorWidth;
+    const floorGeo = new THREE.PlaneGeometry(floorWidth, floorHeight, 1, 1);
     // The grid is rendered inside the floor shader rather than as a separate
     // helper mesh. That removes the final depth-buffer competition completely;
     // fwidth keeps the lines anti-aliased while the player moves.
@@ -395,24 +617,26 @@ export class Renderer3D {
     });
     this.floorMesh = new THREE.Mesh(floorGeo, floorMat);
     this.floorMesh.rotation.x = -Math.PI / 2;
-    this.floorMesh.position.y = 0;
+    this.floorMesh.position.set(this.floatingPlatform ? GAME_WIDTH / 2 : 0, 0, this.floatingPlatform ? GAME_HEIGHT / 2 : 0);
     this.scene.add(this.floorMesh);
+
+    if (this.floatingPlatform) this.setupFloatingPlatform();
 
     // Retained only for lifecycle compatibility; the stable grid lives in the
     // floor shader above and no second grid object enters the scene.
-    this.gridHelper = new THREE.GridHelper(floorSize, 240, 0x256a82, 0x13243a);
+    this.gridHelper = new THREE.GridHelper(Math.max(floorWidth, floorHeight), 240, 0x256a82, 0x13243a);
     this.gridHelper.visible = false;
 
     // Collidable architecture comes from the same deterministic layout used by
     // Engine movement. These are real city blocks, not decorative ghosts.
     this.setupDistrictCity();
-    this.setupDistantSkyline();
+    if (!this.floatingPlatform) this.setupDistantSkyline();
 
     // Distant Cyber Pillars / Horizon Monoliths
     const pillarGeo = new THREE.BoxGeometry(40, 750, 40);
     const pillarColors = [0x00f0ff, 0xff0077, 0x7928ca, 0x00ffcc];
     
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < (this.floatingPlatform ? 0 : 18); i++) {
       const angle = (i / 18) * Math.PI * 2;
       const dist = Math.max(GAME_WIDTH, GAME_HEIGHT) * 0.67 + Math.sin(i * 3) * 400;
       const color = pillarColors[i % pillarColors.length];
@@ -430,6 +654,44 @@ export class Renderer3D {
     }
 
     this.setupGasZoneVisuals();
+  }
+
+  /** Gives co-op's finite play space an honest physical silhouette. The top
+   * surface ends at the authoritative footprint; the slab and warning bands
+   * make that edge readable without adding collision rails or invisible walls. */
+  private setupFloatingPlatform() {
+    const slabDepth = 150;
+    // Do not place another arena-sized horizontal face directly beneath the
+    // shader floor. At grazing angles the huge world-camera depth range can
+    // quantize nearby surfaces to the same value, briefly revealing the sky's
+    // magenta underglow through the deck as the camera rises during a jump.
+    // Four walls plus a deeply separated underside preserve the silhouette
+    // without any competing top layer.
+    const slab = createFloatingPlatformShell(GAME_WIDTH, GAME_HEIGHT, slabDepth);
+    this.scene.add(slab);
+
+    const warningMaterial = new THREE.MeshBasicMaterial({ color: 0xffb020, toneMapped: false });
+    const edgeMaterial = new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.72, toneMapped: false });
+    const edgeInset = 14;
+    const warningWidth = 7;
+    const sideHeight = 4;
+    const addBand = (width: number, depth: number, x: number, z: number, material: THREE.Material, y: number) => {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(width, sideHeight, depth), material);
+      band.position.set(x, y, z);
+      band.name = 'coop-platform-edge-band';
+      this.scene.add(band);
+    };
+
+    // Amber strips sit on the deck just inside the drop; cyan strips outline
+    // the vertical lip from below and at oblique viewing angles.
+    addBand(GAME_WIDTH - edgeInset * 2, warningWidth, GAME_WIDTH / 2, edgeInset, warningMaterial, 1.1);
+    addBand(GAME_WIDTH - edgeInset * 2, warningWidth, GAME_WIDTH / 2, GAME_HEIGHT - edgeInset, warningMaterial, 1.1);
+    addBand(warningWidth, GAME_HEIGHT - edgeInset * 2, edgeInset, GAME_HEIGHT / 2, warningMaterial, 1.1);
+    addBand(warningWidth, GAME_HEIGHT - edgeInset * 2, GAME_WIDTH - edgeInset, GAME_HEIGHT / 2, warningMaterial, 1.1);
+    addBand(GAME_WIDTH, 5, GAME_WIDTH / 2, 0, edgeMaterial, -12);
+    addBand(GAME_WIDTH, 5, GAME_WIDTH / 2, GAME_HEIGHT, edgeMaterial, -12);
+    addBand(5, GAME_HEIGHT, 0, GAME_HEIGHT / 2, edgeMaterial, -12);
+    addBand(5, GAME_HEIGHT, GAME_WIDTH, GAME_HEIGHT / 2, edgeMaterial, -12);
   }
 
   private setupSkyDome() {
@@ -589,10 +851,10 @@ export class Renderer3D {
     // are collision obstacles shared with Engine.
     const bridgeSpan = GAME_WIDTH * 0.6;
     const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(bridgeSpan, 14, 84), steelMat);
-    bridgeDeck.position.set(GAME_WIDTH / 2, 150, GAME_HEIGHT / 2);
+    bridgeDeck.position.set(GAME_WIDTH / 2, WORLD_SKYBRIDGE_ELEVATION, GAME_HEIGHT / 2);
     this.scene.add(bridgeDeck);
     const bridgeGlow = new THREE.Mesh(new THREE.BoxGeometry(bridgeSpan - 20, 3, 3), new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 1.1 }));
-    bridgeGlow.position.set(GAME_WIDTH / 2, 160, GAME_HEIGHT / 2 - 42);
+    bridgeGlow.position.set(GAME_WIDTH / 2, WORLD_SKYBRIDGE_ELEVATION + 10, GAME_HEIGHT / 2 - 42);
     this.scene.add(bridgeGlow);
     for (const pylon of bridgePylons) {
       const support = new THREE.Mesh(pylonGeo, concreteMat);
@@ -1200,6 +1462,37 @@ export class Renderer3D {
     this.armHoloLines.rotation.y = -0.15;
     this.rightArmRoot.add(this.armHoloLines);
 
+    // Premium cosmetics receive a dedicated owner-visible signature around
+    // the cybernetic forearm. It is always allocated once and merely hidden
+    // for standard skins: two fixed draw calls, no runtime particle spawning.
+    this.coopPremiumViewmodelEffect = new THREE.Group();
+    this.coopPremiumViewmodelEffect.name = 'coop-premium-viewmodel-signature';
+    this.coopPremiumViewmodelEffect.position.set(1.1, -1.82, 1.9);
+    const premiumRingMaterial = new THREE.MeshBasicMaterial({
+      color: 0x7dd3fc,
+      transparent: true,
+      opacity: .78,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.coopPremiumViewmodelRing = new THREE.Mesh(new THREE.TorusGeometry(.94, .052, 6, 28), premiumRingMaterial);
+    this.coopPremiumViewmodelEffect.add(this.coopPremiumViewmodelRing);
+    const orbitPositions = new Float32Array(12 * 3);
+    for (let index = 0; index < 12; index++) {
+      const angle = index / 12 * Math.PI * 2;
+      orbitPositions[index * 3] = Math.cos(angle) * 1.12;
+      orbitPositions[index * 3 + 1] = Math.sin(angle) * 1.12;
+      orbitPositions[index * 3 + 2] = (index % 3 - 1) * .34;
+    }
+    const orbitGeometry = new THREE.BufferGeometry();
+    orbitGeometry.setAttribute('position', new THREE.BufferAttribute(orbitPositions, 3));
+    const orbitMaterial = new THREE.PointsMaterial({ color: 0xf0f9ff, size: .105, transparent: true, opacity: .92, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    this.coopPremiumViewmodelParticles = new THREE.Points(orbitGeometry, orbitMaterial);
+    this.coopPremiumViewmodelEffect.add(this.coopPremiumViewmodelParticles);
+    this.coopPremiumViewmodelEffect.visible = false;
+    this.rightArmRoot.add(this.coopPremiumViewmodelEffect);
+
     // Optimized High-FOV viewmodel positioning (placed in the lower right foreground)
     this.fpsWeaponGroup.position.set(1.65, -1.85, -4.8);
     this.viewmodelCamera.add(this.fpsWeaponGroup);
@@ -1535,6 +1828,8 @@ export class Renderer3D {
   requestPointerLock() {
     if (this.renderer.domElement && document.pointerLockElement !== this.renderer.domElement) {
       try {
+        this.renderer.domElement.tabIndex = -1;
+        this.renderer.domElement.focus({ preventScroll: true });
         const request = this.renderer.domElement.requestPointerLock();
         request?.catch(() => {
           this.isShooting = false;
@@ -1633,10 +1928,10 @@ export class Renderer3D {
    * camera. This preserves exact on-screen barrel alignment even though the
    * world and weapon deliberately use different FOV values.
    */
-  private getProjectedMuzzleWorldPosition(): THREE.Vector3 {
+  projectViewmodelPointToWorld(point: THREE.Object3D): { x: number; y: number; z: number } {
     this.camera.updateMatrixWorld(true);
     this.viewmodelCamera.updateMatrixWorld(true);
-    this.weaponMuzzlePoint.getWorldPosition(this.tempMuzzlePos);
+    point.getWorldPosition(this.tempMuzzlePos);
     const muzzleDepth = THREE.MathUtils.clamp(
       this.tempMuzzlePos.distanceTo(this.viewmodelCamera.position),
       6,
@@ -1646,7 +1941,12 @@ export class Renderer3D {
     this.tempMuzzleNdc2.set(this.tempMuzzleNdc.x, this.tempMuzzleNdc.y);
     this.tempRaycaster.setFromCamera(this.tempMuzzleNdc2, this.camera);
     this.tempRaycaster.ray.at(muzzleDepth, this.tempMuzzlePos);
-    return this.tempMuzzlePos;
+    return { x: this.tempMuzzlePos.x, y: this.tempMuzzlePos.y, z: this.tempMuzzlePos.z };
+  }
+
+  private getProjectedMuzzleWorldPosition(): THREE.Vector3 {
+    const projected = this.projectViewmodelPointToWorld(this.weaponMuzzlePoint);
+    return this.tempMuzzlePos.set(projected.x, projected.y, projected.z);
   }
 
   getFireSolution(enemies: Enemy[] = []): FireSolution {
@@ -1729,11 +2029,15 @@ export class Renderer3D {
     const shakeY = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
     this.camera.position.set(
       player.position.x + bobX * 0.2 + shakeX,
-      26 + this.presentationVerticalOffset - (this.presentationSliding ? 9 : 0) + bobY * 0.2 + shakeY,
+      COOP_FIRST_PERSON_EYE_HEIGHT + this.presentationVerticalOffset - (this.presentationSliding ? 9 : 0) + bobY * 0.2 + shakeY,
       player.position.y
     );
     this.camera.rotation.order = 'YXZ';
-    this.camera.rotation.set(this.pitch, this.yaw, 0);
+    this.camera.rotation.set(
+      THREE.MathUtils.clamp(this.pitch + this.presentationCameraPitchOffset, -1.45, 1.45),
+      this.yaw,
+      this.presentationCameraRoll,
+    );
 
     // The viewmodel camera follows the world camera pose but owns its projection.
     this.viewmodelCamera.position.copy(this.camera.position);
@@ -1817,6 +2121,7 @@ export class Renderer3D {
 
   // Render loop called once per frame from GameEngine
   render(engine: GameEngine, deltaTime: number) {
+    this.renderer.info.reset();
     const player = engine.player;
     const viewMode = engine.viewMode;
     this.activeViewMode = viewMode;
@@ -1832,18 +2137,24 @@ export class Renderer3D {
     this.updateGasZoneVisuals(gasZone, deltaTime);
 
     // Safely parse Operator Colors with cached lookup
-    const primaryColor = parseHexColor(op.color, 0x00f0ff);
-    const secondaryColor = parseHexColor(op.colorSecondary, 0x0d5e5e);
-    const darkColor = parseHexColor(op.colorDark, 0x0a3d3d);
-    const glowColor = parseHexColor(op.colorGlow, 0x00f0ff);
-    const visorColor = parseHexColor(op.colorVisor, 0x00ffff);
-    const limbsColor = parseHexColor(op.colorLimbs, 0x00b8b8);
-    const bootsColor = parseHexColor(op.colorBoots, 0x006666);
+    const suit = this.coopSuitPalette;
+    const primaryColor = parseHexColor(suit?.primary || op.color, 0x00f0ff);
+    const secondaryColor = parseHexColor(suit?.secondary || op.colorSecondary, 0x0d5e5e);
+    const darkColor = parseHexColor(suit?.dark || op.colorDark, 0x0a3d3d);
+    const glowColor = parseHexColor(suit?.glow || op.colorGlow, 0x00f0ff);
+    const visorColor = parseHexColor(suit?.visor || op.colorVisor, 0x00ffff);
+    const limbsColor = parseHexColor(suit?.primary || op.colorLimbs, 0x00b8b8);
+    const bootsColor = parseHexColor(suit?.dark || op.colorBoots, 0x006666);
 
     // 1. Update Player Point Light & Viewmodel Glow
     this.playerPointLight.color.copy(primaryColor);
-    this.playerPointLight.position.set(player.position.x, 32, player.position.y);
+    this.playerPointLight.position.set(
+      player.position.x,
+      COOP_FIRST_PERSON_EYE_HEIGHT + 6 + this.presentationVerticalOffset,
+      player.position.y,
+    );
     this.vmGlowLight.color.copy(primaryColor);
+    this.vmGlowLight.intensity = suit?.premium ? 2.35 + (suit.emissiveIntensity || 0) * 1.25 : 2.2;
 
     // 2. Update First-Person Viewmodel Materials with Operator Palette
     (this.weaponChassis.material as THREE.MeshStandardMaterial).color.copy(secondaryColor);
@@ -1894,6 +2205,14 @@ export class Renderer3D {
     (this.armPowerConduit1.material as THREE.MeshBasicMaterial).color.copy(primaryColor);
     (this.armPowerConduit2.material as THREE.MeshBasicMaterial).color.copy(primaryColor);
     (this.armPalm.material as THREE.MeshStandardMaterial).color.copy(secondaryColor);
+    if (suit) {
+      for (const mesh of [this.armForearmMain, this.armCarbonPlate, this.armChevronTrim, this.armPalm]) {
+        const material = mesh.material as THREE.MeshStandardMaterial;
+        if (suit.metalness !== undefined) material.metalness = suit.metalness;
+        if (suit.roughness !== undefined) material.roughness = suit.roughness;
+      }
+      (this.armChevronTrim.material as THREE.MeshStandardMaterial).emissiveIntensity = suit.emissiveIntensity ?? .85;
+    }
     (this.armThumb.material as THREE.MeshStandardMaterial).color.copy(secondaryColor).multiplyScalar(0.42);
     for (const f of this.armFingers) {
       (f.material as THREE.MeshStandardMaterial).color.copy(secondaryColor).multiplyScalar(0.42);
@@ -1903,6 +2222,25 @@ export class Renderer3D {
     }
     (this.armWristHoloDisplay.material as THREE.MeshBasicMaterial).color.copy(visorColor);
     (this.armHoloLines.material as THREE.MeshBasicMaterial).color.copy(visorColor).multiplyScalar(0.65);
+
+    const premiumViewmodel = Boolean(suit?.premium && viewMode === 'FIRST_PERSON');
+    this.coopPremiumViewmodelEffect.visible = premiumViewmodel;
+    if (premiumViewmodel) {
+      const signaturePulse = .5 + .5 * Math.sin(engine.gameTime * .0042);
+      this.coopPremiumViewmodelEffect.rotation.z = engine.gameTime * (suit!.signature === 'black_ice' ? .00075 : -.00115);
+      this.coopPremiumViewmodelEffect.rotation.x = Math.sin(engine.gameTime * .0017) * .16;
+      this.coopPremiumViewmodelEffect.scale.setScalar(.94 + signaturePulse * .12);
+      this.coopPremiumViewmodelRing.material.color.copy(glowColor);
+      this.coopPremiumViewmodelRing.material.opacity = .58 + signaturePulse * .32;
+      this.coopPremiumViewmodelParticles.material.color.copy(visorColor);
+      this.coopPremiumViewmodelParticles.material.opacity = .7 + signaturePulse * .28;
+      this.coopPremiumViewmodelParticles.material.size = .09 + signaturePulse * .055;
+      (this.armWristHoloDisplay.material as THREE.MeshBasicMaterial).opacity = .3 + signaturePulse * .22;
+      (this.armHoloLines.material as THREE.MeshBasicMaterial).opacity = .62 + signaturePulse * .3;
+    } else {
+      (this.armWristHoloDisplay.material as THREE.MeshBasicMaterial).opacity = .2;
+      (this.armHoloLines.material as THREE.MeshBasicMaterial).opacity = .55;
+    }
 
     // Rotate quantum core crystal inside chamber
     this.weaponQuantumCore.rotation.x += deltaTime * 0.004;
@@ -2060,25 +2398,47 @@ export class Renderer3D {
       this.renderer.render(this.viewmodelScene, this.viewmodelCamera);
       this.renderer.autoClear = true;
     }
+
+    // Ease both edges of the effect so tapping sprint never produces a flash.
+    // ADS suppresses the streaks to preserve a clean sight picture.
+    const speedLineTarget = viewMode === 'FIRST_PERSON' && this.presentationSprinting
+      ? 0.26 * (1 - this.adsProgress)
+      : 0;
+    this.speedLineIntensity = this.damp(this.speedLineIntensity, speedLineTarget, speedLineTarget > 0 ? 8 : 12, deltaTime);
+    this.speedLineMaterial.uniforms.time.value += Math.min(deltaTime, 50) / 1000;
+    this.speedLineMaterial.uniforms.intensity.value = this.speedLineIntensity;
+    if (this.speedLineIntensity > 0.002) {
+      this.renderer.autoClear = false;
+      this.renderer.render(this.speedLineScene, this.speedLineCamera);
+      this.renderer.autoClear = true;
+    }
   }
 
   private updateEnemies3D(enemies: Enemy[], deltaTime: number) {
-    const activeEnemyIds = new Set<string>();
-    const activeAttackIds = new Set<string>();
+    const activeEnemyIds = this.activeEnemyIds; activeEnemyIds.clear();
+    const activeAttackIds = this.activeEnemyAttackIds; activeAttackIds.clear();
     const now = Date.now();
+    this.coopEnemyBatchRenderer?.beginFrame();
+    this.pruneEnemyDamageNumbers(now);
 
     for (const enemy of enemies) {
       activeEnemyIds.add(enemy.id);
       let mesh = this.enemyMeshes.get(enemy.id);
-
       if (!mesh) {
         mesh = this.createEnemyMesh(enemy);
         this.scene.add(mesh);
         this.enemyMeshes.set(enemy.id, mesh);
       }
+      mesh.visible = true;
 
       if (mesh.userData.coopRig) {
+        this.coopEnemyBatchRenderer?.prepareRig(mesh);
         animateCoopEnemyRig(mesh as THREE.Group, enemy, this.camera, now);
+        const needsExactMaterialState = Boolean((enemy.hitFlash || 0) > 0
+          || (enemy.presentationAttackCharge || 0) > .001
+          || (enemy.presentationDeathProgress || 0) > 0);
+        if (!needsExactMaterialState) this.coopEnemyBatchRenderer?.add(enemy, mesh);
+        if (this.enemyDamageNumbers.length) this.updateEnemyDamageNumbers(mesh, enemy, now);
         continue;
       }
 
@@ -2145,10 +2505,12 @@ export class Renderer3D {
         }
       }
     }
+    this.coopEnemyBatchRenderer?.endFrame();
 
     // Cleanup dead enemies
     for (const [id, mesh] of this.enemyMeshes.entries()) {
       if (!activeEnemyIds.has(id)) {
+        this.clearEnemyDamageNumbers(id);
         this.scene.remove(mesh);
         if (mesh.userData.coopRig) disposeCoopEnemyRig(mesh);
         else this.disposeEffectMesh(mesh);
@@ -2161,6 +2523,54 @@ export class Renderer3D {
       this.telegraphPool.push(telegraph);
       this.enemyAttackTelegraphs.delete(id);
     }
+  }
+
+  private updateEnemyDamageNumbers(mesh: THREE.Object3D, enemy: Enemy, now: number) {
+    if (!this.enemyDamageNumbers.some(label => label.enemyId === enemy.id)) return;
+    const labels = this.enemyDamageNumbers.filter(label => label.enemyId === enemy.id);
+    labels.forEach((label, index) => {
+      if (label.sprite.parent !== mesh) mesh.add(label.sprite);
+      const age = now - label.bornAt;
+      const progress = THREE.MathUtils.clamp(age / 760, 0, 1);
+      const pop = 1 + Math.sin(Math.min(1, progress * 5.4) * Math.PI) * .07;
+      const stackDepth = labels.length - index - 1;
+      label.sprite.position.set(0, enemy.radius * 1.66 + 8 + stackDepth * 13 + progress * 4, 0);
+      label.sprite.scale.set(50 * pop, 14.6 * pop, 1);
+      (label.sprite.material as THREE.SpriteMaterial).opacity = .9 * (1 - THREE.MathUtils.smoothstep(progress, .66, 1));
+    });
+  }
+
+  private pruneEnemyDamageNumbers(now: number) {
+    for (let index = this.enemyDamageNumbers.length - 1; index >= 0; index--) {
+      const label = this.enemyDamageNumbers[index];
+      if (now - label.bornAt <= 760) continue;
+      this.enemyDamageNumbers.splice(index, 1);
+      this.disposeEnemyDamageNumber(label);
+    }
+  }
+
+  private clearEnemyDamageNumbers(enemyId: string) {
+    for (let index = this.enemyDamageNumbers.length - 1; index >= 0; index--) {
+      const label = this.enemyDamageNumbers[index];
+      if (label.enemyId !== enemyId) continue;
+      this.enemyDamageNumbers.splice(index, 1);
+      this.disposeEnemyDamageNumber(label);
+    }
+  }
+
+  private disposeEnemyDamageNumber(label: EnemyDamageNumberVisual) {
+    label.sprite.removeFromParent();
+    const material = label.sprite.material as THREE.SpriteMaterial;
+    material.map = null;
+    material.opacity = 0;
+    material.needsUpdate = true;
+    const texture = this.enemyDamageNumberTextures.get(label.textureKey);
+    if (texture) {
+      texture.references = Math.max(0, texture.references - 1);
+      texture.lastUsed = Date.now();
+    }
+    if (this.enemyDamageNumberPool.length < 3) this.enemyDamageNumberPool.push(label.sprite);
+    else material.dispose();
   }
 
   /** Keep equipped aura visuals alive between their discrete gameplay damage
@@ -3923,6 +4333,16 @@ export class Renderer3D {
         diamond.position.y = 5;
         group.add(diamond);
       }
+    } else if (item.type === 'self_revive') {
+      const caseMesh = new THREE.Mesh(new THREE.BoxGeometry(19, 13, 6), new THREE.MeshStandardMaterial({ color: 0x38121e, emissive: 0xfb7185, emissiveIntensity: .7, metalness: .55, roughness: .25 }));
+      group.add(caseMesh);
+      const barMaterial = new THREE.MeshBasicMaterial({ color: 0xffd6e0, toneMapped: false });
+      const horizontal = new THREE.Mesh(new THREE.BoxGeometry(11, 3.5, 6.5), barMaterial);
+      const vertical = new THREE.Mesh(new THREE.BoxGeometry(3.5, 11, 6.5), barMaterial);
+      group.add(horizontal, vertical);
+      const beacon = new THREE.Mesh(new THREE.TorusGeometry(12, 1.2, 6, 18), glow);
+      beacon.rotation.x = Math.PI / 2;
+      group.add(beacon);
     } else if (item.type === 'hp') {
       const heartShape = new THREE.Shape();
       const x = 0, y = 0;
@@ -4404,11 +4824,18 @@ export class Renderer3D {
     window.removeEventListener('keydown', this.onDebugKeyDown);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     this.exitPointerLock();
+    for (const label of this.enemyDamageNumbers) this.disposeEnemyDamageNumber(label);
+    this.enemyDamageNumbers.length = 0;
+    for (const sprite of this.enemyDamageNumberPool) (sprite.material as THREE.SpriteMaterial).dispose();
+    this.enemyDamageNumberPool.length = 0;
+    for (const entry of this.enemyDamageNumberTextures.values()) entry.texture.dispose();
+    this.enemyDamageNumberTextures.clear();
     for (const enemy of this.enemyMeshes.values()) {
       if (enemy.userData.coopRig) disposeCoopEnemyRig(enemy);
       else this.disposeEffectMesh(enemy);
     }
     this.enemyMeshes.clear();
+    this.coopEnemyBatchRenderer?.dispose();
     for (const geometry of this.enemyGeometryCache.values()) geometry.dispose();
     this.enemyGeometryCache.clear();
     for (const telegraph of this.enemyAttackTelegraphs.values()) { telegraph.geometry.dispose(); (telegraph.material as THREE.Material).dispose(); }
@@ -4423,6 +4850,10 @@ export class Renderer3D {
     for (const shop of this.shopMeshes.values()) this.disposeEffectMesh(shop);
     for (const template of this.itemTemplates.values()) this.disposeEffectMesh(template);
     if (this.exfillPortalMesh) this.disposeEffectMesh(this.exfillPortalMesh);
+    this.coopPremiumViewmodelRing.geometry.dispose();
+    this.coopPremiumViewmodelRing.material.dispose();
+    this.coopPremiumViewmodelParticles.geometry.dispose();
+    this.coopPremiumViewmodelParticles.material.dispose();
     this.persistentAuraMeshes.clear();
     this.persistentOrbitMeshes.clear();
     this.tendrilStrikeMeshes.clear();
@@ -4434,6 +4865,8 @@ export class Renderer3D {
     this.treasureMeshes.clear();
     this.shopMeshes.clear();
     this.exfillPortalMesh = null;
+    this.speedLineMesh.geometry.dispose();
+    this.speedLineMaterial.dispose();
     this.unmount();
     this.renderer.dispose();
   }

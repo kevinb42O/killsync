@@ -9,16 +9,23 @@ const q = (value: number, precision = 1) => Math.round(value * precision) / prec
  * objective, encounter, results, and stations remain global; high-volume
  * combat entities are limited to the peer's playable neighbourhood. */
 export function createInterestSnapshot(snapshot: CoopSnapshot, playerId?: string): CoopSnapshot {
-  const focus = snapshot.players.find(player => player.id === playerId)
-    || snapshot.players.find(player => player.lifeState === 'alive')
-    || snapshot.players[0];
-  if (!focus) return snapshot;
+  const viewer = snapshot.players.find(player => player.id === playerId);
+  // A downed/eliminated player can cycle through every living squadmate, and a
+  // dedicated spectator has no player mapping at all. Send those peers the
+  // union of the living squad's neighbourhoods so changing camera target never
+  // reveals an empty, incorrectly culled fight.
+  const livingPlayers = snapshot.players.filter(player => player.lifeState === 'alive');
+  const focuses = !viewer || viewer.lifeState !== 'alive'
+    ? livingPlayers
+    : [viewer];
+  if (!focuses.length) return snapshot;
   const interestRadiusSquared = SNAPSHOT_INTEREST_RADIUS * SNAPSHOT_INTEREST_RADIUS;
-  const distanceSquared = (entity: { x: number; y: number }) => {
+  const distanceSquaredFrom = (entity: { x: number; y: number }, focus: { x: number; y: number }) => {
     const dx = entity.x - focus.x, dy = entity.y - focus.y;
     return dx * dx + dy * dy;
   };
-  const interested = (entity: { x: number; y: number }) => distanceSquared(entity) <= interestRadiusSquared;
+  const nearestDistanceSquared = (entity: { x: number; y: number }) => Math.min(...focuses.map(focus => distanceSquaredFrom(entity, focus)));
+  const interested = (entity: { x: number; y: number }) => nearestDistanceSquared(entity) <= interestRadiusSquared;
   const objectiveEnemyId = snapshot.run.objective?.kind === 'elite_hunt' ? snapshot.run.objective.targetEnemyId : undefined;
   const boss = snapshot.run.boss;
   const quantizePosition = <T extends { x: number; y: number }>(entity: T): T => ({ ...entity, x: q(entity.x), y: q(entity.y) });
@@ -32,13 +39,14 @@ export function createInterestSnapshot(snapshot: CoopSnapshot, playerId?: string
     projectiles: snapshot.projectiles.filter(projectile => interested(projectile)).map(projectile => ({ ...quantizePosition(projectile), z: q(projectile.z), angle: q(projectile.angle, 1_000), pitch: q(projectile.pitch, 1_000), lifeMs: Math.round(projectile.lifeMs) })),
     gems: snapshot.gems
       .filter(interested)
-      .sort((left, right) => distanceSquared(left) - distanceSquared(right))
+      .sort((left, right) => nearestDistanceSquared(left) - nearestDistanceSquared(right))
       .slice(0, MAX_VISIBLE_GEMS)
       .map(entity => quantizePosition(entity)),
     items: snapshot.items.filter(interested).map(entity => quantizePosition(entity)),
     ammoCaches: snapshot.ammoCaches.filter(interested).map(entity => quantizePosition(entity)),
     hazards: (snapshot.hazards || []).filter(interested).map(hazard => ({ ...quantizePosition(hazard), radius: q(hazard.radius) })),
-    combatEvents: snapshot.combatEvents.filter(event => interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId),
+    combatEvents: snapshot.combatEvents.filter(event => event.kind === 'station_online' || event.kind === 'foundry_online' || event.kind === 'arc_beam' || event.kind === 'arc_chain' || interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId),
     pings: snapshot.pings?.map(ping => quantizePosition(ping)),
+    structures: snapshot.structures?.filter(interested).map(structure => ({ ...quantizePosition(structure), angle: q(structure.angle, 1_000), health: q(structure.health, 10) })),
   };
 }

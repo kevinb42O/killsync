@@ -7,11 +7,13 @@ describe('SoundManager', () => {
   let createdOscillators: any[];
   let createdGains: any[];
   let createdFilters: any[];
+  let createdPanners: any[];
 
   beforeEach(() => {
     createdOscillators = [];
     createdGains = [];
     createdFilters = [];
+    createdPanners = [];
 
     const createMockAudioParam = (initialValue: number = 0) => ({
       value: initialValue,
@@ -59,6 +61,11 @@ describe('SoundManager', () => {
         createdFilters.push(filter);
         return filter;
       }),
+      createStereoPanner: vi.fn(() => {
+        const panner = { pan: createMockAudioParam(0), connect: vi.fn(), disconnect: vi.fn() };
+        createdPanners.push(panner);
+        return panner;
+      }),
       createBuffer: vi.fn((_channels, size, _rate) => ({
         getChannelData: vi.fn(() => new Float32Array(size)),
       })),
@@ -91,6 +98,29 @@ describe('SoundManager', () => {
     expect(createdOscillators[1].frequency.setValueAtTime).toHaveBeenCalledWith(145, 10);
   });
 
+  it('gives the double jump a distinct two-stage electronic ignition', () => {
+    createdOscillators.length = 0;
+    sm.playDoubleJump();
+    expect(createdOscillators).toHaveLength(2);
+    expect(createdOscillators[0].type).toBe('sawtooth');
+    expect(createdOscillators[0].frequency.setValueAtTime).toHaveBeenCalledWith(190, 10);
+    expect(createdOscillators[1].type).toBe('square');
+    expect(createdOscillators[1].frequency.setValueAtTime).toHaveBeenCalledWith(690, 10.045);
+    expect(createdOscillators[1].start).toHaveBeenCalledWith(10.045);
+  });
+
+  it('gives the wall-jump a spatialized contact snap and lateral thrust', () => {
+    createdOscillators.length = 0;
+    createdPanners.length = 0;
+    sm.playWallJump(.75);
+    expect(createdOscillators).toHaveLength(2);
+    expect(createdOscillators[0].type).toBe('triangle');
+    expect(createdOscillators[0].frequency.setValueAtTime).toHaveBeenCalledWith(620, 10);
+    expect(createdOscillators[1].type).toBe('sawtooth');
+    expect(createdOscillators[1].frequency.setValueAtTime).toHaveBeenCalledWith(135, 10);
+    expect(createdPanners[0].pan.setValueAtTime).toHaveBeenCalledWith(.75, 10);
+  });
+
   it('plays muffled low-frequency landing sound with heavy lowpass damping', () => {
     createdOscillators.length = 0;
     createdFilters.length = 0;
@@ -110,19 +140,19 @@ describe('SoundManager', () => {
     expect(createdOscillators.length).toBeGreaterThanOrEqual(7);
   });
 
-  it('controls continuous tower charging sound and resumes at the correct pitch', () => {
+  it('controls the subdued single-layer uplink hum and resumes at the correct pitch', () => {
     // 1. Enter circle at 0% progress
     sm.updateTowerCharge(true, 0);
-    expect(createdOscillators.length).toBeGreaterThanOrEqual(3);
-    const mainOsc = createdOscillators.find(o => o.type === 'triangle');
+    expect(createdOscillators).toHaveLength(1);
+    const mainOsc = createdOscillators.find(o => o.type === 'sine');
     expect(mainOsc).toBeDefined();
-    expect(mainOsc.frequency.setValueAtTime).toHaveBeenCalledWith(220, 10);
+    expect(mainOsc.frequency.setValueAtTime).toHaveBeenCalledWith(125, 10);
 
     // 2. Advance to 50% progress
     mockAudioContext.currentTime = 12;
     sm.updateTowerCharge(true, 0.5);
     // Pitch should glide higher than base 220
-    const expectedHalfPitch = 220 + 740 * Math.pow(0.5, 1.15);
+    const expectedHalfPitch = 125 + 75 * Math.pow(0.5, 1.1);
     expect(mainOsc.frequency.linearRampToValueAtTime).toHaveBeenCalledWith(
       expect.closeTo(expectedHalfPitch, 1),
       expect.any(Number)
@@ -143,6 +173,32 @@ describe('SoundManager', () => {
     // 5. Complete objective
     sm.playObjectiveComplete();
     sm.stopTowerCharge();
+  });
+
+  it('uses a subdued non-stacking continuous hum for station capture', () => {
+    createdOscillators.length = 0;
+    sm.updateStationCapture(true, 0);
+    expect(createdOscillators).toHaveLength(1);
+    expect(createdOscillators[0].type).toBe('sine');
+    expect(createdOscillators[0].frequency.setValueAtTime).toHaveBeenCalledWith(105, 10);
+    sm.updateStationCapture(true, .5);
+    expect(createdOscillators).toHaveLength(1);
+    expect(createdOscillators[0].frequency.linearRampToValueAtTime).toHaveBeenCalledWith(140, expect.any(Number));
+    sm.updateStationCapture(false, .5);
+    sm.updateStationCapture(true, .75);
+    expect(createdOscillators).toHaveLength(1);
+    sm.stopStationCapture();
+    expect(createdOscillators[0].stop).toHaveBeenCalledOnce();
+  });
+
+  it('plays a dedicated station completion cue after stopping the hum', () => {
+    createdOscillators.length = 0;
+    sm.updateStationCapture(true, .9);
+    const hum = createdOscillators[0];
+    sm.playStationCaptured();
+    expect(hum.stop).toHaveBeenCalledOnce();
+    expect(createdOscillators[1].type).toBe('sine');
+    expect(createdOscillators[1].frequency.setValueAtTime).toHaveBeenCalledWith(330, 10);
   });
 
   it('plays normal tactical sonar ping with sine chime', () => {

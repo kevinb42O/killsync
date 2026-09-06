@@ -45,7 +45,7 @@ describe('CoopRunDirector', () => {
     const director = new CoopRunDirector(123);
     const centre = { x: 6000, y: 6000 };
     director.advanceInsertion(COOP_INSERTION_DURATION_MS, centre);
-    director.addUplinkProgress(100); director.completeBoss(centre); director.startContract(centre);
+    director.addUplinkProgress(100); director.completeBoss(centre); director.updateCheckpoint(20_000, 0, 1); director.startContract(centre);
     director.setEliteTarget(88);
     director.trackEliteTarget(89, 0, 0);
     director.trackEliteTarget(88, 6300, 6400);
@@ -60,19 +60,34 @@ describe('CoopRunDirector', () => {
     expect(director.addUplinkProgress(100)).toBe(true);
     expect(director.currentPhase).toBe('mini_boss');
     director.activateBoss(100, 6100, 6100);
-    expect(director.completeBoss(centre)).toBe('station');
+    expect(director.completeBoss(centre)).toBe('checkpoint');
+    expect(director.currentPhase).toBe('checkpoint');
+    expect(director.updateCheckpoint(20_000, 0, 1)).toBe('continue');
 
     director.startContract(centre);
     expect(director.currentObjective?.kind).toBe('elite_hunt');
     director.setEliteTarget(88);
     expect(director.completeEliteTarget(88)).toBe(true);
     director.activateBoss(100, 6100, 6100);
-    expect(director.completeBoss(centre)).toBe('station');
+    expect(director.completeBoss(centre)).toBe('checkpoint');
+    expect(director.updateCheckpoint(20_000, 0, 1)).toBe('continue');
     expect(director.startFinalBoss(centre)).toBe(true);
     director.activateBoss(100, 6100, 6100);
     expect(director.completeBoss(centre)).toBe('exfil');
     expect(director.currentPhase).toBe('exfil');
     expect(director.updateExfil(12_000, 2, 2)).toBe('success');
+  });
+
+  it('extracts early only when every living operator commits to the checkpoint', () => {
+    const director = new CoopRunDirector(44);
+    const centre = { x: 6000, y: 6000 };
+    director.advanceInsertion(COOP_INSERTION_DURATION_MS, centre);
+    director.addUplinkProgress(100);
+    director.activateBoss(100, 6000, 6000);
+    director.completeBoss(centre);
+    expect(director.updateCheckpoint(5_000, 1, 2)).toBeUndefined();
+    expect(director.currentExfil?.holdProgressMs).toBe(0);
+    expect(director.updateCheckpoint(5_000, 2, 2)).toBe('success');
   });
 
   it('loses extraction when its timer expires', () => {
@@ -82,11 +97,13 @@ describe('CoopRunDirector', () => {
     director.addUplinkProgress(100);
     director.activateBoss(100, 6000, 6000);
     director.completeBoss(centre);
+    director.updateCheckpoint(20_000, 0, 1);
     director.startContract(centre);
     director.setEliteTarget(3);
     director.completeEliteTarget(3);
     director.activateBoss(100, 6000, 6000);
     director.completeBoss(centre);
+    director.updateCheckpoint(20_000, 0, 1);
     director.startFinalBoss(centre);
     director.activateBoss(100, 6000, 6000);
     director.completeBoss(centre);
