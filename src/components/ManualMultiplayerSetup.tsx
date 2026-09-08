@@ -34,7 +34,8 @@ import { CoopImprintSummary } from './CoopImprintSummary';
 import { normalizeCoopSkinId, readCoopSkinId, writeCoopSkinId, type CoopSkinId } from '../game/multiplayer/CoopSkins';
 import { CoopSkinBadge, CoopSkinSelector } from './CoopSkinSelector';
 import { normalizeCoopOperatorId } from '../game/multiplayer/CoopOperators';
-import { getWorldDefinition, normalizeWorldId, readCoopWorldProgress, WORLD_IDS, type WorldId } from '../game/world/WorldDefinitions';
+import { normalizeWorldId, readCoopWorldProgress, type WorldId } from '../game/world/WorldDefinitions';
+import { CoopWorldSelector } from './CoopWorldSelector';
 
 type SetupMode = 'choose' | 'host' | 'guest' | 'direct_host' | 'direct_guest';
 
@@ -589,39 +590,13 @@ export function ManualMultiplayerSetup({
           {/* MAIN VIEW: CHOOSE / LOBBY BROWSER */}
           {mode === 'choose' && (
             <div className="space-y-6">
-              <div>
-                <div className="mb-3 flex items-end justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-black uppercase tracking-[0.18em] text-white">Deployment world</div>
-                    <div className="mt-1 text-[10px] uppercase tracking-wider text-white/45">Discover worlds in order. Redeploy directly to any world your squad leader has unlocked.</div>
-                  </div>
-                  <div className="shrink-0 font-mono text-[9px] font-black text-cyan-300">{worldProgress.unlockedWorldIds.length}/{WORLD_IDS.length} LINKED</div>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  {WORLD_IDS.map(worldId => {
-                    const world = getWorldDefinition(worldId);
-                    const unlocked = worldProgress.unlockedWorldIds.includes(worldId);
-                    const selected = selectedWorldId === worldId;
-                    return (
-                      <button
-                        key={worldId}
-                        type="button"
-                        disabled={!unlocked || loading}
-                        onClick={() => setSelectedWorldId(worldId)}
-                        style={{ borderColor: selected ? `#${world.theme.accentColor.toString(16).padStart(6, '0')}` : undefined }}
-                        className={`min-h-28 border bg-black/35 p-3 text-left transition ${selected ? 'shadow-[0_0_22px_rgba(34,211,238,.18)]' : 'border-white/10 hover:border-white/30'} disabled:cursor-not-allowed disabled:opacity-35`}
-                      >
-                        <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-white/45">
-                          <span>World {world.tier}</span><span>{unlocked ? `T${world.tier}` : 'LOCKED'}</span>
-                        </div>
-                        <div className="mt-2 text-[11px] font-black tracking-[.12em] text-white">{world.name}</div>
-                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/50">{world.subtitle}</div>
-                        <div className="mt-2 font-mono text-[8px] text-white/35">THREAT ×{world.difficulty.threatMultiplier.toFixed(2)} · LOOT ×{world.difficulty.rewardMultiplier.toFixed(2)}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <CoopWorldSelector
+                unlockedWorldIds={worldProgress.unlockedWorldIds}
+                selectedWorldId={selectedWorldId}
+                onChange={setSelectedWorldId}
+                disabled={loading}
+                description="Discover worlds in order. Redeploy directly to any world your squad leader has unlocked."
+              />
 
               {/* PRIMARY ACTION BAR */}
               <div className="grid gap-3 sm:grid-cols-2">
@@ -777,13 +752,12 @@ export function ManualMultiplayerSetup({
           {/* HOST VIEW: SQUAD READY ROOM */}
           {mode === 'host' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between gap-4 border border-amber-300/30 bg-amber-400/[.06] px-4 py-3">
-                <div>
-                  <div className="text-[9px] font-black uppercase tracking-[.2em] text-amber-200">Locked deployment vector</div>
-                  <div className="mt-1 text-sm font-black tracking-[.14em] text-white">WORLD {getWorldDefinition(selectedWorldId).tier} · {getWorldDefinition(selectedWorldId).name}</div>
-                </div>
-                <div className="text-right font-mono text-[9px] text-white/45">THREAT ×{getWorldDefinition(selectedWorldId).difficulty.threatMultiplier.toFixed(2)}<br />LOOT ×{getWorldDefinition(selectedWorldId).difficulty.rewardMultiplier.toFixed(2)}</div>
-              </div>
+              <CoopWorldSelector
+                unlockedWorldIds={worldProgress.unlockedWorldIds}
+                selectedWorldId={selectedWorldId}
+                onChange={setSelectedWorldId}
+                description="Squad leader may choose any unlocked world until deployment."
+              />
               {/* CODE & SHARE HERO CARD */}
               <div className="border border-cyan-400/40 bg-gradient-to-br from-cyan-950/40 to-black/60 p-5 shadow-[0_0_30px_rgba(0,240,255,0.15)]">
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -972,6 +946,12 @@ export function ManualMultiplayerSetup({
           {/* MANUAL DIRECT CO-OP SCREENS (PRESERVED FOR AIR-GAPPED ENVIRONMENTS) */}
           {mode === 'direct_host' && (
             <div className="space-y-4 border border-cyan-400/30 bg-cyan-950/20 p-5">
+              <CoopWorldSelector
+                unlockedWorldIds={worldProgress.unlockedWorldIds}
+                selectedWorldId={selectedWorldId}
+                onChange={setSelectedWorldId}
+                description="Choose any unlocked world before starting the match."
+              />
               <div className="text-sm font-black uppercase tracking-wider text-white">
                 {tr('setup.directHost')}
               </div>
