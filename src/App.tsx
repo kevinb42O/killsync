@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2, Radio } from 'lucide-react';
+import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2, Radio, Gamepad2 } from 'lucide-react';
 import { GameEngine, BalanceTuning, DEFAULT_BALANCE_TUNING } from './game/Engine';
 import { GameHUD } from './components/GameHUD';
 import { MenuEffects, triggerMenuEffect } from './components/MenuEffects';
@@ -33,7 +33,7 @@ import {
   createExfillXPBreakdown,
   getAccountXPRequired
 } from './game/xpProgression';
-import { CONTROL_SCHEME_DETAILS, ControlScheme, getCoopSlideBinding, getMovementBindings, parseControlScheme } from './game/controls';
+import { CONTROL_SCHEME_DETAILS, ControlScheme, getCoopSlideBinding, getMovementBindings, isGamepadControlScheme, parseControlScheme } from './game/controls';
 import { importCoopOwnerRecoveryCode } from './game/multiplayer/CoopOwnerIdentity';
 
 const EMPTY_INVENTORY: Inventory = { armorTier: 0, hasRevive: false, nukeCount: 0 };
@@ -2404,7 +2404,7 @@ export default function App() {
                       <h2 className="text-3xl font-black italic tracking-tight text-white sm:text-4xl">CONTROL SETTINGS</h2>
                     </div>
                   </div>
-                  <p className="max-w-2xl text-sm leading-relaxed text-white/50">Choose the movement cluster that matches your keyboard. Your choice is saved automatically and applies to solo and direct co-op.</p>
+                  <p className="max-w-2xl text-sm leading-relaxed text-white/50">Choose a keyboard layout or gamepad. Your choice is saved automatically; the gamepad profile drives direct co-op through the browser's standard controller support.</p>
                 </div>
 
                 <div className="mb-6 flex w-fit border border-white/10 bg-black/30 p-1" role="tablist" aria-label="Settings categories">
@@ -2422,12 +2422,19 @@ export default function App() {
                   {(Object.entries(CONTROL_SCHEME_DETAILS) as [ControlScheme, typeof CONTROL_SCHEME_DETAILS[ControlScheme]][]).map(([scheme, details]) => {
                     const isActive = controlScheme === scheme;
                     const bindings = getMovementBindings(scheme);
-                    const keyRows: Array<{ label: string; key: string }> = [
-                      { label: 'Forward', key: bindings.up[0].toUpperCase() },
-                      { label: 'Left', key: bindings.left[0].toUpperCase() },
-                      { label: 'Back', key: bindings.down[0].toUpperCase() },
-                      { label: 'Right', key: bindings.right[0].toUpperCase() },
-                    ];
+                    const keyRows: Array<{ label: string; key: string }> = isGamepadControlScheme(scheme)
+                      ? [
+                        { label: 'Move', key: 'L STICK' },
+                        { label: 'Look', key: 'R STICK' },
+                        { label: 'Fire', key: 'RT' },
+                        { label: 'Aim', key: 'LT' },
+                      ]
+                      : [
+                        { label: 'Forward', key: bindings.up[0].toUpperCase() },
+                        { label: 'Left', key: bindings.left[0].toUpperCase() },
+                        { label: 'Back', key: bindings.down[0].toUpperCase() },
+                        { label: 'Right', key: bindings.right[0].toUpperCase() },
+                      ];
 
                     return (
                       <button
@@ -2445,7 +2452,7 @@ export default function App() {
                         <div className={`absolute left-0 top-0 h-full w-1 transition-colors ${isActive ? 'bg-violet-300' : 'bg-white/10 group-hover:bg-violet-400/60'}`} />
                         <div className="mb-5 flex items-start justify-between gap-4">
                           <div>
-                            <div className="text-lg font-black italic tracking-wide text-white">{details.label}</div>
+                            <div className="flex items-center gap-2 text-lg font-black italic tracking-wide text-white">{isGamepadControlScheme(scheme) && <Gamepad2 size={19} className="text-cyan-200" />}{details.label}</div>
                             <div className="mt-1 text-[10px] font-mono uppercase tracking-[0.12em] text-white/40">{details.description}</div>
                           </div>
                           <div className={`flex h-6 w-6 items-center justify-center border transition-all ${isActive ? 'border-violet-200 bg-violet-300 text-slate-950' : 'border-white/15 text-transparent'}`} aria-hidden="true">
@@ -2471,12 +2478,21 @@ export default function App() {
                 <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                   <div className="relative overflow-hidden border border-cyan-300/25 bg-cyan-400/[0.05] p-5" style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}>
                     <div className="absolute right-0 top-0 h-1 w-24 bg-cyan-300/80" />
-                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200"><Keyboard size={14} /> Always available</div>
-                    <div className="mt-2 text-sm font-bold text-white">Arrow keys stay enabled in every profile.</div>
-                    <p className="mt-1 text-xs leading-relaxed text-white/45">Use ↑ ↓ ← → whenever you prefer — changing keyboard layout never removes them.</p>
-                    <div className="mt-4 flex gap-1.5" aria-label="Arrow key movement is always available">
-                      {['↑', '↓', '←', '→'].map((key) => <span key={key} className="flex h-8 w-8 items-center justify-center border border-cyan-200/30 bg-black/35 font-mono text-sm font-black text-cyan-100">{key}</span>)}
-                    </div>
+                    {isGamepadControlScheme(controlScheme) ? <>
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200"><Gamepad2 size={14} /> Controller ready</div>
+                      <div className="mt-2 text-sm font-bold text-white">Direct co-op reads your connected gamepad.</div>
+                      <p className="mt-1 text-xs leading-relaxed text-white/45">Plug in a standard controller, then press any button once if your browser has not detected it yet.</p>
+                      <div className="mt-4 flex gap-1.5" aria-label="Gamepad sticks and triggers are enabled for direct co-op">
+                        {['L', 'R', 'LT', 'RT'].map((key) => <span key={key} className="flex h-8 min-w-8 items-center justify-center border border-cyan-200/30 bg-black/35 px-2 font-mono text-sm font-black text-cyan-100">{key}</span>)}
+                      </div>
+                    </> : <>
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200"><Keyboard size={14} /> Always available</div>
+                      <div className="mt-2 text-sm font-bold text-white">Arrow keys stay enabled in every keyboard profile.</div>
+                      <p className="mt-1 text-xs leading-relaxed text-white/45">Use ↑ ↓ ← → whenever you prefer — changing keyboard layout never removes them.</p>
+                      <div className="mt-4 flex gap-1.5" aria-label="Arrow key movement is always available">
+                        {['↑', '↓', '←', '→'].map((key) => <span key={key} className="flex h-8 w-8 items-center justify-center border border-cyan-200/30 bg-black/35 font-mono text-sm font-black text-cyan-100">{key}</span>)}
+                      </div>
+                    </>}
                   </div>
 
                   <div className="border border-white/10 bg-black/25 p-5">
@@ -2492,9 +2508,18 @@ export default function App() {
 
                 <div className="mt-4 border border-fuchsia-300/25 bg-fuchsia-400/[0.045] p-5" style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}>
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-200"><Radio size={14} /> Direct co-op controls</div>
-                  <p className="mt-2 text-xs leading-relaxed text-white/50">Movement uses the selected profile above. <span className="font-bold text-white/75">F</span> is the shared action key on both keyboard layouts: revive a nearby teammate first, otherwise interact with a Buy Station.</p>
+                  <p className="mt-2 text-xs leading-relaxed text-white/50">{isGamepadControlScheme(controlScheme) ? 'Controller input uses the standard browser layout. Y interacts and revives; use the sticks for movement and look.' : <>Movement uses the selected profile above. <span className="font-bold text-white/75">F</span> is the shared action key on both keyboard layouts: revive a nearby teammate first, otherwise interact with a Buy Station.</>}</p>
                   <div className="mt-4 grid gap-x-5 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
-                    {[
+                    {(isGamepadControlScheme(controlScheme) ? [
+                      { label: 'Move / look', key: 'L / R STICK' },
+                      { label: 'Sprint', key: 'L3' },
+                      { label: 'Slide / crouch', key: 'B' },
+                      { label: 'Jump / jet', key: 'A' },
+                      { label: 'Fire / aim', key: 'RT / LT' },
+                      { label: 'Reload', key: 'X' },
+                      { label: 'Weapons', key: 'LB / RB / D-PAD' },
+                      { label: 'Revive / interact', key: 'Y' },
+                    ] : [
                       { label: 'Sprint', key: 'SHIFT' },
                       { label: 'Slide / crouch', key: getCoopSlideBinding(controlScheme).toUpperCase() },
                       { label: 'Jump', key: 'SPACE' },
@@ -2505,7 +2530,7 @@ export default function App() {
                       { label: 'Revive / interact', key: 'F' },
                       { label: 'Look', key: 'MOUSE' },
                       { label: 'Downed spectator', key: 'LMB: CYCLE' },
-                    ].map(item => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-white/55">{item.label}</span><kbd className="shrink-0 border border-fuchsia-200/25 bg-black/35 px-2 py-1 font-mono text-[10px] font-bold text-fuchsia-100">{item.key}</kbd></div>)}
+                    ]).map(item => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-white/55">{item.label}</span><kbd className="shrink-0 border border-fuchsia-200/25 bg-black/35 px-2 py-1 font-mono text-[10px] font-bold text-fuchsia-100">{item.key}</kbd></div>)}
                   </div>
                 </div>
               </div>

@@ -30,8 +30,14 @@ describe('control presets', () => {
     expect(parseControlScheme('other')).toBe('AZERTY');
   });
 
+  it('persists the dedicated gamepad profile without keyboard movement bindings', () => {
+    expect(parseControlScheme('GAMEPAD')).toBe('GAMEPAD');
+    expect(getMovementBindings('GAMEPAD')).toEqual({ up: [], down: [], left: [], right: [] });
+  });
+
   it('keeps co-op slide off QWERTY forward movement', () => {
     expect(getCoopSlideBinding('AZERTY')).toBe('w');
     expect(getCoopSlideBinding('QWERTY')).toBe('c');
+    expect(getCoopSlideBinding('GAMEPAD')).toBe('');
   });
 });

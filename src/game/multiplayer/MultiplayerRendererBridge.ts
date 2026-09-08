@@ -164,6 +164,11 @@ export class MultiplayerRendererBridge {
   canLocalJump() { return this.lastLocalZ <= 0.08; }
   getAimAngle() { return Math.atan2(-Math.cos(this.renderer.yaw), -Math.sin(this.renderer.yaw)); }
   getAimPitch() { return this.renderer.pitch; }
+  /** Apply right-stick look without relying on Pointer Lock mouse movement. */
+  adjustAim(yawDelta: number, pitchDelta: number) {
+    this.renderer.yaw -= yawDelta;
+    this.renderer.pitch = Math.max(-1.45, Math.min(1.45, this.renderer.pitch - pitchDelta));
+  }
   getViewportSize() {
     const canvas = this.renderer.renderer.domElement;
     return { width: canvas.clientWidth || canvas.width, height: canvas.clientHeight || canvas.height };

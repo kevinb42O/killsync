@@ -3,7 +3,7 @@
  * character produced by the player's active keyboard layout stay aligned.
  * Arrow keys intentionally live outside a preset: they are always available.
  */
-export type ControlScheme = 'AZERTY' | 'QWERTY';
+export type ControlScheme = 'AZERTY' | 'QWERTY' | 'GAMEPAD';
 
 export type MovementDirection = 'up' | 'down' | 'left' | 'right';
 
@@ -26,6 +26,14 @@ export const CONTROL_SCHEME_DETAILS: Record<ControlScheme, {
     description: 'International keyboard layout',
     bindings: { up: 'w', down: 's', left: 'a', right: 'd' },
   },
+  GAMEPAD: {
+    label: 'GAMEPAD',
+    description: 'Standard controller layout for direct co-op',
+    // Controller movement is polled from the Gamepad API rather than keyboard
+    // events. Empty bindings deliberately prevent a selected controller
+    // profile from also reacting to a keyboard movement cluster.
+    bindings: { up: '', down: '', left: '', right: '' },
+  },
 };
 
 const ARROW_BINDINGS: Record<MovementDirection, string> = {
@@ -36,6 +44,9 @@ const ARROW_BINDINGS: Record<MovementDirection, string> = {
 };
 
 export const getMovementBindings = (scheme: ControlScheme): MovementBindings => {
+  if (scheme === 'GAMEPAD') {
+    return { up: [], down: [], left: [], right: [] };
+  }
   const preset = CONTROL_SCHEME_DETAILS[scheme].bindings;
   return {
     up: [preset.up, ARROW_BINDINGS.up],
@@ -47,7 +58,9 @@ export const getMovementBindings = (scheme: ControlScheme): MovementBindings => 
 
 /** Co-op keeps slide/crouch off the movement cluster. On AZERTY that is W;
  * QWERTY needs a separate key because W is forward movement. */
-export const getCoopSlideBinding = (scheme: ControlScheme) => scheme === 'AZERTY' ? 'w' : 'c';
+export const getCoopSlideBinding = (scheme: ControlScheme) => scheme === 'AZERTY' ? 'w' : scheme === 'QWERTY' ? 'c' : '';
+
+export const isGamepadControlScheme = (scheme: ControlScheme) => scheme === 'GAMEPAD';
 
 export const isMovementDirectionPressed = (
   keys: ReadonlySet<string>,
@@ -56,4 +69,4 @@ export const isMovementDirectionPressed = (
 ): boolean => getMovementBindings(scheme)[direction].some((key) => keys.has(key));
 
 export const parseControlScheme = (value: string | null): ControlScheme =>
-  value === 'QWERTY' || value === 'AZERTY' ? value : DEFAULT_CONTROL_SCHEME;
+  value === 'QWERTY' || value === 'AZERTY' || value === 'GAMEPAD' ? value : DEFAULT_CONTROL_SCHEME;

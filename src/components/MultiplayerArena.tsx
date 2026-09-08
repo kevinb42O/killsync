@@ -9,7 +9,8 @@ import { soundManager } from '../game/SoundManager';
 import { MultiplayerLaunch } from './ManualMultiplayerSetup';
 import { CoopPing, CoopPingKind, MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION, type CoopAdminRequest, type CoopAdminResult } from '../game/multiplayer/protocol';
 import { COOP_OPERATOR_REDEPLOY_COST, COOP_SHOP_ITEMS, coopShopDisabledReason, type CoopPurchaseResult, type CoopRedeployResult, type CoopShopItemId } from '../game/multiplayer/CoopBuyStation';
-import { CONTROL_SCHEME_DETAILS, getCoopSlideBinding, getMovementBindings, type ControlScheme } from '../game/controls';
+import { CONTROL_SCHEME_DETAILS, getCoopSlideBinding, getMovementBindings, isGamepadControlScheme, type ControlScheme } from '../game/controls';
+import { firstConnectedGamepad, GAMEPAD_BUTTON, gamepadLookAxes, gamepadMovementMask, isGamepadButtonDown } from '../game/gamepad';
 import { LocalPlayerPrediction } from '../game/multiplayer/LocalPlayerPrediction';
 import { advancePlayerMovement, COOP_PLAYER_RADIUS, COOP_STEP_MS } from '../game/multiplayer/playerMovement';
 import { HostSimulationClock } from '../game/multiplayer/HostSimulationClock';
@@ -1148,6 +1149,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         reviving: keys.has('f'),
       };
     };
+    const changeSelectedWeapon = (direction: number) => {
+      const slotCount = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.weaponStates.length || COOP_WEAPON_SLOTS.length;
+      const selectedSlot = (inputRef.current.selectedSlot + direction + slotCount) % slotCount;
+      inputRef.current = { ...inputRef.current, selectedSlot };
+      setHud(current => ({ ...current, selectedSlot }));
+    };
     const clearJumpInput = () => {
       if (!inputRef.current.jumpPressed && !inputRef.current.reloadPressed) return;
       inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: false, reloadPressed: false };
@@ -1262,6 +1269,59 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'structure_action', payload: { requestId, structureId: target.id, action, ...relocationPose } });
         setBuildMessage(tr('build.requestSent'));
       }
+    };
+
+    /**
+     * Keyboard F and gamepad Y must reach the same local menus and the same
+     * authoritative hold/action frames. The host still validates every world
+     * interaction; this only chooses the appropriate local presentation.
+     */
+    const triggerContextualInteract = (keyboardHold = false) => {
+      const snapshot = snapshotRef.current;
+      const local = snapshot?.players.find(player => player.id === launch.localPlayerId);
+      const station = local && snapshot?.buyStations.find(candidate => candidate.state === 'active' && Math.hypot(local.x - candidate.x, local.y - candidate.y) <= candidate.radius + 48);
+      const foundry = local && snapshot?.weaponFoundry?.state === 'active' && Math.hypot(local.x - snapshot.weaponFoundry.x, local.y - snapshot.weaponFoundry.y) <= snapshot.weaponFoundry.radius + 48 ? snapshot.weaponFoundry : undefined;
+      const revivableTeammate = local && snapshot?.players.some(player => player.id !== local.id && player.lifeState === 'downed' && Math.hypot(local.x - player.x, local.y - player.y) <= COOP_REVIVE_RANGE);
+      const nearbyManualDrop = local?.lifeState === 'alive' && local.z <= 20 && snapshot?.items.some(item => item.manualDropKind
+        && !(item.manualDropKind === 'self_revive' && local.selfRevives > 0)
+        && Math.hypot(local.x - item.x, local.y - item.y) <= COOP_MANUAL_PICKUP_RANGE);
+      const repairableStructure = local?.lifeState === 'alive' && snapshot?.structures?.some(structure => structure.state !== 'destroying'
+        && structure.health < structure.maxHealth && Math.hypot(local.x - structure.x, local.y - structure.y) <= COOP_STRUCTURE_ACTION_RANGE);
+      const fieldMissions = snapshot?.fieldMissions;
+      const activeMission = fieldMissions?.active;
+      const nearbyContract = local && !activeMission ? fieldMissions?.sites.find(site => site.state === 'available' && Math.hypot(local.x - site.x, local.y - site.y) <= 125) : undefined;
+      const nearbyHostage = local && activeMission?.hostage?.state === 'waiting' && Math.hypot(local.x - activeMission.hostage.x, local.y - activeMission.hostage.y) <= 120;
+      const nearbyDrive = local && activeMission?.drives.some(drive => !drive.collected && Math.hypot(local.x - drive.x, local.y - drive.y) <= 105);
+      const missionHoldStage = activeMission && ['plant_a', 'plant_b', 'activate', 'deliver'].includes(activeMission.stage);
+      const nearbyMissionHold = local && missionHoldStage && Math.hypot(local.x - activeMission.x, local.y - activeMission.y) <= 165;
+      const holdInteraction = () => {
+        if (keyboardHold) {
+          keys.add('f');
+          updateInput();
+        }
+      };
+
+      // Revive takes precedence over every other nearby interaction, just as
+      // before, and now remains consistent across controller and keyboard.
+      if (local?.lifeState === 'downed' || revivableTeammate || nearbyHostage || nearbyMissionHold || repairableStructure) {
+        holdInteraction();
+        return;
+      }
+      if (nearbyManualDrop || nearbyContract || nearbyDrive) {
+        inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), interactActionId: ++interactActionId };
+        return;
+      }
+      if (!station && !foundry) {
+        setCombatNotice({ text: tr('notice.noInteraction'), color: '#fca5a5' });
+        return;
+      }
+      renderer.exitPointerLock();
+      firing = false;
+      keys.clear();
+      updateInput();
+      setStationMessage(null);
+      if (foundry) { setFoundryMessage(null); setFoundryPanelOpen(true); }
+      else setStationPanelOpen(open => !open);
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1442,65 +1502,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       }
       if (key === 'f') {
         event.preventDefault();
-        const snapshot = snapshotRef.current;
-        const local = snapshot?.players.find(player => player.id === launch.localPlayerId);
-        const station = local && snapshot?.buyStations.find(candidate => candidate.state === 'active' && Math.hypot(local.x - candidate.x, local.y - candidate.y) <= candidate.radius + 48);
-        const foundry = local && snapshot?.weaponFoundry?.state === 'active' && Math.hypot(local.x - snapshot.weaponFoundry.x, local.y - snapshot.weaponFoundry.y) <= snapshot.weaponFoundry.radius + 48 ? snapshot.weaponFoundry : undefined;
-        const revivableTeammate = local && snapshot?.players.some(player => player.id !== local.id && player.lifeState === 'downed' && Math.hypot(local.x - player.x, local.y - player.y) <= COOP_REVIVE_RANGE);
-        const nearbyManualDrop = local?.lifeState === 'alive' && local.z <= 20 && snapshot?.items.some(item => item.manualDropKind
-          && !(item.manualDropKind === 'self_revive' && local.selfRevives > 0)
-          && Math.hypot(local.x - item.x, local.y - item.y) <= COOP_MANUAL_PICKUP_RANGE);
-        const repairableStructure = local?.lifeState === 'alive' && snapshot?.structures?.some(structure => structure.state !== 'destroying'
-          && structure.health < structure.maxHealth && Math.hypot(local.x - structure.x, local.y - structure.y) <= COOP_STRUCTURE_ACTION_RANGE);
-        const fieldMissions = snapshot?.fieldMissions;
-        const activeMission = fieldMissions?.active;
-        const nearbyContract = local && !activeMission ? fieldMissions?.sites.find(site => site.state === 'available' && Math.hypot(local.x - site.x, local.y - site.y) <= 125) : undefined;
-        const nearbyHostage = local && activeMission?.hostage?.state === 'waiting' && Math.hypot(local.x - activeMission.hostage.x, local.y - activeMission.hostage.y) <= 120;
-        const nearbyDrive = local && activeMission?.drives.some(drive => !drive.collected && Math.hypot(local.x - drive.x, local.y - drive.y) <= 105);
-        const missionHoldStage = activeMission && ['plant_a', 'plant_b', 'activate', 'deliver'].includes(activeMission.stage);
-        const nearbyMissionHold = local && missionHoldStage && Math.hypot(local.x - activeMission.x, local.y - activeMission.y) <= 165;
-        // Revive is deliberately first priority when both are possible. The
-        // interaction key remains held in `keys` so the host owns validation.
-        if (local?.lifeState === 'downed' || revivableTeammate) {
-          keys.add(key);
-          updateInput();
-          return;
-        }
-        if (nearbyManualDrop) {
-          if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), interactActionId: ++interactActionId };
-          return;
-        }
-        if (nearbyHostage) {
-          keys.add(key);
-          updateInput();
-          return;
-        }
-        if (nearbyContract || nearbyDrive) {
-          if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), interactActionId: ++interactActionId };
-          return;
-        }
-        if (nearbyMissionHold) {
-          keys.add(key);
-          updateInput();
-          return;
-        }
-        if (repairableStructure) {
-          keys.add(key);
-          updateInput();
-          return;
-        }
-        if (!station && !foundry) {
-          if (!event.repeat) setCombatNotice({ text: tr('notice.noInteraction'), color: '#fca5a5' });
-          return;
-        }
         if (event.repeat) return;
-        renderer.exitPointerLock();
-        firing = false;
-        keys.clear();
-        updateInput();
-        setStationMessage(null);
-        if (foundry) { setFoundryMessage(null); setFoundryPanelOpen(true); }
-        else setStationPanelOpen(open => !open);
+        triggerContextualInteract(true);
         return;
       }
       if (key === 'r') {
@@ -1643,10 +1646,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         } else buildRotationRef.current += direction * Math.PI / 12;
         return;
       }
-      const slotCount = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.weaponStates.length || COOP_WEAPON_SLOTS.length;
-      const selectedSlot = (inputRef.current.selectedSlot + direction + slotCount) % slotCount;
-      inputRef.current = { ...inputRef.current, selectedSlot };
-      setHud(current => ({ ...current, selectedSlot }));
+      changeSelectedWeapon(direction);
     };
     const clearControls = () => {
       keys.clear(); firing = false; updateInput();
@@ -1665,6 +1665,61 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     window.addEventListener('auxclick', onAuxClick);
     window.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('contextmenu', onContextMenu);
+
+    let previousGamepadButtons: boolean[] = [];
+    const pollGamepad = (elapsedMs: number) => {
+      if (!isGamepadControlScheme(controlScheme) || typeof navigator === 'undefined' || !navigator.getGamepads) return;
+      const gamepad = firstConnectedGamepad(Array.from(navigator.getGamepads()));
+      if (!gamepad || deploymentBlockedRef.current || isSpectator || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current || adminPausedRef.current) {
+        if (gamepad) previousGamepadButtons = gamepad.buttons.map(button => Boolean(button.pressed || button.value > .5));
+        return;
+      }
+
+      const buttons = gamepad.buttons.map(button => Boolean(button.pressed || button.value > .5));
+      const pressed = (button: number) => buttons[button] && !previousGamepadButtons[button];
+      const down = (button: number) => isGamepadButtonDown(gamepad, button);
+      const look = gamepadLookAxes(gamepad);
+      if (look.x || look.y) renderer.adjustAim(look.x * elapsedMs * .0025, look.y * elapsedMs * .002);
+
+      const fireHeld = down(GAMEPAD_BUTTON.fire);
+      const firePressed = pressed(GAMEPAD_BUTTON.fire);
+      const jumpPressed = pressed(GAMEPAD_BUTTON.jump);
+      const reloadPressed = pressed(GAMEPAD_BUTTON.reload);
+      const interactPressed = pressed(GAMEPAD_BUTTON.interact);
+      if (pressed(GAMEPAD_BUTTON.previousWeapon) || pressed(GAMEPAD_BUTTON.dpadLeft)) changeSelectedWeapon(-1);
+      if (pressed(GAMEPAD_BUTTON.nextWeapon) || pressed(GAMEPAD_BUTTON.dpadRight)) changeSelectedWeapon(1);
+
+      if (firePressed) {
+        fireActionId++;
+        const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
+        const weapon = local?.weaponStates[inputRef.current.selectedSlot];
+        if (weapon && local?.lifeState === 'alive' && weapon.state === 'ready' && weapon.magazineAmmo > 0 && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
+          renderer.predictLocalFire(weapon.weaponId, fireActionId);
+        }
+      }
+      if (interactPressed) triggerContextualInteract();
+      if (reloadPressed || jumpPressed || interactPressed || firePressed) sequence++;
+      firing = fireHeld;
+      inputRef.current = {
+        ...inputRef.current,
+        sequence,
+        clientTime: Date.now(),
+        movement: gamepadMovementMask(gamepad),
+        aimAngle: quantizeAngle(renderer.getAimAngle()),
+        aimPitch: quantizePitch(renderer.getAimPitch()),
+        firing: fireHeld,
+        fireActionId,
+        reloadPressed: inputRef.current.reloadPressed || reloadPressed,
+        sprinting: down(GAMEPAD_BUTTON.sprint),
+        sliding: down(GAMEPAD_BUTTON.slide),
+        reviving: down(GAMEPAD_BUTTON.interact),
+        interactActionId,
+        jumpPressed: inputRef.current.jumpPressed || jumpPressed,
+        jetHeld: down(GAMEPAD_BUTTON.jump),
+        aiming: down(GAMEPAD_BUTTON.aim),
+      };
+      previousGamepadButtons = buttons;
+    };
 
     let animationFrame = 0;
     let lastTime = performance.now();
@@ -1713,6 +1768,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       accumulator += elapsed;
       inputAccumulator += elapsed;
       if (stationOpenRef.current || foundryOpenRef.current || chatOpenRef.current) clearControls();
+      pollGamepad(elapsed);
       if (launch.role === 'guest') {
         while (inputAccumulator >= INPUT_INTERVAL_MS) {
           inputAccumulator -= INPUT_INTERVAL_MS;
@@ -2535,7 +2591,9 @@ function CoopDeploymentOverlay({
 }) {
   const tr = (key: CoopTextKey, params?: Record<string, string | number>) => coopText(language, key, params);
   const movement = CONTROL_SCHEME_DETAILS[controlScheme].bindings;
-  const movementLabel = `${movement.up}${movement.left}${movement.down}${movement.right}`.toUpperCase();
+  const movementLabel = isGamepadControlScheme(controlScheme)
+    ? 'L STICK'
+    : `${movement.up}${movement.left}${movement.down}${movement.right}`.toUpperCase();
   const localPlayer = players.find(player => player.id === localPlayerId);
   const countdown = Math.max(1, Math.ceil((insertionRemainingMs ?? 12_000) / 1000));
 
@@ -2580,8 +2638,8 @@ function CoopDeploymentOverlay({
 
       {isSpectator ? <div className="coop-deployment__spectating"><Crosshair size={15} />{tr('deployment.synchronizing')}</div> : <div className="coop-deployment__controls">
         <span><kbd>{movementLabel}</kbd>{tr('deployment.move')}</span>
-        <span><kbd>{tr('deployment.mouse')}</kbd>{tr('deployment.aim')}</span>
-        <span><kbd>F</kbd>{tr('deployment.interact')}</span>
+        <span><kbd>{isGamepadControlScheme(controlScheme) ? 'R STICK' : tr('deployment.mouse')}</kbd>{tr('deployment.aim')}</span>
+        <span><kbd>{isGamepadControlScheme(controlScheme) ? 'Y' : 'F'}</kbd>{tr('deployment.interact')}</span>
         <span><kbd>G</kbd>{tr('deployment.gear')}</span>
       </div>}
     </div>
