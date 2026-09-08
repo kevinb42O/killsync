@@ -1,7 +1,7 @@
 import { CoopPing, CoopPingKind, MultiplayerInputFrame } from './protocol';
 export type { CoopPing, CoopPingKind } from './protocol';
 import { GAME_WIDTH } from '../../constants';
-import { COOP_FIREARM_BY_ID, COOP_FIREARM_DEFINITIONS, COOP_WEAPON_SLOTS as FIREARM_SLOTS, createCoopWeaponRuntime, firearmDamage, firearmFireInterval, firearmSpread, type AmmoType, type CoopFirearmId, type CoopWeaponRuntime } from '../combat/coopFirearms';
+import { COOP_FIREARM_BY_ID, COOP_FIREARM_DEFINITIONS, COOP_FIREARM_IDS, COOP_WEAPON_SLOTS as FIREARM_SLOTS, coopWeaponSlotsForSignature, createCoopWeaponRuntime, firearmDamage, firearmFireInterval, firearmSpread, type AmmoType, type CoopFirearmDefinition, type CoopFirearmId, type CoopWeaponRuntime } from '../combat/coopFirearms';
 import {
   ENEMY_TYPES,
   ENEMY_ATTACK_PROFILES,
@@ -16,11 +16,13 @@ import {
   rollHolderItem,
   rollCoopHeartDrop,
   ITEM_HOLDER_CHANCE,
+  type EnemyAttackProfile,
 } from '../combat/enemyDomain';
 import { isWorldPositionClear, raycastWorldObstacles, resolveWorldCollisions } from '../world/WorldLayout';
+import { getWorldDefinition, nextWorldId, normalizeWorldId, sampleWorldSurface, type WorldId } from '../world/WorldDefinitions';
 import { buildEncounterClusters, EncounterDirector, type EncounterDirectorSnapshot, type EncounterOrder, type EncounterPlayer, type EncounterRoundEvent } from './EncounterDirector';
 import { SpawnTopology } from './SpawnTopology';
-import { COOP_INSERTION_DURATION_MS, COOP_UPLINK_RADIUS, CoopRunDirector, coopBossHealth, coopObjectiveEliteHealth, type CoopRunSnapshot } from './CoopRunDirector';
+import { COOP_INSERTION_DURATION_MS, COOP_UPLINK_RADIUS, CoopRunDirector, coopBossHealth, coopObjectiveEliteHealth, type CoopBossKind, type CoopRunSnapshot } from './CoopRunDirector';
 import { COOP_OPERATOR_REDEPLOY_COST, COOP_SHOP_ITEMS, type CoopBuyStationSnapshot, type CoopPurchaseError, type CoopRedeployErrorCode, type CoopShopItemId } from './CoopBuyStation';
 import { COOP_STATION_COUNT, CoopStationDirector } from './CoopStationDirector';
 import { CoopWeaponFoundry, coopFoundryUpgradeCost, generateCoopWeaponFoundrySite, isCoopFirearmId, type CoopFoundryResult, type CoopWeaponFoundrySnapshot } from './CoopWeaponFoundry';
@@ -30,9 +32,11 @@ import { advancePlayerMovement, COOP_PLAYER_RADIUS, isOnCoopPlatform, type Playe
 import { findEnemyDetour, hasClearAttackPath, moveTacticalEnemy } from './enemyTactics';
 import { SpatialHash } from './SpatialHash';
 import { CoopGasZone, GAS_DPS, type CoopGasZoneSnapshot } from './CoopGasZone';
+import { COOP_FIELD_MISSION_LABELS, COOP_HOSTAGE_FREE_DURATION_MS, COOP_HOSTAGE_RECOVERY_DURATION_MS, CoopFieldMissionDirector, resolveCoopMissionNavigationTarget, type CoopFieldMissionsSnapshot, type CoopFieldMissionKind } from './CoopFieldMissions';
 import type { CoopTextKey } from './i18n';
 import { coopImprintModifiers, normalizeCoopImprintLoadout, type CoopImprintLoadout } from './CoopImprint';
 import { normalizeCoopSkinId, type CoopSkinId } from './CoopSkins';
+import { getCoopOperator, normalizeCoopOperatorId, type CoopOperatorId } from './CoopOperators';
 import {
   COOP_BUILD_RANGE,
   COOP_BUILD_ZONE_RADIUS,
@@ -78,6 +82,9 @@ import {
 
 /** Multiplayer shares the production city's physical 12 km square. */
 export const COOP_WORLD_SIZE = GAME_WIDTH;
+export const COOP_BRIDGE_REQUIRED_SEGMENTS = 4;
+export const COOP_BRIDGE_SEGMENT_LENGTH = 260;
+export const COOP_BRIDGE_WIDTH = 170;
 /** Co-op deliberately owns five firearms instead of importing survival slots. */
 export const COOP_WEAPON_SLOTS = FIREARM_SLOTS;
 export type CoopWeaponId = string;
@@ -120,7 +127,7 @@ const SWITCH_MS = 280;
 const ARC_CHAIN_RADIUS = 360;
 const ARC_CHAIN_TARGETS = 3;
 const ARC_CHAIN_DAMAGE_RATIO = .60;
-const ARC_UNUSED_BOSS_DAMAGE_RATIO = .18;
+const ARC_UNUSED_BOSS_DAMAGE_RATIO = .08;
 const ARC_BEAM_RANGE = 1_900;
 /** Damage traces begin at the authoritative player centre. Presentation may
  * still hide the first few centimetres inside the first-person viewmodel. */
@@ -130,11 +137,14 @@ export const COOP_REVIVE_DURATION_MS = 3_000;
 export const COOP_REVIVE_RANGE = 108;
 export const COOP_REVIVE_HEALTH_RATIO = .35;
 export const COOP_REVIVE_INVULNERABILITY_MS = 2_500;
+export const COOP_GROUNDED_INTERACTION_MAX_Z = 20;
+export const COOP_CONTACT_ATTACK_MAX_Z = 55;
+const ARTIFACT_ZONE_CAP = 12;
 
-export type CoopPlayerLifeState = 'alive' | 'downed' | 'eliminated';
+export type CoopPlayerLifeState = 'alive' | 'downed' | 'eliminated' | 'extracted';
 export type CoopMatchState = 'active' | 'mission_failed' | 'solo_defeat' | 'squad_wiped';
 
-export interface CoopPlayerSeed { id: string; label: string; color: string; skinId?: CoopSkinId; imprint?: CoopImprintLoadout; }
+export interface CoopPlayerSeed { id: string; label: string; color: string; skinId?: CoopSkinId; operatorId?: CoopOperatorId; imprint?: CoopImprintLoadout; }
 
 export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   x: number;
@@ -177,12 +187,23 @@ export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   gasMaskHp: number;
   gasMaskMaxHp: number;
   passiveModules: CoopPassiveSnapshot[];
+  /** A hostage carrier is slowed and cannot operate a firearm. */
+  carryingHostage?: boolean;
+  privateExfilAvailable?: boolean;
+  privateExfilCalled?: boolean;
   /** Personal, host-owned deployable resource. Teammates cannot spend it. */
   fabricatorCharges?: number;
   fabricatorRechargeRemainingMs?: number;
+  artifactResource?: number;
+  artifactResourceMax?: number;
+  artifactResourceKind?: string;
+  artifactProc?: string;
+  artifactBarrier?: number;
+  jetFuel?: number;
+  jetActive?: boolean;
   lastProcessedInput?: number;
   lastProcessedFireAction?: number;
-  motion?: Pick<PlayerMotionState, 'verticalVelocity' | 'lastJumpSequence' | 'lastWallJumpSequence' | 'lastDoubleJumpSequence' | 'wallJumpDirectionX' | 'wallJumpDirectionY' | 'airActionConsumedSinceGrounded' | 'slideAngle'>;
+  motion?: Pick<PlayerMotionState, 'verticalVelocity' | 'lastJumpSequence' | 'lastWallJumpSequence' | 'lastDoubleJumpSequence' | 'wallJumpDirectionX' | 'wallJumpDirectionY' | 'airActionConsumedSinceGrounded' | 'jetIgnitedThisAirTime' | 'airborneMs' | 'groundedMs' | 'jetFuel' | 'jetActive' | 'slideAngle'>;
 }
 
 export interface CoopEnemySnapshot {
@@ -207,6 +228,37 @@ export interface CoopEnemySnapshot {
   spawnPacketId?: number;
   facingAngle?: number;
   attackWindupUntilMs?: number;
+  chillStacks?: number;
+  chillRemainingMs?: number;
+  cinderhexStacks?: number;
+  cinderhexRemainingMs?: number;
+  missionId?: number;
+  missionRole?: 'target' | 'guard' | 'courier';
+  worldId?: WorldId;
+  archetypeName?: string;
+}
+
+export interface CoopPrivateExfilSnapshot {
+  x: number;
+  y: number;
+  radius: number;
+  state: 'inbound' | 'active';
+  arrivalRemainingMs: number;
+  windowRemainingMs: number;
+  holdProgressMs: number;
+  holdRequiredMs: number;
+}
+
+export interface CoopArtifactEffectSnapshot {
+  id: number;
+  kind: 'stormcall' | 'dawnwall' | 'hellseed' | 'emberling';
+  ownerId: string;
+  x: number;
+  y: number;
+  radius: number;
+  remainingMs: number;
+  targetEnemyId?: number;
+  empowered?: boolean;
 }
 
 export interface CoopHazardSnapshot {
@@ -245,7 +297,7 @@ export type CoopInventoryDropErrorCode = 'alive_required' | 'empty';
 export interface CoopInventoryDropError { code: CoopInventoryDropErrorCode; }
 export interface CoopAmmoCacheSnapshot { id: number; x: number; y: number; ammoType: AmmoType; amount: number; color: string; }
 
-export type CoopCombatEventKind = 'enemy_hit' | 'enemy_killed' | 'damage_number' | 'drop_spawned' | 'pickup_collected' | 'level_up' | 'weapon_upgraded' | 'weapon_fired' | 'projectile_impact' | 'reload_started' | 'reload_shell_loaded' | 'reload_finished' | 'empty_fire' | 'ammo_collected' | 'player_damaged' | 'player_downed' | 'player_falling' | 'player_revived' | 'player_redeployed' | 'player_eliminated' | 'revive_started' | 'squad_wiped' | 'solo_defeat' | 'station_online' | 'station_purchase' | 'foundry_online' | 'foundry_upgrade' | 'arc_beam' | 'arc_chain' | 'objective_started' | 'objective_completed' | 'boss_spawned' | 'boss_defeated' | 'boss_ability' | 'exfil_deployed' | 'passive_triggered' | 'self_revived' | 'round_started' | 'round_completed' | 'gas_warning' | 'gas_spread' | 'mask_broken' | 'mask_damaged' | 'gas_damaged' | 'structure_built' | 'structure_damaged' | 'structure_destroyed' | 'structure_dismantled' | 'structure_activated' | 'structure_healed' | 'fabricator_charged' | 'fabricator_scrap' | 'fence_triggered' | 'ping';
+export type CoopCombatEventKind = 'enemy_hit' | 'enemy_killed' | 'damage_number' | 'drop_spawned' | 'pickup_collected' | 'level_up' | 'weapon_upgraded' | 'weapon_fired' | 'projectile_impact' | 'artifact_cast' | 'reload_started' | 'reload_shell_loaded' | 'reload_finished' | 'empty_fire' | 'ammo_collected' | 'player_damaged' | 'player_downed' | 'player_falling' | 'player_revived' | 'player_redeployed' | 'player_eliminated' | 'player_extracted' | 'revive_started' | 'squad_wiped' | 'solo_defeat' | 'station_online' | 'station_purchase' | 'foundry_online' | 'foundry_upgrade' | 'arc_beam' | 'arc_chain' | 'objective_started' | 'objective_completed' | 'mission_started' | 'mission_stage' | 'demolition_charge_planted' | 'demolition_charge_detonated' | 'mission_completed' | 'mission_expired' | 'boss_spawned' | 'boss_defeated' | 'boss_ability' | 'exfil_deployed' | 'private_exfil_inbound' | 'passive_triggered' | 'self_revived' | 'round_started' | 'round_completed' | 'gas_warning' | 'gas_spread' | 'gas_settled' | 'mask_broken' | 'mask_damaged' | 'gas_damaged' | 'structure_built' | 'structure_damaged' | 'structure_destroyed' | 'structure_dismantled' | 'structure_activated' | 'structure_healed' | 'fabricator_charged' | 'fabricator_scrap' | 'fence_triggered' | 'bridge_online' | 'bridge_segment_built' | 'bridge_completed' | 'world_transition' | 'ping';
 
 /** A replay-safe presentation event. It is also repeated in snapshots briefly
  * so packet loss cannot suppress feedback on a guest. */
@@ -293,12 +345,18 @@ export interface CoopProjectileSnapshot {
   z: number;
   /** Vertical view angle used to orient the existing 3D projectile mesh. */
   pitch: number;
+  /** Cosmetic cone particles replicate through the normal projectile renderer,
+   * but never participate in host-authoritative damage or penetration. */
+  presentationOnly?: boolean;
 }
 
 export interface CoopSnapshot {
   tick: number;
   elapsedMs: number;
   kills: number;
+  /** Current authoritative frames include this; optional for older replays. */
+  world?: CoopWorldSnapshot;
+  bridge?: CoopWorldBridgeSnapshot;
   players: CoopPlayerSnapshot[];
   enemies: CoopEnemySnapshot[];
   projectiles: CoopProjectileSnapshot[];
@@ -311,6 +369,8 @@ export interface CoopSnapshot {
   buyStations: CoopBuyStationSnapshot[];
   weaponFoundry?: CoopWeaponFoundrySnapshot;
   gasZone?: CoopGasZoneSnapshot;
+  fieldMissions?: CoopFieldMissionsSnapshot;
+  privateExfil?: CoopPrivateExfilSnapshot;
   results?: CoopRunResultsSnapshot;
   /** Present on current authoritative snapshots; optional for backward-compatible replay frames. */
   encounter?: EncounterDirectorSnapshot;
@@ -318,10 +378,33 @@ export interface CoopSnapshot {
   pings?: CoopPing[];
   /** Optional only for replay compatibility; current authoritative frames always include it. */
   structures?: CoopStructureSnapshot[];
+  artifactEffects?: CoopArtifactEffectSnapshot[];
+  /** Owner commands that affect gameplay make career settlement ineligible. */
+  administration?: { modified: boolean; lastAction?: string; paused?: boolean };
 }
 
-type CoopPlayer = CoopPlayerSnapshot & { verticalVelocity: number; lastJumpSequence: number; lastWallJumpSequence: number; lastDoubleJumpSequence: number; wallJumpDirectionX: number; wallJumpDirectionY: number; airActionConsumedSinceGrounded: boolean; lastReloadSequence: number; lastFireActionId: number; lastInteractActionId: number; slideAngle: number; aimPitch: number; previousFiring: boolean; shotSequence: number; lastDamageEventAtMs: number; passiveRuntime: CoopPassiveRuntime[]; lastArmorDamageAtMs: number; lastGasNoticeAtMs: number; fabricatorRechargeAtMs: number };
-type CoopEnemy = CoopEnemySnapshot & { hitFlashUntilMs: number; deathUntilMs?: number; killedByPlayerId?: string; targetLeaseUntilMs: number; nextAttackAtMs?: number; structureStunUntilMs?: number; targetStructureId?: number };
+export interface CoopWorldSnapshot {
+  id: WorldId;
+  tier: number;
+  name: string;
+  elapsedMs: number;
+}
+
+export interface CoopWorldBridgeSnapshot {
+  sourceWorldId: WorldId;
+  destinationWorldId?: WorldId;
+  state: 'locked' | 'building' | 'complete' | 'crossing' | 'terminal';
+  builtSegments: number;
+  requiredSegments: number;
+  buildX: number;
+  buildY: number;
+  startX: number;
+  endX: number;
+  width: number;
+}
+
+type CoopPlayer = CoopPlayerSnapshot & { verticalVelocity: number; lastJumpSequence: number; lastWallJumpSequence: number; lastDoubleJumpSequence: number; wallJumpDirectionX: number; wallJumpDirectionY: number; airActionConsumedSinceGrounded: boolean; jetIgnitedThisAirTime: boolean; airborneMs: number; groundedMs: number; lastReloadSequence: number; lastFireActionId: number; lastAltFireActionId: number; lastInteractActionId: number; slideAngle: number; aimPitch: number; previousFiring: boolean; shotSequence: number; lastDamageEventAtMs: number; passiveRuntime: CoopPassiveRuntime[]; lastArmorDamageAtMs: number; lastGasNoticeAtMs: number; fabricatorRechargeAtMs: number; artifactTargetId?: number; artifactHitCount: number; artifactLastActionAtMs: number; artifactBarrierExpiresAtMs: number; artifactProcExpiresAtMs: number; lastArtifactX: number; lastArtifactY: number; slipstreamReadyAtMs: number; echoPositions: Array<{ x: number; y: number }> };
+type CoopEnemy = CoopEnemySnapshot & { hitFlashUntilMs: number; deathUntilMs?: number; killedByPlayerId?: string; targetLeaseUntilMs: number; nextAttackAtMs?: number; structureStunUntilMs?: number; targetStructureId?: number; chillExpiresAtMs?: number; rimeGrantedAtMs?: number; missionAnchorX?: number; missionAnchorY?: number; cinderhexByOwner?: Map<string, { stacks: number; expiresAtMs: number; nextTickAtMs: number; damageSinceFragment: number }> };
 type CoopProjectile = CoopProjectileSnapshot & {
   verticalVelocity: number;
   damage: number;
@@ -336,6 +419,7 @@ type CoopStructure = CoopStructureSnapshot & {
   nextSupportPulseAtMs?: number;
   healingSincePulseByPlayer?: Record<string, number>;
 };
+type CoopArtifactEffect = CoopArtifactEffectSnapshot & { resolvesAtMs: number; nextTickAtMs: number; pulsesRemaining?: number };
 type EnemyNavigationState = { x: number; y: number; stuckMs: number; waypoint?: { x: number; y: number }; waypointUntilMs: number; clearAttackPath?: boolean; nextPathCheckAtMs?: number };
 
 /** A small, deterministic, DOM-free authoritative combat simulation. */
@@ -359,6 +443,7 @@ export class CoopSimulation {
   private hazards: Array<CoopHazardSnapshot & { damage: number; resolved: boolean }> = [];
   private pings: CoopPing[] = [];
   private structures: CoopStructure[] = [];
+  private artifactEffects: CoopArtifactEffect[] = [];
   private readonly fenceTriggerAt = new Map<string, number>();
   private readonly latestBuildRequestByPlayer = new Map<string, number>();
   private readonly latestDismantleRequestByPlayer = new Map<string, number>();
@@ -368,12 +453,16 @@ export class CoopSimulation {
   private nextEntityId = 1;
   private nextCombatEventId = 1;
   private randomState: number;
-  private readonly encounterDirector: EncounterDirector;
-  private readonly runDirector: CoopRunDirector;
-  private readonly spawnTopology = new SpawnTopology();
-  private readonly stationDirector: CoopStationDirector;
-  private readonly weaponFoundry: CoopWeaponFoundry;
-  private readonly gasZone: CoopGasZone;
+  private encounterDirector!: EncounterDirector;
+  private runDirector!: CoopRunDirector;
+  private spawnTopology = new SpawnTopology();
+  private stationDirector!: CoopStationDirector;
+  private weaponFoundry!: CoopWeaponFoundry;
+  private gasZone!: CoopGasZone;
+  private fieldMissionDirector!: CoopFieldMissionDirector;
+  private gasEnclave?: { missionSiteId: number; commanderId: number; guardIds: number[]; lastGasX: number; lastGasY: number };
+  private privateExfil?: CoopPrivateExfilSnapshot;
+  private privateExfilCalled = false;
   private readonly runStats = new Map<string, CoopPlayerRunStats>();
   private nextScenarioAtMs = 0;
   private bossEnemyId?: number;
@@ -385,46 +474,289 @@ export class CoopSimulation {
   private simulationTick = 0;
   private kills = 0;
   private killsSinceLastHeartDrop = 0;
+  private adminModified = false;
+  private lastAdminAction?: string;
+  private currentWorldId: WorldId;
+  private worldStartedAtMs = 0;
+  private nextWorldHazardAtMs = 0;
+  private worldHazardSequence = 0;
+  private bridgeState: CoopWorldBridgeSnapshot;
 
-  constructor(players: CoopPlayerSeed[], seed: number = 0xdecafbad, runId = `coop-${Date.now().toString(36)}-${(seed >>> 0).toString(36)}`) {
+  constructor(players: CoopPlayerSeed[], seed: number = 0xdecafbad, runId = `coop-${Date.now().toString(36)}-${(seed >>> 0).toString(36)}`, worldId: WorldId = 'neon_bastion') {
     this.randomState = seed >>> 0;
     this.runId = runId;
-    // Do not manufacture an opening ring around the squad. The normal
-    // topology-aware director begins after a brief safe insertion instead.
-    this.encounterDirector = new EncounterDirector(seed, COOP_SAFE_INSERTION_MS);
+    this.currentWorldId = normalizeWorldId(worldId);
     players.forEach(player => this.addPlayer(player));
-    const insertion = this.squadCentre();
-    this.gasZone = new CoopGasZone(insertion, seed);
-    this.stationDirector = new CoopStationDirector(seed, insertion, { x: this.gasZone.x, y: this.gasZone.y });
-    const foundrySite = generateCoopWeaponFoundrySite(seed, insertion, { x: this.gasZone.x, y: this.gasZone.y }, this.stationDirector.positions);
-    this.weaponFoundry = new CoopWeaponFoundry(COOP_STATION_COUNT + 1, foundrySite.x, foundrySite.y);
-    this.runDirector = new CoopRunDirector(seed, [...this.stationDirector.positions.map(site => ({ ...site, radius: 105 })), { ...foundrySite, radius: 180 }]);
-    // Station and Foundry ids occupy the first four deterministic entity slots.
-    this.nextEntityId = COOP_STATION_COUNT + 2;
+    this.bridgeState = this.createBridgeState('building');
+    this.initializeWorldSystems(seed, true);
   }
+
+  private initializeWorldSystems(seed: number, resetEntityIds = false) {
+    // Only the active world's directors exist. A bridge crossing replaces
+    // these compact systems and their entities instead of accumulating maps.
+    // Station and Foundry ids occupy the first four deterministic entity slots.
+    // Reset before creating the enclave because it now exists from world load.
+    if (resetEntityIds) this.nextEntityId = COOP_STATION_COUNT + 2;
+    this.gasEnclave = undefined;
+    this.encounterDirector = new EncounterDirector(seed, COOP_SAFE_INSERTION_MS, getWorldDefinition(this.currentWorldId).difficulty.threatMultiplier);
+    this.spawnTopology = new SpawnTopology(this.currentWorldId);
+    const insertion = this.squadCentre();
+    this.gasZone = new CoopGasZone(insertion, seed, this.currentWorldId);
+    this.stationDirector = new CoopStationDirector(seed, insertion, { x: this.gasZone.x, y: this.gasZone.y }, this.currentWorldId);
+    const foundrySite = generateCoopWeaponFoundrySite(seed, insertion, { x: this.gasZone.x, y: this.gasZone.y }, this.stationDirector.positions, this.currentWorldId);
+    this.weaponFoundry = new CoopWeaponFoundry(COOP_STATION_COUNT + 1, foundrySite.x, foundrySite.y);
+    this.fieldMissionDirector = new CoopFieldMissionDirector(seed, insertion, [...this.stationDirector.positions, foundrySite, { x: this.gasZone.x, y: this.gasZone.y }], this.currentWorldId);
+    this.spawnGasEnclave();
+    this.runDirector = new CoopRunDirector(seed, [...this.stationDirector.positions.map(site => ({ ...site, radius: 105 })), { ...foundrySite, radius: 180 }], this.currentWorldId);
+    this.worldHazardSequence = 0;
+    this.nextWorldHazardAtMs = this.elapsedMs + worldHazardIntervalMs(this.currentWorldId, true);
+  }
+
+  private createBridgeState(state: CoopWorldBridgeSnapshot['state']): CoopWorldBridgeSnapshot {
+    const definition = getWorldDefinition(this.currentWorldId);
+    const destinationWorldId = nextWorldId(this.currentWorldId);
+    const startX = GAME_WIDTH - 130;
+    return {
+      sourceWorldId: this.currentWorldId,
+      destinationWorldId,
+      state: destinationWorldId ? state : 'terminal',
+      builtSegments: 0,
+      requiredSegments: destinationWorldId ? COOP_BRIDGE_REQUIRED_SEGMENTS : 0,
+      buildX: definition.bridgehead.x - 110,
+      buildY: definition.bridgehead.y,
+      startX,
+      endX: startX + COOP_BRIDGE_REQUIRED_SEGMENTS * COOP_BRIDGE_SEGMENT_LENGTH,
+      width: COOP_BRIDGE_WIDTH,
+    };
+  }
+
+  private bridgeContains(x: number, y: number, radius = 0) {
+    if (this.bridgeState.builtSegments <= 0) return false;
+    const builtEnd = this.bridgeState.startX + this.bridgeState.builtSegments * COOP_BRIDGE_SEGMENT_LENGTH;
+    return x >= this.bridgeState.startX - radius && x <= builtEnd + radius
+      && Math.abs(y - this.bridgeState.buildY) <= this.bridgeState.width * .5 - radius;
+  }
+
+  private buildBridgeSegment(player: CoopPlayer, definition: typeof COOP_STRUCTURE_DEFINITIONS.bridge_segment): CoopBuildError | undefined {
+    if (this.bridgeState.state === 'locked' || this.bridgeState.state === 'terminal') return { code: 'bridge_locked' };
+    if (this.bridgeState.state === 'complete' || this.bridgeState.state === 'crossing') return { code: 'bridge_complete' };
+    if (Math.hypot(player.x - this.bridgeState.buildX, player.y - this.bridgeState.buildY) > COOP_BUILD_RANGE + 180) return { code: 'bridge_range' };
+    const charges = player.fabricatorCharges || 0;
+    if (charges < definition.chargeCost) return { code: 'charges', amount: definition.chargeCost - charges };
+    const index = this.bridgeState.builtSegments;
+    const structure: CoopStructure = {
+      id: this.nextEntityId++, type: 'bridge_segment', ownerId: player.id, ownerColor: player.color,
+      x: Math.round(this.bridgeState.startX + COOP_BRIDGE_SEGMENT_LENGTH * (index + .5)), y: Math.round(this.bridgeState.buildY), angle: 0,
+      health: definition.maxHealth, maxHealth: definition.maxHealth, state: 'active', createdAtMs: Math.round(this.elapsedMs),
+      expiresAtMs: Math.round(this.elapsedMs + 86_400_000), contextKey: `worldlink:${this.currentWorldId}:${index}`,
+    };
+    this.structures.push(structure);
+    this.bridgeState.builtSegments++;
+    player.fabricatorCharges = charges - definition.chargeCost;
+    if (charges >= COOP_MAX_FABRICATOR_CHARGES || player.fabricatorRechargeAtMs <= this.elapsedMs) player.fabricatorRechargeAtMs = this.elapsedMs + COOP_FABRICATOR_RECHARGE_MS;
+    const stats = this.runStats.get(player.id); if (stats) stats.structuresBuilt++;
+    this.emitCombatEvent({ kind: 'bridge_segment_built', x: structure.x, y: structure.y, playerId: player.id, structureId: structure.id, structureType: structure.type, amount: this.bridgeState.builtSegments, color: definition.color });
+    if (this.bridgeState.builtSegments >= this.bridgeState.requiredSegments) {
+      this.bridgeState.state = 'complete';
+      this.emitCombatEvent({ kind: 'bridge_completed', x: this.bridgeState.endX, y: this.bridgeState.buildY, playerId: player.id, color: definition.color });
+    }
+    return undefined;
+  }
+
+  private transitionToNextWorld() {
+    const destination = this.bridgeState.destinationWorldId;
+    if (!destination || this.bridgeState.state !== 'complete') return;
+    this.bridgeState.state = 'crossing';
+    this.transitionToWorld(destination);
+  }
+
+  private transitionToWorld(destination: WorldId) {
+    this.currentWorldId = destination;
+    this.worldStartedAtMs = this.elapsedMs;
+    this.enemies = [];
+    this.projectiles = [];
+    this.gems = [];
+    this.items = [];
+    this.ammoCaches = [];
+    this.hazards = [];
+    this.pings = [];
+    this.combatEvents = [];
+    this.structures = [];
+    this.artifactEffects = [];
+    this.enemyNavigation.clear();
+    this.enemySpatialIndex.rebuild([]);
+    this.fenceTriggerAt.clear();
+    this.privateExfil = undefined;
+    this.privateExfilCalled = false;
+    this.bossEnemyId = undefined;
+    this.nextBossAbilityAtMs = 0;
+    this.nextScenarioAtMs = 0;
+    this.results = undefined;
+    this.matchState = 'active';
+    const insertion = { x: GAME_WIDTH / 2, y: GAME_WIDTH / 2 };
+    const members = [...this.players.values()].filter(player => player.lifeState !== 'extracted');
+    const insertionPackage = getWorldDefinition(destination).insertion;
+    members.forEach((player, index) => {
+      const angle = index / Math.max(1, members.length) * Math.PI * 2;
+      const spawn = this.safeFallbackPosition(insertion.x + Math.cos(angle) * 65, insertion.y + Math.sin(angle) * 65, PLAYER_RADIUS);
+      player.x = spawn.x; player.y = spawn.y; player.z = 0; player.verticalVelocity = 0;
+      player.invulnerableRemainingMs = Math.max(player.invulnerableRemainingMs, 4_000);
+      player.carryingHostage = false;
+      for (const weapon of player.weaponStates) weapon.level = Math.max(weapon.level, insertionPackage.minimumWeaponLevel);
+      player.weaponLevels = player.weaponStates.map(weapon => weapon.level);
+      player.selectedWeaponLevel = player.weaponStates[player.selectedSlot]?.level || insertionPackage.minimumWeaponLevel;
+      if (player.armorTier < insertionPackage.armorTier) {
+        player.armorTier = insertionPackage.armorTier;
+        player.armorHp = Math.max(player.armorHp, maxArmorHp(player.armorTier));
+      }
+      if (player.lifeState === 'downed') {
+        player.lifeState = 'alive'; player.health = Math.max(1, player.maxHealth * .4); player.downedRemainingMs = 0;
+      }
+    });
+    const tierSeed = (this.randomState ^ getWorldDefinition(destination).tier * 0x9e3779b9) >>> 0;
+    this.initializeWorldSystems(tierSeed, false);
+    this.bridgeState = this.createBridgeState('building');
+    this.emitCombatEvent({ kind: 'world_transition', x: insertion.x, y: insertion.y, amount: getWorldDefinition(destination).tier, color: `#${getWorldDefinition(destination).theme.accentColor.toString(16).padStart(6, '0')}` });
+  }
+
+  private worldElapsedMs() { return Math.max(0, this.elapsedMs - this.worldStartedAtMs); }
 
   addPlayer(player: CoopPlayerSeed): boolean {
     if (this.matchState !== 'active' || this.players.has(player.id) || this.players.size >= 4) return false;
     const index = this.players.size;
     const angle = index * Math.PI / 2;
-    const weaponStates = COOP_WEAPON_SLOTS.map(createCoopWeaponRuntime);
-    const imprint = normalizeCoopImprintLoadout(player.imprint);
     const skinId = normalizeCoopSkinId(player.skinId);
+    const operatorId = normalizeCoopOperatorId(player.operatorId, skinId);
+    const operator = getCoopOperator(operatorId);
+    const weaponStates = coopWeaponSlotsForSignature(operator.signatureWeaponId).map(createCoopWeaponRuntime);
+    const insertion = getWorldDefinition(this.currentWorldId).insertion;
+    for (const weapon of weaponStates) weapon.level = Math.max(weapon.level, insertion.minimumWeaponLevel);
+    const imprint = normalizeCoopImprintLoadout(player.imprint);
     const modifiers = coopImprintModifiers(imprint.ranks);
     this.players.set(player.id, {
-      ...player, skinId, imprint, x: COOP_WORLD_SIZE / 2 + Math.cos(angle) * 100, y: COOP_WORLD_SIZE / 2 + Math.sin(angle) * 100,
+      ...player, skinId, operatorId, imprint, x: COOP_WORLD_SIZE / 2 + Math.cos(angle) * 100, y: COOP_WORLD_SIZE / 2 + Math.sin(angle) * 100,
       angle: 0, health: modifiers.maxHealth, maxHealth: modifiers.maxHealth, movementMultiplier: modifiers.movementMultiplier, selectedSlot: 0, z: 0, sprinting: false, sliding: false, crouching: false,
-      level: 1, experience: 0, experienceToNextLevel: getRunXPRequired(1), coins: 0, pendingDataCores: 0,
-      weaponStates, weaponLevels: weaponStates.map(state => state.level), selectedWeaponLevel: 1, selectedWeaponId: 'plasma_gun', isAiming: false, isReloading: false, isSwitching: false,
+      level: 1, experience: 0, experienceToNextLevel: getRunXPRequired(1), coins: insertion.credits, pendingDataCores: 0,
+      weaponStates, weaponLevels: weaponStates.map(state => state.level), selectedWeaponLevel: weaponStates[0]?.level || 1, selectedWeaponId: weaponStates[0]?.weaponId || 'plasma_gun', isAiming: false, isReloading: false, isSwitching: false,
       lifeState: 'alive', downedRemainingMs: 0, reviveProgressMs: 0, invulnerableRemainingMs: 0,
-      selfRevives: 0, selfReviveProgressMs: 0, armorTier: 0, armorHp: 0, gasMaskHp: 0, gasMaskMaxHp: 150, passiveModules: [], fabricatorCharges: COOP_STARTING_FABRICATOR_CHARGES,
-      verticalVelocity: 0, lastJumpSequence: -1, lastWallJumpSequence: -1, lastDoubleJumpSequence: -1, wallJumpDirectionX: 0, wallJumpDirectionY: 0, airActionConsumedSinceGrounded: false, lastReloadSequence: -1, lastFireActionId: 0, lastInteractActionId: 0, slideAngle: 0, aimPitch: 0, previousFiring: false, shotSequence: 0, lastDamageEventAtMs: -Infinity, passiveRuntime: [], lastArmorDamageAtMs: -Infinity, lastGasNoticeAtMs: -Infinity, fabricatorRechargeAtMs: COOP_FABRICATOR_RECHARGE_MS,
+      selfRevives: 0, selfReviveProgressMs: 0, armorTier: insertion.armorTier, armorHp: maxArmorHp(insertion.armorTier), gasMaskHp: 0, gasMaskMaxHp: 150, passiveModules: [], fabricatorCharges: COOP_STARTING_FABRICATOR_CHARGES,
+      artifactResource: 0, artifactResourceMax: operator.resourceMax, artifactResourceKind: operator.resource, artifactBarrier: 0, jetFuel: 100, jetActive: false,
+      verticalVelocity: 0, lastJumpSequence: -1, lastWallJumpSequence: -1, lastDoubleJumpSequence: -1, wallJumpDirectionX: 0, wallJumpDirectionY: 0, airActionConsumedSinceGrounded: false, jetIgnitedThisAirTime: false, airborneMs: 0, groundedMs: 0, lastReloadSequence: -1, lastFireActionId: 0, lastAltFireActionId: 0, lastInteractActionId: 0, slideAngle: 0, aimPitch: 0, previousFiring: false, shotSequence: 0, lastDamageEventAtMs: -Infinity, passiveRuntime: [], lastArmorDamageAtMs: -Infinity, lastGasNoticeAtMs: -Infinity, fabricatorRechargeAtMs: COOP_FABRICATOR_RECHARGE_MS, artifactHitCount: 0, artifactLastActionAtMs: -Infinity, artifactBarrierExpiresAtMs: 0, artifactProcExpiresAtMs: 0, lastArtifactX: COOP_WORLD_SIZE / 2, lastArtifactY: COOP_WORLD_SIZE / 2, slipstreamReadyAtMs: 0, echoPositions: [],
     });
     this.runStats.set(player.id, createRunStats(player.id));
     return true;
   }
 
-  getPlayerSeeds(): CoopPlayerSeed[] { return [...this.players.values()].map(({ id, label, color, skinId, imprint }) => ({ id, label, color, skinId: normalizeCoopSkinId(skinId), imprint: normalizeCoopImprintLoadout(imprint) })); }
+  getPlayerSeeds(): CoopPlayerSeed[] { return [...this.players.values()].map(({ id, label, color, skinId, operatorId, imprint }) => ({ id, label, color, skinId: normalizeCoopSkinId(skinId), operatorId: normalizeCoopOperatorId(operatorId, skinId), imprint: normalizeCoopImprintLoadout(imprint) })); }
+
+  getWorldId() { return this.currentWorldId; }
+
+  /** Owner testing shortcut. A world is session-global, so this deliberately
+   * moves the entire squad and rebuilds every active-world authority system. */
+  adminSetWorld(destination: WorldId) {
+    if (destination === this.currentWorldId) return false;
+    this.transitionToWorld(destination);
+    this.markAdminModified(`teleported squad to ${getWorldDefinition(destination).name}`);
+    return true;
+  }
+
+  /** Explicit, bounded owner mutations. Network commands never receive direct
+   * access to simulation collections or private encounter directors. */
+  adminHeal(playerIds: readonly string[], amount?: number) {
+    let changed = 0;
+    for (const id of playerIds) {
+      const player = this.players.get(id);
+      if (!player || player.lifeState !== 'alive') continue;
+      const next = amount === undefined ? player.maxHealth : Math.min(player.maxHealth, player.health + Math.max(0, amount));
+      if (next <= player.health) continue;
+      player.health = next; changed++;
+    }
+    if (changed) this.markAdminModified(`healed ${changed} operator${changed === 1 ? '' : 's'}`);
+    return changed;
+  }
+
+  adminRevive(playerIds: readonly string[]) {
+    let changed = 0;
+    for (const id of playerIds) {
+      const player = this.players.get(id);
+      if (!player || (player.lifeState !== 'downed' && player.lifeState !== 'eliminated')) continue;
+      const spawn = this.safeFallbackPosition(player.x, player.y, PLAYER_RADIUS);
+      player.x = spawn.x; player.y = spawn.y; player.z = 0; player.verticalVelocity = 0;
+      player.lifeState = 'alive'; player.health = player.maxHealth * COOP_REVIVE_HEALTH_RATIO;
+      player.downedRemainingMs = 0; player.reviveProgressMs = 0; player.selfReviveProgressMs = 0; player.reviverId = undefined;
+      player.invulnerableRemainingMs = COOP_REVIVE_INVULNERABILITY_MS;
+      this.emitCombatEvent({ kind: 'player_redeployed', x: player.x, y: player.y, playerId: player.id, color: player.color });
+      changed++;
+    }
+    if (changed) {
+      this.results = undefined;
+      this.matchState = 'active';
+      this.markAdminModified(`revived ${changed} operator${changed === 1 ? '' : 's'}`);
+    }
+    return changed;
+  }
+
+  adminGive(playerIds: readonly string[], resource: 'credits' | 'cores' | 'ammo' | 'fabricator' | 'selfrevive', amount?: number) {
+    let changed = 0;
+    for (const id of playerIds) {
+      const player = this.players.get(id);
+      if (!player) continue;
+      if (resource === 'credits') player.coins = amount === undefined ? 9_999_999 : Math.min(9_999_999, player.coins + Math.max(0, Math.trunc(amount)));
+      else if (resource === 'cores') player.pendingDataCores = amount === undefined ? 99_999 : Math.min(99_999, player.pendingDataCores + Math.max(0, Math.trunc(amount)));
+      else if (resource === 'fabricator') player.fabricatorCharges = amount === undefined ? COOP_MAX_FABRICATOR_CHARGES : Math.min(COOP_MAX_FABRICATOR_CHARGES, (player.fabricatorCharges || 0) + Math.max(0, Math.trunc(amount)));
+      else if (resource === 'selfrevive') player.selfRevives = amount === undefined ? 9 : Math.min(9, player.selfRevives + Math.max(0, Math.trunc(amount)));
+      else for (const weapon of player.weaponStates) weapon.reserveAmmo = COOP_FIREARM_BY_ID[weapon.weaponId].maxReserve;
+      changed++;
+    }
+    if (changed) this.markAdminModified(`granted ${resource} to ${changed} operator${changed === 1 ? '' : 's'}`);
+    return changed;
+  }
+
+  adminTeleport(playerIds: readonly string[], x: number, y: number) {
+    let changed = 0;
+    for (let index = 0; index < playerIds.length; index++) {
+      const player = this.players.get(playerIds[index]);
+      if (!player || player.lifeState === 'extracted') continue;
+      const angle = index * Math.PI * 2 / Math.max(1, playerIds.length);
+      const position = this.safeFallbackPosition(x + Math.cos(angle) * Math.min(55, playerIds.length * 14), y + Math.sin(angle) * Math.min(55, playerIds.length * 14), PLAYER_RADIUS);
+      player.x = position.x; player.y = position.y; player.z = 0; player.verticalVelocity = 0;
+      changed++;
+    }
+    if (changed) this.markAdminModified(`teleported ${changed} operator${changed === 1 ? '' : 's'}`);
+    return changed;
+  }
+
+  adminSpawn(type: keyof typeof ENEMY_TYPES, count: number, nearPlayerId?: string) {
+    const target = this.players.get(nearPlayerId || '') || [...this.players.values()].find(player => player.lifeState === 'alive');
+    if (!target) return 0;
+    const allowed = Math.max(0, Math.min(40, COOP_MAX_ENEMIES - this.enemies.length, Math.trunc(count)));
+    for (let index = 0; index < allowed; index++) {
+      const angle = index / Math.max(1, allowed) * Math.PI * 2;
+      const distance = ENEMY_TYPES[type].radius + 260 + (index % 4) * 45;
+      const position = this.safeFallbackPosition(target.x + Math.cos(angle) * distance, target.y + Math.sin(angle) * distance, ENEMY_TYPES[type].radius);
+      this.spawnEnemy(type, target.id, -1, position);
+    }
+    if (allowed) this.markAdminModified(`spawned ${allowed} ${type}`);
+    return allowed;
+  }
+
+  adminKillAll() {
+    const targets = this.enemies.filter(enemy => !enemy.dying);
+    const count = targets.length;
+    const ownerId = [...this.players.keys()][0] || 'owner';
+    for (const enemy of targets) this.killEnemy(enemy, ownerId);
+    const clearedIds = new Set(targets.map(enemy => enemy.id));
+    this.enemies = this.enemies.filter(enemy => !clearedIds.has(enemy.id));
+    this.projectiles = [];
+    this.hazards = [];
+    if (count) this.markAdminModified(`cleared ${count} hostiles`);
+    return count;
+  }
+
+  private markAdminModified(action: string) {
+    this.adminModified = true;
+    this.lastAdminAction = action;
+  }
 
   updatePlayerImprint(playerId: string, value: unknown) {
     // Imprints are immutable during combat. They may only change after an
@@ -445,6 +777,15 @@ export class CoopSimulation {
   /** Remove a disconnected guest without ending the host's surviving run. */
   removePlayer(playerId: string): boolean {
     if (!this.players.has(playerId)) return false;
+    const leaving = this.players.get(playerId);
+    const hostage = this.fieldMissionDirector.current?.hostage;
+    if (leaving?.carryingHostage && hostage?.carrierId === playerId) {
+      hostage.x = leaving.x; hostage.y = leaving.y; hostage.carrierId = undefined; hostage.state = 'waiting';
+      const mission = this.fieldMissionDirector.current!;
+      mission.x = hostage.x; mission.y = hostage.y; mission.progress = 0; mission.required = COOP_HOSTAGE_FREE_DURATION_MS;
+      mission.points[0].state = 'arming'; mission.points[1].state = 'locked';
+      this.emitCombatEvent({ kind: 'mission_stage', x: hostage.x, y: hostage.y, playerId, amount: -2, color: '#fbbf24' });
+    }
     this.players.delete(playerId);
     this.inputByPlayer.delete(playerId);
     this.latestInputSequence.delete(playerId);
@@ -480,12 +821,20 @@ export class CoopSimulation {
     // Remote-shot compensation runs during input processing, so seed the
     // broad phase before any player can fire this tick.
     this.enemySpatialIndex.rebuild(this.enemies);
+    let bridgeCrossed = false;
     for (const player of this.players.values()) {
       const receivedAt = this.inputReceivedAtMs.get(player.id);
       const storedInput = this.inputByPlayer.get(player.id);
       const stale = storedInput && (receivedAt === undefined || this.elapsedMs - receivedAt > COOP_STALE_INPUT_MS);
-      const input = stale ? { ...storedInput, movement: 0, firing: false, aiming: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, reloadPressed: false, dashPressed: false } : storedInput;
+      const rawInput = stale ? { ...storedInput, movement: 0, firing: false, aiming: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, jetHeld: false, reloadPressed: false, dashPressed: false } : storedInput;
+      const input = rawInput && player.carryingHostage
+        ? { ...rawInput, firing: false, aiming: false, sprinting: false, sliding: false, jetHeld: false, dashPressed: false, reloadPressed: false, altFireActionId: player.lastAltFireActionId }
+        : rawInput;
       player.invulnerableRemainingMs = Math.max(0, player.invulnerableRemainingMs - dt);
+      if (player.artifactBarrier > 0 && this.elapsedMs >= player.artifactBarrierExpiresAtMs) player.artifactBarrier = Math.max(0, player.artifactBarrier - 8 * seconds);
+      if (player.artifactProc && this.elapsedMs >= player.artifactProcExpiresAtMs) player.artifactProc = undefined;
+      if (player.operatorId === 'crimson_strike' && this.elapsedMs - player.artifactLastActionAtMs > 6_000) player.artifactResource = Math.max(0, player.artifactResource - 12 * seconds);
+      if (player.operatorId === 'void_runner' && this.elapsedMs - player.artifactLastActionAtMs > 5_000) { player.artifactResource = 0; player.artifactTargetId = undefined; }
       if (player.lifeState === 'downed') {
         if (player.selfRevives > 0 && input?.reviving) {
           player.selfReviveProgressMs = Math.min(6_000, player.selfReviveProgressMs + dt);
@@ -498,7 +847,7 @@ export class CoopSimulation {
         if (player.downedRemainingMs <= 0 && !this.hasLivingTeammate(player.id)) this.eliminatePlayer(player, 'bled out');
         continue;
       }
-      if (player.lifeState === 'eliminated') continue;
+      if (player.lifeState === 'eliminated' || player.lifeState === 'extracted') continue;
       if (player.armorTier > 0 && this.elapsedMs - player.lastArmorDamageAtMs >= 3_000) {
         player.armorHp = Math.min(maxArmorHp(player.armorTier), player.armorHp + dt * .024);
       }
@@ -524,44 +873,71 @@ export class CoopSimulation {
           dt,
           (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius),
           (position, radius) => this.getPlayerStructureWallContact(position, player.z, radius),
+          this.currentWorldId,
         );
-        if (!isOnCoopPlatform(player.x, player.y)) {
+        if (Math.hypot(player.x - player.lastArtifactX, player.y - player.lastArtifactY) >= 60) {
+          player.echoPositions.push({ x: player.x, y: player.y });
+          if (player.echoPositions.length > 5) player.echoPositions.shift();
+          player.lastArtifactX = player.x; player.lastArtifactY = player.y;
+        }
+        if (this.bridgeState.state === 'complete' && this.bridgeContains(player.x, player.y, PLAYER_RADIUS) && player.x >= this.bridgeState.endX - 70) bridgeCrossed = true;
+        if (!isOnCoopPlatform(player.x, player.y, this.currentWorldId) && !this.bridgeContains(player.x, player.y, PLAYER_RADIUS)) {
           this.emitCombatEvent({ kind: 'player_falling', x: player.x, y: player.y, playerId: player.id, color: player.color });
           this.eliminatePlayer(player, 'fell from platform');
           continue;
         }
+        const surface = sampleWorldSurface(this.currentWorldId, player.x, player.y);
+        if (surface.damagePerSecond > 0) this.damagePlayer(player, surface.damagePerSecond * seconds, player.x, player.y);
         player.aimPitch = dequantizePitch(input.aimPitch);
-        const requestedSlot = clamp(Math.trunc(input.selectedSlot), 0, COOP_WEAPON_SLOTS.length - 1);
+        const requestedSlot = clamp(Math.trunc(input.selectedSlot), 0, player.weaponStates.length - 1);
         if (requestedSlot !== player.selectedSlot && !player.isSwitching) this.switchWeapon(player, requestedSlot);
-        player.selectedWeaponId = COOP_WEAPON_SLOTS[player.selectedSlot];
+        player.selectedWeaponId = this.weapon(player).weaponId;
         player.selectedWeaponLevel = this.weapon(player).level;
-        player.isAiming = Boolean(input.aiming) && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
+        player.isAiming = Boolean(input.aiming) && player.selectedSlot !== 3 && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
         if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; this.startReload(player); }
         this.advanceWeaponActions(player);
         const fireActionId = input.fireActionId || 0;
         const triggerPressed = fireActionId > player.lastFireActionId || (input.fireActionId === undefined && input.firing && !player.previousFiring);
         if (fireActionId > player.lastFireActionId) player.lastFireActionId = fireActionId;
         player.lastProcessedFireAction = player.lastFireActionId;
+        const altFireActionId = input.altFireActionId || 0;
+        if (altFireActionId > player.lastAltFireActionId) {
+          player.lastAltFireActionId = altFireActionId;
+          if (player.selectedSlot === 3) this.tryArtifactSpender(player);
+        }
         const interactActionId = input.interactActionId || 0;
         if (interactActionId > player.lastInteractActionId) {
           player.lastInteractActionId = interactActionId;
-          this.collectManualDrop(player);
+          this.handleFieldInteraction(player);
         }
         if (input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
       }
-      if (!input) advancePlayerMovement(player, undefined, dt);
+      if (!input) advancePlayerMovement(player, undefined, dt, undefined, undefined, this.currentWorldId);
+    }
+
+    if (bridgeCrossed) {
+      this.transitionToNextWorld();
+      return;
     }
 
     this.updateRun(dt);
     const gasEvent = this.gasZone.tick(dt, this.elapsedMs);
     if (gasEvent.warningTriggered) {
-      this.emitCombatEvent({ kind: 'gas_warning', x: this.gasZone.x, y: this.gasZone.y, color: '#f59e0b', amount: 30 });
+      this.emitCombatEvent({ kind: 'gas_warning', x: this.gasZone.x, y: this.gasZone.y, color: '#f59e0b', amount: 12 });
     }
     if (gasEvent.spreadTriggered) {
       this.emitCombatEvent({ kind: 'gas_spread', x: this.gasZone.x, y: this.gasZone.y, color: '#4ade80', amount: this.gasZone.radius });
     }
+    if (gasEvent.settledTriggered) this.emitCombatEvent({ kind: 'gas_settled', x: this.gasZone.x, y: this.gasZone.y, color: '#86efac' });
+    this.updateGasEnclave();
+    this.updateWorldHazards();
+    this.updateFieldMission(dt);
+    this.updateMissionPings();
+    this.updatePrivateExfil(dt);
     if (this.results) return;
+    this.updateArtifactEffects(dt);
+    this.updateArtifactStatuses();
     this.updatePassiveModules();
     this.scheduleEncounters();
     this.updateStructures(dt);
@@ -571,9 +947,14 @@ export class CoopSimulation {
 
     for (const enemy of this.enemies) {
       if (enemy.dying) continue;
-      const target = this.resolveEnemyTarget(enemy);
+      const hasMissionAnchor = (enemy.missionRole === 'guard' || enemy.missionRole === 'courier')
+        && Number.isFinite(enemy.missionAnchorX) && Number.isFinite(enemy.missionAnchorY);
+      const missionAnchor = hasMissionAnchor ? { x: enemy.missionAnchorX!, y: enemy.missionAnchorY! } : undefined;
+      const nearestIntruder = missionAnchor ? this.closestLivingPlayer(missionAnchor.x, missionAnchor.y) : undefined;
+      const holdingMissionPosition = Boolean(missionAnchor && (!nearestIntruder || Math.hypot(nearestIntruder.x - missionAnchor.x, nearestIntruder.y - missionAnchor.y) > 700));
+      const target = holdingMissionPosition ? missionAnchor : this.resolveEnemyTarget(enemy);
       if (!target) continue;
-      const targetStructure = 'type' in target && isCoopStructureType(target.type) ? target : undefined;
+      const targetStructure = 'type' in target && isCoopStructureType(target.type) ? target as CoopStructure : undefined;
       const distance = Math.hypot(target.x - enemy.x, target.y - enemy.y);
       enemy.facingAngle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
       const windingUp = (enemy.attackWindupUntilMs || 0) > this.elapsedMs;
@@ -585,7 +966,7 @@ export class CoopSimulation {
         || (enemy.type === 'phantom' && distance <= ENEMY_ATTACK_PROFILES.phantom!.maxRange)
         || (enemy.type === 'elite' && distance <= ENEMY_ATTACK_PROFILES.elite!.maxRange);
       if (needsAttackPath && this.elapsedMs >= (navigation.nextPathCheckAtMs || 0)) {
-        navigation.clearAttackPath = hasClearAttackPath(enemy, target);
+        navigation.clearAttackPath = hasClearAttackPath(enemy, target, this.currentWorldId);
         // Stagger checks so a horde does not submit every world probe in one tick.
         navigation.nextPathCheckAtMs = this.elapsedMs + 180 + enemy.id % 5 * 17;
       }
@@ -597,7 +978,7 @@ export class CoopSimulation {
         const neighbors = this.enemySpatialIndex.query(enemy.x, enemy.y, enemy.radius + MAX_ENEMY_RADIUS + 48, this.nearbyEnemies);
         const fenceSlowed = this.structures.some(structure => structure.type === 'arc_fence' && structure.state !== 'destroying'
           && structureContainsCircle(structure, enemy.x, enemy.y, enemy.radius));
-        enemy.facingAngle = moveTacticalEnemy(enemy, travelTarget, neighbors, this.elapsedMs, fenceSlowed ? dt * COOP_ARC_FENCE_SLOW_MULTIPLIER : dt, clearAttackPath);
+        enemy.facingAngle = moveTacticalEnemy(enemy, travelTarget, neighbors, this.elapsedMs, fenceSlowed ? dt * COOP_ARC_FENCE_SLOW_MULTIPLIER : dt, clearAttackPath, this.currentWorldId);
       }
       this.updateEnemyStructureInteractions(enemy, dt);
       structureStunned = (enemy.structureStunUntilMs || 0) > this.elapsedMs;
@@ -605,34 +986,37 @@ export class CoopSimulation {
       navigation.stuckMs = !windingUp && distance > 240 && progress < .2 ? navigation.stuckMs + dt : 0;
       navigation.x = enemy.x; navigation.y = enemy.y;
       if (navigation.stuckMs >= 700) {
-        navigation.waypoint = findEnemyDetour(enemy, target);
+        navigation.waypoint = findEnemyDetour(enemy, target, this.currentWorldId);
         navigation.waypointUntilMs = this.elapsedMs + 2_200;
         navigation.stuckMs = 0;
       }
       this.enemyNavigation.set(enemy.id, navigation);
-      if (!structureStunned && enemy.type === 'ranged' && distance >= ENEMY_ATTACK_PROFILES.ranged!.minRange && distance <= ENEMY_ATTACK_PROFILES.ranged!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
-        const attack = ENEMY_ATTACK_PROFILES.ranged!;
-        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, enemy.damage * attack.damageMultiplier, attack.windupMs, '#4ade80');
+      if (!holdingMissionPosition && !structureStunned && enemy.type === 'ranged' && distance >= ENEMY_ATTACK_PROFILES.ranged!.minRange && distance <= ENEMY_ATTACK_PROFILES.ranged!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
+        const attack = worldEnemyAttack(this.currentWorldId, 'ranged', ENEMY_ATTACK_PROFILES.ranged!);
+        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, enemy.damage * attack.damageMultiplier, attack.windupMs, attack.color);
         enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs + enemy.id % 5 * 150;
-      } else if (!structureStunned && enemy.type === 'tank' && distance >= ENEMY_ATTACK_PROFILES.tank!.minRange && distance <= ENEMY_ATTACK_PROFILES.tank!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0)) {
-        const attack = ENEMY_ATTACK_PROFILES.tank!;
-        this.queueHazard(enemy, attack.kind, enemy.x, enemy.y, attack.radius, enemy.damage * attack.damageMultiplier, attack.windupMs, '#fbbf24');
+      } else if (!holdingMissionPosition && !structureStunned && enemy.type === 'tank' && distance >= ENEMY_ATTACK_PROFILES.tank!.minRange && distance <= ENEMY_ATTACK_PROFILES.tank!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0)) {
+        const attack = worldEnemyAttack(this.currentWorldId, 'tank', ENEMY_ATTACK_PROFILES.tank!);
+        this.queueHazard(enemy, attack.kind, enemy.x, enemy.y, attack.radius, enemy.damage * attack.damageMultiplier, attack.windupMs, attack.color);
         enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
-      } else if (!structureStunned && enemy.type === 'phantom' && distance >= ENEMY_ATTACK_PROFILES.phantom!.minRange && distance <= ENEMY_ATTACK_PROFILES.phantom!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
-        const attack = ENEMY_ATTACK_PROFILES.phantom!;
-        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, Math.max(16, enemy.damage * attack.damageMultiplier), attack.windupMs, '#e2e8f0');
+      } else if (!holdingMissionPosition && !structureStunned && enemy.type === 'phantom' && distance >= ENEMY_ATTACK_PROFILES.phantom!.minRange && distance <= ENEMY_ATTACK_PROFILES.phantom!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
+        const attack = worldEnemyAttack(this.currentWorldId, 'phantom', ENEMY_ATTACK_PROFILES.phantom!);
+        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, Math.max(16, enemy.damage * attack.damageMultiplier), attack.windupMs, attack.color);
         enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
-      } else if (!structureStunned && enemy.type === 'elite' && distance >= ENEMY_ATTACK_PROFILES.elite!.minRange && distance <= ENEMY_ATTACK_PROFILES.elite!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
-        const attack = ENEMY_ATTACK_PROFILES.elite!;
-        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, Math.max(24, enemy.damage * attack.damageMultiplier), attack.windupMs, '#f472d0');
+      } else if (!holdingMissionPosition && !structureStunned && enemy.type === 'elite' && distance >= ENEMY_ATTACK_PROFILES.elite!.minRange && distance <= ENEMY_ATTACK_PROFILES.elite!.maxRange && !windingUp && this.elapsedMs >= (enemy.nextAttackAtMs || 0) && clearAttackPath) {
+        const attack = worldEnemyAttack(this.currentWorldId, 'elite', ENEMY_ATTACK_PROFILES.elite!);
+        this.queueHazard(enemy, attack.kind, target.x, target.y, attack.radius, Math.max(24, enemy.damage * attack.damageMultiplier), attack.windupMs, attack.color);
         enemy.nextAttackAtMs = this.elapsedMs + attack.cooldownMs;
-      } else if (!structureStunned && !windingUp && enemy.type !== 'ranged' && enemy.type !== 'tank' && distance <= PLAYER_RADIUS + enemy.radius) {
+      } else if (!holdingMissionPosition && !structureStunned && !windingUp && enemy.type !== 'ranged' && enemy.type !== 'tank' && distance <= PLAYER_RADIUS + enemy.radius) {
         if (targetStructure) this.damageStructure(targetStructure, enemy.damage * seconds);
-        else this.damagePlayer(target as CoopPlayer, enemy.damage * seconds, enemy.x, enemy.y);
+        else if ((target as CoopPlayer).z <= COOP_CONTACT_ATTACK_MAX_Z) this.damagePlayer(target as CoopPlayer, enemy.damage * seconds, enemy.x, enemy.y);
       }
       if (enemy.id === this.bossEnemyId) this.runDirector.updateBoss(enemy.health, enemy.x, enemy.y);
       this.runDirector.trackEliteTarget(enemy.id, enemy.x, enemy.y);
     }
+    // Combat AI can pursue intruders, but the whole enclave remains physically
+    // inside the moving gas instead of being left behind by its next patrol.
+    this.constrainGasEnclave();
     this.activeEnemyIds.clear();
     for (const enemy of this.enemies) if (!enemy.dying) this.activeEnemyIds.add(enemy.id);
     this.updateHazards();
@@ -643,7 +1027,7 @@ export class CoopSimulation {
     for (const projectile of this.projectiles) {
       const owner = this.players.get(projectile.ownerId);
       const previousX = projectile.x, previousY = projectile.y, previousZ = projectile.z;
-      const firearmProjectile = isCoopFirearmId(projectile.weaponId, COOP_WEAPON_SLOTS);
+      const firearmProjectile = isCoopFirearmId(projectile.weaponId, COOP_FIREARM_IDS);
       if (projectile.weaponId === 'orbit_drones' || projectile.weaponId === 'data_scythe') {
         if (owner) {
           projectile.angle += (projectile.weaponId === 'orbit_drones' ? 4.4 : -6.8) * seconds;
@@ -669,6 +1053,10 @@ export class CoopSimulation {
       }
       const blockedByWorld = firearmProjectile && this.clipFirearmSegmentToWorld(projectile, previousX, previousY, previousZ);
       projectile.lifeMs -= dt;
+      if (projectile.presentationOnly) {
+        if (blockedByWorld) projectile.lifeMs = 0;
+        continue;
+      }
       if (this.elapsedMs < projectile.nextDamageAt) continue;
       projectile.nextDamageAt = this.elapsedMs + projectile.damageIntervalMs;
       // Projectiles only hit an enemy when their 3D height crosses its body.
@@ -701,6 +1089,10 @@ export class CoopSimulation {
       }
       if (projectile.penetration <= 0 || blockedByWorld) projectile.lifeMs = 0;
     }
+    // Knockback and gravity weapons resolve after enemy movement; re-apply the
+    // enclave leash so those effects cannot leave its gas shelter between
+    // authoritative ticks.
+    this.constrainGasEnclave();
     this.updateRevives(dt);
     this.finalizeDefeatIfNeeded();
     this.updateDrops(seconds);
@@ -715,10 +1107,13 @@ export class CoopSimulation {
   }
 
   createSnapshot(): CoopSnapshot {
+    const world = getWorldDefinition(this.currentWorldId);
     return {
       tick: this.simulationTick, elapsedMs: Math.round(this.elapsedMs), kills: this.kills,
-      players: [...this.players.values()].map(({ verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, ...player }) => ({ ...player, fabricatorRechargeRemainingMs: this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
-      enemies: this.enemies.map(({ hitFlashUntilMs, deathUntilMs, killedByPlayerId: _killedBy, targetLeaseUntilMs: _lease, nextAttackAtMs: _nextAttack, targetStructureId: _targetStructureId, structureStunUntilMs: _structureStunUntilMs, ...enemy }) => ({
+      world: { id: world.id, tier: world.tier, name: world.name, elapsedMs: Math.round(this.elapsedMs - this.worldStartedAtMs) },
+      bridge: { ...this.bridgeState },
+      players: [...this.players.values()].map(({ verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastAltFireActionId: _lastAltFireActionId, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, artifactTargetId: _artifactTargetId, artifactHitCount: _artifactHitCount, artifactLastActionAtMs: _artifactLastActionAtMs, artifactBarrierExpiresAtMs: _artifactBarrierExpiresAtMs, artifactProcExpiresAtMs: _artifactProcExpiresAtMs, lastArtifactX: _lastArtifactX, lastArtifactY: _lastArtifactY, slipstreamReadyAtMs: _slipstreamReadyAtMs, echoPositions: _echoPositions, ...player }) => ({ ...player, privateExfilAvailable: this.fieldMissionDirector.completions > 0 || this.runDirector.snapshot(this.elapsedMs).contractIndex > 0, privateExfilCalled: this.privateExfilCalled, fabricatorRechargeRemainingMs: this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, jetFuel: player.jetFuel, jetActive: player.jetActive, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
+      enemies: this.enemies.map(({ hitFlashUntilMs, deathUntilMs, killedByPlayerId: _killedBy, targetLeaseUntilMs: _lease, nextAttackAtMs: _nextAttack, targetStructureId: _targetStructureId, structureStunUntilMs: _structureStunUntilMs, chillExpiresAtMs: _chillExpiresAtMs, rimeGrantedAtMs: _rimeGrantedAtMs, missionAnchorX: _missionAnchorX, missionAnchorY: _missionAnchorY, cinderhexByOwner: _cinderhexByOwner, ...enemy }) => ({
         ...enemy,
         hitFlashMs: Math.max(0, hitFlashUntilMs - this.elapsedMs),
         deathRemainingMs: enemy.dying ? Math.max(0, (deathUntilMs || this.elapsedMs) - this.elapsedMs) : 0,
@@ -729,10 +1124,12 @@ export class CoopSimulation {
       ammoCaches: this.ammoCaches.map(cache => ({ ...cache })),
       combatEvents: this.combatEvents.map(event => ({ ...event })),
       matchState: this.matchState,
-      run: this.runDirector.snapshot(Math.round(this.elapsedMs)),
+      run: this.runDirector.snapshot(Math.round(this.worldElapsedMs())),
       buyStations: this.stationDirector.snapshot(),
       weaponFoundry: this.weaponFoundry.snapshot(),
       gasZone: this.gasZone.snapshot(Math.round(this.elapsedMs)),
+      fieldMissions: this.fieldMissionDirector.snapshot(),
+      privateExfil: this.privateExfil && { ...this.privateExfil },
       results: this.results && { ...this.results, players: this.results.players.map(player => ({ ...player, passiveDamageById: { ...player.passiveDamageById } })) },
       encounter: this.encounterDirector.snapshot(buildEncounterClusters(this.encounterPlayers(), this.encounterEnemies()).length),
       hazards: this.hazards.map(({ damage: _damage, resolved: _resolved, ...hazard }) => ({ ...hazard })),
@@ -744,6 +1141,8 @@ export class CoopSimulation {
         ...structure,
         destroyRemainingMs: structure.state === 'destroying' ? Math.max(0, (destroyAtMs || this.elapsedMs) - this.elapsedMs) : undefined,
       })),
+      artifactEffects: this.artifactEffects.map(effect => ({ id: effect.id, kind: effect.kind, ownerId: effect.ownerId, x: effect.x, y: effect.y, radius: effect.radius, remainingMs: effect.remainingMs, targetEnemyId: effect.targetEnemyId, empowered: effect.empowered })),
+      administration: { modified: this.adminModified, lastAction: this.lastAdminAction },
     };
   }
 
@@ -751,27 +1150,28 @@ export class CoopSimulation {
    * hologram pose; the simulation repeats every spatial and economy check. */
   buildStructure(playerId: string, requestedType: unknown, requestedX: number, requestedY: number, requestedAngle: number, requestId?: number): CoopBuildError | undefined {
     const player = this.players.get(playerId);
-    if (!player || player.lifeState !== 'alive') return { code: 'alive_required' };
+    if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
     if (!this.acceptEngineeringRequest(this.latestBuildRequestByPlayer, playerId, requestId)) return { code: 'stale_request' };
     if (!isCoopStructureType(requestedType)) return { code: 'invalid_blueprint' };
     const definition = COOP_STRUCTURE_DEFINITIONS[requestedType];
+    if (requestedType === 'bridge_segment') return this.buildBridgeSegment(player, definition);
     const charges = player.fabricatorCharges || 0;
     if (charges < definition.chargeCost) return { code: 'charges', amount: definition.chargeCost - charges };
-    const activeStructures = this.structures.filter(structure => structure.state !== 'destroying');
+    const activeStructures = this.structures.filter(structure => structure.state !== 'destroying' && structure.type !== 'bridge_segment');
     if (activeStructures.filter(structure => structure.ownerId === playerId).length >= COOP_MAX_STRUCTURES_PER_PLAYER) return { code: 'player_limit' };
     if (activeStructures.length >= COOP_MAX_SQUAD_STRUCTURES) return { code: 'squad_limit' };
     const x = Number(requestedX), y = Number(requestedY);
     if (!Number.isFinite(x) || !Number.isFinite(y) || Math.hypot(x - player.x, y - player.y) > COOP_BUILD_RANGE) return { code: 'range' };
-    if (!isOnCoopPlatform(x, y)) return { code: 'obstructed' };
+    if (!isOnCoopPlatform(x, y, this.currentWorldId)) return { code: 'obstructed' };
     const anchor = this.closestBuildAnchor(x, y);
     const tacticalBonus = Boolean(anchor && Math.hypot(x - anchor.x, y - anchor.y) <= (anchor.radius || COOP_BUILD_ZONE_RADIUS));
     const angle = normalizeStructureAngle(requestedAngle);
     const protectedBodies = [
-      ...[...this.players.values()].filter(member => member.lifeState !== 'eliminated').map(member => ({ x: member.x, y: member.y, radius: PLAYER_RADIUS })),
+      ...[...this.players.values()].filter(member => member.lifeState !== 'eliminated' && member.lifeState !== 'extracted').map(member => ({ x: member.x, y: member.y, radius: PLAYER_RADIUS })),
       ...this.enemies.filter(enemy => !enemy.dying).map(enemy => ({ x: enemy.x, y: enemy.y, radius: enemy.radius })),
       ...this.protectedBuildBodies(),
     ];
-    if (!isStructurePlacementClear(requestedType, x, y, angle, protectedBodies, activeStructures)) return { code: 'obstructed' };
+    if (!isStructurePlacementClear(requestedType, x, y, angle, protectedBodies, activeStructures, this.currentWorldId)) return { code: 'obstructed' };
     const structure: CoopStructure = {
       id: this.nextEntityId++, type: requestedType, ownerId: player.id, ownerColor: player.color,
       x: Math.round(x), y: Math.round(y), angle, health: definition.maxHealth, maxHealth: definition.maxHealth,
@@ -789,10 +1189,11 @@ export class CoopSimulation {
 
   dismantleStructure(playerId: string, structureId: number, requestId?: number): CoopDismantleError | { code: 'stale_request' } | undefined {
     const player = this.players.get(playerId);
-    if (!player || player.lifeState !== 'alive') return { code: 'alive_required' };
+    if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
     if (!this.acceptEngineeringRequest(this.latestDismantleRequestByPlayer, playerId, requestId)) return { code: 'stale_request' };
     const structure = this.structures.find(candidate => candidate.id === structureId && candidate.state !== 'destroying');
     if (!structure) return { code: 'unknown_structure' };
+    if (structure.type === 'bridge_segment') return { code: 'not_owner' };
     if (structure.ownerId !== playerId && this.players.has(structure.ownerId)) return { code: 'not_owner' };
     if (Math.hypot(player.x - structure.x, player.y - structure.y) > 280) return { code: 'dismantle_range' };
     const pristine = structure.health >= structure.maxHealth && this.elapsedMs - structure.createdAtMs <= 15_000;
@@ -808,24 +1209,25 @@ export class CoopSimulation {
 
   structureAction(playerId: string, structureId: number, requestedAction: unknown, requestId?: number, requestedX?: number, requestedY?: number, requestedAngle?: number): CoopStructureActionError | undefined {
     const player = this.players.get(playerId);
-    if (!player || player.lifeState !== 'alive') return { code: 'alive_required' };
+    if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
     if (!this.acceptEngineeringRequest(this.latestStructureActionRequestByPlayer, playerId, requestId)) return { code: 'stale_request' };
     if (!isCoopStructureAction(requestedAction)) return { code: 'unknown_structure' };
     const structure = this.structures.find(candidate => candidate.id === structureId && candidate.state !== 'destroying');
     if (!structure) return { code: 'unknown_structure' };
+    if (structure.type === 'bridge_segment') return { code: 'not_owner' };
     if (Math.hypot(player.x - structure.x, player.y - structure.y) > COOP_STRUCTURE_ACTION_RANGE) return { code: 'action_range' };
     if (requestedAction === 'relocate') {
       if (structure.ownerId !== playerId && this.players.has(structure.ownerId)) return { code: 'not_owner' };
       if (structure.health < structure.maxHealth) return { code: 'already_upgraded' };
       const x = Number(requestedX), y = Number(requestedY), angle = normalizeStructureAngle(Number(requestedAngle));
       if (!Number.isFinite(x) || !Number.isFinite(y) || Math.hypot(x - player.x, y - player.y) > COOP_BUILD_RANGE) return { code: 'action_range' };
-      if (!isOnCoopPlatform(x, y)) return { code: 'obstructed' };
+      if (!isOnCoopPlatform(x, y, this.currentWorldId)) return { code: 'obstructed' };
       const bodies = [
-        ...[...this.players.values()].filter(member => member.lifeState !== 'eliminated').map(member => ({ x: member.x, y: member.y, radius: PLAYER_RADIUS })),
+        ...[...this.players.values()].filter(member => member.lifeState !== 'eliminated' && member.lifeState !== 'extracted').map(member => ({ x: member.x, y: member.y, radius: PLAYER_RADIUS })),
         ...this.enemies.filter(enemy => !enemy.dying).map(enemy => ({ x: enemy.x, y: enemy.y, radius: enemy.radius })),
         ...this.protectedBuildBodies(),
       ];
-      if (!isStructurePlacementClear(structure.type, x, y, angle, bodies, this.structures.filter(candidate => candidate.id !== structure.id))) return { code: 'obstructed' };
+      if (!isStructurePlacementClear(structure.type, x, y, angle, bodies, this.structures.filter(candidate => candidate.id !== structure.id), this.currentWorldId)) return { code: 'obstructed' };
       structure.x = Math.round(x); structure.y = Math.round(y); structure.angle = angle;
       const anchor = this.closestBuildAnchor(x, y);
       structure.tacticalBonus = Boolean(anchor && Math.hypot(x - anchor.x, y - anchor.y) <= (anchor.radius || COOP_BUILD_ZONE_RADIUS));
@@ -890,6 +1292,7 @@ export class CoopSimulation {
         (y - player.y) / distance,
         (z - originZ) / distance,
         distance,
+        this.currentWorldId,
       );
       if (obstruction && obstruction.distance < distance - 1) {
         targetX = obstruction.x;
@@ -900,32 +1303,59 @@ export class CoopSimulation {
         targetLabelParams = undefined;
       }
     }
-    // Making a ping removes any previous ping from this player
-    this.pings = this.pings.filter(p => p.playerId !== playerId);
+    return this.storePing(player, targetX, targetY, targetZ, targetKind, targetLabelKey, targetLabelParams);
+  }
+
+  /** A map ping names a contract instead of trusting arbitrary client world
+   * coordinates. The host resolves the id to the current pickup or, after
+   * acceptance, the live objective so buildings cannot intercept the marker. */
+  addMissionPing(playerId: string, missionSiteId: number): CoopPing | undefined {
+    const player = this.players.get(playerId);
+    const site = this.fieldMissionDirector.snapshot().sites.find(candidate => candidate.id === Math.trunc(missionSiteId) && candidate.state !== 'completed');
+    if (!player || player.lifeState === 'eliminated' || player.lifeState === 'extracted' || !site) return undefined;
+    const active = this.fieldMissionDirector.current;
+    const target = site.state === 'active' && active?.id === site.id ? resolveCoopMissionNavigationTarget(active, this.enemies) || active : site;
+    return this.storePing(player, target.x, target.y, 0, 'objective', 'ping.mission', { name: COOP_FIELD_MISSION_LABELS[site.kind] }, 45_000, site.id);
+  }
+
+  private storePing(player: CoopPlayer, x: number, y: number, z: number, kind: CoopPingKind, labelKey: CoopTextKey, labelParams?: Record<string, string | number>, durationMs = 6_500, missionSiteId?: number) {
+    // Making a ping removes any previous ping from this player.
+    this.pings = this.pings.filter(p => p.playerId !== player.id);
     if (this.pings.length >= 10) this.pings.shift();
     const ping: CoopPing = {
       id: this.nextPingId++,
-      playerId,
+      playerId: player.id,
       playerLabel: player.label,
       playerColor: player.color,
-      x: Math.round(targetX),
-      y: Math.round(targetY),
-      z: Math.round(targetZ),
-      kind: targetKind,
-      labelKey: targetLabelKey,
-      labelParams: targetLabelParams,
+      x: Math.round(x),
+      y: Math.round(y),
+      z: Math.round(z),
+      kind,
+      labelKey,
+      labelParams,
+      missionSiteId,
       createdAtMs: Math.round(this.elapsedMs),
-      expiresAtMs: Math.round(this.elapsedMs) + 6500,
+      expiresAtMs: Math.round(this.elapsedMs) + durationMs,
     };
     this.pings.push(ping);
     this.emitCombatEvent({
       kind: 'ping',
       x: ping.x,
       y: ping.y,
-      playerId,
-      color: targetKind === 'enemy' || targetKind === 'boss' ? '#ef4444' : targetKind === 'revive' ? '#fbbf24' : player.color,
+      playerId: player.id,
+      color: kind === 'enemy' || kind === 'boss' ? '#ef4444' : kind === 'revive' ? '#fbbf24' : player.color,
     });
     return ping;
+  }
+
+  private updateMissionPings() {
+    const active = this.fieldMissionDirector.current;
+    if (!active) return;
+    const target = resolveCoopMissionNavigationTarget(active, this.enemies) || active;
+    for (const ping of this.pings) {
+      if (ping.missionSiteId !== active.id) continue;
+      ping.x = Math.round(target.x); ping.y = Math.round(target.y); ping.z = 0;
+    }
   }
 
   /** Reliable purchase entry point. The WebRTC/UI layer supplies only intent;
@@ -933,9 +1363,11 @@ export class CoopSimulation {
   purchase(playerId: string, stationId: number, itemId: CoopShopItemId): CoopPurchaseError | undefined {
     const player = this.players.get(playerId);
     const station = this.stationDirector.snapshot().find(candidate => candidate.id === stationId && candidate.state === 'active');
-    if (!player || player.lifeState !== 'alive') return { code: 'alive_required' };
+    if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
     if (!station || Math.hypot(player.x - station.x, player.y - station.y) > station.radius + 48) return { code: 'station_range' };
     if (!station.stock.includes(itemId)) return { code: 'not_stocked' };
+    if (itemId === 'private_exfil' && this.fieldMissionDirector.completions <= 0 && this.runDirector.snapshot(this.elapsedMs).contractIndex <= 0) return { code: 'exfil_locked' };
+    if (itemId === 'private_exfil' && this.privateExfilCalled) return { code: 'exfil_called' };
     let cost = COOP_SHOP_ITEMS[itemId].cost;
     if (isPassiveModule(itemId)) {
       const owned = player.passiveRuntime.find(module => module.id === itemId);
@@ -970,6 +1402,8 @@ export class CoopSimulation {
     } else if (itemId === 'gas_mask') {
       if (player.gasMaskHp >= player.gasMaskMaxHp && player.gasMaskHp > 0) return { code: 'mask_full' };
       player.gasMaskHp = 150; player.gasMaskMaxHp = 150;
+    } else if (itemId === 'private_exfil') {
+      this.deployPrivateExfil(station);
     } else if (isPassiveModule(itemId)) {
       const owned = player.passiveRuntime.find(module => module.id === itemId);
       if (owned) {
@@ -986,11 +1420,434 @@ export class CoopSimulation {
     return undefined;
   }
 
+  /** Accepts a map-visible contract only while an alive operator is standing
+   * at its physical transmitter. The resulting contract belongs to the squad. */
+  acceptFieldMission(playerId: string, siteId: number): boolean {
+    const player = this.players.get(playerId);
+    const site = this.fieldMissionDirector.snapshot().sites.find(candidate => candidate.id === siteId && candidate.state === 'available');
+    if (!player || player.lifeState !== 'alive' || !site || Math.hypot(player.x - site.x, player.y - site.y) > 125) return false;
+    const eligible = [...this.players.values()].filter(member => member.lifeState !== 'extracted').map(member => member.id);
+    const active = this.fieldMissionDirector.accept(siteId, eligible, { x: this.gasZone.x, y: this.gasZone.y });
+    if (!active) return false;
+    if (!this.activateFieldMission(active.kind)) {
+      const failedMissionId = this.fieldMissionDirector.cancelActivation();
+      if (failedMissionId !== undefined) {
+        const removedIds = this.enemies.filter(enemy => enemy.missionId === failedMissionId).map(enemy => enemy.id);
+        retainInPlace(this.enemies, enemy => enemy.missionId !== failedMissionId);
+        for (const id of removedIds) this.enemyNavigation.delete(id);
+        this.enemySpatialIndex.rebuild(this.enemies);
+      }
+      return false;
+    }
+    this.emitCombatEvent({ kind: 'mission_started', x: active.x, y: active.y, amount: active.reward, color: '#2dd4bf' });
+    return true;
+  }
+
+  private activateFieldMission(kind: CoopFieldMissionKind): boolean {
+    const mission = this.fieldMissionDirector.current;
+    if (!mission) return false;
+    const livingCount = Math.max(1, [...this.players.values()].filter(player => player.lifeState === 'alive').length);
+    const desiredEnemyCount = kind === 'hostage_recovery' ? 5 + livingCount * 2
+        : kind === 'courier_intercept' ? 3 * (3 + livingCount)
+          : 0;
+    this.reserveMissionEnemyCapacity(desiredEnemyCount);
+    if (kind === 'toxic_hunt') {
+      const enclave = this.gasEnclave;
+      const commander = enclave && this.enemies.find(enemy => enemy.id === enclave.commanderId && !enemy.dying);
+      if (!enclave || enclave.missionSiteId !== mission.id || !commander) return false;
+      mission.targetEnemyIds = [commander.id];
+      mission.guardEnemyIds = enclave.guardIds.filter(id => this.enemies.some(enemy => enemy.id === id && !enemy.dying));
+      mission.x = commander.x; mission.y = commander.y;
+      mission.progress = Math.max(0, commander.maxHealth - commander.health); mission.required = commander.maxHealth;
+    } else if (kind === 'hostage_recovery') {
+      const guards = 5 + livingCount * 2;
+      const roster: Array<keyof typeof ENEMY_TYPES> = ['basic', 'fast', 'ranged', 'tank'];
+      for (let index = 0; index < guards; index++) {
+        const id = this.spawnMissionEnemy(roster[index % roster.length], mission.x, mission.y, 'guard', 1 + (livingCount - 1) * .16, '#dc2626', index);
+        if (id !== undefined) {
+          mission.guardEnemyIds.push(id);
+          const captor = this.enemies.find(enemy => enemy.id === id);
+          if (captor) captor.archetypeName = 'HOSTAGE CAPTOR';
+        }
+      }
+      mission.progress = 0; mission.required = mission.guardEnemyIds.length;
+    } else if (kind === 'courier_intercept') {
+      for (let index = 0; index < 3; index++) {
+        const point = mission.points[index];
+        const courierId = this.spawnMissionEnemy('fast', point.x, point.y, 'courier', 4 + (livingCount - 1) * .75, '#f59e0b', index);
+        if (courierId !== undefined) mission.courierEnemyIds.push(courierId);
+        for (let guard = 0; guard < 2 + livingCount; guard++) {
+          const id = this.spawnMissionEnemy(guard % 2 ? 'basic' : 'ranged', point.x, point.y, 'guard', 1 + (livingCount - 1) * .12, '#dc2626', guard);
+          if (id !== undefined) mission.guardEnemyIds.push(id);
+        }
+      }
+      if (mission.courierEnemyIds.length !== 3) return false;
+    }
+    return true;
+  }
+
+  /** The Chem Commander is a real world encounter, not a contract-spawned
+   * prop. Every world begins with this enclave already occupying its gas. */
+  private spawnGasEnclave() {
+    const site = this.fieldMissionDirector.snapshot().sites.find(candidate => candidate.kind === 'toxic_hunt');
+    if (!site) return;
+    const livingCount = Math.max(1, [...this.players.values()].filter(player => player.lifeState === 'alive').length);
+    const guardCount = 6 + (livingCount - 1) * 2;
+    this.reserveMissionEnemyCapacity(1 + guardCount);
+    const commanderId = this.spawnMissionEnemy(
+      'elite', this.gasZone.x, this.gasZone.y, 'target',
+      1_600 / ENEMY_TYPES.elite.health * (1 + (livingCount - 1) * .65), '#ef4444', 0, site.id,
+    );
+    if (commanderId === undefined) {
+      this.fieldMissionDirector.removeAvailable(site.id);
+      return;
+    }
+    const guardIds: number[] = [];
+    const roster: Array<keyof typeof ENEMY_TYPES> = ['basic', 'fast', 'ranged', 'basic', 'tank'];
+    for (let index = 0; index < guardCount; index++) {
+      const id = this.spawnMissionEnemy(
+        roster[index % roster.length], this.gasZone.x, this.gasZone.y, 'guard',
+        1 + (livingCount - 1) * .18, '#dc2626', index, site.id,
+      );
+      if (id !== undefined) guardIds.push(id);
+    }
+    this.gasEnclave = {
+      missionSiteId: site.id, commanderId, guardIds,
+      lastGasX: this.gasZone.x, lastGasY: this.gasZone.y,
+    };
+    this.constrainGasEnclave();
+  }
+
+  /** Optional contracts must remain completable even when the ambient
+   * director has filled its budget. Retire the farthest ordinary combatants
+   * first, never a boss, then keep all subsequent mission spawns under the
+   * same global cap as the rest of the simulation. */
+  private reserveMissionEnemyCapacity(count: number) {
+    const removeCount = Math.max(0, this.enemies.length + count - COOP_MAX_ENEMIES);
+    if (removeCount <= 0) return;
+    const centre = this.squadCentre();
+    const removable = this.enemies.filter(enemy => enemy.id !== this.bossEnemyId && enemy.missionId === undefined)
+      .sort((a, b) => Number(b.dying) - Number(a.dying)
+        || Math.hypot(b.x - centre.x, b.y - centre.y) - Math.hypot(a.x - centre.x, a.y - centre.y)
+        || a.id - b.id)
+      .slice(0, removeCount);
+    const ids = new Set(removable.map(enemy => enemy.id));
+    if (!ids.size) return;
+    retainInPlace(this.enemies, enemy => !ids.has(enemy.id));
+    for (const id of ids) this.enemyNavigation.delete(id);
+  }
+
+  private spawnMissionEnemy(type: keyof typeof ENEMY_TYPES, x: number, y: number, role: 'target' | 'guard' | 'courier', healthMultiplier: number, color: string, index = 0, missionId = this.fieldMissionDirector.current?.id) {
+    if (this.enemies.length >= COOP_MAX_ENEMIES) return undefined;
+    const definition = ENEMY_TYPES[type];
+    const angle = index / 12 * Math.PI * 2 + this.random() * .35;
+    const distance = role === 'target' ? 0 : 115 + (index % 4) * 42;
+    const position = this.safeMissionSpawnPosition(x, y, x + Math.cos(angle) * distance, y + Math.sin(angle) * distance, definition.radius, index);
+    const health = Math.round(definition.health * healthMultiplier);
+    const id = this.nextEntityId++;
+    this.enemies.push({
+      id, x: position.x, y: position.y, health, maxHealth: health, type, color, radius: definition.radius,
+      damage: definition.damage * (1 + Math.max(0, this.players.size - 1) * .12), speed: role === 'courier' ? definition.speed * 1.08 : definition.speed,
+      experienceValue: definition.xp, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: false,
+      dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500, nextAttackAtMs: this.elapsedMs + enemyOpeningDelay(type),
+      missionId, missionRole: role,
+      missionAnchorX: x, missionAnchorY: y,
+      worldId: this.currentWorldId,
+      archetypeName: role === 'target' ? 'CHEM COMMANDER' : role === 'courier' ? 'DATA COURIER' : 'CONTRACT GUARD',
+    });
+    return id;
+  }
+
+  private handleFieldInteraction(player: CoopPlayer) {
+    if (this.collectManualDrop(player)) return;
+    const mission = this.fieldMissionDirector.current;
+    if (!mission) {
+      const site = this.fieldMissionDirector.snapshot().sites
+        .filter(candidate => candidate.state === 'available')
+        .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0];
+      if (site && Math.hypot(site.x - player.x, site.y - player.y) <= 125) this.acceptFieldMission(player.id, site.id);
+      return;
+    }
+    if (mission.kind === 'courier_intercept') {
+      const drive = mission.drives.find(candidate => !candidate.collected && Math.hypot(candidate.x - player.x, candidate.y - player.y) <= 105);
+      if (drive) {
+        drive.collected = true;
+        const recovered = mission.drives.filter(candidate => candidate.collected).length;
+        if (recovered >= 3) {
+          mission.stage = 'deliver'; mission.points[3].state = 'available'; mission.x = mission.points[3].x; mission.y = mission.points[3].y; mission.progress = 0; mission.required = 3_000;
+        } else if (!mission.courierEnemyIds.length) {
+          mission.stage = 'recover'; mission.progress = recovered; mission.required = 3;
+        } else { mission.progress = 3 - mission.courierEnemyIds.length; mission.required = 3; }
+        this.emitCombatEvent({ kind: 'mission_stage', x: drive.x, y: drive.y, playerId: player.id, amount: recovered, color: '#f59e0b' });
+      }
+    }
+  }
+
+  private cancelPlayerWeaponActions(player: CoopPlayer) {
+    const weapon = this.weapon(player);
+    this.cancelReload(weapon); weapon.state = 'ready';
+    player.isAiming = false; player.isReloading = false; player.isSwitching = false; player.previousFiring = false; player.weaponActionEndsAtMs = undefined;
+  }
+
+  private beginHostageCarry(player: CoopPlayer, mission: NonNullable<ReturnType<CoopFieldMissionDirector['accept']>>) {
+    const hostage = mission.hostage;
+    if (!hostage || hostage.state !== 'waiting' || player.lifeState !== 'alive') return;
+    hostage.state = 'carried'; hostage.carrierId = player.id; player.carryingHostage = true;
+    mission.progress = 0; mission.required = COOP_HOSTAGE_RECOVERY_DURATION_MS;
+    mission.points[0].state = 'completed';
+    const recovery = mission.points[1]; recovery.state = 'available'; mission.x = recovery.x; mission.y = recovery.y;
+    this.cancelPlayerWeaponActions(player);
+    this.emitCombatEvent({ kind: 'mission_stage', x: player.x, y: player.y, playerId: player.id, amount: 1, color: '#fbbf24' });
+  }
+
+  private deployPrivateExfil(station: CoopBuyStationSnapshot) {
+    const point = this.findPrivateExfilPosition(station);
+    this.privateExfilCalled = true;
+    this.privateExfil = { ...point, radius: 115, state: 'inbound', arrivalRemainingMs: 20_000, windowRemainingMs: 60_000, holdProgressMs: 0, holdRequiredMs: 10_000 };
+    this.emitCombatEvent({ kind: 'private_exfil_inbound', x: point.x, y: point.y, amount: 20, color: '#fbbf24' });
+  }
+
+  private findPrivateExfilPosition(station: CoopBuyStationSnapshot) {
+    for (let attempt = 0; attempt < 96; attempt++) {
+      const angle = this.random() * Math.PI * 2;
+      const distance = 900 + this.random() * 500;
+      const point = { x: station.x + Math.cos(angle) * distance, y: station.y + Math.sin(angle) * distance };
+      if (point.x < 180 || point.y < 180 || point.x > COOP_WORLD_SIZE - 180 || point.y > COOP_WORLD_SIZE - 180) continue;
+      if (!isWorldPositionClear(point.x, point.y, 125, this.currentWorldId)) continue;
+      if (Math.hypot(point.x - this.gasZone.x, point.y - this.gasZone.y) < this.gasZone.radius + 350) continue;
+      if (this.stationDirector.positions.some(other => Math.hypot(point.x - other.x, point.y - other.y) < 420)) continue;
+      return { x: Math.round(point.x), y: Math.round(point.y) };
+    }
+    return this.safeFallbackPosition(station.x + 1_000, station.y, 125);
+  }
+
+  /** Applies the gas zone's authoritative displacement to its enclave. The
+   * commander and every surviving minion therefore move during each gas
+   * relocation even when Toxic Hunt has not been accepted. */
+  private updateGasEnclave() {
+    const enclave = this.gasEnclave;
+    if (!enclave) return;
+    const dx = this.gasZone.x - enclave.lastGasX;
+    const dy = this.gasZone.y - enclave.lastGasY;
+    if (dx || dy) {
+      const ids = new Set([enclave.commanderId, ...enclave.guardIds]);
+      for (const enemy of this.enemies) {
+        if (!ids.has(enemy.id) || enemy.dying) continue;
+        enemy.x += dx; enemy.y += dy;
+      }
+    }
+    enclave.lastGasX = this.gasZone.x;
+    enclave.lastGasY = this.gasZone.y;
+    this.constrainGasEnclave();
+  }
+
+  private constrainGasEnclave() {
+    const enclave = this.gasEnclave;
+    if (!enclave) return;
+    const guards = new Set(enclave.guardIds);
+    for (const enemy of this.enemies) {
+      if (enemy.dying || (enemy.id !== enclave.commanderId && !guards.has(enemy.id))) continue;
+      const maxDistance = this.gasZone.radius * (enemy.id === enclave.commanderId ? .62 : .78);
+      const dx = enemy.x - this.gasZone.x, dy = enemy.y - this.gasZone.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > maxDistance) {
+        enemy.x = this.gasZone.x + dx / distance * maxDistance;
+        enemy.y = this.gasZone.y + dy / distance * maxDistance;
+      }
+      enemy.missionAnchorX = this.gasZone.x;
+      enemy.missionAnchorY = this.gasZone.y;
+    }
+  }
+
+  private updateFieldMission(deltaMs: number) {
+    const mission = this.fieldMissionDirector.current;
+    if (!mission) return;
+    const alive = [...this.players.values()].filter(player => player.lifeState === 'alive');
+    const heldAt = (x: number, y: number, radius = 125) => alive.filter(player => this.inputByPlayer.get(player.id)?.reviving
+      && player.z <= COOP_GROUNDED_INTERACTION_MAX_Z && Math.hypot(player.x - x, player.y - y) <= radius);
+
+    if (mission.kind === 'toxic_hunt') {
+      const target = this.enemies.find(enemy => mission.targetEnemyIds.includes(enemy.id) && !enemy.dying);
+      if (target) {
+        mission.x = target.x; mission.y = target.y;
+        mission.progress = Math.max(0, target.maxHealth - target.health); mission.required = target.maxHealth;
+      } else { mission.x = this.gasZone.x; mission.y = this.gasZone.y; }
+      return;
+    }
+
+    if (mission.kind === 'demolition') {
+      const isA = mission.stage === 'plant_a' || mission.stage === 'defend_a';
+      const point = mission.points[isA ? 0 : 1];
+      mission.x = point.x; mission.y = point.y;
+      if (mission.stage === 'plant_b') {
+        mission.timerRemainingMs = Math.max(0, (mission.timerRemainingMs ?? 90_000) - deltaMs);
+        if (mission.timerRemainingMs <= 0) {
+          mission.stage = 'plant_a'; mission.progress = 0; mission.required = 4_000; mission.timerRemainingMs = undefined;
+          mission.points[0].state = 'available'; mission.points[1].state = 'locked';
+          this.emitCombatEvent({ kind: 'mission_stage', x: mission.points[0].x, y: mission.points[0].y, amount: -1, color: '#fb7185' });
+          return;
+        }
+      }
+      if (mission.stage === 'plant_a' || mission.stage === 'plant_b') {
+        mission.required = 4_000;
+        const planters = heldAt(point.x, point.y);
+        if (planters.length) mission.progress = Math.min(mission.required, mission.progress + deltaMs);
+        else mission.progress = Math.max(0, mission.progress - deltaMs * .4);
+        // Replicate partial planting as a first-class world state. This lets
+        // every client show that the charge is being handled, even when a
+        // squadmate (rather than the local player) is holding the key.
+        point.state = mission.progress > 0 ? 'arming' : 'available';
+        if (mission.progress >= mission.required) {
+          point.state = 'defending'; mission.stage = isA ? 'defend_a' : 'defend_b'; mission.progress = 0; mission.required = 20_000; mission.timerRemainingMs = 20_000;
+          this.spawnMissionDefenseWave(point.x, point.y, isA ? 5 : 8);
+          this.emitCombatEvent({ kind: 'demolition_charge_planted', x: point.x, y: point.y, amount: isA ? 1 : 2, color: '#fb7185' });
+          this.emitCombatEvent({ kind: 'mission_stage', x: point.x, y: point.y, color: '#fb7185' });
+        }
+      } else {
+        mission.timerRemainingMs = Math.max(0, (mission.timerRemainingMs ?? 20_000) - deltaMs);
+        mission.progress = mission.required - mission.timerRemainingMs;
+        if (mission.timerRemainingMs <= 0) {
+          point.state = 'completed';
+          this.emitCombatEvent({ kind: 'demolition_charge_detonated', x: point.x, y: point.y, amount: isA ? 1 : 2, color: '#fb923c' });
+          if (isA) {
+            mission.points[1].state = 'available'; mission.stage = 'plant_b'; mission.x = mission.points[1].x; mission.y = mission.points[1].y;
+            mission.progress = 0; mission.required = 4_000; mission.timerRemainingMs = 90_000;
+            this.emitCombatEvent({ kind: 'mission_stage', x: mission.x, y: mission.y, color: '#fb7185' });
+          } else this.completeFieldMission();
+        }
+      }
+      return;
+    }
+
+    if (mission.kind === 'signal_hijack') {
+      const relay = mission.points[0]; mission.x = relay.x; mission.y = relay.y;
+      if (mission.stage === 'activate') {
+        mission.required = 3_000;
+        if (heldAt(relay.x, relay.y).length) mission.progress = Math.min(3_000, mission.progress + deltaMs);
+        else mission.progress = Math.max(0, mission.progress - deltaMs * .4);
+        if (mission.progress >= 3_000) {
+          mission.stage = 'upload'; mission.progress = 0; mission.required = 45_000; relay.state = 'defending';
+          this.spawnMissionDefenseWave(relay.x, relay.y, 7);
+          this.emitCombatEvent({ kind: 'mission_stage', x: relay.x, y: relay.y, color: '#22d3ee' });
+        }
+      } else {
+        const occupants = alive.filter(player => Math.hypot(player.x - relay.x, player.y - relay.y) <= 155).length;
+        const contested = this.enemies.some(enemy => !enemy.dying && Math.hypot(enemy.x - relay.x, enemy.y - relay.y) <= 155 + enemy.radius);
+        if (occupants > 0 && !contested) mission.progress = Math.min(mission.required, mission.progress + deltaMs * (1 + Math.min(1.5, (occupants - 1) * .5)));
+        else if (occupants === 0) mission.progress = Math.max(0, mission.progress - deltaMs * .2);
+        if (mission.progress >= mission.required) { relay.state = 'completed'; this.completeFieldMission(); }
+      }
+      return;
+    }
+
+    if (mission.kind === 'hostage_recovery') {
+      const hostage = mission.hostage!;
+      if (mission.stage === 'secure') {
+        // Reconcile against authoritative entities every tick. This also
+        // handles a captor removed by world cleanup rather than a damage kill.
+        const livingGuardIds = new Set(this.enemies.filter(enemy => !enemy.dying && enemy.missionId === mission.id && enemy.missionRole === 'guard').map(enemy => enemy.id));
+        mission.guardEnemyIds = mission.guardEnemyIds.filter(id => livingGuardIds.has(id));
+        mission.progress = Math.max(0, mission.required - mission.guardEnemyIds.length);
+        if (!mission.guardEnemyIds.length) {
+          mission.stage = 'escort'; hostage.state = 'waiting'; mission.points[0].state = 'arming'; mission.points[1].state = 'locked'; mission.x = hostage.x; mission.y = hostage.y;
+          mission.progress = 0; mission.required = COOP_HOSTAGE_FREE_DURATION_MS;
+          this.emitCombatEvent({ kind: 'mission_stage', x: hostage.x, y: hostage.y, color: '#fbbf24' });
+        }
+        return;
+      }
+      if (hostage.state === 'waiting') {
+        mission.x = hostage.x; mission.y = hostage.y; mission.required = COOP_HOSTAGE_FREE_DURATION_MS;
+        const rescuers = heldAt(hostage.x, hostage.y, 120);
+        if (rescuers.length) mission.progress = Math.min(mission.required, mission.progress + deltaMs);
+        else mission.progress = Math.max(0, mission.progress - deltaMs * .5);
+        if (mission.progress >= mission.required) this.beginHostageCarry(rescuers[0], mission);
+        return;
+      }
+      const carrier = hostage.carrierId ? this.players.get(hostage.carrierId) : undefined;
+      if (carrier && carrier.lifeState === 'alive') {
+        hostage.x = carrier.x; hostage.y = carrier.y; carrier.carryingHostage = true;
+        const recovery = mission.points[1]; mission.x = recovery.x; mission.y = recovery.y; mission.required = COOP_HOSTAGE_RECOVERY_DURATION_MS;
+        const recovering = Math.hypot(carrier.x - recovery.x, carrier.y - recovery.y) <= 125;
+        recovery.state = recovering ? 'defending' : 'available';
+        if (recovering) mission.progress = Math.min(mission.required, mission.progress + deltaMs);
+        else mission.progress = Math.max(0, mission.progress - deltaMs * .25);
+        if (mission.progress >= mission.required) { hostage.state = 'secured'; carrier.carryingHostage = false; this.completeFieldMission(); }
+      } else if (carrier) {
+        carrier.carryingHostage = false; hostage.carrierId = undefined; hostage.state = 'waiting'; mission.progress = 0; mission.required = COOP_HOSTAGE_FREE_DURATION_MS; mission.x = hostage.x; mission.y = hostage.y;
+        mission.points[0].state = 'arming'; mission.points[1].state = 'locked';
+      }
+      return;
+    }
+
+    if (mission.kind === 'courier_intercept') {
+      const navigationTarget = resolveCoopMissionNavigationTarget(mission, this.enemies);
+      if (navigationTarget) { mission.x = navigationTarget.x; mission.y = navigationTarget.y; }
+      if (mission.stage === 'deliver') {
+        const drop = mission.points[3]; mission.x = drop.x; mission.y = drop.y;
+        mission.required = 3_000;
+        if (heldAt(drop.x, drop.y).length) mission.progress = Math.min(mission.required, mission.progress + deltaMs);
+        else mission.progress = Math.max(0, mission.progress - deltaMs * .4);
+        if (mission.progress >= mission.required) { drop.state = 'completed'; this.completeFieldMission(); }
+      }
+    }
+  }
+
+  private spawnMissionDefenseWave(x: number, y: number, count: number) {
+    const mission = this.fieldMissionDirector.current;
+    if (!mission) return;
+    const roster: Array<keyof typeof ENEMY_TYPES> = ['basic', 'fast', 'ranged', 'tank'];
+    for (let index = 0; index < count; index++) {
+      const id = this.spawnMissionEnemy(roster[index % roster.length], x, y, 'guard', 1 + Math.max(0, this.players.size - 1) * .15, '#dc2626', index);
+      if (id !== undefined) mission.guardEnemyIds.push(id);
+    }
+  }
+
+  private completeFieldMission() {
+    const completion = this.fieldMissionDirector.complete();
+    if (!completion) return;
+    this.pings = this.pings.filter(ping => ping.missionSiteId !== completion.id);
+    for (const enemy of this.enemies) {
+      if (enemy.missionId !== completion.id) continue;
+      enemy.missionId = undefined;
+      enemy.missionRole = undefined;
+    }
+    for (const playerId of completion.eligiblePlayerIds) {
+      const player = this.players.get(playerId);
+      if (!player || player.lifeState === 'extracted') continue;
+      player.coins += completion.reward;
+      const stats = this.runStats.get(player.id); if (stats) stats.creditsEarned += completion.reward;
+    }
+    this.emitCombatEvent({ kind: 'mission_completed', x: completion.x, y: completion.y, amount: completion.reward, color: '#5eead4' });
+  }
+
+  private updatePrivateExfil(deltaMs: number) {
+    const exfil = this.privateExfil;
+    if (!exfil) return;
+    if (exfil.state === 'inbound') {
+      exfil.arrivalRemainingMs = Math.max(0, exfil.arrivalRemainingMs - deltaMs);
+      if (exfil.arrivalRemainingMs <= 0) { exfil.state = 'active'; this.emitCombatEvent({ kind: 'exfil_deployed', x: exfil.x, y: exfil.y, color: '#fbbf24' }); }
+      return;
+    }
+    exfil.windowRemainingMs = Math.max(0, exfil.windowRemainingMs - deltaMs);
+    const inside = [...this.players.values()].filter(player => player.lifeState === 'alive' && player.z <= COOP_GROUNDED_INTERACTION_MAX_Z && Math.hypot(player.x - exfil.x, player.y - exfil.y) <= exfil.radius);
+    if (inside.length) exfil.holdProgressMs = Math.min(exfil.holdRequiredMs, exfil.holdProgressMs + deltaMs);
+    else exfil.holdProgressMs = Math.max(0, exfil.holdProgressMs - deltaMs * .25);
+    if (exfil.holdProgressMs >= exfil.holdRequiredMs) {
+      for (const player of inside) {
+        player.lifeState = 'extracted'; player.health = 0; player.carryingHostage = false;
+        this.cancelPlayerWeaponActions(player);
+        this.emitCombatEvent({ kind: 'player_extracted', x: exfil.x, y: exfil.y, playerId: player.id, color: player.color });
+      }
+      this.privateExfil = undefined;
+      if (![...this.players.values()].some(player => player.lifeState === 'alive' || player.lifeState === 'downed')) this.finishRun(true);
+    } else if (exfil.windowRemainingMs <= 0) this.privateExfil = undefined;
+  }
+
   /** Moves a personal run resource into the shared world. The host derives
    * position and amount from authoritative state; clients only choose a kind. */
   dropInventory(playerId: string, kind: CoopInventoryDropKind): CoopInventoryDropError | undefined {
     const player = this.players.get(playerId);
-    if (!player || player.lifeState !== 'alive') return { code: 'alive_required' };
+    if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
     const value = kind === 'cash' ? Math.max(0, Math.trunc(player.coins)) : player.selfRevives > 0 ? 1 : 0;
     if (value <= 0) return { code: 'empty' };
     if (kind === 'cash') player.coins -= value;
@@ -1017,7 +1874,7 @@ export class CoopSimulation {
     const buyer = this.players.get(buyerId);
     const target = this.players.get(targetPlayerId);
     const station = this.stationDirector.snapshot().find(candidate => candidate.id === stationId && candidate.state === 'active');
-    if (!buyer || buyer.lifeState !== 'alive') return { code: 'alive_required' };
+    if (!buyer || buyer.lifeState !== 'alive' || buyer.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
     if (!station || Math.hypot(buyer.x - station.x, buyer.y - station.y) > station.radius + 48) return { code: 'station_range' };
     if (buyerId === targetPlayerId) return { code: 'redeploy_self' };
     if (!target || target.lifeState !== 'eliminated') return { code: 'target_not_eliminated' };
@@ -1048,10 +1905,9 @@ export class CoopSimulation {
   forgeWeapon(playerId: string, foundryId: number, requestedWeapon: unknown): CoopFoundryResult | undefined {
     const player = this.players.get(playerId);
     const foundry = this.weaponFoundry.snapshot();
-    if (!player || player.lifeState !== 'alive') return { code: 'alive_required' };
+    if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
     if (foundry.id !== foundryId || foundry.state !== 'active') return { code: 'foundry_inactive' };
     if (Math.hypot(player.x - foundry.x, player.y - foundry.y) > foundry.radius + 48) return { code: 'foundry_range' };
-    if (!isCoopFirearmId(requestedWeapon, COOP_WEAPON_SLOTS)) return { code: 'invalid_weapon' };
     const weapon = player.weaponStates.find(candidate => candidate.weaponId === requestedWeapon);
     if (!weapon) return { code: 'invalid_weapon' };
     if (weapon.level >= WEAPON_MAX_LEVEL) return { code: 'weapon_max' };
@@ -1068,7 +1924,7 @@ export class CoopSimulation {
 
   private updateRun(deltaMs: number) {
     const centre = this.squadCentre();
-    const capturePlayers = [...this.players.values()].map(player => ({ ...player, radius: PLAYER_RADIUS }));
+    const capturePlayers = [...this.players.values()].map(player => ({ ...player, lifeState: player.z <= COOP_GROUNDED_INTERACTION_MAX_Z ? player.lifeState : 'airborne', radius: PLAYER_RADIUS }));
     for (const station of this.stationDirector.update(deltaMs, capturePlayers, this.enemies.filter(enemy => !enemy.dying))) {
       this.emitCombatEvent({ kind: 'station_online', x: station.x, y: station.y, color: '#67e8f9' });
     }
@@ -1076,10 +1932,10 @@ export class CoopSimulation {
       const foundry = this.weaponFoundry.snapshot();
       this.emitCombatEvent({ kind: 'foundry_online', x: foundry.x, y: foundry.y, color: '#f59e0b' });
     }
-    if (this.runDirector.advanceInsertion(this.elapsedMs, centre)) this.activateObjectiveIfNeeded();
+    if (this.runDirector.advanceInsertion(this.worldElapsedMs(), centre)) this.activateObjectiveIfNeeded();
     const objective = this.runDirector.currentObjective;
     if (objective?.kind === 'uplink') {
-      const members = [...this.players.values()].filter(player => player.lifeState === 'alive' && Math.hypot(player.x - objective.x, player.y - objective.y) <= COOP_UPLINK_RADIUS).length;
+      const members = [...this.players.values()].filter(player => player.lifeState === 'alive' && player.z <= COOP_GROUNDED_INTERACTION_MAX_Z && Math.hypot(player.x - objective.x, player.y - objective.y) <= COOP_UPLINK_RADIUS).length;
       const contested = this.enemies.some(enemy => !enemy.dying && Math.hypot(enemy.x - objective.x, enemy.y - objective.y) <= COOP_UPLINK_RADIUS + enemy.radius);
       if (this.runDirector.updateUplink(deltaMs, members, contested)) this.onObjectiveCompleted(centre);
     }
@@ -1100,7 +1956,7 @@ export class CoopSimulation {
     if (this.runDirector.currentPhase === 'checkpoint') {
       const exfil = this.runDirector.currentExfil!;
       const living = [...this.players.values()].filter(player => player.lifeState === 'alive');
-      const inside = living.filter(player => Math.hypot(player.x - exfil.x, player.y - exfil.y) <= exfil.radius).length;
+      const inside = living.filter(player => player.z <= COOP_GROUNDED_INTERACTION_MAX_Z && Math.hypot(player.x - exfil.x, player.y - exfil.y) <= exfil.radius).length;
       const outcome = this.runDirector.updateCheckpoint(deltaMs, inside, living.length);
       if (outcome === 'success') this.finishRun(true);
       if (outcome === 'failed') this.finishRun(false);
@@ -1110,7 +1966,7 @@ export class CoopSimulation {
     if (this.runDirector.currentPhase === 'exfil') {
       const exfil = this.runDirector.currentExfil!;
       const living = [...this.players.values()].filter(player => player.lifeState === 'alive');
-      const inside = living.filter(player => Math.hypot(player.x - exfil.x, player.y - exfil.y) <= exfil.radius).length;
+      const inside = living.filter(player => player.z <= COOP_GROUNDED_INTERACTION_MAX_Z && Math.hypot(player.x - exfil.x, player.y - exfil.y) <= exfil.radius).length;
       const outcome = this.runDirector.updateExfil(deltaMs, inside, living.length);
       if (outcome === 'success') this.finishRun(true);
       if (outcome === 'failed') this.finishRun(false);
@@ -1122,9 +1978,10 @@ export class CoopSimulation {
     const objective = this.runDirector.currentObjective;
     if (!objective || objective.kind !== 'elite_hunt' || objective.targetEnemyId !== undefined) return;
     const definition = ENEMY_TYPES.elite;
+    const identity = worldEnemyIdentity(this.currentWorldId, 'elite');
     const id = this.nextEntityId++;
     const health = coopObjectiveEliteHealth(definition.health, this.players.size);
-    this.enemies.push({ id, x: objective.x, y: objective.y, health, maxHealth: health, type: 'elite', color: definition.color, radius: definition.radius, damage: definition.damage * this.partyScale(.24), speed: definition.speed, experienceValue: definition.xp * 4, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: true, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500, nextAttackAtMs: this.elapsedMs + enemyOpeningDelay('elite') });
+    this.enemies.push({ id, x: objective.x, y: objective.y, health, maxHealth: health, type: 'elite', color: identity.color, worldId: this.currentWorldId, archetypeName: identity.name, radius: definition.radius, damage: definition.damage * this.partyScale(.24), speed: definition.speed, experienceValue: definition.xp * 4, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: true, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500, nextAttackAtMs: this.elapsedMs + enemyOpeningDelay('elite') });
     this.runDirector.setEliteTarget(id);
     this.emitCombatEvent({ kind: 'objective_started', x: objective.x, y: objective.y, enemyId: id, color: definition.color });
   }
@@ -1142,14 +1999,17 @@ export class CoopSimulation {
     if (!boss) return;
     const definition = ENEMY_TYPES.titan;
     const isFinal = boss.kind === 'singularity';
-    const health = coopBossHealth(boss.kind, this.players.size);
+    const difficulty = getWorldDefinition(this.currentWorldId).difficulty;
+    const identity = worldBossIdentity(this.currentWorldId, boss.kind);
+    boss.displayName = identity.name;
+    const health = Math.round(coopBossHealth(boss.kind, this.players.size) * difficulty.healthMultiplier);
     const id = this.nextEntityId++;
-    this.enemies.push({ id, x: boss.x, y: boss.y, health, maxHealth: health, type: 'titan', color: isFinal ? '#f8fafc' : boss.kind === 'void_architect' ? '#e879f9' : '#fb7185', radius: isFinal ? 150 : 88, damage: (isFinal ? 68 : 42) * this.partyScale(.18), speed: isFinal ? .72 : .82, experienceValue: isFinal ? 3_000 : 700, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: false, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500 });
+    this.enemies.push({ id, x: boss.x, y: boss.y, health, maxHealth: health, type: 'titan', color: identity.color, worldId: this.currentWorldId, archetypeName: identity.name, radius: isFinal ? 150 : 88, damage: (isFinal ? 68 : 42) * this.partyScale(.18) * difficulty.damageMultiplier, speed: isFinal ? .72 : .82, experienceValue: Math.round((isFinal ? 3_000 : 700) * difficulty.rewardMultiplier), hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: false, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: this.elapsedMs + 2_500 });
     this.bossEnemyId = id;
     this.nextBossAbilityAtMs = this.elapsedMs + 5_500;
     this.lastBossPhase = 1;
     this.runDirector.activateBoss(health, boss.x, boss.y);
-    this.emitCombatEvent({ kind: 'boss_spawned', x: boss.x, y: boss.y, enemyId: id, color: isFinal ? '#f8fafc' : '#fb7185' });
+    this.emitCombatEvent({ kind: 'boss_spawned', x: boss.x, y: boss.y, enemyId: id, color: identity.color });
   }
 
   /** Readable boss mechanics intentionally use the same host damage and
@@ -1168,6 +2028,71 @@ export class CoopSimulation {
       if (bossState.kind === 'singularity' && bossState.phase === 3) this.spawnBossGuards(boss, 5);
     }
     if (this.elapsedMs < this.nextBossAbilityAtMs) return;
+    if (this.currentWorldId !== 'neon_bastion') {
+      const target = this.closestLivingPlayer(boss.x, boss.y) || boss;
+      if (this.currentWorldId === 'cinderworks') {
+        if (bossState.kind === 'neural_overlord') {
+          // Kiln Marshal brackets the nearest operator with alternating vents.
+          for (const offset of [-1, 1]) this.queueHazard(boss, 'artillery', target.x + offset * 145, target.y, 112, 24, 1_250, '#ff8a24');
+          this.nextBossAbilityAtMs = this.elapsedMs + 6_700;
+        } else if (bossState.kind === 'void_architect') {
+          // Crucible Engine clears its immediate deck, then seals the obvious
+          // retreat line with a delayed slag impact.
+          this.queueHazard(boss, 'shockwave', boss.x, boss.y, 390, 27, 1_500, '#ffb020');
+          this.queueHazard(boss, 'artillery', target.x, target.y, 135, 31, 1_950, '#ff5a0a');
+          this.nextBossAbilityAtMs = this.elapsedMs + 7_200;
+        } else {
+          // Furnace Sovereign: a readable eruption fan forces movement between
+          // the safe foundry plates instead of merely inflating contact damage.
+          for (const offset of [-1, 0, 1]) this.queueHazard(boss, 'artillery', target.x + offset * 190, target.y + Math.abs(offset) * 80, 145, 27 + bossState.phase * 3, 1_650, '#ff5a0a');
+          this.nextBossAbilityAtMs = this.elapsedMs + (bossState.phase === 3 ? 5_200 : 7_400);
+        }
+      } else if (this.currentWorldId === 'white_silence') {
+        if (bossState.kind === 'neural_overlord') {
+          // Rime Matriarch paints a slow, readable lance corridor across the
+          // ice instead of using the city boss's radial pulse.
+          for (const offset of [-1, 0, 1]) this.queueHazard(boss, 'artillery', target.x, target.y + offset * 130, 88, 22, 1_550, '#67e8f9');
+          this.nextBossAbilityAtMs = this.elapsedMs + 7_300;
+        } else if (bossState.kind === 'void_architect') {
+          // Cryostorm Colossus chains two jumpable fractures; surviving one
+          // ring does not let the squad immediately settle back into position.
+          this.queueHazard(boss, 'shockwave', boss.x, boss.y, 420, 25, 1_650, '#a5f3fc');
+          this.queueHazard(boss, 'shockwave', target.x, target.y, 260, 22, 2_250, '#60a5fa');
+          this.nextBossAbilityAtMs = this.elapsedMs + 7_800;
+        } else {
+          // Pale Leviathan: the expanding ice-breaker can be jumped; its centre
+          // lance cannot, giving the encounter its own movement cadence.
+          this.queueHazard(boss, 'shockwave', boss.x, boss.y, bossState.phase === 3 ? 620 : 480, 24 + bossState.phase * 4, 1_850, '#b9f5ff');
+          this.queueHazard(boss, 'artillery', target.x, target.y, 120, 30, 1_250, '#67e8f9');
+          this.nextBossAbilityAtMs = this.elapsedMs + (bossState.phase === 3 ? 6_000 : 8_200);
+        }
+      } else {
+        if (bossState.kind === 'neural_overlord') {
+          // Bloom Tyrant tears open at the operator's predicted escape point.
+          const echo = this.safeFallbackPosition(target.x + (target.x - boss.x) * .18, target.y + (target.y - boss.y) * .18, 100);
+          this.queueHazard(boss, 'ambush', echo.x, echo.y, 118, 30, 1_250, '#ff4fd8');
+          this.nextBossAbilityAtMs = this.elapsedMs + 5_900;
+        } else if (bossState.kind === 'void_architect') {
+          // Graviton Gardener uproots the squad and blooms beneath the pull.
+          this.queueHazard(boss, 'gravity', boss.x, boss.y, 560, 8, 1_500, '#d8b4fe');
+          this.queueHazard(boss, 'artillery', target.x, target.y, 140, 30, 2_050, '#a3ff6f');
+          this.nextBossAbilityAtMs = this.elapsedMs + 6_800;
+        } else {
+          // Eclipse Heart: pulls the squad inward while a phase echo attacks the
+          // predicted retreat point. Both use the existing authoritative hazard
+          // budget, so the richer boss costs no per-frame world simulation.
+          this.queueHazard(boss, 'gravity', boss.x, boss.y, bossState.phase === 3 ? 760 : 620, 0, 1_700, '#d8b4fe');
+          const distance = Math.hypot(target.x - boss.x, target.y - boss.y) || 1;
+          const echoX = target.x + (target.x - boss.x) / distance * 150;
+          const echoY = target.y + (target.y - boss.y) / distance * 150;
+          const echo = this.safeFallbackPosition(echoX, echoY, 90);
+          this.queueHazard(boss, 'ambush', echo.x, echo.y, 125, 34, 1_450, '#ff4fd8');
+          this.nextBossAbilityAtMs = this.elapsedMs + (bossState.phase === 3 ? 5_400 : 7_800);
+        }
+      }
+      this.emitCombatEvent({ kind: 'boss_ability', x: boss.x, y: boss.y, enemyId: boss.id, amount: bossState.phase, color: boss.color });
+      return;
+    }
     if (bossState.kind === 'neural_overlord') {
       this.queueHazard(boss, 'shockwave', boss.x, boss.y, 310, 22, 1400, '#fb7185');
       this.nextBossAbilityAtMs = this.elapsedMs + 8_500;
@@ -1185,24 +2110,63 @@ export class CoopSimulation {
     }
   }
 
+  /** Sparse host-authored weather makes each expedition mechanically distinct
+   * without adding a second physics world or hundreds of persistent actors. */
+  private updateWorldHazards() {
+    if (this.currentWorldId === 'neon_bastion' || this.elapsedMs < this.nextWorldHazardAtMs) return;
+    const living = [...this.players.values()].filter(player => player.lifeState === 'alive').sort((left, right) => left.id.localeCompare(right.id));
+    if (living.length === 0) return;
+    const target = living[this.worldHazardSequence % living.length];
+    const phase = this.worldHazardSequence * 2.399963;
+    if (this.currentWorldId === 'cinderworks') {
+      // A travelling furnace rupture creates three readable vents. The line is
+      // rotated every cycle so memorising one safe axis never solves the world.
+      for (const offset of [-1, 0, 1]) {
+        const x = target.x + Math.cos(phase) * offset * 205;
+        const y = target.y + Math.sin(phase) * offset * 205;
+        const point = this.safeFallbackPosition(x, y, 95);
+        this.queueWorldHazard('artillery', point.x, point.y, 112, 24, 1_550, '#ff5a0a');
+      }
+    } else if (this.currentWorldId === 'white_silence') {
+      // The shelf releases a broad cryoseismic ring. It is deliberately
+      // jumpable, rewarding mastery of the game's vertical movement.
+      const point = this.safeFallbackPosition(target.x + Math.cos(phase) * 120, target.y + Math.sin(phase) * 120, 180);
+      this.queueWorldHazard('shockwave', point.x, point.y, 430, 26, 1_850, '#b9f5ff');
+    } else {
+      // Null Garden tears first pull an operator off a causeway, then bloom at
+      // the same location. Both phases are separately telegraphed.
+      const point = this.safeFallbackPosition(target.x + Math.cos(phase) * 145, target.y + Math.sin(phase) * 145, 150);
+      this.queueWorldHazard('gravity', point.x, point.y, 360, 10, 1_350, '#d8b4fe');
+      this.queueWorldHazard('artillery', point.x, point.y, 145, 30, 2_150, '#ff4fd8');
+    }
+    this.worldHazardSequence++;
+    this.nextWorldHazardAtMs = this.elapsedMs + worldHazardIntervalMs(this.currentWorldId, false);
+  }
+
+  private queueWorldHazard(kind: CoopHazardSnapshot['kind'], x: number, y: number, radius: number, damage: number, windupMs: number, color: string) {
+    if (this.hazards.length >= 24) return;
+    this.hazards.push({ id: this.nextEntityId++, enemyId: 0, kind, x, y, radius, damage, startsAtMs: this.elapsedMs, resolvesAtMs: this.elapsedMs + windupMs, color, resolved: false });
+  }
+
   private queueHazard(enemy: CoopEnemy, kind: CoopHazardSnapshot['kind'], x: number, y: number, radius: number, damage: number, windupMs: number, color: string) {
     enemy.attackWindupUntilMs = this.elapsedMs + windupMs;
     this.hazards.push({ id: this.nextEntityId++, enemyId: enemy.id, kind, x, y, radius, damage, startsAtMs: this.elapsedMs, resolvesAtMs: this.elapsedMs + windupMs, color, resolved: false });
   }
 
   private updateHazards() {
-    this.hazards = this.hazards.filter(hazard => this.elapsedMs <= hazard.resolvesAtMs + 350 && this.activeEnemyIds.has(hazard.enemyId));
+    this.hazards = this.hazards.filter(hazard => this.elapsedMs <= hazard.resolvesAtMs + 350 && (hazard.enemyId === 0 || this.activeEnemyIds.has(hazard.enemyId)));
     for (const hazard of this.hazards) {
       if (hazard.resolved || this.elapsedMs < hazard.resolvesAtMs) continue;
       hazard.resolved = true;
       for (const player of this.players.values()) {
         if (player.lifeState !== 'alive' || Math.hypot(player.x - hazard.x, player.y - hazard.y) > hazard.radius + PLAYER_RADIUS) continue;
         if (hazard.kind === 'shockwave' && player.z > 45) continue;
-        if (!hasClearAttackPath(hazard, player)) continue;
+        if (!hasClearAttackPath(hazard, player, this.currentWorldId)) continue;
         if (hazard.kind === 'gravity') {
           const distance = Math.hypot(hazard.x - player.x, hazard.y - player.y) || 1;
           const position = { x: player.x + (hazard.x - player.x) / distance * 68, y: player.y + (hazard.y - player.y) / distance * 68 };
-          resolveWorldCollisions(position, PLAYER_RADIUS); player.x = position.x; player.y = position.y;
+          resolveWorldCollisions(position, PLAYER_RADIUS, true, this.currentWorldId); player.x = position.x; player.y = position.y;
+          if (hazard.damage > 0) this.damagePlayer(player, hazard.damage, hazard.x, hazard.y);
         } else this.damagePlayer(player, hazard.damage, hazard.x, hazard.y);
       }
       for (const structure of this.structures) {
@@ -1212,7 +2176,7 @@ export class CoopSimulation {
       }
       if (hazard.kind === 'ambush') {
         const source = this.enemies.find(enemy => enemy.id === hazard.enemyId && !enemy.dying);
-        if (source && isWorldPositionClear(hazard.x, hazard.y, source.radius)) { source.x = hazard.x; source.y = hazard.y; }
+        if (source && isWorldPositionClear(hazard.x, hazard.y, source.radius, this.currentWorldId)) { source.x = hazard.x; source.y = hazard.y; }
       }
     }
   }
@@ -1229,6 +2193,7 @@ export class CoopSimulation {
     }
     const living = [...this.players.values()].filter(player => player.lifeState === 'alive');
     for (const structure of this.structures) {
+      if (structure.type === 'bridge_segment') { structure.linkedStructureIds = []; continue; }
       structure.repairingPlayerId = undefined;
       const squadNearby = living.some(player => Math.hypot(player.x - structure.x, player.y - structure.y) <= COOP_STRUCTURE_SQUAD_RANGE);
       if (structure.state !== 'destroying' && !squadNearby) {
@@ -1243,10 +2208,10 @@ export class CoopSimulation {
     // than maintaining a mutable connection graph.
     for (let leftIndex = 0; leftIndex < this.structures.length; leftIndex++) {
       const left = this.structures[leftIndex];
-      if (left.state === 'destroying') continue;
+      if (left.state === 'destroying' || left.type === 'bridge_segment') continue;
       for (let rightIndex = leftIndex + 1; rightIndex < this.structures.length; rightIndex++) {
         const right = this.structures[rightIndex];
-        if (right.state === 'destroying') continue;
+        if (right.state === 'destroying' || right.type === 'bridge_segment') continue;
         const distance = Math.hypot(left.x - right.x, left.y - right.y);
         const fenceBarricade = (left.type === 'arc_fence' && right.type === 'barricade') || (right.type === 'arc_fence' && left.type === 'barricade');
         const relayBarricade = (left.type === 'recovery_relay' && right.type === 'barricade') || (right.type === 'recovery_relay' && left.type === 'barricade');
@@ -1363,7 +2328,7 @@ export class CoopSimulation {
   }
 
   private damageStructure(structure: CoopStructure, amount: number, creditOwner = true) {
-    if (structure.state === 'destroying' || amount <= 0) return;
+    if (structure.type === 'bridge_segment' || structure.state === 'destroying' || amount <= 0) return;
     const wasActive = structure.state === 'active';
     const absorbed = Math.min(structure.health, amount);
     structure.health = Math.max(0, structure.health - absorbed);
@@ -1459,10 +2424,11 @@ export class CoopSimulation {
   }
 
   private awardCredits(amount: number) {
+    const scaledAmount = Math.round(amount * getWorldDefinition(this.currentWorldId).difficulty.rewardMultiplier);
     for (const player of this.players.values()) {
-      if (player.lifeState === 'eliminated') continue;
-      player.coins += amount;
-      const stats = this.runStats.get(player.id); if (stats) stats.creditsEarned += amount;
+      if (player.lifeState === 'eliminated' || player.lifeState === 'extracted') continue;
+      player.coins += scaledAmount;
+      const stats = this.runStats.get(player.id); if (stats) stats.creditsEarned += scaledAmount;
     }
   }
 
@@ -1478,31 +2444,54 @@ export class CoopSimulation {
       this.nextScenarioAtMs = 0;
       this.emitCombatEvent({ kind: 'exfil_deployed', x: this.runDirector.currentExfil!.x, y: this.runDirector.currentExfil!.y, color: '#fbbf24' });
     }
-    if (outcome === 'exfil') { this.awardCredits(400); this.emitCombatEvent({ kind: 'exfil_deployed', x: this.runDirector.currentExfil!.x, y: this.runDirector.currentExfil!.y, color: '#fbbf24' }); }
+    if (outcome === 'exfil') {
+      this.awardCredits(400);
+      this.emitCombatEvent({ kind: 'exfil_deployed', x: this.runDirector.currentExfil!.x, y: this.runDirector.currentExfil!.y, color: '#fbbf24' });
+    }
     this.emitCombatEvent({ kind: 'boss_defeated', x: enemy.x, y: enemy.y, enemyId: enemy.id, color: enemy.color });
   }
 
   private finishRun(success: boolean) {
     if (this.results) return;
     const run = this.runDirector.snapshot(this.elapsedMs);
-    const squadWiped = !success && ![...this.players.values()].some(player =>
+    const anyoneExtracted = [...this.players.values()].some(player => player.lifeState === 'extracted');
+    const squadWiped = !success && !anyoneExtracted && ![...this.players.values()].some(player =>
       player.lifeState === 'alive' || (player.lifeState === 'downed' && player.selfRevives > 0)
     );
-    const players = awardMedals([...this.players.values()].map(player => ({ ...createRunStats(player.id), ...this.runStats.get(player.id), dataCoresExtracted: success ? player.pendingDataCores : 0, label: player.label, color: player.color })));
-    this.results = { runId: this.runId, success, squadWiped, durationMs: Math.round(this.elapsedMs), contractsCompleted: run.contractIndex, bossesDefeated: run.bossesDefeated, players };
-    this.matchState = success ? 'active' : squadWiped ? (this.players.size === 1 ? 'solo_defeat' : 'squad_wiped') : 'mission_failed';
+    const players = awardMedals([...this.players.values()].map(player => ({ ...createRunStats(player.id), ...this.runStats.get(player.id), dataCoresExtracted: success || player.lifeState === 'extracted' ? player.pendingDataCores : 0, label: player.label, color: player.color })));
+    this.results = { runId: this.runId, success: success || anyoneExtracted, squadWiped, durationMs: Math.round(this.elapsedMs), contractsCompleted: run.contractIndex + this.fieldMissionDirector.completions, bossesDefeated: run.bossesDefeated, players };
+    this.matchState = success || anyoneExtracted ? 'active' : squadWiped ? (this.players.size === 1 ? 'solo_defeat' : 'squad_wiped') : 'mission_failed';
   }
 
   private squadCentre() {
     const living = [...this.players.values()].filter(player => player.lifeState === 'alive');
-    const members = living.length ? living : [...this.players.values()];
+    const members = living.length ? living : [...this.players.values()].filter(player => player.lifeState !== 'extracted');
     return { x: members.reduce((sum, player) => sum + player.x, 0) / Math.max(1, members.length), y: members.reduce((sum, player) => sum + player.y, 0) / Math.max(1, members.length) };
   }
 
-  private partyScale(perAdditionalPlayer: number) { return 1 + Math.max(0, [...this.players.values()].filter(player => player.lifeState !== 'eliminated').length - 1) * perAdditionalPlayer; }
+  private partyScale(perAdditionalPlayer: number) { return 1 + Math.max(0, [...this.players.values()].filter(player => player.lifeState === 'alive' || player.lifeState === 'downed').length - 1) * perAdditionalPlayer; }
+  private safeMissionSpawnPosition(anchorX: number, anchorY: number, desiredX: number, desiredY: number, radius: number, index: number) {
+    const desired = { x: clamp(desiredX, radius, COOP_WORLD_SIZE - radius), y: clamp(desiredY, radius, COOP_WORLD_SIZE - radius) };
+    if (isWorldPositionClear(desired.x, desired.y, radius, this.currentWorldId)) return desired;
+    // Search locally around the authored objective. Falling back around the
+    // squad could strand one invisible captor a kilometre away and soft-lock
+    // Hostage Recovery after the visible group was cleared.
+    for (let attempt = 0; attempt < 32; attempt++) {
+      const ring = Math.floor(attempt / 8);
+      const angle = (attempt % 8) / 8 * Math.PI * 2 + index * .47;
+      const distance = 85 + ring * 58;
+      const candidate = {
+        x: clamp(anchorX + Math.cos(angle) * distance, radius, COOP_WORLD_SIZE - radius),
+        y: clamp(anchorY + Math.sin(angle) * distance, radius, COOP_WORLD_SIZE - radius),
+      };
+      if (isWorldPositionClear(candidate.x, candidate.y, radius, this.currentWorldId)) return candidate;
+    }
+    const anchor = { x: clamp(anchorX, radius, COOP_WORLD_SIZE - radius), y: clamp(anchorY, radius, COOP_WORLD_SIZE - radius) };
+    return isWorldPositionClear(anchor.x, anchor.y, radius, this.currentWorldId) ? anchor : this.safeFallbackPosition(anchorX, anchorY, radius);
+  }
   private safeFallbackPosition(x: number, y: number, radius: number) {
     const position = { x: clamp(x, radius, COOP_WORLD_SIZE - radius), y: clamp(y, radius, COOP_WORLD_SIZE - radius) };
-    if (isWorldPositionClear(position.x, position.y, radius)) return position;
+    if (isWorldPositionClear(position.x, position.y, radius, this.currentWorldId)) return position;
     return this.safeFallback('', radius);
   }
 
@@ -1516,6 +2505,9 @@ export class CoopSimulation {
     if (this.matchState !== 'active' || player.lifeState !== 'alive' || player.invulnerableRemainingMs > 0 || amount <= 0) return;
     this.cancelRevivesBy(player.id);
     player.lastArmorDamageAtMs = this.elapsedMs;
+    const artifactAbsorbed = Math.min(player.artifactBarrier, amount);
+    player.artifactBarrier -= artifactAbsorbed;
+    amount -= artifactAbsorbed;
     const absorbed = Math.min(player.armorHp, amount);
     player.armorHp -= absorbed;
     const healthDamage = amount - absorbed;
@@ -1562,8 +2554,19 @@ export class CoopSimulation {
   }
 
   private downPlayer(player: CoopPlayer) {
+    if (player.carryingHostage) {
+      const hostage = this.fieldMissionDirector.current?.hostage;
+      if (hostage?.carrierId === player.id) {
+        hostage.x = player.x; hostage.y = player.y; hostage.carrierId = undefined; hostage.state = 'waiting';
+        const mission = this.fieldMissionDirector.current!;
+        mission.x = hostage.x; mission.y = hostage.y; mission.progress = 0; mission.required = COOP_HOSTAGE_FREE_DURATION_MS;
+        mission.points[0].state = 'arming'; mission.points[1].state = 'locked';
+        this.emitCombatEvent({ kind: 'mission_stage', x: hostage.x, y: hostage.y, playerId: player.id, amount: -2, color: '#fbbf24' });
+      }
+      player.carryingHostage = false;
+    }
     player.health = 0;
-    player.z = 0; player.verticalVelocity = 0; player.airActionConsumedSinceGrounded = false; player.sliding = false; player.crouching = false;
+    player.z = 0; player.verticalVelocity = 0; player.airActionConsumedSinceGrounded = false; player.jetActive = false; player.jetIgnitedThisAirTime = false; player.sliding = false; player.crouching = false; player.artifactBarrier = 0;
     player.isAiming = false; player.isReloading = false; player.isSwitching = false; player.previousFiring = false;
     const weapon = this.weapon(player);
     this.cancelReload(weapon); weapon.state = 'ready';
@@ -1584,7 +2587,7 @@ export class CoopSimulation {
   }
 
   private eliminatePlayer(player: CoopPlayer, reason: string) {
-    if (player.lifeState === 'eliminated') return;
+    if (player.lifeState === 'eliminated' || player.lifeState === 'extracted') return;
     player.health = 0; player.lifeState = 'eliminated'; player.downedRemainingMs = 0;
     player.reviveProgressMs = 0; player.selfReviveProgressMs = 0; player.reviverId = undefined; player.isAiming = false; player.isReloading = false; player.isSwitching = false;
     this.emitCombatEvent({ kind: 'player_eliminated', x: player.x, y: player.y, playerId: player.id, color: player.color });
@@ -1611,7 +2614,7 @@ export class CoopSimulation {
   private updateRevives(deltaMs: number) {
     const targets = [...this.players.values()].filter(player => player.lifeState === 'downed');
     const availableRevivers = [...this.players.values()]
-      .filter(player => player.lifeState === 'alive' && this.inputByPlayer.get(player.id)?.reviving)
+      .filter(player => player.lifeState === 'alive' && player.z <= COOP_GROUNDED_INTERACTION_MAX_Z && this.inputByPlayer.get(player.id)?.reviving)
       .sort((left, right) => left.id.localeCompare(right.id));
     const assignments = new Map<string, CoopPlayer>();
     const claimedRevivers = new Set<string>();
@@ -1680,6 +2683,7 @@ export class CoopSimulation {
     // A purchased Emergency Reboot creates a short, solo clutch window even
     // when no teammate is still standing to perform the normal revive.
     if ([...this.players.values()].some(player => player.lifeState === 'downed' && player.selfRevives > 0)) return;
+    if ([...this.players.values()].some(player => player.lifeState === 'extracted')) { this.finishRun(true); return; }
     this.matchState = this.players.size === 1 ? 'solo_defeat' : 'squad_wiped';
     this.runDirector.fail(); this.finishRun(false);
     this.emitCombatEvent({ kind: this.matchState === 'solo_defeat' ? 'solo_defeat' : 'squad_wiped', x: COOP_WORLD_SIZE / 2, y: COOP_WORLD_SIZE / 2, color: '#fb7185' });
@@ -1687,7 +2691,7 @@ export class CoopSimulation {
 
   private switchWeapon(player: CoopPlayer, slot: number) {
     const previous = this.weapon(player); if (previous.state === 'reloading') this.cancelReload(previous);
-    player.selectedSlot = slot; player.selectedWeaponId = COOP_WEAPON_SLOTS[slot]; player.selectedWeaponLevel = this.weapon(player).level;
+    player.selectedSlot = slot; player.selectedWeaponId = player.weaponStates[slot].weaponId; player.selectedWeaponLevel = this.weapon(player).level;
     player.isAiming = false; player.isReloading = false; player.isSwitching = true;
     const weapon = this.weapon(player); weapon.state = 'switching'; weapon.switchEndsAtMs = this.elapsedMs + SWITCH_MS * this.imprintModifiers(player).handlingDurationMultiplier; player.weaponActionEndsAtMs = weapon.switchEndsAtMs;
   }
@@ -1703,8 +2707,10 @@ export class CoopSimulation {
   }
   private startReload(player: CoopPlayer) {
     const weapon = this.weapon(player), definition = COOP_FIREARM_BY_ID[weapon.weaponId];
-    if (player.health <= 0 || player.isSwitching || weapon.state !== 'ready' || weapon.magazineAmmo >= definition.magazineSize || weapon.reserveAmmo <= 0) return false;
-    const handling = this.imprintModifiers(player).handlingDurationMultiplier;
+    if (player.carryingHostage || player.health <= 0 || player.isSwitching || weapon.state !== 'ready' || weapon.magazineAmmo >= definition.magazineSize || weapon.reserveAmmo <= 0) return false;
+    const nearSquadmate = player.operatorId === 'solar_guard' && [...this.players.values()].some(ally => ally.id !== player.id && ally.lifeState === 'alive' && Math.hypot(ally.x - player.x, ally.y - player.y) <= 260);
+    const handling = this.imprintModifiers(player).handlingDurationMultiplier * (nearSquadmate ? .8 : 1);
+    if (nearSquadmate) { player.artifactProc = 'stand_together'; player.artifactProcExpiresAtMs = this.elapsedMs + 1_000; }
     weapon.state = 'reloading'; weapon.reloadStartedAtMs = this.elapsedMs; weapon.reloadEndsAtMs = this.elapsedMs + (definition.reloadStyle === 'shell_by_shell' ? definition.shellInsertMs! : definition.reloadDurationMs!) * handling; weapon.shellsLoaded = 0; player.isReloading = true; player.isAiming = false; player.weaponActionEndsAtMs = weapon.reloadEndsAtMs;
     this.emitCombatEvent({ kind: 'reload_started', x: player.x, y: player.y, playerId: player.id, weaponId: weapon.weaponId, color: definition.visual.muzzleColor }); return true;
   }
@@ -1712,6 +2718,7 @@ export class CoopSimulation {
   private cancelReload(weapon: CoopWeaponRuntime) { weapon.state = 'ready'; weapon.reloadStartedAtMs = undefined; weapon.reloadEndsAtMs = undefined; }
 
   private tryCastWeapon(player: CoopPlayer, triggerPressed: boolean, actionId = 0) {
+    if (player.carryingHostage) return;
     const weapon = this.weapon(player), definition = COOP_FIREARM_BY_ID[weapon.weaponId];
     if (player.isSwitching || weapon.state === 'switching') return;
     if (weapon.state === 'reloading') {
@@ -1720,17 +2727,30 @@ export class CoopSimulation {
     }
     if (weapon.magazineAmmo <= 0) { if (weapon.reserveAmmo > 0) this.startReload(player); else if (triggerPressed) this.emitCombatEvent({ kind: 'empty_fire', x: player.x, y: player.y, playerId: player.id, weaponId: weapon.weaponId, color: '#fca5a5' }); return; }
     if (this.elapsedMs < weapon.nextFireAtMs) return;
-    weapon.magazineAmmo--; weapon.nextFireAtMs = this.elapsedMs + firearmFireInterval(definition, weapon.level); player.shotSequence++;
+    const redline = player.operatorId === 'crimson_strike' && weapon.weaponId === 'goreline_repeater' && player.health / Math.max(1, player.maxHealth) <= .45;
+    weapon.magazineAmmo--; weapon.nextFireAtMs = this.elapsedMs + firearmFireInterval(definition, weapon.level) * (redline ? .8 : 1); player.shotSequence++;
+    if (redline) { player.artifactProc = 'redline'; player.artifactProcExpiresAtMs = this.elapsedMs + 400; }
     const stats = this.runStats.get(player.id); if (stats) stats.shotsFired += definition.pelletCount || 1;
     this.emitCombatEvent({ kind: 'weapon_fired', x: player.x, y: player.y, playerId: player.id, weaponId: weapon.weaponId, color: definition.visual.muzzleColor, actionId });
     if (weapon.weaponId === 'arc_launcher') {
-      this.fireArcBeam(player, firearmDamage(definition, weapon.level) * this.imprintModifiers(player).damageMultiplier);
+      const overloaded = player.artifactProc === 'overload';
+      if (overloaded) { player.artifactProc = undefined; player.artifactHitCount = 0; this.emitCombatEvent({ kind: 'passive_triggered', x: player.x, y: player.y, playerId: player.id, weaponId: weapon.weaponId, color: '#bfdbfe' }); }
+      const thrustSpread = player.jetActive ? deterministicSigned(player.shotSequence, 0, weapon.weaponId) * definition.hipSpreadRadians * 1.6 : 0;
+      this.fireArcBeam(player, firearmDamage(definition, weapon.level) * this.imprintModifiers(player).damageMultiplier * (overloaded ? 1.35 : 1), player.angle + thrustSpread);
+      if (weapon.magazineAmmo === 0 && weapon.reserveAmmo > 0) this.startReload(player);
+      return;
+    }
+    if (weapon.weaponId === 'winterglass_projector') {
+      const thrustSpread = player.jetActive ? deterministicSigned(player.shotSequence, 0, weapon.weaponId) * definition.hipSpreadRadians * 1.6 : 0;
+      const aimAngle = player.angle + thrustSpread;
+      this.fireWinterBreath(player, firearmDamage(definition, weapon.level) * this.imprintModifiers(player).damageMultiplier, aimAngle);
+      this.spawnWinterglassProjectiles(player, definition, aimAngle);
       if (weapon.magazineAmmo === 0 && weapon.reserveAmmo > 0) this.startReload(player);
       return;
     }
     const count = definition.pelletCount || 1;
     for (let pellet = 0; pellet < count; pellet++) {
-      const spread = definition.pelletCount ? definition.spreadRadians! : firearmSpread(definition, player.isAiming);
+      const spread = (definition.pelletCount ? definition.spreadRadians! : firearmSpread(definition, player.isAiming)) * (player.jetActive ? 1.6 : 1);
       const centered = count === 1 ? deterministicSigned(player.shotSequence, pellet, weapon.weaponId) : (pellet / Math.max(1, count - 1) - .5) * 2 + deterministicSigned(player.shotSequence, pellet, weapon.weaponId) * .18;
       const angle = player.angle + centered * spread, pitch = player.aimPitch + deterministicSigned(player.shotSequence, pellet + 71, weapon.weaponId) * spread * .28;
       const projectile: CoopProjectile = { id: this.nextEntityId++, ownerId: player.id, weaponId: weapon.weaponId, x: player.x + Math.cos(angle) * FIREARM_PROJECTILE_START_OFFSET, y: player.y + Math.sin(angle) * FIREARM_PROJECTILE_START_OFFSET, angle, pitch, z: 24 + player.z, radius: definition.projectileRadius, lifeMs: 1100, velocity: definition.projectileVelocity, verticalVelocity: Math.sin(pitch) * definition.projectileVelocity, damage: firearmDamage(definition, weapon.level) * this.imprintModifiers(player).damageMultiplier, penetration: definition.penetration, damageIntervalMs: 1, nextDamageAt: this.elapsedMs };
@@ -1777,7 +2797,7 @@ export class CoopSimulation {
     const distance = Math.hypot(dx, dy);
     if (distance < .0001) return false;
     const verticalDelta = projectile.z - fromZ;
-    const hit = raycastWorldObstacles(fromX, fromY, fromZ, dx, dy, verticalDelta / distance, distance);
+    const hit = raycastWorldObstacles(fromX, fromY, fromZ, dx, dy, verticalDelta / distance, distance, this.currentWorldId);
     const groundT = verticalDelta < 0 && fromZ >= 0 && projectile.z <= 0 ? fromZ / -verticalDelta : Infinity;
     const groundDistance = groundT <= 1 ? distance * groundT : Infinity;
     if (!hit && !Number.isFinite(groundDistance)) return false;
@@ -1857,18 +2877,20 @@ export class CoopSimulation {
     enemy.hitFlashMs = HIT_FLASH_MS;
     this.emitCombatEvent({ kind: 'enemy_hit', x: enemy.x, y: enemy.y, enemyId: enemy.id, playerId, amount: damage, color: enemy.color, weaponId });
     this.emitCombatEvent({ kind: 'damage_number', x: enemy.x, y: enemy.y, enemyId: enemy.id, playerId, amount: damage, color: '#ffffff', weaponId });
+    if (isArtifactPrimary(weaponId)) this.applyArtifactPrimaryHit(enemy, playerId, weaponId);
     if (enemy.health <= 0) this.killEnemy(enemy, playerId, weaponId);
+    return damage;
   }
 
   /** Instant host-owned lightning cast. The first intersected body becomes
    * the beam endpoint; a miss terminates at the aimed maximum range. */
-  private fireArcBeam(player: CoopPlayer, damage: number) {
+  private fireArcBeam(player: CoopPlayer, damage: number, aimAngle = player.angle) {
     const horizontalRange = ARC_BEAM_RANGE * Math.cos(player.aimPitch);
-    const directionX = Math.cos(player.angle), directionY = Math.sin(player.angle);
+    const directionX = Math.cos(aimAngle), directionY = Math.sin(aimAngle);
     const traceStartX = player.x, traceStartY = player.y;
     const visualStartX = player.x + directionX * 26, visualStartY = player.y + directionY * 26;
     const startZ = 24 + player.z;
-    const worldHit = raycastWorldObstacles(traceStartX, traceStartY, startZ, directionX, directionY, Math.tan(player.aimPitch), horizontalRange);
+    const worldHit = raycastWorldObstacles(traceStartX, traceStartY, startZ, directionX, directionY, Math.tan(player.aimPitch), horizontalRange, this.currentWorldId);
     const unobstructedRange = worldHit?.distance ?? horizontalRange;
     const candidates = this.enemySpatialIndex.query(traceStartX + directionX * horizontalRange * .5, traceStartY + directionY * horizontalRange * .5, horizontalRange * .5 + MAX_ENEMY_RADIUS, this.nearbyEnemies)
       .filter(enemy => !enemy.dying)
@@ -1886,7 +2908,14 @@ export class CoopSimulation {
     const targetX = primary?.x ?? worldHit?.x ?? traceStartX + directionX * horizontalRange;
     const targetY = primary?.y ?? worldHit?.y ?? traceStartY + directionY * horizontalRange;
     this.emitCombatEvent({ kind: 'arc_beam', x: visualStartX, y: visualStartY, targetX, targetY, enemyId: primary?.id, playerId: player.id, weaponId: 'arc_launcher', color: '#60a5fa' });
-    if (primary) this.applyArcImpact(player.id, damage, primary);
+    if (primary) {
+      const chainCount = this.applyArcImpact(player.id, damage, primary);
+      this.addArtifactResource(player, chainCount === ARC_CHAIN_TARGETS ? 2 : 1);
+      if (chainCount === ARC_CHAIN_TARGETS) {
+        player.artifactHitCount++;
+        if (player.artifactHitCount >= 3) { player.artifactHitCount = 0; player.artifactProc = 'overload'; player.artifactProcExpiresAtMs = this.elapsedMs + 10_000; }
+      }
+    }
   }
 
   /** Chain selection is sorted independently of spatial-hash bucket order, so
@@ -1897,7 +2926,7 @@ export class CoopSimulation {
       .filter(enemy => enemy.id !== primary.id && !enemy.dying && (enemy.x - primary.x) ** 2 + (enemy.y - primary.y) ** 2 <= ARC_CHAIN_RADIUS ** 2)
       .filter(enemy => {
         const distance = Math.hypot(enemy.x - primary.x, enemy.y - primary.y);
-        return !raycastWorldObstacles(primary.x, primary.y, ENEMY_HIT_HEIGHT * .5, enemy.x - primary.x, enemy.y - primary.y, 0, distance);
+        return !raycastWorldObstacles(primary.x, primary.y, ENEMY_HIT_HEIGHT * .5, enemy.x - primary.x, enemy.y - primary.y, 0, distance, this.currentWorldId);
       })
       .map(enemy => ({ enemy, distance: (enemy.x - primary.x) ** 2 + (enemy.y - primary.y) ** 2 }))
       .sort((a, b) => a.distance - b.distance || a.enemy.id - b.enemy.id)
@@ -1911,6 +2940,320 @@ export class CoopSimulation {
     if (primary.type === 'titan' && eligible.length < ARC_CHAIN_TARGETS && !primary.dying) {
       this.applyDamage(primary, damage * ARC_UNUSED_BOSS_DAMAGE_RATIO * (ARC_CHAIN_TARGETS - eligible.length), ownerId, 'arc_launcher');
     }
+    return eligible.length;
+  }
+
+  private addArtifactResource(player: CoopPlayer | undefined, amount: number) {
+    if (!player || amount <= 0) return;
+    player.artifactResource = Math.min(player.artifactResourceMax, player.artifactResource + amount);
+    player.artifactLastActionAtMs = this.elapsedMs;
+  }
+
+  private applyArtifactPrimaryHit(enemy: CoopEnemy, ownerId: string, weaponId: CoopWeaponId) {
+    const player = this.players.get(ownerId);
+    if (!player) return;
+    player.artifactLastActionAtMs = this.elapsedMs;
+    if (weaponId === 'goreline_repeater') {
+      this.addArtifactResource(player, 3 + (enemy.health / Math.max(1, enemy.maxHealth) <= .35 ? 2 : 0));
+      return;
+    }
+    if (weaponId === 'riftspike_array') {
+      if (player.artifactTargetId !== enemy.id) { player.artifactTargetId = enemy.id; player.artifactResource = 0; }
+      const origin = player.echoPositions[0];
+      const slipstream = origin && Math.hypot(player.x - origin.x, player.y - origin.y) >= 120 && this.elapsedMs >= player.slipstreamReadyAtMs;
+      this.addArtifactResource(player, slipstream ? 2 : 1);
+      if (slipstream) { player.slipstreamReadyAtMs = this.elapsedMs + 750; player.artifactProc = 'slipstream'; player.artifactProcExpiresAtMs = this.elapsedMs + 800; player.echoPositions.length = 0; }
+      return;
+    }
+    if (weaponId === 'dawnwall_cannon') {
+      player.artifactHitCount++;
+      if (player.artifactHitCount >= 3) {
+        player.artifactHitCount = 0;
+        this.addArtifactResource(player, 1 + (enemy.targetPlayerId && enemy.targetPlayerId !== ownerId ? 1 : 0));
+      }
+      return;
+    }
+    if (weaponId === 'cinderhex_engine') {
+      enemy.cinderhexByOwner ||= new Map();
+      const existing = enemy.cinderhexByOwner.get(ownerId);
+      enemy.cinderhexByOwner.set(ownerId, { stacks: Math.min(3, (existing?.stacks || 0) + 1), expiresAtMs: this.elapsedMs + 6_000, nextTickAtMs: existing?.nextTickAtMs || this.elapsedMs + 1_000, damageSinceFragment: existing?.damageSinceFragment || 0 });
+    }
+  }
+
+  private fireWinterBreath(player: CoopPlayer, damage: number, aimAngle = player.angle) {
+    const range = 500;
+    const horizontalRange = range * Math.cos(player.aimPitch);
+    const directionX = Math.cos(aimAngle), directionY = Math.sin(aimAngle);
+    const startZ = 24 + player.z;
+    const worldHit = raycastWorldObstacles(player.x, player.y, startZ, directionX, directionY, Math.tan(player.aimPitch), horizontalRange, this.currentWorldId);
+    const unobstructedRange = worldHit?.distance ?? horizontalRange;
+    const candidates = this.enemySpatialIndex.query(player.x + directionX * unobstructedRange * .5, player.y + directionY * unobstructedRange * .5, unobstructedRange * .5 + MAX_ENEMY_RADIUS, this.nearbyEnemies)
+      .filter(enemy => !enemy.dying)
+      .map(enemy => {
+        const relativeX = enemy.x - player.x, relativeY = enemy.y - player.y;
+        const along = relativeX * directionX + relativeY * directionY;
+        const perpendicular = Math.abs(relativeX * directionY - relativeY * directionX);
+        return { enemy, along, perpendicular };
+      })
+      .filter(({ enemy, along, perpendicular }) => {
+        if (along < 0 || along > unobstructedRange + enemy.radius) return false;
+        const coneRadius = Math.tan(.18) * along;
+        if (perpendicular > coneRadius + enemy.radius) return false;
+        const beamZ = startZ + Math.tan(player.aimPitch) * along;
+        const verticalConeRadius = Math.tan(.12) * along + enemy.radius;
+        if (beamZ + verticalConeRadius < 0 || beamZ - verticalConeRadius > ENEMY_HIT_HEIGHT + enemy.radius) return false;
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        return !raycastWorldObstacles(player.x, player.y, startZ, enemy.x - player.x, enemy.y - player.y, Math.tan(player.aimPitch), distance, this.currentWorldId);
+      })
+      .sort((a, b) => a.along - b.along || a.enemy.id - b.enemy.id)
+      .slice(0, 12);
+    for (const { enemy } of candidates) {
+      this.applyDamage(enemy, damage, player.id, 'winterglass_projector');
+      if (enemy.dying) continue;
+      const previous = enemy.chillStacks || 0;
+      enemy.chillStacks = Math.min(5, previous + 1);
+      enemy.chillExpiresAtMs = this.elapsedMs + 4_000;
+      if (previous < 5 && enemy.chillStacks === 5 && this.elapsedMs >= (enemy.rimeGrantedAtMs || 0)) {
+        enemy.rimeGrantedAtMs = this.elapsedMs + 5_000;
+        this.addArtifactResource(player, 1);
+        if (enemy.type !== 'titan') enemy.structureStunUntilMs = Math.max(enemy.structureStunUntilMs || 0, this.elapsedMs + (enemy.type === 'elite' ? 150 : 400));
+      }
+    }
+  }
+
+  /** Winterglass deals one authoritative cone sample per round. These three
+   * zero-damage shards make that otherwise-instant cast readable to every
+   * peer while retaining the cone's existing balance and bounded entity cost. */
+  private spawnWinterglassProjectiles(player: CoopPlayer, definition: CoopFirearmDefinition, aimAngle: number) {
+    for (let shard = -1; shard <= 1; shard++) {
+      const angleJitter = deterministicSigned(player.shotSequence, shard + 31, definition.id) * .022;
+      const pitchJitter = deterministicSigned(player.shotSequence, shard + 47, definition.id) * .025;
+      const angle = aimAngle + shard * .105 + angleJitter;
+      const pitch = player.aimPitch + shard * .035 + pitchJitter;
+      this.projectiles.push({
+        id: this.nextEntityId++, ownerId: player.id, weaponId: definition.id,
+        x: player.x, y: player.y, z: 24 + player.z, angle, pitch,
+        radius: definition.projectileRadius * (shard === 0 ? 1 : .72),
+        lifeMs: 600, velocity: definition.projectileVelocity,
+        verticalVelocity: Math.sin(pitch) * definition.projectileVelocity,
+        damage: 0, penetration: 999, damageIntervalMs: Infinity,
+        nextDamageAt: Infinity, presentationOnly: true,
+      });
+    }
+  }
+
+  private tryArtifactSpender(player: CoopPlayer) {
+    if (player.lifeState !== 'alive' || player.isReloading || player.isSwitching || player.jetActive) return;
+    switch (player.operatorId) {
+      case 'neon_vanguard': return this.castStormcall(player);
+      case 'crimson_strike': return this.castReckoning(player);
+      case 'void_runner': return this.castEchoCollapse(player);
+      case 'solar_guard': return this.castDawnwall(player);
+      case 'black_ice': return this.castShatter(player);
+      case 'royal_inferno': return this.castHellseed(player);
+    }
+  }
+
+  private castStormcall(player: CoopPlayer) {
+    if (player.artifactResource < getCoopOperator(player.operatorId).spenderCost) return;
+    player.artifactResource = 0; player.artifactLastActionAtMs = this.elapsedMs;
+    const range = 650, directionX = Math.cos(player.angle), directionY = Math.sin(player.angle);
+    const obstruction = raycastWorldObstacles(player.x, player.y, 24 + player.z, directionX, directionY, 0, range, this.currentWorldId);
+    const placementRange = obstruction ? Math.max(24, obstruction.distance - 36) : range;
+    const x = player.x + directionX * placementRange, y = player.y + directionY * placementRange;
+    this.artifactEffects.push({ id: this.nextEntityId++, kind: 'stormcall', ownerId: player.id, x, y, radius: 260, remainingMs: 1_900, resolvesAtMs: this.elapsedMs + 1_900, nextTickAtMs: this.elapsedMs + 700, pulsesRemaining: 3 });
+    this.emitCombatEvent({ kind: 'artifact_cast', x: player.x, y: player.y, targetX: x, targetY: y, playerId: player.id, weaponId: 'stormcall', color: '#60a5fa' });
+    this.trimArtifactEffects();
+  }
+
+  private castReckoning(player: CoopPlayer) {
+    const cost = getCoopOperator(player.operatorId).spenderCost;
+    if (player.artifactResource < cost) return;
+    const target = this.aimedEnemy(player, 1_450);
+    if (!target) return;
+    player.artifactResource -= cost; player.artifactLastActionAtMs = this.elapsedMs;
+    let killed = false;
+    for (let round = 0; round < 5 && !target.dying; round++) {
+      const missing = 1 - target.health / Math.max(1, target.maxHealth);
+      this.applyDamage(target, 22 * (1 + missing * .5) * this.imprintModifiers(player).damageMultiplier, player.id, 'reckoning');
+      killed ||= target.dying;
+    }
+    this.emitCombatEvent({ kind: 'artifact_cast', x: player.x, y: player.y, targetX: target.x, targetY: target.y, enemyId: target.id, playerId: player.id, weaponId: 'reckoning', amount: 5, color: '#fb7185' });
+    if (killed) { this.addArtifactResource(player, 20); this.grantArtifactBarrier(player, 10, 20, 6_000); const weapon = this.weapon(player); weapon.magazineAmmo = Math.min(COOP_FIREARM_BY_ID[weapon.weaponId].magazineSize, weapon.magazineAmmo + 5); }
+  }
+
+  private castEchoCollapse(player: CoopPlayer) {
+    const target = this.enemies.find(enemy => enemy.id === player.artifactTargetId && !enemy.dying);
+    const seals = Math.floor(player.artifactResource);
+    if (!target || seals <= 0) return;
+    player.artifactResource = 0; player.artifactTargetId = undefined; player.artifactLastActionAtMs = this.elapsedMs;
+    const positions = [...player.echoPositions.slice(-seals), ...Array.from({ length: seals }, () => ({ x: player.x, y: player.y }))].slice(0, seals);
+    for (let index = 0; index < positions.length; index++) {
+      const origin = positions[index];
+      if (target.dying) break;
+      const distance = Math.hypot(target.x - origin.x, target.y - origin.y);
+      if (!raycastWorldObstacles(origin.x, origin.y, 24, target.x - origin.x, target.y - origin.y, 0, distance, this.currentWorldId)) {
+        this.emitCombatEvent({ kind: 'artifact_cast', x: origin.x, y: origin.y, targetX: target.x, targetY: target.y, enemyId: target.id, playerId: player.id, weaponId: 'echo_collapse', chainIndex: index, amount: positions.length, color: '#c084fc' });
+        this.applyDamage(target, 30 * this.imprintModifiers(player).damageMultiplier, player.id, 'echo_collapse');
+      }
+    }
+    player.echoPositions.length = 0;
+  }
+
+  private castDawnwall(player: CoopPlayer) {
+    if (player.artifactResource < getCoopOperator(player.operatorId).spenderCost || this.artifactEffects.some(effect => effect.kind === 'dawnwall' && effect.ownerId === player.id)) return;
+    player.artifactResource = 0; player.artifactLastActionAtMs = this.elapsedMs;
+    const x = player.x + Math.cos(player.angle) * 180, y = player.y + Math.sin(player.angle) * 180;
+    this.grantArtifactBarrier(player, 30, 30, 6_000);
+    for (const ally of this.players.values()) if (ally.id !== player.id && ally.lifeState === 'alive' && Math.hypot(ally.x - x, ally.y - y) <= 260) this.grantArtifactBarrier(ally, 12, 12, 6_000);
+    this.artifactEffects.push({ id: this.nextEntityId++, kind: 'dawnwall', ownerId: player.id, x, y, radius: 260, remainingMs: 6_000, resolvesAtMs: this.elapsedMs + 6_000, nextTickAtMs: this.elapsedMs, pulsesRemaining: 6 });
+    this.emitCombatEvent({ kind: 'artifact_cast', x: player.x, y: player.y, targetX: x, targetY: y, playerId: player.id, weaponId: 'dawnwall', color: '#fbbf24' });
+    this.trimArtifactEffects();
+  }
+
+  private castShatter(player: CoopPlayer) {
+    const cost = getCoopOperator(player.operatorId).spenderCost;
+    if (player.artifactResource < cost) return;
+    const target = this.aimedEnemy(player, 1_700);
+    if (!target) return;
+    player.artifactResource -= cost; player.artifactLastActionAtMs = this.elapsedMs;
+    const stacks = target.chillStacks || 0;
+    this.emitCombatEvent({ kind: 'artifact_cast', x: player.x, y: player.y, targetX: target.x, targetY: target.y, enemyId: target.id, playerId: player.id, weaponId: 'shatter_lance', amount: stacks, color: '#7dd3fc' });
+    this.applyDamage(target, (70 + stacks * 12) * this.imprintModifiers(player).damageMultiplier, player.id, 'shatter_lance');
+    if (stacks >= 5) {
+      let fullTargets = 1;
+      const nearby = this.enemySpatialIndex.query(target.x, target.y, 110 + MAX_ENEMY_RADIUS, this.nearbyEnemies).filter(enemy => enemy.id !== target.id && !enemy.dying && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= 110 + enemy.radius).slice(0, 8);
+      for (const enemy of nearby) { if ((enemy.chillStacks || 0) >= 5) fullTargets++; this.applyDamage(enemy, (35 + (enemy.chillStacks || 0) * 6) * this.imprintModifiers(player).damageMultiplier, player.id, 'shatter_burst'); enemy.chillStacks = 0; }
+      if (fullTargets >= 3) { this.addArtifactResource(player, 1); player.artifactProc = 'deep_freeze'; player.artifactProcExpiresAtMs = this.elapsedMs + 1_200; }
+    }
+    target.chillStacks = 0;
+  }
+
+  private castHellseed(player: CoopPlayer) {
+    const cost = getCoopOperator(player.operatorId).spenderCost;
+    if (player.artifactResource < cost || this.artifactEffects.some(effect => effect.kind === 'hellseed' && effect.ownerId === player.id)) return;
+    const target = this.aimedEnemy(player, 1_500);
+    if (!target) return;
+    const empowered = player.artifactResource >= 5;
+    player.artifactResource -= empowered ? 5 : cost; player.artifactLastActionAtMs = this.elapsedMs;
+    player.artifactProc = empowered ? 'soulburn' : undefined; player.artifactProcExpiresAtMs = this.elapsedMs + 2_000;
+    this.artifactEffects.push({ id: this.nextEntityId++, kind: 'hellseed', ownerId: player.id, x: target.x, y: target.y, radius: empowered ? 250 : 200, remainingMs: 2_000, resolvesAtMs: this.elapsedMs + 2_000, nextTickAtMs: this.elapsedMs + 2_000, targetEnemyId: target.id, empowered });
+    this.emitCombatEvent({ kind: 'artifact_cast', x: player.x, y: player.y, targetX: target.x, targetY: target.y, enemyId: target.id, playerId: player.id, weaponId: 'hellseed', amount: empowered ? 5 : 3, color: empowered ? '#fde68a' : '#fb923c' });
+    this.trimArtifactEffects();
+  }
+
+  private aimedEnemy(player: CoopPlayer, range: number) {
+    const directionX = Math.cos(player.angle), directionY = Math.sin(player.angle);
+    const horizontalRange = range * Math.cos(player.aimPitch);
+    const worldHit = raycastWorldObstacles(player.x, player.y, 24 + player.z, directionX, directionY, Math.tan(player.aimPitch), horizontalRange, this.currentWorldId);
+    const maximum = worldHit?.distance ?? horizontalRange;
+    return this.enemySpatialIndex.query(player.x + directionX * maximum * .5, player.y + directionY * maximum * .5, maximum * .5 + MAX_ENEMY_RADIUS, this.nearbyEnemies)
+      .filter(enemy => !enemy.dying)
+      .map(enemy => {
+        const dx = enemy.x - player.x, dy = enemy.y - player.y;
+        const along = dx * directionX + dy * directionY;
+        const aimZ = 24 + player.z + Math.tan(player.aimPitch) * along;
+        return { enemy, along, perpendicular: Math.abs(dx * directionY - dy * directionX), aimZ };
+      })
+      .filter(hit => hit.along >= 0 && hit.along <= maximum && hit.perpendicular <= hit.enemy.radius + 12
+        && hit.aimZ >= -5 && hit.aimZ <= ENEMY_HIT_HEIGHT + hit.enemy.radius + 5)
+      .sort((a, b) => a.along - b.along || a.enemy.id - b.enemy.id)[0]?.enemy;
+  }
+
+  private grantArtifactBarrier(player: CoopPlayer, amount: number, cap: number, durationMs: number) {
+    player.artifactBarrier = Math.min(cap, player.artifactBarrier + amount);
+    player.artifactBarrierExpiresAtMs = Math.max(player.artifactBarrierExpiresAtMs, this.elapsedMs + durationMs);
+  }
+
+  private trimArtifactEffects() {
+    while (this.artifactEffects.length > ARTIFACT_ZONE_CAP) this.artifactEffects.shift();
+  }
+
+  private updateArtifactEffects(deltaMs: number) {
+    for (const effect of this.artifactEffects) {
+      effect.remainingMs = Math.max(0, effect.resolvesAtMs - this.elapsedMs);
+      const owner = this.players.get(effect.ownerId);
+      if (!owner) { effect.remainingMs = 0; continue; }
+      if (effect.kind === 'stormcall' && this.elapsedMs >= effect.nextTickAtMs && (effect.pulsesRemaining || 0) > 0) {
+        const targets = this.enemySpatialIndex.query(effect.x, effect.y, effect.radius + MAX_ENEMY_RADIUS, this.nearbyEnemies).filter(enemy => !enemy.dying && Math.hypot(enemy.x - effect.x, enemy.y - effect.y) <= effect.radius + enemy.radius).sort((a, b) => Math.hypot(a.x - effect.x, a.y - effect.y) - Math.hypot(b.x - effect.x, b.y - effect.y) || a.id - b.id).slice(0, 6);
+        for (const enemy of targets) this.applyDamage(enemy, 24 * this.imprintModifiers(owner).damageMultiplier, owner.id, 'stormcall');
+        effect.pulsesRemaining!--; effect.nextTickAtMs += 400;
+      } else if (effect.kind === 'dawnwall' && this.elapsedMs >= effect.nextTickAtMs) {
+        const targets = this.enemySpatialIndex.query(effect.x, effect.y, effect.radius + MAX_ENEMY_RADIUS, this.nearbyEnemies).filter(enemy => !enemy.dying && Math.hypot(enemy.x - effect.x, enemy.y - effect.y) <= effect.radius + enemy.radius).slice(0, 12);
+        for (const enemy of targets) {
+          this.applyDamage(enemy, 12 * this.imprintModifiers(owner).damageMultiplier, owner.id, 'dawnwall');
+          if (enemy.type !== 'titan' && enemy.type !== 'ranged') { enemy.targetPlayerId = owner.id; enemy.targetLeaseUntilMs = Math.max(enemy.targetLeaseUntilMs, this.elapsedMs + 1_100); }
+        }
+        effect.nextTickAtMs += 1_000;
+      } else if (effect.kind === 'hellseed') {
+        const target = this.enemies.find(enemy => enemy.id === effect.targetEnemyId);
+        if (target && !target.dying) { effect.x = target.x; effect.y = target.y; }
+        if (this.elapsedMs >= effect.resolvesAtMs || !target || target.dying) {
+          const targets = this.enemySpatialIndex.query(effect.x, effect.y, effect.radius + MAX_ENEMY_RADIUS, this.nearbyEnemies).filter(enemy => !enemy.dying && Math.hypot(enemy.x - effect.x, enemy.y - effect.y) <= effect.radius + enemy.radius).slice(0, 8);
+          for (const enemy of targets) {
+            this.applyDamage(enemy, 90 * this.imprintModifiers(owner).damageMultiplier, owner.id, 'hellseed');
+            if (!enemy.dying) {
+              enemy.cinderhexByOwner ||= new Map();
+              const existing = enemy.cinderhexByOwner.get(owner.id);
+              enemy.cinderhexByOwner.set(owner.id, { stacks: Math.min(3, Math.max(2, existing?.stacks || 0)), expiresAtMs: this.elapsedMs + 6_000, nextTickAtMs: existing?.nextTickAtMs || this.elapsedMs + 1_000, damageSinceFragment: existing?.damageSinceFragment || 0 });
+            }
+          }
+          if (effect.empowered) {
+            this.artifactEffects.push({ id: this.nextEntityId++, kind: 'emberling', ownerId: owner.id, x: effect.x, y: effect.y, radius: 32, remainingMs: 4_500, resolvesAtMs: this.elapsedMs + 4_500, nextTickAtMs: this.elapsedMs + 250, pulsesRemaining: 9, empowered: true });
+            this.trimArtifactEffects();
+          }
+          effect.remainingMs = 0;
+        }
+      } else if (effect.kind === 'emberling') {
+        const target = this.enemySpatialIndex.query(effect.x, effect.y, 520 + MAX_ENEMY_RADIUS, this.nearbyEnemies)
+          .filter(enemy => !enemy.dying)
+          .sort((a, b) => Math.hypot(a.x - effect.x, a.y - effect.y) - Math.hypot(b.x - effect.x, b.y - effect.y) || a.id - b.id)[0];
+        if (target) {
+          const distance = Math.hypot(target.x - effect.x, target.y - effect.y);
+          const travel = Math.min(distance, 230 * deltaMs / 1000);
+          if (distance > .001) { effect.x += (target.x - effect.x) / distance * travel; effect.y += (target.y - effect.y) / distance * travel; }
+          if (this.elapsedMs >= effect.nextTickAtMs && distance <= 330 + target.radius && (effect.pulsesRemaining || 0) > 0) {
+            this.applyDamage(target, 24 * this.imprintModifiers(owner).damageMultiplier, owner.id, 'hellseed');
+            if (!target.dying) {
+              target.cinderhexByOwner ||= new Map();
+              const hex = target.cinderhexByOwner.get(owner.id);
+              target.cinderhexByOwner.set(owner.id, { stacks: Math.min(3, Math.max(1, hex?.stacks || 0)), expiresAtMs: this.elapsedMs + 6_000, nextTickAtMs: hex?.nextTickAtMs || this.elapsedMs + 1_000, damageSinceFragment: hex?.damageSinceFragment || 0 });
+            }
+            effect.pulsesRemaining!--; effect.nextTickAtMs += 500;
+          }
+        }
+      }
+    }
+    retainInPlace(this.artifactEffects, effect => effect.remainingMs > 0 && ((effect.kind !== 'stormcall' && effect.kind !== 'emberling') || (effect.pulsesRemaining || 0) > 0));
+  }
+
+  private updateArtifactStatuses() {
+    for (const enemy of this.enemies) {
+      if (enemy.dying) continue;
+      if ((enemy.chillStacks || 0) > 0 && this.elapsedMs < (enemy.chillExpiresAtMs || 0)) {
+        const cap = enemy.type === 'titan' ? .10 : enemy.type === 'elite' ? .20 : .35;
+        enemy.slowMultiplier = Math.min(enemy.slowMultiplier, 1 - cap * (enemy.chillStacks || 0) / 5);
+        enemy.chillRemainingMs = Math.max(0, (enemy.chillExpiresAtMs || 0) - this.elapsedMs);
+      } else if (enemy.chillStacks) { enemy.chillStacks = 0; enemy.chillRemainingMs = 0; enemy.slowMultiplier = 1; }
+      let totalCinder = 0, longest = 0;
+      for (const [ownerId, hex] of enemy.cinderhexByOwner || []) {
+        if (this.elapsedMs >= hex.expiresAtMs) { enemy.cinderhexByOwner!.delete(ownerId); continue; }
+        totalCinder += hex.stacks; longest = Math.max(longest, hex.expiresAtMs - this.elapsedMs);
+        if (this.elapsedMs >= hex.nextTickAtMs) {
+          const owner = this.players.get(ownerId);
+          if (owner) {
+            const dealt = this.applyDamage(enemy, 4 * hex.stacks * this.imprintModifiers(owner).damageMultiplier, ownerId, 'cinderhex_dot') || 0;
+            if (enemy.type === 'elite' || enemy.type === 'titan') {
+              hex.damageSinceFragment += dealt;
+              const threshold = enemy.type === 'titan' ? 300 : 200;
+              if (hex.damageSinceFragment >= threshold) { hex.damageSinceFragment -= threshold; this.addArtifactResource(owner, 1); }
+            }
+          }
+          hex.nextTickAtMs += 1_000;
+        }
+      }
+      enemy.cinderhexStacks = totalCinder; enemy.cinderhexRemainingMs = longest;
+    }
   }
 
   private killEnemy(enemy: CoopEnemy, playerId: string, weaponId?: CoopWeaponId) {
@@ -1921,6 +3264,7 @@ export class CoopSimulation {
     enemy.deathUntilMs = this.elapsedMs + COOP_ENEMY_DEATH_PRESENTATION_MS;
     enemy.deathRemainingMs = COOP_ENEMY_DEATH_PRESENTATION_MS;
     this.kills++;
+    for (const ownerId of enemy.cinderhexByOwner?.keys() || []) this.addArtifactResource(this.players.get(ownerId), 1);
     const stats = this.runStats.get(playerId); if (stats) stats.kills++;
     this.emitCombatEvent({ kind: 'enemy_killed', x: enemy.x, y: enemy.y, enemyId: enemy.id, playerId, killedByPlayerId: playerId, color: enemy.color, weaponId });
     this.spawnGem(enemy.x, enemy.y, enemy.experienceValue, playerId);
@@ -1936,7 +3280,8 @@ export class CoopSimulation {
     if (enemy.isHolder) {
       this.spawnItem(enemy.x, enemy.y, rollHolderItem(() => this.random()), playerId);
     } else {
-      const coin = rollCoinDrop(enemy.type, 1, 0.22, () => this.random());
+      const lootMultiplier = getWorldDefinition(this.currentWorldId).difficulty.rewardMultiplier;
+      const coin = rollCoinDrop(enemy.type, 1, Math.min(.58, .22 * lootMultiplier), () => this.random());
       if (coin) this.spawnItem(enemy.x, enemy.y, coin, playerId);
     }
 
@@ -1955,6 +3300,49 @@ export class CoopSimulation {
 
     if (enemy.id === this.bossEnemyId) this.onBossKilled(enemy);
     if (this.runDirector.completeEliteTarget(enemy.id)) this.onObjectiveCompleted(this.squadCentre());
+    this.onFieldMissionEnemyKilled(enemy);
+  }
+
+  private onFieldMissionEnemyKilled(enemy: CoopEnemy) {
+    const mission = this.fieldMissionDirector.current;
+    const enclave = this.gasEnclave;
+    if (enclave && enclave.guardIds.includes(enemy.id)) {
+      enclave.guardIds = enclave.guardIds.filter(id => id !== enemy.id);
+      if (!mission || mission.id !== enclave.missionSiteId) return;
+    }
+    if (enclave && enemy.id === enclave.commanderId) {
+      this.gasEnclave = undefined;
+      if (mission?.id === enclave.missionSiteId && mission.kind === 'toxic_hunt') {
+        mission.targetEnemyIds = mission.targetEnemyIds.filter(id => id !== enemy.id);
+        this.completeFieldMission();
+      } else {
+        const removed = this.fieldMissionDirector.removeAvailable(enclave.missionSiteId);
+        this.pings = this.pings.filter(ping => ping.missionSiteId !== enclave.missionSiteId);
+        for (const guard of this.enemies) {
+          if (!enclave.guardIds.includes(guard.id)) continue;
+          guard.missionId = undefined; guard.missionRole = undefined;
+          guard.missionAnchorX = undefined; guard.missionAnchorY = undefined;
+        }
+        if (removed) this.emitCombatEvent({ kind: 'mission_expired', x: enemy.x, y: enemy.y, enemyId: enemy.id, color: '#4ade80' });
+      }
+      return;
+    }
+    if (!mission || enemy.missionId !== mission.id) return;
+    mission.guardEnemyIds = mission.guardEnemyIds.filter(id => id !== enemy.id);
+    if (enemy.missionRole === 'courier' && mission.kind === 'courier_intercept') {
+      mission.courierEnemyIds = mission.courierEnemyIds.filter(id => id !== enemy.id);
+      mission.drives.push({ id: enemy.id, x: enemy.x, y: enemy.y, collected: false });
+      const couriersEliminated = 3 - mission.courierEnemyIds.length;
+      if (!mission.courierEnemyIds.length) {
+        mission.stage = 'recover'; mission.progress = mission.drives.filter(drive => drive.collected).length;
+      } else {
+        mission.stage = 'intercept'; mission.progress = couriersEliminated;
+      }
+      mission.required = 3;
+      const nextTarget = resolveCoopMissionNavigationTarget(mission, this.enemies);
+      mission.x = nextTarget?.x ?? enemy.x; mission.y = nextTarget?.y ?? enemy.y;
+      this.emitCombatEvent({ kind: 'mission_stage', x: enemy.x, y: enemy.y, enemyId: enemy.id, amount: couriersEliminated, color: '#f59e0b' });
+    }
   }
 
   private spawnGem(x: number, y: number, value: number, killedByPlayerId?: string) {
@@ -1963,7 +3351,7 @@ export class CoopSimulation {
       if (merge) { merge.value += value; this.emitCombatEvent({ kind: 'drop_spawned', x: merge.x, y: merge.y, playerId: killedByPlayerId, amount: value, color: merge.color }); }
       return;
     }
-    const gem: CoopGemSnapshot = { id: this.nextEntityId++, x, y, value, color: EXPERIENCE_GEM_COLOR };
+    const gem: CoopGemSnapshot = { id: this.nextEntityId++, x, y, value, color: WORLD_GEM_COLORS[this.currentWorldId] || EXPERIENCE_GEM_COLOR };
     this.gems.push(gem);
     this.emitCombatEvent({ kind: 'drop_spawned', x, y, playerId: killedByPlayerId, amount: value, color: gem.color });
   }
@@ -1978,7 +3366,7 @@ export class CoopSimulation {
         // saturated with unrelated pickups. Bank it to its killer immediately.
         const player = this.players.get(killedByPlayerId);
         if (player) {
-          for (const member of this.players.values()) if (member.lifeState !== 'eliminated') member.pendingDataCores += definition.value;
+          for (const member of this.players.values()) if (member.lifeState !== 'eliminated' && member.lifeState !== 'extracted') member.pendingDataCores += definition.value;
           this.emitCombatEvent({ kind: 'pickup_collected', x, y, playerId: killedByPlayerId, itemType: type, amount: definition.value, color: definition.color });
         }
       }
@@ -2061,6 +3449,7 @@ export class CoopSimulation {
   }
 
   private collectManualDrop(player: CoopPlayer) {
+    if (player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return false;
     let closest: CoopItemSnapshot | undefined;
     let closestDistance = COOP_MANUAL_PICKUP_RANGE;
     for (const item of this.items) {
@@ -2071,18 +3460,19 @@ export class CoopSimulation {
       closest = item;
       closestDistance = distance;
     }
-    if (!closest) return;
+    if (!closest) return false;
     if (closest.manualDropKind === 'cash') {
       player.coins += closest.value;
     } else player.selfRevives++;
     this.items = this.items.filter(item => item.id !== closest!.id);
     this.emitCombatEvent({ kind: 'pickup_collected', x: closest.x, y: closest.y, playerId: player.id, itemType: closest.type, amount: closest.value, color: closest.color });
+    return true;
   }
 
   private collectGem(gem: CoopGemSnapshot, player: CoopPlayer) {
     // XP is a squad resource. Reach helps recover it without stealing levels
     // from the teammate who happened to stand nearest to the drop.
-    for (const member of this.players.values()) if (member.lifeState !== 'eliminated') this.addExperience(member, gem.value);
+    for (const member of this.players.values()) if (member.lifeState !== 'eliminated' && member.lifeState !== 'extracted') this.addExperience(member, gem.value);
     this.emitCombatEvent({ kind: 'pickup_collected', x: gem.x, y: gem.y, playerId: player.id, amount: gem.value, color: gem.color });
   }
 
@@ -2102,7 +3492,7 @@ export class CoopSimulation {
     } else {
       // Data Cores fund every deployed Imprint; they are never a last-hit or
       // pickup-radius contest between co-op partners.
-      for (const member of this.players.values()) if (member.lifeState !== 'eliminated') member.pendingDataCores += effect.amount;
+      for (const member of this.players.values()) if (member.lifeState !== 'eliminated' && member.lifeState !== 'extracted') member.pendingDataCores += effect.amount;
     }
     const eventAmount = item.type === 'hp' ? player.maxHealth : item.value;
     this.emitCombatEvent({ kind: 'pickup_collected', x: item.x, y: item.y, playerId: player.id, itemType: item.type, amount: eventAmount, color: item.color });
@@ -2126,14 +3516,16 @@ export class CoopSimulation {
 
   private spawnEnemy(type: keyof typeof ENEMY_TYPES, targetPlayerId: string, packetId: number, openingPosition?: { x: number; y: number }, healthMultiplier = 1, damageMultiplier = 1) {
     const definition = ENEMY_TYPES[type];
+    const identity = worldEnemyIdentity(this.currentWorldId, type);
+    const difficulty = getWorldDefinition(this.currentWorldId).difficulty;
     const players = this.encounterPlayers();
     const clusters = buildEncounterClusters(players, this.enemies);
     const cluster = clusters.find(candidate => candidate.playerIds.includes(targetPlayerId)) || clusters[0];
     const position = openingPosition || (cluster && this.spawnTopology.find(cluster, players, definition.radius, this.enemies)) || this.safeFallback(targetPlayerId, definition.radius);
     this.enemies.push({
-      id: this.nextEntityId++, x: position.x, y: position.y, health: definition.health * healthMultiplier, maxHealth: definition.health * healthMultiplier,
-      type, color: definition.color, radius: definition.radius, damage: definition.damage * damageMultiplier, speed: definition.speed,
-      experienceValue: Math.round(definition.xp * (.75 + healthMultiplier * .25)), hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1,
+      id: this.nextEntityId++, x: position.x, y: position.y, health: definition.health * healthMultiplier * difficulty.healthMultiplier, maxHealth: definition.health * healthMultiplier * difficulty.healthMultiplier,
+      type, color: identity.color, worldId: this.currentWorldId, archetypeName: identity.name, radius: definition.radius, damage: definition.damage * damageMultiplier * difficulty.damageMultiplier, speed: definition.speed,
+      experienceValue: Math.round(definition.xp * (.75 + healthMultiplier * .25) * difficulty.rewardMultiplier), hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1,
       isHolder: this.random() > 1 - ITEM_HOLDER_CHANCE, dying: false, deathRemainingMs: 0,
       targetPlayerId, spawnPacketId: packetId, targetLeaseUntilMs: this.elapsedMs + 2_500,
       nextAttackAtMs: this.elapsedMs + enemyOpeningDelay(type),
@@ -2150,7 +3542,7 @@ export class CoopSimulation {
     ));
     // Contract elites and bosses consume global capacity, but their separate
     // scenario budget must not stall or inflate finite round accounting.
-    const orders = this.encounterDirector.schedule(this.elapsedMs, this.encounterEnemies(), this.encounterPlayers(), capacity);
+    const orders = this.encounterDirector.schedule(this.worldElapsedMs(), this.encounterEnemies(), this.encounterPlayers(), capacity);
     for (const packet of groupEncounterOrders(orders)) this.spawnEncounterPacket(packet);
     for (const event of this.encounterDirector.drainRoundEvents()) this.handleRoundEvent(event);
   }
@@ -2179,7 +3571,7 @@ export class CoopSimulation {
     for (const rotation of [0, .45, -.45, .9, -.9, Math.PI]) {
       const x = centre.x + Math.cos(toward + rotation) * depth + Math.cos(toward + Math.PI / 2 + rotation) * lateral;
       const y = centre.y + Math.sin(toward + rotation) * depth + Math.sin(toward + Math.PI / 2 + rotation) * lateral;
-      if (!isWorldPositionClear(x, y, radius + 6)) continue;
+      if (!isWorldPositionClear(x, y, radius + 6, this.currentWorldId)) continue;
       if (placed.some(other => Math.hypot(other.x - x, other.y - y) < other.radius + radius + 12)) continue;
       return { x, y };
     }
@@ -2209,7 +3601,7 @@ export class CoopSimulation {
     this.emitCombatEvent({ kind: 'round_completed', x: centre.x, y: centre.y, amount: event.round, color: '#5eead4' });
   }
 
-  private encounterPlayers(): EncounterPlayer[] { return [...this.players.values()].map(({ id, x, y, angle, health }) => ({ id, x, y, angle, health })); }
+  private encounterPlayers(): EncounterPlayer[] { return [...this.players.values()].filter(player => player.lifeState === 'alive').map(({ id, x, y, angle, health }) => ({ id, x, y, angle, health })); }
   private encounterEnemies() { return this.enemies.filter(enemy => enemy.spawnPacketId !== undefined); }
 
   private safeFallback(targetPlayerId: string, radius: number) {
@@ -2218,7 +3610,7 @@ export class CoopSimulation {
     for (let attempt = 0; attempt < 16; attempt++) {
       const angle = (attempt / 16) * Math.PI * 2 + this.random() * 0.08;
       const position = { x: clamp(base.x + Math.cos(angle) * 980, radius, COOP_WORLD_SIZE - radius), y: clamp(base.y + Math.sin(angle) * 980, radius, COOP_WORLD_SIZE - radius) };
-      if (isWorldPositionClear(position.x, position.y, radius)) return position;
+      if (isWorldPositionClear(position.x, position.y, radius, this.currentWorldId)) return position;
     }
     return { x: clamp(base.x + 900, radius, COOP_WORLD_SIZE - radius), y: base.y };
   }
@@ -2227,7 +3619,7 @@ export class CoopSimulation {
     let target: CoopPlayer | undefined;
     let distance = Infinity;
     for (const player of this.players.values()) {
-      if (player.health <= 0) continue;
+      if (player.health <= 0 || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) continue;
       const candidateDistance = (player.x - x) ** 2 + (player.y - y) ** 2;
       if (candidateDistance < distance || (candidateDistance === distance && target !== undefined && player.id < target.id)) {
         target = player;
@@ -2317,6 +3709,78 @@ function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: n
   const amount = lengthSquared > .0001 ? clamp(((px - ax) * dx + (py - ay) * dy) / lengthSquared, 0, 1) : 0;
   return Math.hypot(px - (ax + dx * amount), py - (ay + dy * amount));
 }
+
+const WORLD_ENEMY_NAMES: Readonly<Record<WorldId, Readonly<Record<keyof typeof ENEMY_TYPES, string>>>> = Object.freeze({
+  neon_bastion: { basic: 'Signal Drone', fast: 'Neon Ripper', ranged: 'Rail Seer', tank: 'Bastion Bulwark', phantom: 'Static Phantom', elite: 'Grid Commander', titan: 'Singularity' },
+  cinderworks: { basic: 'Slag Drone', fast: 'Ash Hound', ranged: 'Magma Artillerist', tank: 'Crucible Guard', phantom: 'Smoke Stalker', elite: 'Forge Warden', titan: 'Furnace Sovereign' },
+  white_silence: { basic: 'Frostling', fast: 'Shard Runner', ranged: 'Cryo Seer', tank: 'Glacial Bulwark', phantom: 'White Wraith', elite: 'Rime Commander', titan: 'Pale Leviathan' },
+  null_garden: { basic: 'Sporeling', fast: 'Blinkling', ranged: 'Void Bloom', tank: 'Root Guardian', phantom: 'Phase Stalker', elite: 'Garden Mind', titan: 'Eclipse Heart' },
+});
+
+const WORLD_BOSS_NAMES: Readonly<Record<WorldId, Readonly<Record<CoopBossKind, string>>>> = Object.freeze({
+  neon_bastion: { neural_overlord: 'Neural Overlord', void_architect: 'Void Architect', singularity: 'Singularity' },
+  cinderworks: { neural_overlord: 'Kiln Marshal', void_architect: 'Crucible Engine', singularity: 'Furnace Sovereign' },
+  white_silence: { neural_overlord: 'Rime Matriarch', void_architect: 'Cryostorm Colossus', singularity: 'Pale Leviathan' },
+  null_garden: { neural_overlord: 'Bloom Tyrant', void_architect: 'Graviton Gardener', singularity: 'Eclipse Heart' },
+});
+
+const WORLD_ENEMY_COLORS: Readonly<Record<WorldId, readonly string[]>> = Object.freeze({
+  neon_bastion: ['#00f0ff', '#ffb020', '#34d399', '#ff4f64', '#d8b4fe', '#e879f9', '#f8fafc'],
+  cinderworks: ['#ff6a1a', '#ffb020', '#ff3b0a', '#b91c1c', '#9a3412', '#ffd166', '#fff0c2'],
+  white_silence: ['#d9f7ff', '#67e8f9', '#a5f3fc', '#60a5fa', '#e0e7ff', '#c4b5fd', '#ffffff'],
+  null_garden: ['#a3ff6f', '#ff4fd8', '#d8b4fe', '#7c3aed', '#67e8f9', '#f0abfc', '#ffe7a3'],
+});
+
+const WORLD_GEM_COLORS: Readonly<Record<WorldId, string>> = Object.freeze({
+  neon_bastion: EXPERIENCE_GEM_COLOR,
+  cinderworks: '#ffb020',
+  white_silence: '#a5f3fc',
+  null_garden: '#e879f9',
+});
+
+function worldEnemyIdentity(worldId: WorldId, type: keyof typeof ENEMY_TYPES) {
+  const index = ['basic', 'fast', 'ranged', 'tank', 'phantom', 'elite', 'titan'].indexOf(type);
+  return { name: WORLD_ENEMY_NAMES[worldId][type], color: WORLD_ENEMY_COLORS[worldId][Math.max(0, index)] || ENEMY_TYPES[type].color };
+}
+
+function worldBossIdentity(worldId: WorldId, kind: CoopBossKind) {
+  return { name: WORLD_BOSS_NAMES[worldId][kind], color: WORLD_ENEMY_COLORS[worldId][6] || ENEMY_TYPES.titan.color };
+}
+
+type WorldEnemyAttackProfile = Omit<EnemyAttackProfile, 'kind'> & { kind: CoopHazardSnapshot['kind']; color: string };
+
+/** Same role, different faction grammar. These remain compact data transforms
+ * so later worlds gain tactics without multiplying update loops. */
+function worldEnemyAttack(worldId: WorldId, type: keyof typeof ENEMY_TYPES, base: EnemyAttackProfile): WorldEnemyAttackProfile {
+  const attack: WorldEnemyAttackProfile = { ...base, color: type === 'ranged' ? '#4ade80' : type === 'tank' ? '#fbbf24' : type === 'phantom' ? '#e2e8f0' : '#f472d0' };
+  if (worldId === 'cinderworks') {
+    if (type === 'ranged') return { ...attack, radius: 108, windupMs: 950, cooldownMs: 2_850, damageMultiplier: 1.12, color: '#ff6a1a' };
+    if (type === 'tank') return { ...attack, radius: 205, windupMs: 1_250, damageMultiplier: 1.02, color: '#ffb020' };
+    if (type === 'phantom') return { ...attack, kind: 'lunge', radius: 98, windupMs: 650, cooldownMs: 3_650, damageMultiplier: 1.5, color: '#9a3412' };
+    return { ...attack, radius: 142, windupMs: 1_100, cooldownMs: 4_050, damageMultiplier: .86, color: '#ffd166' };
+  }
+  if (worldId === 'white_silence') {
+    if (type === 'ranged') return { ...attack, radius: 94, windupMs: 1_450, cooldownMs: 3_450, damageMultiplier: .95, color: '#67e8f9' };
+    if (type === 'tank') return { ...attack, radius: 235, windupMs: 1_450, cooldownMs: 3_850, damageMultiplier: .82, color: '#d9f7ff' };
+    if (type === 'phantom') return { ...attack, radius: 112, windupMs: 920, cooldownMs: 3_800, damageMultiplier: 1.38, color: '#e0e7ff' };
+    return { ...attack, kind: 'shockwave', radius: 285, windupMs: 1_650, cooldownMs: 4_700, damageMultiplier: .62, color: '#c4b5fd' };
+  }
+  if (worldId === 'null_garden') {
+    if (type === 'ranged') return { ...attack, kind: 'gravity', radius: 175, windupMs: 1_150, cooldownMs: 3_050, damageMultiplier: .58, color: '#d8b4fe' };
+    if (type === 'tank') return { ...attack, radius: 220, windupMs: 1_050, cooldownMs: 3_100, damageMultiplier: 1.05, color: '#7c3aed' };
+    if (type === 'phantom') return { ...attack, radius: 125, windupMs: 620, cooldownMs: 3_200, damageMultiplier: 1.52, color: '#ff4fd8' };
+    return { ...attack, kind: 'gravity', radius: 310, windupMs: 1_400, cooldownMs: 4_100, damageMultiplier: .72, color: '#f0abfc' };
+  }
+  return attack;
+}
+
+function worldHazardIntervalMs(worldId: WorldId, insertion: boolean) {
+  if (worldId === 'cinderworks') return insertion ? 13_000 : 10_500;
+  if (worldId === 'white_silence') return insertion ? 15_000 : 12_000;
+  if (worldId === 'null_garden') return insertion ? 12_000 : 9_500;
+  return Number.POSITIVE_INFINITY;
+}
+
 function clamp(value: number, min: number, max: number) { return Math.max(min, Math.min(max, value)); }
 function retainInPlace<T>(items: T[], retain: (item: T) => boolean) {
   let writeIndex = 0;
@@ -2327,6 +3791,9 @@ function retainInPlace<T>(items: T[], retain: (item: T) => boolean) {
   items.length = writeIndex;
 }
 function isPassiveModule(value: unknown): value is CoopPassiveModuleId { return typeof value === 'string' && value in COOP_PASSIVE_BY_ID; }
+function isArtifactPrimary(value: unknown): value is CoopFirearmId {
+  return value === 'goreline_repeater' || value === 'riftspike_array' || value === 'dawnwall_cannon' || value === 'cinderhex_engine';
+}
 function maxArmorHp(tier: number) { return tier >= 2 ? 100 : tier >= 1 ? 50 : 0; }
 function groupEncounterOrders(orders: readonly EncounterOrder[]) {
   const packets = new Map<number, EncounterOrder[]>();

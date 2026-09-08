@@ -5,6 +5,7 @@ import { CoopEnemySnapshot, CoopPlayerSnapshot, CoopProjectileSnapshot, CoopSnap
  * simulation, so network authority remains unchanged.
  */
 export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSnapshot, alpha: number): CoopSnapshot {
+  if ((previous.world?.id || 'neon_bastion') !== (current.world?.id || 'neon_bastion')) return current;
   const progress = Math.max(0, Math.min(1, alpha));
   // Once presentation catches up, the authoritative snapshot is already the
   // exact result. Avoid cloning every moving entity on extra display frames.
@@ -25,6 +26,8 @@ export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSna
   }));
   const gasZone = current.gasZone && previous.gasZone ? {
     ...current.gasZone,
+    x: lerp(previous.gasZone.x, current.gasZone.x, progress),
+    y: lerp(previous.gasZone.y, current.gasZone.y, progress),
     radius: lerp(previous.gasZone.radius, current.gasZone.radius, progress),
   } : current.gasZone;
   return { ...current, players, enemies, projectiles, gasZone };
@@ -49,6 +52,7 @@ export class CoopSnapshotInterpolator {
   private frame = {} as CoopSnapshot;
 
   interpolate(previous: CoopSnapshot, current: CoopSnapshot, alpha: number): CoopSnapshot {
+    if ((previous.world?.id || 'neon_bastion') !== (current.world?.id || 'neon_bastion')) { this.reset(); return current; }
     const progress = Math.max(0, Math.min(1, alpha));
     if (progress >= 1) return current;
 
@@ -61,6 +65,8 @@ export class CoopSnapshotInterpolator {
     this.frame.projectiles = this.projectileFrame;
     if (current.gasZone && previous.gasZone) {
       assignExact(this.gasFrame, current.gasZone);
+      this.gasFrame.x = lerp(previous.gasZone.x, current.gasZone.x, progress);
+      this.gasFrame.y = lerp(previous.gasZone.y, current.gasZone.y, progress);
       this.gasFrame.radius = lerp(previous.gasZone.radius, current.gasZone.radius, progress);
       this.frame.gasZone = this.gasFrame;
     }

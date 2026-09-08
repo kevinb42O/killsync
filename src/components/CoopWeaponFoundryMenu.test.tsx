@@ -19,7 +19,7 @@ describe('localized co-op Weapon Foundry', () => {
       onClose={() => undefined}
     />);
 
-    for (const text of ['Оружейная кузница', 'Пистолетные патроны', 'Винтовочные патроны', 'Ружейные патроны', 'Дуговые ячейки', 'Патроны для ПП', 'УР. 1', 'КР']) expect(markup).toContain(text);
+    for (const text of ['Оружейная кузница', 'Пистолетные патроны', 'Винтовочные патроны', 'Ружейные патроны', 'Артефактные ячейки', 'Патроны для ПП', 'УР. 1', 'КР']) expect(markup).toContain(text);
     for (const leak of ['PISTOL AMMO', 'RIFLE AMMO', 'ARC CELL', '>LV ', ' CR<']) expect(markup).not.toContain(leak);
   });
 });

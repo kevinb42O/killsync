@@ -1,4 +1,5 @@
 import { GAME_HEIGHT, GAME_WIDTH } from '../../constants';
+import { getWorldDefinition, isWorldSurfaceWalkable, type WorldId } from './WorldDefinitions';
 
 export type WorldDistrictId = 'signal_plaza' | 'neon_bazaar' | 'redline_foundry' | 'violet_archive' | 'storm_drain' | 'exfill_spire';
 
@@ -19,7 +20,10 @@ export interface WorldObstacle {
   height: number;
   elevation: number;
   district: WorldDistrictId;
-  kind: 'tower' | 'arcade' | 'service_block' | 'transit_pylon' | 'bridge_pylon';
+  kind: 'tower' | 'arcade' | 'service_block' | 'transit_pylon' | 'bridge_pylon'
+    | 'basalt' | 'forge_stack' | 'furnace'
+    | 'ice_spire' | 'cryo_ruin' | 'glacier'
+    | 'alien_root' | 'void_crystal' | 'garden_rib';
 }
 
 export interface WorldCollisionResult {
@@ -79,8 +83,8 @@ export const WORLD_DISTRICTS: Record<WorldDistrictId, WorldDistrict> = {
 };
 
 const districts: WorldDistrictId[] = ['signal_plaza', 'neon_bazaar', 'redline_foundry', 'violet_archive', 'storm_drain', 'exfill_spire'];
-let cachedObstacles: WorldObstacle[] | null = null;
-const obstacleBuckets = new Map<string, WorldObstacle[]>();
+const obstacleCache = new Map<WorldId, WorldObstacle[]>();
+const obstacleBuckets = new Map<WorldId, Map<string, WorldObstacle[]>>();
 
 function sectorKey(sx: number, sy: number) {
   return `${sx}:${sy}`;
@@ -104,8 +108,10 @@ export function getWorldDistrictAt(x: number, y: number): WorldDistrict {
 /** Buildings are deliberately placed beside broad 180-unit combat corridors.
  * Their exact AABBs are the authoritative collision source for both Engine
  * and Three.js—there are no visual-only solid props. */
-export function getWorldObstacles(): WorldObstacle[] {
-  if (cachedObstacles) return cachedObstacles;
+export function getWorldObstacles(worldId: WorldId = 'neon_bastion'): WorldObstacle[] {
+  const cached = obstacleCache.get(worldId);
+  if (cached) return cached;
+  if (worldId !== 'neon_bastion') return buildDistinctWorldObstacles(worldId);
   const result: WorldObstacle[] = [];
   const sectorsX = Math.ceil(GAME_WIDTH / WORLD_SECTOR_SIZE);
   const sectorsY = Math.ceil(GAME_HEIGHT / WORLD_SECTOR_SIZE);
@@ -183,8 +189,45 @@ export function getWorldObstacles(): WorldObstacle[] {
     });
   }
 
-  cachedObstacles = result;
-  obstacleBuckets.clear();
+  cacheWorldObstacles(worldId, result);
+  return result;
+}
+
+function buildDistinctWorldObstacles(worldId: Exclude<WorldId, 'neon_bastion'>) {
+  const result: WorldObstacle[] = [];
+  const sectorsX = Math.ceil(GAME_WIDTH / WORLD_SECTOR_SIZE);
+  const sectorsY = Math.ceil(GAME_HEIGHT / WORLD_SECTOR_SIZE);
+  for (let sy = 0; sy < sectorsY; sy++) {
+    for (let sx = 0; sx < sectorsX; sx++) {
+      const baseX = sx * WORLD_SECTOR_SIZE, baseY = sy * WORLD_SECTOR_SIZE;
+      const random = hash2D(sx + getWorldDefinition(worldId).tier * 101, sy + getWorldDefinition(worldId).tier * 211);
+      if (random % (worldId === 'null_garden' ? 4 : 3) !== 0) continue;
+      const width = worldId === 'cinderworks' ? 90 + random % 115 : worldId === 'white_silence' ? 70 + random % 105 : 55 + random % 95;
+      const height = worldId === 'cinderworks' ? 90 + (random >>> 7) % 150 : worldId === 'white_silence' ? 80 + (random >>> 7) % 135 : 65 + (random >>> 7) % 110;
+      const x = baseX + 55 + (random >>> 16) % Math.max(1, WORLD_SECTOR_SIZE - width - 110);
+      const y = baseY + 55 + (random >>> 22) % Math.max(1, WORLD_SECTOR_SIZE - height - 110);
+      if (Math.hypot(x + width / 2 - GAME_WIDTH / 2, y + height / 2 - GAME_HEIGHT / 2) < 720) continue;
+      if (!isWorldSurfaceWalkable(worldId, x + width / 2, y + height / 2, Math.max(width, height) * .55)) continue;
+      const kind: WorldObstacle['kind'] = worldId === 'cinderworks'
+        ? (random % 7 === 0 ? 'furnace' : random % 2 ? 'forge_stack' : 'basalt')
+        : worldId === 'white_silence'
+          ? (random % 7 === 0 ? 'cryo_ruin' : random % 2 ? 'ice_spire' : 'glacier')
+          : (random % 7 === 0 ? 'garden_rib' : random % 2 ? 'void_crystal' : 'alien_root');
+      const elevation = worldId === 'cinderworks' ? 80 + (random >>> 4) % 210
+        : worldId === 'white_silence' ? 100 + (random >>> 4) % 280
+          : 120 + (random >>> 4) % 330;
+      result.push({ id: `${worldId}:${sx}:${sy}`, x, y, width, height, elevation, district: 'signal_plaza', kind });
+    }
+  }
+  const bridgehead = getWorldDefinition(worldId).bridgehead;
+  result.push({ id: `${worldId}:bridgehead`, x: bridgehead.x - 48, y: bridgehead.y - 48, width: 96, height: 96, elevation: 90, district: 'signal_plaza', kind: 'bridge_pylon' });
+  cacheWorldObstacles(worldId, result);
+  return result;
+}
+
+function cacheWorldObstacles(worldId: WorldId, result: WorldObstacle[]) {
+  obstacleCache.set(worldId, result);
+  const buckets = new Map<string, WorldObstacle[]>();
   for (const obstacle of result) {
     const minX = Math.floor(obstacle.x / WORLD_SECTOR_SIZE);
     const maxX = Math.floor((obstacle.x + obstacle.width) / WORLD_SECTOR_SIZE);
@@ -193,17 +236,18 @@ export function getWorldObstacles(): WorldObstacle[] {
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         const key = sectorKey(x, y);
-        const bucket = obstacleBuckets.get(key) || [];
+        const bucket = buckets.get(key) || [];
         bucket.push(obstacle);
-        obstacleBuckets.set(key, bucket);
+        buckets.set(key, bucket);
       }
     }
   }
-  return result;
+  obstacleBuckets.set(worldId, buckets);
 }
 
-export function getNearbyWorldObstacles(x: number, y: number, radius: number): WorldObstacle[] {
-  getWorldObstacles();
+export function getNearbyWorldObstacles(x: number, y: number, radius: number, worldId: WorldId = 'neon_bastion'): WorldObstacle[] {
+  getWorldObstacles(worldId);
+  const buckets = obstacleBuckets.get(worldId)!;
   const minX = Math.floor((x - radius) / WORLD_SECTOR_SIZE);
   const maxX = Math.floor((x + radius) / WORLD_SECTOR_SIZE);
   const minY = Math.floor((y - radius) / WORLD_SECTOR_SIZE);
@@ -211,14 +255,14 @@ export function getNearbyWorldObstacles(x: number, y: number, radius: number): W
   const nearby = new Set<WorldObstacle>();
   for (let sy = minY; sy <= maxY; sy++) {
     for (let sx = minX; sx <= maxX; sx++) {
-      for (const obstacle of obstacleBuckets.get(sectorKey(sx, sy)) || []) nearby.add(obstacle);
+      for (const obstacle of buckets.get(sectorKey(sx, sy)) || []) nearby.add(obstacle);
     }
   }
   return [...nearby];
 }
 
-export function isWorldPositionClear(x: number, y: number, radius: number): boolean {
-  return !getNearbyWorldObstacles(x, y, radius + 4).some((obstacle) =>
+export function isWorldPositionClear(x: number, y: number, radius: number, worldId: WorldId = 'neon_bastion'): boolean {
+  return isWorldSurfaceWalkable(worldId, x, y, radius) && !getNearbyWorldObstacles(x, y, radius + 4, worldId).some((obstacle) =>
     x + radius > obstacle.x && x - radius < obstacle.x + obstacle.width
     && y + radius > obstacle.y && y - radius < obstacle.y + obstacle.height
   );
@@ -227,10 +271,10 @@ export function isWorldPositionClear(x: number, y: number, radius: number): bool
 /** Returns the outward normal of a nearby solid surface without moving the
  * body. Unlike collision resolution, this remains true at resting contact, so
  * a player can jump away from a wall without continuing to press into it. */
-export function getWorldWallContact(x: number, y: number, radius: number, tolerance = 3): WorldWallContact | undefined {
+export function getWorldWallContact(x: number, y: number, radius: number, tolerance = 3, worldId: WorldId = 'neon_bastion'): WorldWallContact | undefined {
   let nearest: WorldWallContact | undefined;
   let nearestDistance = Infinity;
-  for (const obstacle of getNearbyWorldObstacles(x, y, radius + tolerance + 4)) {
+  for (const obstacle of getNearbyWorldObstacles(x, y, radius + tolerance + 4, worldId)) {
     const nearestX = Math.max(obstacle.x, Math.min(x, obstacle.x + obstacle.width));
     const nearestY = Math.max(obstacle.y, Math.min(y, obstacle.y + obstacle.height));
     const dx = x - nearestX, dy = y - nearestY;
@@ -263,6 +307,7 @@ export function raycastWorldObstacles(
   directionY: number,
   verticalSlope: number,
   maxDistance: number,
+  worldId: WorldId = 'neon_bastion',
 ): WorldRayHit | undefined {
   const directionLength = Math.hypot(directionX, directionY);
   if (directionLength < .0001 || maxDistance <= 0) return undefined;
@@ -272,7 +317,7 @@ export function raycastWorldObstacles(
   const centerY = originY + dy * maxDistance * .5;
   let nearest: WorldRayHit | undefined;
 
-  for (const obstacle of getNearbyWorldObstacles(centerX, centerY, maxDistance * .5 + 8)) {
+  for (const obstacle of getNearbyWorldObstacles(centerX, centerY, maxDistance * .5 + 8, worldId)) {
     const xInterval = raySlabInterval(originX, dx, obstacle.x, obstacle.x + obstacle.width);
     const yInterval = raySlabInterval(originY, dy, obstacle.y, obstacle.y + obstacle.height);
     if (!xInterval || !yInterval) continue;
@@ -311,6 +356,7 @@ export function resolveWorldCollisions(
   position: { x: number; y: number },
   radius: number,
   clampToWorld = true,
+  worldId: WorldId = 'neon_bastion',
 ): WorldCollisionResult {
   let collided = false;
   let blockedX = false;
@@ -318,7 +364,7 @@ export function resolveWorldCollisions(
   // Two iterations resolve a corner cleanly without a per-frame physics cost.
   for (let pass = 0; pass < 2; pass++) {
     let resolvedSomething = false;
-    for (const obstacle of getNearbyWorldObstacles(position.x, position.y, radius + 20)) {
+    for (const obstacle of getNearbyWorldObstacles(position.x, position.y, radius + 20, worldId)) {
       const nearestX = Math.max(obstacle.x, Math.min(position.x, obstacle.x + obstacle.width));
       const nearestY = Math.max(obstacle.y, Math.min(position.y, obstacle.y + obstacle.height));
       let dx = position.x - nearestX;
@@ -349,8 +395,9 @@ export function resolveWorldCollisions(
     if (!resolvedSomething) break;
   }
   if (clampToWorld) {
-    position.x = Math.max(radius, Math.min(GAME_WIDTH - radius, position.x));
-    position.y = Math.max(radius, Math.min(GAME_HEIGHT - radius, position.y));
+    const bounds = getWorldDefinition(worldId).bounds;
+    position.x = Math.max(radius, Math.min(bounds.width - radius, position.x));
+    position.y = Math.max(radius, Math.min(bounds.height - radius, position.y));
   }
   return { collided, blockedX, blockedY };
 }

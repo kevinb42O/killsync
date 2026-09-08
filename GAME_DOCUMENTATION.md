@@ -25,16 +25,17 @@
 ## Game States
 
 ```
-MENU → PLAYING → LEVEL_UP → PLAYING
+MENU → SOLO_SETUP → MULTIPLAYER_PLAYING → MENU
+     → PLAYING → LEVEL_UP → PLAYING
                 → TREASURE → PLAYING
                 → GAME_OVER → MENU or PLAYING
      → OPERATOR_SELECT → MENU
      → PERMANENT_UPGRADES → MENU
      → MULTIPLAYER_SETUP → MENU
-     → MULTIPLAYER_PLAYING → MENU
 ```
 
-- **MENU** — Title screen with "Initialize Run", "Select Operator", & "Neural Lab". Shows active operator, coins, level.
+- **MENU** — Title screen with "Initialize Run", "Multiplayer", "Select Operator", and "Neural Lab". **Initialize Run** opens a local-only configuration screen before launching the current co-op simulation in one-player practice mode. The legacy top-down single-player implementation remains in the codebase for possible future reuse but is no longer the primary menu action.
+- **SOLO_SETUP** — Local-only run configuration for callsign, operator class, Imprint allocation, and unlocked world selection. It contains no lobby discovery, hosting, joining, room-code, or signaling UI.
 - **OPERATOR_SELECT** — Card grid of 6 operators. Unlock with coins, select one to play.
 - **PLAYING** — Active gameplay. Canvas renders world; React HUD overlays stats.
 - **LEVEL_UP** — Player chooses 1 of 3 upgrades.
@@ -252,7 +253,11 @@ choices—ammo, healing, armor, a personal self-revive, and up to two support
 modules. Its Reinforcements category can also redeploy a fully eliminated
 teammate for 900 credits at 50% health. A downed, still-revivable teammate is
 never eligible for that purchase and must be restored through the normal revive
-flow. The initial support roster is Orbit Drones, Data Scythe, Void Aura,
+flow. Its Extraction category sells a one-use **Private Exfil** for 1,500
+credits after the squad has completed a field contract or advanced the primary
+operation. The caller pays the full price; any living squad members inside the
+extraction zone when its ten-second hold completes leave safely. The initial
+support roster is Orbit Drones, Data Scythe, Void Aura,
 Frost Aura, and Neural Pulse; these are intentionally a safe subset of the
 single-player arsenal rather than a claim that every single-player weapon is
 already network-ready.
@@ -278,21 +283,33 @@ Movement is camera-relative: **Z** moves forward where you are
 looking, **S** moves back, and **Q/D** strafe left/right (with arrow keys also
 available). **W** is reserved for the slide/crouch action on the AZERTY layout.
 **Shift** is a held sprint with a replicated speed/FOV change, while **Space**
-sends a single host-validated jump pulse. Jump height and grounded state are
-part of the shared snapshot, so every peer receives the same grounded state
-and the same first-person camera lift. While airborne, pressing **Space** as
+sends a single host-validated launch pulse and a held thrust state. Pressing it
+while grounded immediately performs a jet-assisted launch; continuing to hold
+keeps the engine firing, while releasing early produces a short hop. Jump
+height and grounded state are part of the shared snapshot, so every peer receives the same
+grounded state and the same first-person camera lift. While airborne, pressing **Space** as
 you touch solid city architecture or a Hardlight Barricade performs a
 wall-jump, even while facing or moving away from it. Only one wall-jump is
 available per airborne cycle; landing on the real floor restores it.
-Away from a wall, that air action becomes a bounded double-jump jet burst.
-Wall contact takes priority, so the same input becomes a directional wall-jump
-instead. A double jump and wall-jump cannot be chained in one airborne cycle.
-The second impulse is capped below a stacked pair of full jumps and grants no
-horizontal acceleration or damage immunity. Other players see the existing
-dual jetpack flames flare more intensely during its brief ignition.
-Ground jumps, double jumps, and wall-jumps have distinct audio signatures:
-mechanical push-off, two-stage mid-air ignition, and a spatialized wall-contact
-scrape with lateral thrust respectively.
+Away from a wall, holding **Space** ignites the universal Burst Pack immediately,
+including directly from the floor. Every class has the identical pack: 100 fuel,
+50 fuel drained per second for two full seconds of continuous thrust, an 800 ms
+grounded recharge delay, and 50 fuel restored per second. Air steering is capped
+near 330 units/second. Thrust tapers above 120 elevation and settles against the
+hard 150-elevation ceiling without cutting the engine early. Wall contact takes
+priority once airborne, so the shared aerial action becomes a directional
+wall-jump instead; a wall-jump and Burst Pack ignition cannot be chained in the
+same airborne cycle. A local looping turbine/exhaust sound follows the replicated
+active-thrust state and fades out as soon as thrust stops.
+
+The pack is repositioning, not immunity. Ground contact enemies cannot hit an
+operator above 55 elevation and shockwaves can be cleared above 45, but ranged,
+artillery, gravity, gas, and other hazards remain dangerous. Captures, revives,
+shopping, Foundry use, pickups, construction, mission interactions, and
+extraction do not progress above 20 elevation. Crossing a platform or world
+surface edge remains an immediate fall even with fuel. Firing while thrusting
+adds 60% spread. Other players see the existing dual pack flames remain fully
+lit for the authoritative thrust window.
 The first-person camera banks away from side walls and adds a restrained pitch
 kick when rebounding from a wall ahead or behind. The lean follows the
 authoritative collision normal and eases back without changing the player's aim.
@@ -302,6 +319,94 @@ locks that direction at the instant the slide begins, makes it substantially
 faster than sprint, and keeps it going even when movement keys remain held or
 the camera turns. Releasing **W** immediately stands the player up and returns
 to the normal movement input; jumping also ends the slide.
+
+### Co-op Field Contracts and Mobile Gas
+
+Press **Tab** during a run to open the full 12 km tactical map. It shows the
+live fixed-radius toxic zone, its announced destination while relocating, Buy
+Stations, the Foundry, both extraction types, squad members, and all five field
+contract pickups over the authoritative city building plan. Every operator is
+drawn as a directional arrow; the local operator also has a bright pulse, a
+**YOU** label, and a facing cone. The simulation continues while the map is
+open. A contract is accepted physically with **F** at its world transmitter;
+single-clicking it on the map displays its briefing. Double-clicking a contract
+or its active objective sends a host-validated, 45-second squad waypoint that
+follows the live mission target. Only one field contract can be active at once.
+
+Accepting a contract also enables permanent objective guidance until that
+contract ends. The active target has a 9,000-unit skyline beacon with a bright
+white core, the contract's color, rotating broken signal bands, and an
+occlusion-proof render pass so buildings cannot hide it. A reserved outer
+indicator around the aiming reticle continuously points toward the objective
+and displays the contract name, current stage, and distance. Moving targets
+are tracked directly; multi-step contracts automatically advance the beacon to
+the next living courier, uncollected drive, bomb site, hostage, or handoff zone.
+
+Every operator who belongs to the squad when a contract is accepted receives
+the full listed payout when it completes, including an operator who is awaiting
+redeployment. An operator who already extracted, or who joins after acceptance,
+is not enrolled. The five contracts are:
+
+- **Toxic Hunt — 500 credits each:** enter the mobile toxic zone and eliminate
+  a 1,600-base-HP Chem Commander protected by a scaled squad of red guards.
+- **Demolition — 450 credits each:** hold F for four seconds to plant Site A,
+  defend it for 20 seconds, then reach and plant Site B within 90 seconds and
+  defend that charge for another 20 seconds.
+- **Hostage Recovery — 550 credits each:** clear the hostage's guards, press F
+  to pick up the hostage, then remain in the recovery beacon for ten seconds.
+  The carrier cannot aim, fire, reload, sprint, or slide; their walking speed is
+  reduced by 18%, and the jet pack is disabled. If the carrier is downed or
+  disconnects, the hostage drops with a squad-wide warning and another living
+  squad member may take over.
+- **Signal Hijack — 400 credits each:** activate the relay with a three-second
+  F hold and control its area for 45 seconds. More operators accelerate the
+  upload, enemies contest it, and abandoning it slowly loses progress.
+- **Courier Intercept — 425 credits each:** eliminate three guarded couriers,
+  recover each dropped drive with F, then deposit all drives at the marked dead
+  drop with a three-second F hold. The contract remains in its intercept stage
+  until all three couriers are dead, then advances through every outstanding
+  drive before exposing the dead drop.
+
+Mission progress is authoritative and stage-specific: the HUD reports Chem
+Commander health, hostage guards cleared, bomb arming/defence progress, relay
+upload progress, couriers remaining, drives recovered, and handoff progress.
+Every stage transition is announced to the whole squad with a tactical audio
+cue. A missed Demolition Site B window explicitly resets the squad to Site A.
+Mission waypoints disappear immediately on completion, and surviving contract
+guards become ordinary threats so later contracts can always reserve their
+required enemy capacity.
+
+The toxic zone no longer spreads. It is always a 750-unit-radius cloud placed at
+a deterministic random, navigable map position. It remains stationary for
+75–110 seconds, announces its next destination for 12 seconds, travels 900–1,500
+units over 22–30 seconds, settles for five seconds, then starts another stopped
+period. Its radius and damage never increase during the run.
+
+### Co-op Artifact Classes
+
+Every operator has the same practical firearm skeleton: **1** Neon Handgun,
+**2** Assault Rifle, **3** Combat Shotgun, a class artifact in **4**, and **5**
+SMG. Left click fires the artifact primary. While slot 4 is active, right click
+spends its class resource instead of aiming down sights; standard firearms keep
+normal right-click ADS. Resources and active procs are host-authoritative and
+replicated in the lower-left HUD beside the universal Burst Pack fuel bar.
+
+| Operator | Class | Slot-4 artifact | Resource loop | Right-click spender |
+|---|---|---|---|---|
+| Neon Vanguard | Stormcaller | Tempest Conductor | Chains generate up to 5 Static; three full chains prime Overload | **Stormcall:** 5 Static marks a 260-radius zone for three capped lightning pulses |
+| Crimson Strike | Bloodreaver | Goreline Repeater | Hits generate Fury, with extra gain against wounded enemies; Fury decays out of combat | **Reckoning:** 50 Fury fires a five-round missing-health execute volley; a kill refunds Fury, rounds, and barrier |
+| Void Runner | Riftstrider | Riftspike Array | Repeated hits seal one target; moving 120 units triggers Slipstream for a bonus seal | **Echo Collapse:** consumes all seals and attacks the marked target from recent path echoes |
+| Solar Guard | Sunwarden | Dawnwall Cannon | Every third hit grants Conviction, with a protection bonus when the enemy is targeting an ally | **Dawnwall:** 5 Conviction creates a six-second taunt/burn field and barriers nearby allies |
+| Black Ice | Cryowarden | Winterglass Projector | The cone stacks Chill; reaching five stacks grants Rime and briefly roots non-Titans | **Shatter Lance:** 3 Rime bursts a target and nearby chilled enemies; shattering a frozen pack can refund Rime |
+| Royal Inferno | Hellbinder | Cinderhex Engine | Hits stack Cinderhex; burning kills and sustained elite/titan burns yield Soul Fragments | **Hellseed:** 3 fragments plants a delayed blast; 5 empowers it and summons a chasing Emberling |
+
+Class passives are deliberately narrower than complete MMO kits: Stormcaller
+Overload strengthens one next bolt, Bloodreaver Redline speeds Goreline by 20%
+below 45% health, Sunwarden Stand Together shortens reloads near a living ally,
+Riftstrider rewards movement, Cryowarden rewards pack setup, and Hellbinder
+rewards damage-over-time target management. There are no separate long-cooldown
+Q abilities in this implementation; the artifact primary/resource/spender loop
+is the class identity and avoids adding six simultaneous control systems.
 
 ### Co-op Field Engineering
 

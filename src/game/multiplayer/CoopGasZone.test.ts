@@ -1,66 +1,58 @@
 import { describe, expect, it } from 'vitest';
 import {
   CoopGasZone,
-  GAS_BASE_SPREAD_RATE,
   GAS_INITIAL_RADIUS,
-  GAS_SPREAD_AT_MS,
-  GAS_SURGE_AT_MS,
-  GAS_WARNING_AT_MS,
+  GAS_MAX_MOVE_DISTANCE,
+  GAS_MIN_MOVE_DISTANCE,
+  GAS_WARNING_DURATION_MS,
 } from './CoopGasZone';
 
 describe('CoopGasZone', () => {
-  it('initializes with default radius and contained state', () => {
+  it('initializes at a deterministic random map position with a fixed radius', () => {
     const gas = new CoopGasZone({ x: 6000, y: 6000 }, 42);
+    const repeated = new CoopGasZone({ x: 6000, y: 6000 }, 42);
     expect(gas.radius).toBe(GAS_INITIAL_RADIUS);
-    expect(gas.currentState).toBe('contained');
-    // Epicenter should be offset from spawn
-    const dist = gas.distanceFromCenter(6000, 6000);
-    expect(dist).toBeGreaterThan(1500);
-    expect(dist).toBeLessThan(2200);
+    expect(gas.currentState).toBe('stationary');
+    expect({ x: gas.x, y: gas.y }).toEqual({ x: repeated.x, y: repeated.y });
+    expect(gas.distanceFromCenter(6000, 6000)).toBeGreaterThanOrEqual(1400);
+    expect(gas.x).toBeGreaterThan(GAS_INITIAL_RADIUS);
+    expect(gas.y).toBeGreaterThan(GAS_INITIAL_RADIUS);
   });
 
-  it('keeps radius stable during contained phase', () => {
+  it('stops, warns, moves, settles, and stops again without ever spreading', () => {
     const gas = new CoopGasZone({ x: 6000, y: 6000 }, 42);
-    const result = gas.tick(50, 30_000);
-    expect(gas.radius).toBe(GAS_INITIAL_RADIUS);
-    expect(gas.currentState).toBe('contained');
-    expect(result.warningTriggered).toBe(false);
-    expect(result.spreadTriggered).toBe(false);
-  });
-
-  it('triggers warning state at warning milestone', () => {
-    const gas = new CoopGasZone({ x: 6000, y: 6000 }, 42);
-    const result = gas.tick(50, GAS_WARNING_AT_MS + 10);
+    const start = { x: gas.x, y: gas.y };
+    const warning = gas.tick(gas.snapshot().phaseRemainingMs);
+    expect(warning.warningTriggered).toBe(true);
     expect(gas.currentState).toBe('warning');
-    expect(result.warningTriggered).toBe(true);
+    expect(gas.snapshot().warningRemainingMs).toBe(GAS_WARNING_DURATION_MS);
     expect(gas.radius).toBe(GAS_INITIAL_RADIUS);
 
-    // Snapshot reflects warningRemainingMs
-    const snap = gas.snapshot(GAS_WARNING_AT_MS + 10);
-    expect(snap.state).toBe('warning');
-    expect(snap.warningRemainingMs).toBeDefined();
-    expect(snap.warningRemainingMs!).toBeGreaterThan(0);
-  });
+    const move = gas.tick(GAS_WARNING_DURATION_MS);
+    expect(move.moveTriggered).toBe(true);
+    expect(move.spreadTriggered).toBe(true);
+    expect(gas.currentState).toBe('moving');
+    const destination = gas.snapshot();
+    const moveDistance = Math.hypot(destination.targetX! - start.x, destination.targetY! - start.y);
+    expect(moveDistance).toBeGreaterThanOrEqual(GAS_MIN_MOVE_DISTANCE - 2);
+    expect(moveDistance).toBeLessThanOrEqual(GAS_MAX_MOVE_DISTANCE + 2);
 
-  it('expands radius smoothly in spreading phase', () => {
-    const gas = new CoopGasZone({ x: 6000, y: 6000 }, 42);
-    // Enter spreading phase
-    const result = gas.tick(1000, GAS_SPREAD_AT_MS + 1000);
-    expect(gas.currentState).toBe('spreading');
-    expect(result.spreadTriggered).toBe(true);
-    // Expanded by 1 second * GAS_BASE_SPREAD_RATE
-    expect(gas.radius).toBeCloseTo(GAS_INITIAL_RADIUS + GAS_BASE_SPREAD_RATE, 0.1);
+    gas.tick(destination.phaseRemainingMs / 2);
+    expect(Math.hypot(gas.x - start.x, gas.y - start.y)).toBeGreaterThan(0);
+    expect(gas.radius).toBe(GAS_INITIAL_RADIUS);
+    const settled = gas.tick(gas.snapshot().phaseRemainingMs);
+    expect(settled.settledTriggered).toBe(true);
+    expect(gas.currentState).toBe('settling');
+    gas.tick(gas.snapshot().phaseRemainingMs);
+    expect(gas.currentState).toBe('stationary');
+    expect(gas.radius).toBe(GAS_INITIAL_RADIUS);
   });
 
   it('correctly evaluates containment of positions', () => {
     const gas = new CoopGasZone({ x: 6000, y: 6000 }, 42);
-    // At gas center
     expect(gas.isInsideGas(gas.x, gas.y)).toBe(true);
-    // Just inside edge
     expect(gas.isInsideGas(gas.x + GAS_INITIAL_RADIUS - 10, gas.y)).toBe(true);
-    // Outside edge
     expect(gas.isInsideGas(gas.x + GAS_INITIAL_RADIUS + 50, gas.y)).toBe(false);
-    // Margin check
     expect(gas.isInsideGas(gas.x + GAS_INITIAL_RADIUS + 20, gas.y, 30)).toBe(true);
   });
 });

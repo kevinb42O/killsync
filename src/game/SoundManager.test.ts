@@ -8,12 +8,14 @@ describe('SoundManager', () => {
   let createdGains: any[];
   let createdFilters: any[];
   let createdPanners: any[];
+  let createdBufferSources: any[];
 
   beforeEach(() => {
     createdOscillators = [];
     createdGains = [];
     createdFilters = [];
     createdPanners = [];
+    createdBufferSources = [];
 
     const createMockAudioParam = (initialValue: number = 0) => ({
       value: initialValue,
@@ -69,12 +71,18 @@ describe('SoundManager', () => {
       createBuffer: vi.fn((_channels, size, _rate) => ({
         getChannelData: vi.fn(() => new Float32Array(size)),
       })),
-      createBufferSource: vi.fn(() => ({
-        buffer: null,
-        connect: vi.fn(),
-        start: vi.fn(),
-        stop: vi.fn(),
-      })),
+      createBufferSource: vi.fn(() => {
+        const source = {
+          buffer: null,
+          loop: false,
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        };
+        createdBufferSources.push(source);
+        return source;
+      }),
     };
 
     (globalThis as any).window = globalThis;
@@ -107,6 +115,30 @@ describe('SoundManager', () => {
     expect(createdOscillators[1].type).toBe('square');
     expect(createdOscillators[1].frequency.setValueAtTime).toHaveBeenCalledWith(690, 10.045);
     expect(createdOscillators[1].start).toHaveBeenCalledWith(10.045);
+  });
+
+  it('runs one non-stacking jetpack engine graph only while thrust is active', () => {
+    createdOscillators.length = 0;
+    createdBufferSources.length = 0;
+
+    sm.updateJetpack(true, 1);
+    expect(createdOscillators).toHaveLength(2);
+    expect(createdOscillators[0].type).toBe('sawtooth');
+    expect(createdOscillators[1].type).toBe('sine');
+    expect(createdBufferSources).toHaveLength(1);
+    expect(createdBufferSources[0].loop).toBe(true);
+    expect(createdGains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.016, 10.045);
+
+    sm.updateJetpack(true, .5);
+    expect(createdOscillators).toHaveLength(2);
+    expect(createdBufferSources).toHaveLength(1);
+
+    sm.updateJetpack(false, .5);
+    expect(createdGains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10.11);
+    sm.stopJetpack();
+    expect(createdOscillators[0].stop).toHaveBeenCalledOnce();
+    expect(createdOscillators[1].stop).toHaveBeenCalledOnce();
+    expect(createdBufferSources[0].stop).toHaveBeenCalledOnce();
   });
 
   it('gives the wall-jump a spatialized contact snap and lateral thrust', () => {

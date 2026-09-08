@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { ArrowLeft, Backpack, Coins, Crosshair, Hammer, HeartPulse, Radio, ShoppingCart, ShieldPlus, Signal, X } from 'lucide-react';
-import { COOP_MANUAL_PICKUP_RANGE, COOP_REVIVE_RANGE, COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, CoopPlayerSeed, CoopSimulation, CoopSnapshot, quantizeAngle, quantizePitch, type CoopInventoryDropKind } from '../game/multiplayer/CoopSimulation';
+import { Backpack, Coins, Crosshair, Hammer, HeartPulse, MessageSquare, Radio, Send, ShieldCheck, ShoppingCart, ShieldPlus, Signal, Terminal, X } from 'lucide-react';
+import { COOP_MANUAL_PICKUP_RANGE, COOP_REVIVE_RANGE, COOP_WEAPON_DETAILS, COOP_WEAPON_SLOTS, COOP_WORLD_SIZE, CoopPlayerSeed, CoopSimulation, CoopSnapshot, quantizeAngle, quantizePitch, type CoopInventoryDropKind } from '../game/multiplayer/CoopSimulation';
+import { getCoopOperator, isCoopArtifactSpenderCharged, normalizeCoopOperatorId } from '../game/multiplayer/CoopOperators';
 import { MultiplayerRendererBridge } from '../game/multiplayer/MultiplayerRendererBridge';
 import { CoopSnapshotInterpolator } from '../game/multiplayer/snapshotInterpolation';
 import { CoopPerformanceMonitor } from '../game/multiplayer/CoopPerformanceMonitor';
 import { soundManager } from '../game/SoundManager';
 import { MultiplayerLaunch } from './ManualMultiplayerSetup';
-import { CoopPing, CoopPingKind, MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
+import { CoopPing, CoopPingKind, MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION, type CoopAdminRequest, type CoopAdminResult } from '../game/multiplayer/protocol';
 import { COOP_OPERATOR_REDEPLOY_COST, COOP_SHOP_ITEMS, coopShopDisabledReason, type CoopPurchaseResult, type CoopRedeployResult, type CoopShopItemId } from '../game/multiplayer/CoopBuyStation';
 import { CONTROL_SCHEME_DETAILS, getCoopSlideBinding, getMovementBindings, type ControlScheme } from '../game/controls';
 import { LocalPlayerPrediction } from '../game/multiplayer/LocalPlayerPrediction';
@@ -18,7 +19,7 @@ import { CoopCombatReticle, type CoopReticleMode } from './CoopCombatReticle';
 import { OffscreenThreatIndicators, type HudThreat } from './OffscreenThreatIndicators';
 import { CoopShopMenu, resolveCoopShopKey, type CoopShopCategoryId } from './CoopShopMenu';
 import { CoopWeaponFoundryMenu } from './CoopWeaponFoundryMenu';
-import type { CoopFirearmId } from '../game/combat/coopFirearms';
+import { COOP_FIREARM_IDS, type CoopFirearmId } from '../game/combat/coopFirearms';
 import type { CoopFoundryUpgradeResult } from '../game/multiplayer/CoopWeaponFoundry';
 import { COOP_MAX_FABRICATOR_CHARGES, COOP_RECOVERY_RELAY_HEAL_PER_SECOND, COOP_STRUCTURE_ACTION_RANGE, COOP_STRUCTURE_DEFINITIONS, isCoopStructureAction, isCoopStructureType, resolveBarricadeCollision, validateCoopBuildPreview, type CoopBuildResult, type CoopDismantleResult, type CoopStructureAction, type CoopStructureActionResult, type CoopStructureType } from '../game/multiplayer/CoopFieldEngineering';
 import {
@@ -36,12 +37,24 @@ import {
 } from '../game/multiplayer/CoopImprint';
 import './multiplayer.css';
 import { normalizeCoopSkinId } from '../game/multiplayer/CoopSkins';
+import { COOP_FIELD_MISSION_LABELS, coopFieldMissionStageLabel, resolveCoopMissionNavigationTarget, type CoopActiveFieldMissionSnapshot } from '../game/multiplayer/CoopFieldMissions';
+import { appendCoopChatMessage, COOP_CHAT_MAX_LENGTH, normalizeCoopChatText, parseCoopChatMessage, parseCoopChatRequest, type CoopChatMessage } from '../game/multiplayer/CoopChat';
+import { getWorldDefinition, readCoopWorldProgress, unlockCoopWorld, writeCoopWorldProgress } from '../game/world/WorldDefinitions';
+import { COOP_ADMIN_HELP, isCoopEnemyType, parseCoopAdminCommand, resolveCoopAdminTargets, resolveCoopAdminWorld, type CoopAdminCommandResult } from '../game/multiplayer/CoopAdminCommands';
+import { hasCoopOwnerCredential, signCoopAdminCommand, verifyCoopAdminRequest } from '../game/multiplayer/CoopOwnerIdentity';
+import { CoopTacticalMap as EnhancedCoopTacticalMap } from './CoopTacticalMap';
 
 const INPUT_INTERVAL_MS = COOP_STEP_MS;
 const SNAPSHOT_INTERVAL_MS = 50;
 /** React HUD work does not need to run at the 20 Hz network snapshot rate. */
 const HUD_INTERVAL_MS = 100;
-const COOP_BUILD_TYPES: readonly CoopStructureType[] = ['barricade', 'arc_fence', 'recovery_relay', 'decoy_beacon'];
+const COOP_BUILD_TYPES: readonly CoopStructureType[] = ['barricade', 'arc_fence', 'recovery_relay', 'decoy_beacon', 'bridge_segment'];
+const WORLD_CONDITIONS = {
+  neon_bastion: 'STABLE PLATFORM · SIGNAL STORM',
+  cinderworks: 'BURNING PLATES · FURNACE RUPTURES',
+  white_silence: 'THIN ICE · CRYOSEISMIC WAVES',
+  null_garden: 'LOW GRAVITY · VOID RIFTS · ENERGIZED PATHS',
+} as const;
 type DeploymentStage = 'briefing' | 'ready' | 'released' | 'complete';
 
 export function deploymentSectorNumber(players: readonly Pick<CoopPlayerSeed, 'id'>[]) {
@@ -62,15 +75,23 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const sceneRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<MultiplayerRendererBridge | null>(null);
   const simulationRef = useRef<CoopSimulation | null>(null);
-  if (launch.role === 'host' && !simulationRef.current) simulationRef.current = new CoopSimulation(launch.players);
+  if (launch.role === 'host' && !simulationRef.current) simulationRef.current = new CoopSimulation(launch.players, 0xdecafbad, undefined, launch.worldId);
   const snapshotRef = useRef<CoopSnapshot | null>(null);
   if (simulationRef.current && !snapshotRef.current) snapshotRef.current = simulationRef.current.createSnapshot();
   const presentationRef = useRef({ previous: snapshotRef.current as CoopSnapshot | null, current: snapshotRef.current as CoopSnapshot | null, receivedAt: performance.now(), durationMs: INPUT_INTERVAL_MS });
   const snapshotInterpolatorRef = useRef(new CoopSnapshotInterpolator());
   const inputRef = useRef<MultiplayerInputFrame>(createInput());
   const networkTickRef = useRef(0);
+  const adminOpenRef = useRef(false);
+  const adminPausedRef = useRef(false);
+  const ownerAvailableRef = useRef(false);
+  const lastAdminSequenceByPeerRef = useRef(new Map<string, number>());
   const displayedCombatEventsRef = useRef(new Map<number, number>());
   const healingPopTimersRef = useRef(new Set<number>());
+  const specialReadyTimerRef = useRef<number | null>(null);
+  const specialWasReadyRef = useRef(false);
+  const specialReadyOperatorRef = useRef<string | null>(null);
+  const specialReadySequenceRef = useRef(0);
   const sessionCloseTimerRef = useRef(0);
   const settledRunRef = useRef<string | null>(null);
   const spectatorTargetRef = useRef<string | null>(null);
@@ -81,6 +102,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const stationOpenRef = useRef(false);
   const foundryOpenRef = useRef(false);
   const backpackOpenRef = useRef(false);
+  const tacticalMapOpenRef = useRef(false);
+  const chatOpenRef = useRef(false);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+  const adminInputRef = useRef<HTMLInputElement>(null);
+  const chatMessageSequenceRef = useRef(0);
   const buildModeRef = useRef(false);
   const buildTypeRef = useRef<CoopStructureType>('barricade');
   const buildRequestIdRef = useRef(0);
@@ -96,6 +122,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const stationCategoryRef = useRef<CoopShopCategoryId | null>(null);
   const [hud, setHud] = useState({ players: launch.players.length, kills: 0, tick: 0, connected: true, selectedSlot: 0, weaponLevel: 1, health: 100, maxHealth: 100, level: 1, experience: 0, experienceToNextLevel: 120, coins: 0, cores: 0, fabricatorCharges: 0, fabricatorRechargeRemainingMs: 0, weapons: [] as CoopSnapshot['players'][number]['weaponStates'], isReloading: false, isAiming: false, actionEndsAt: undefined as number | undefined, lifeState: 'alive' as CoopSnapshot['players'][number]['lifeState'], downedRemainingMs: 0, reviveProgressMs: 0, reviverId: undefined as string | undefined, invulnerableRemainingMs: 0, matchState: 'active' as CoopSnapshot['matchState'], squad: [] as Array<Pick<CoopSnapshot['players'][number], 'id' | 'label' | 'color' | 'health' | 'maxHealth' | 'lifeState' | 'downedRemainingMs' | 'reviveProgressMs' | 'reviverId'>> });
   const [combatNotice, setCombatNotice] = useState<{ text: string; color: string } | null>(null);
+  const [specialReadyCue, setSpecialReadyCue] = useState<{ id: number; name: string; color: string } | null>(null);
   const [healingPops, setHealingPops] = useState<Array<{ id: number; amount: number }>>([]);
   const [damageFlashKey, setDamageFlashKey] = useState<number | null>(null);
   const damageFlashTimerRef = useRef<number | null>(null);
@@ -147,6 +174,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const [foundryOpen, setFoundryOpen] = useState(false);
   const [foundryMessage, setFoundryMessage] = useState<string | null>(null);
   const [backpackOpen, setBackpackOpen] = useState(false);
+  const [tacticalMapOpen, setTacticalMapOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatMessages, setChatMessages] = useState<CoopChatMessage[]>([]);
+  const [ownerAvailable, setOwnerAvailable] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminDraft, setAdminDraft] = useState('');
+  const [adminHistory, setAdminHistory] = useState<string[]>([]);
+  const [adminLog, setAdminLog] = useState<Array<{ id: number; tone: 'input' | 'ok' | 'error' | 'info'; text: string }>>([
+    { id: 0, tone: 'info', text: 'OWNER CONTROL MESH · Type help for commands.' },
+  ]);
+  const [adminPaused, setAdminPaused] = useState(false);
   const [backpackMessage, setBackpackMessage] = useState<string | null>(null);
   const [buildMode, setBuildModeState] = useState(false);
   const [buildPaletteExpanded, setBuildPaletteExpanded] = useState(false);
@@ -157,6 +196,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const [deploymentStage, setDeploymentStage] = useState<DeploymentStage>('briefing');
   const isSpectator = launch.role === 'spectator';
   const reticleMode: CoopReticleMode = hud.isAiming ? 'ads' : 'hip';
+
+  useEffect(() => {
+    let active = true;
+    const refreshOwner = () => void hasCoopOwnerCredential().then(available => {
+      if (!active) return;
+      ownerAvailableRef.current = available;
+      setOwnerAvailable(available);
+    });
+    refreshOwner();
+    window.addEventListener('killsync-owner-changed', refreshOwner);
+    return () => { active = false; window.removeEventListener('killsync-owner-changed', refreshOwner); };
+  }, []);
 
   const releaseDeployment = useCallback((requestControl: boolean = false) => {
     if (deploymentStageRef.current === 'released' || deploymentStageRef.current === 'complete') return;
@@ -235,6 +286,230 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     if (!next) setBackpackMessage(null);
   };
 
+  const setTacticalMapPanelOpen = (next: boolean) => {
+    tacticalMapOpenRef.current = next;
+    setTacticalMapOpen(next);
+  };
+
+  const setChatPanelOpen = (next: boolean) => {
+    chatOpenRef.current = next;
+    setChatOpen(next);
+    if (next) window.requestAnimationFrame(() => chatInputRef.current?.focus({ preventScroll: true }));
+  };
+
+  const closeChatAndResume = () => {
+    setChatPanelOpen(false);
+    setChatDraft('');
+    if (!stationOpenRef.current && !foundryOpenRef.current && !backpackOpenRef.current && !tacticalMapOpenRef.current
+      && !matchSnapshot?.results && hud.matchState === 'active' && connectionStatus !== 'disconnected') resumeGameplayInteraction();
+  };
+
+  const addChatMessage = (message: CoopChatMessage) => {
+    setChatMessages(history => appendCoopChatMessage(history, message));
+  };
+
+  const addAdminLog = (tone: 'input' | 'ok' | 'error' | 'info', text: string) => {
+    setAdminLog(history => [...history, { id: Date.now() + Math.random(), tone, text }].slice(-80));
+  };
+
+  const setAdminPanelOpen = (next: boolean) => {
+    if (!ownerAvailableRef.current && next) return;
+    adminOpenRef.current = next;
+    setAdminOpen(next);
+    if (next) window.requestAnimationFrame(() => adminInputRef.current?.focus({ preventScroll: true }));
+  };
+
+  const closeAdminAndResume = () => {
+    setAdminPanelOpen(false);
+    if (!adminPausedRef.current && !stationOpenRef.current && !foundryOpenRef.current && !backpackOpenRef.current && !tacticalMapOpenRef.current && !chatOpenRef.current) resumeGameplayInteraction();
+  };
+
+  const sendChatMessage = () => {
+    const text = normalizeCoopChatText(chatDraft);
+    if (!text || isSpectator) return false;
+    if (launch.role === 'host') {
+      const player = snapshotRef.current?.players.find(candidate => candidate.id === launch.localPlayerId)
+        || launch.players.find(candidate => candidate.id === launch.localPlayerId);
+      if (!player) return false;
+      const message: CoopChatMessage = {
+        id: `${launch.localPlayerId}:${Date.now().toString(36)}:${++chatMessageSequenceRef.current}`,
+        playerId: player.id,
+        playerLabel: player.label,
+        playerColor: player.color,
+        text,
+        sentAt: Date.now(),
+      };
+      addChatMessage(message);
+      launch.session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'chat', payload: message });
+    } else {
+      const delivered = launch.session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'chat', payload: { text } });
+      if (!delivered) return false;
+    }
+    setChatDraft('');
+    return true;
+  };
+
+  const executeAdminCommandAtHost = (raw: string, actorPlayerId: string): CoopAdminCommandResult & { kickPeerId?: string } => {
+    const simulation = simulationRef.current;
+    if (launch.role !== 'host' || !simulation) return { ok: false, message: 'The authoritative host is unavailable.' };
+    const parsed = parseCoopAdminCommand(raw);
+    if ('ok' in parsed) return parsed;
+    const snapshot = simulation.createSnapshot();
+    const targetPlayers = (selector?: string) => resolveCoopAdminTargets(snapshot, selector, actorPlayerId);
+    const requireTargets = (selector?: string) => {
+      const targets = targetPlayers(selector);
+      return targets.length ? targets : null;
+    };
+    const labels = (players: ReturnType<typeof targetPlayers>) => players.map(player => player.label).join(', ');
+    const markNotice = (message: string, modified = false) => {
+      launch.session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'admin_notice', payload: { message, kind: modified ? 'warning' : 'info', modified } });
+      setCombatNotice({ text: message, color: modified ? '#fbbf24' : '#67e8f9' });
+    };
+
+    if (parsed.name === 'help') return { ok: true, message: COOP_ADMIN_HELP.join('\n') };
+    if (parsed.name === 'players') return {
+      ok: true,
+      message: snapshot.players.map((player, index) => `${String(index + 1).padStart(2, '0')}  ${player.label}  ${player.lifeState}  ${Math.ceil(player.health)}/${Math.ceil(player.maxHealth)}  #${player.id}`).join('\n') || 'No active operators.',
+    };
+    if (parsed.name === 'status') return {
+      ok: true,
+      message: `HOST ONLINE · ${snapshot.world?.name || 'UNKNOWN WORLD'} · tick ${snapshot.tick} · ${snapshot.players.length} players · ${snapshot.enemies.length} hostiles · ${adminPausedRef.current ? 'PAUSED' : 'RUNNING'} · ${snapshot.administration?.modified ? 'MODIFIED RUN' : 'CLEAN RUN'}`,
+    };
+    if (parsed.name === 'announce') {
+      const message = parsed.args.join(' ').trim().slice(0, 180);
+      if (!message) return { ok: false, message: 'Usage: announce <message>' };
+      markNotice(`OWNER: ${message}`);
+      return { ok: true, message: `Announcement sent: ${message}` };
+    }
+    if (parsed.name === 'pause' || parsed.name === 'resume') {
+      const paused = parsed.name === 'pause';
+      adminPausedRef.current = paused;
+      setAdminPaused(paused);
+      const message = paused ? 'OWNER PAUSED THE OPERATION' : 'OWNER RESUMED THE OPERATION';
+      launch.session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'admin_notice', payload: { message, kind: 'info', paused } });
+      setCombatNotice({ text: message, color: '#67e8f9' });
+      return { ok: true, message };
+    }
+    if (parsed.name === 'restart') {
+      adminPausedRef.current = false;
+      setAdminPaused(false);
+      retryRun();
+      markNotice('OWNER RESTARTED THE OPERATION');
+      return { ok: true, message: 'Operation restarted.' };
+    }
+    if (parsed.name === 'kick') {
+      const targets = requireTargets(parsed.args[0]);
+      if (!targets || targets.length !== 1) return { ok: false, message: targets ? 'Kick requires exactly one operator.' : 'No operator matched that target.' };
+      const target = targets[0];
+      if (target.id === launch.players[0]?.id) return { ok: false, message: 'The authoritative host cannot be kicked from its own peer session.' };
+      const peerEntry = Object.entries(launch.peerPlayerIds).find(([, playerId]) => playerId === target.id);
+      if (!peerEntry) return { ok: false, message: `${target.label} has no active peer connection.` };
+      const [peerId] = peerEntry;
+      const reason = parsed.args.slice(1).join(' ').trim().slice(0, 120) || 'Removed by owner.';
+      launch.session.sendEventTo(peerId, { type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'admin_notice', payload: { message: `REMOVED BY OWNER · ${reason}`, kind: 'kick' } });
+      simulation.removePlayer(target.id);
+      delete launch.peerPlayerIds[peerId];
+      window.setTimeout(() => launch.session.disconnectPeer(peerId), 120);
+      markNotice(`${target.label} REMOVED BY OWNER`);
+      return { ok: true, message: `${target.label} removed: ${reason}`, kickPeerId: peerId };
+    }
+
+    if (parsed.name === 'heal') {
+      const targets = requireTargets(parsed.args[0]);
+      if (!targets) return { ok: false, message: 'No operator matched that target.' };
+      const amountToken = parsed.args[1]?.toLowerCase();
+      const amount = !amountToken || amountToken === 'full' ? undefined : Number(amountToken);
+      if (amount !== undefined && (!Number.isFinite(amount) || amount <= 0)) return { ok: false, message: 'Heal amount must be a positive number or “full”.' };
+      const changed = simulation.adminHeal(targets.map(player => player.id), amount);
+      if (!changed) return { ok: false, message: 'No living target needed healing.' };
+      markNotice(`OWNER HEALED ${labels(targets)}`, true);
+      return { ok: true, message: `Healed ${labels(targets)}.`, modified: true };
+    }
+    if (parsed.name === 'revive' || parsed.name === 'redeploy') {
+      const targets = requireTargets(parsed.args[0]);
+      if (!targets) return { ok: false, message: 'No operator matched that target.' };
+      const changed = simulation.adminRevive(targets.map(player => player.id));
+      if (!changed) return { ok: false, message: 'No selected operator was downed or eliminated.' };
+      markNotice(`OWNER REDEPLOYED ${labels(targets)}`, true);
+      return { ok: true, message: `Redeployed ${labels(targets)}.`, modified: true };
+    }
+    if (parsed.name === 'give') {
+      const targets = requireTargets(parsed.args[0]);
+      if (!targets) return { ok: false, message: 'No operator matched that target.' };
+      const resource = parsed.args[1]?.toLowerCase();
+      if (!['credits', 'cores', 'ammo', 'fabricator', 'selfrevive'].includes(resource)) return { ok: false, message: 'Usage: give <target> <credits|cores|ammo|fabricator|selfrevive> <amount|full>' };
+      const amountToken = parsed.args[2]?.toLowerCase();
+      const amount = resource === 'ammo' || amountToken === 'full' ? undefined : Number(amountToken || (resource === 'credits' ? 500 : 1));
+      if (amount !== undefined && (!Number.isFinite(amount) || amount <= 0)) return { ok: false, message: 'Grant amount must be a positive number.' };
+      simulation.adminGive(targets.map(player => player.id), resource as 'credits' | 'cores' | 'ammo' | 'fabricator' | 'selfrevive', amount);
+      markNotice(`OWNER GRANTED ${resource.toUpperCase()} TO ${labels(targets)}`, true);
+      return { ok: true, message: `Granted ${resource} to ${labels(targets)}.`, modified: true };
+    }
+    const teleportWorldToken = parsed.name === 'teleport'
+      ? (parsed.args[0]?.toLowerCase() === 'world' ? parsed.args[1] : parsed.args.length === 1 ? parsed.args[0] : undefined)
+      : undefined;
+    const requestedWorld = parsed.name === 'world'
+      ? resolveCoopAdminWorld(parsed.args[0])
+      : resolveCoopAdminWorld(teleportWorldToken);
+    if (parsed.name === 'world' || requestedWorld) {
+      if (!requestedWorld) return { ok: false, message: 'Usage: world <1|2|3|4|world-id>' };
+      const destination = getWorldDefinition(requestedWorld);
+      if (!simulation.adminSetWorld(requestedWorld)) return { ok: false, message: `Squad is already deployed in ${destination.name}.` };
+      markNotice(`OWNER TELEPORTED SQUAD TO WORLD ${destination.tier} · ${destination.name}`, true);
+      return { ok: true, message: `Teleported the squad to World ${destination.tier}: ${destination.name}.`, modified: true };
+    }
+    if (parsed.name === 'teleport') {
+      const targets = requireTargets(parsed.args[0]);
+      if (!targets) return { ok: false, message: 'No operator matched that target.' };
+      const destinationToken = parsed.args[1] || 'me';
+      let x = COOP_WORLD_SIZE / 2, y = COOP_WORLD_SIZE / 2;
+      if (destinationToken !== 'center') {
+        const destination = requireTargets(destinationToken)?.[0];
+        if (!destination) return { ok: false, message: 'No destination operator matched.' };
+        x = destination.x; y = destination.y;
+      }
+      simulation.adminTeleport(targets.map(player => player.id), x, y);
+      markNotice(`OWNER TELEPORTED ${labels(targets)}`, true);
+      return { ok: true, message: `Teleported ${labels(targets)}.`, modified: true };
+    }
+    if (parsed.name === 'spawn') {
+      const type = parsed.args[0]?.toLowerCase();
+      if (!type || !isCoopEnemyType(type)) return { ok: false, message: 'Usage: spawn <enemy-type> [count] [near-target]' };
+      const count = Math.max(1, Math.min(40, Math.trunc(Number(parsed.args[1] || 1))));
+      if (!Number.isFinite(count)) return { ok: false, message: 'Spawn count must be between 1 and 40.' };
+      const near = requireTargets(parsed.args[2] || 'me')?.[0];
+      if (!near) return { ok: false, message: 'No spawn target matched.' };
+      const spawned = simulation.adminSpawn(type, count, near.id);
+      if (!spawned) return { ok: false, message: 'No enemy capacity is currently available.' };
+      markNotice(`OWNER SPAWNED ${spawned} ${type.toUpperCase()}`, true);
+      return { ok: true, message: `Spawned ${spawned} ${type}.`, modified: true };
+    }
+    const killed = simulation.adminKillAll();
+    if (!killed) return { ok: true, message: 'No active hostiles to clear.' };
+    markNotice(`OWNER CLEARED ${killed} HOSTILES`, true);
+    return { ok: true, message: `Cleared ${killed} hostiles.`, modified: true };
+  };
+
+  const submitAdminCommand = async () => {
+    const command = adminDraft.trim();
+    if (!command || !ownerAvailable) return;
+    addAdminLog('input', `> ${command}`);
+    setAdminHistory(history => [...history.filter(entry => entry !== command), command].slice(-30));
+    setAdminDraft('');
+    if (launch.role === 'host') {
+      const result = executeAdminCommandAtHost(command, launch.localPlayerId);
+      addAdminLog(result.ok ? 'ok' : 'error', result.message);
+      return;
+    }
+    try {
+      const request = await signCoopAdminCommand(launch.session.authoritySessionId, launch.localPlayerId, command);
+      const delivered = launch.session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'admin_request', payload: request });
+      if (!delivered) addAdminLog('error', 'The command could not reach the authoritative host.');
+    } catch (error) {
+      addAdminLog('error', error instanceof Error ? error.message : 'Could not sign owner command.');
+    }
+  };
+
   const resumeGameplayInteraction = () => {
     const renderer = rendererRef.current;
     if (!renderer) return;
@@ -299,7 +574,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
    * instantaneous even while visual positions are being smoothed. */
   const resolveDownedSpectatorTarget = (snapshot: CoopSnapshot | null) => {
     const local = snapshot?.players.find(player => player.id === launch.localPlayerId);
-    if (local?.lifeState !== 'downed' && local?.lifeState !== 'eliminated') {
+    if (local?.lifeState !== 'downed' && local?.lifeState !== 'eliminated' && local?.lifeState !== 'extracted') {
       if (downedSpectatorTargetRef.current !== null) {
         downedSpectatorTargetRef.current = null;
         setDownedSpectatorTarget(null);
@@ -357,7 +632,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     if (launch.role !== 'host') return;
     const previous = simulationRef.current;
     if (!previous) return;
-    const nextSimulation = new CoopSimulation(previous.getPlayerSeeds(), Date.now() >>> 0);
+    const nextSimulation = new CoopSimulation(previous.getPlayerSeeds(), Date.now() >>> 0, undefined, snapshotRef.current?.world?.id || launch.worldId);
     const snapshot = nextSimulation.createSnapshot();
     const now = performance.now();
     simulationRef.current = nextSimulation;
@@ -401,7 +676,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     window.clearTimeout(sessionCloseTimerRef.current);
     launch.hostedLobby?.setStatusListener(message => setConnectionMessage(localizeCoopSignalingMessage(launch.language, message, 'status')));
     displayedCombatEventsRef.current.clear();
-    const renderer = new MultiplayerRendererBridge();
+    const renderer = new MultiplayerRendererBridge(launch.worldId);
     if (sceneRef.current) renderer.mount(sceneRef.current);
     const performanceMonitor = sceneRef.current ? CoopPerformanceMonitor.mount(sceneRef.current) : undefined;
     rendererRef.current = renderer;
@@ -426,6 +701,36 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
             text: tr(isDanger ? 'notice.dangerAlert' : 'notice.pinged', { name: pingerName.toUpperCase() }),
             color: event.color || '#22d3ee',
           });
+          continue;
+        }
+        if (event.kind === 'mission_started') {
+          const mission = snapshot.fieldMissions?.active;
+          soundManager.playTacticalPing(false);
+          setCombatNotice({ text: mission ? `${COOP_FIELD_MISSION_LABELS[mission.kind]} ACCEPTED · ${coopFieldMissionStageLabel(mission)} · ¤ ${mission.reward} EACH` : 'FIELD CONTRACT ACCEPTED', color: '#2dd4bf' });
+          continue;
+        }
+        if (event.kind === 'mission_stage') {
+          const mission = snapshot.fieldMissions?.active;
+          const urgent = event.amount === -1 || event.amount === -2;
+          soundManager.playTacticalPing(urgent);
+          setCombatNotice({ text: event.amount === -1 ? 'SITE B WINDOW LOST · RESTART AT SITE A' : event.amount === -2 ? 'HOSTAGE DROPPED · RECOVER THE HOSTAGE' : mission ? coopFieldMissionStageLabel(mission) : 'MISSION OBJECTIVE UPDATED', color: event.amount === -1 ? '#fb7185' : event.color || '#fbbf24' });
+          continue;
+        }
+        if (event.kind === 'demolition_charge_planted') {
+          setCombatNotice({ text: `SITE ${event.amount === 2 ? 'B' : 'A'} CHARGE ARMED · DEFEND UNTIL DETONATION`, color: '#fb7185' });
+          continue;
+        }
+        if (event.kind === 'demolition_charge_detonated') {
+          setCombatNotice({ text: `SITE ${event.amount === 2 ? 'B' : 'A'} DESTROYED`, color: '#fb923c' });
+          continue;
+        }
+        if (event.kind === 'mission_completed') {
+          setCombatNotice({ text: `FIELD CONTRACT COMPLETE · +¤ ${event.amount || 0} EACH`, color: '#5eead4' });
+          continue;
+        }
+        if (event.kind === 'mission_expired') {
+          soundManager.playTacticalPing(false);
+          setCombatNotice({ text: 'CHEM COMMANDER ELIMINATED · TOXIC HUNT REMOVED', color: '#4ade80' });
           continue;
         }
         if (event.kind === 'player_falling' && event.playerId !== launch.localPlayerId) {
@@ -477,6 +782,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         else if (event.kind === 'boss_ability') setCombatNotice({ text: event.amount ? tr('notice.bossPhase', { phase: event.amount }) : tr('notice.bossAttack'), color: event.color || '#fda4af' });
         else if (event.kind === 'station_online') setCombatNotice({ text: tr('notice.stationOnline'), color: '#67e8f9' });
         else if (event.kind === 'foundry_online') setCombatNotice({ text: tr('notice.foundryOnline'), color: '#f59e0b' });
+        else if (event.kind === 'private_exfil_inbound') setCombatNotice({ text: `PRIVATE EXFIL INBOUND · ${event.amount || 20}s`, color: '#fbbf24' });
+        else if (event.kind === 'player_extracted' && event.playerId === launch.localPlayerId) setCombatNotice({ text: 'EXTRACTED · SPECTATING SQUAD', color: '#5eead4' });
         else if (event.kind === 'exfil_deployed') setCombatNotice({ text: tr('notice.exfil'), color: '#fbbf24' });
         else if (event.kind === 'gas_warning') { setCombatNotice({ text: tr('notice.gasWarning'), color: '#f59e0b' }); soundManager.playHazardKlaxon(); }
         else if (event.kind === 'gas_spread') { setCombatNotice({ text: tr('notice.gasSpread'), color: '#4ade80' }); soundManager.playHazardKlaxon(); }
@@ -519,6 +826,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       presentCombatNotice(snapshot);
     };
     const publishSnapshot = (snapshot: CoopSnapshot, now: number) => {
+      if (typeof snapshot.administration?.paused === 'boolean' && adminPausedRef.current !== snapshot.administration.paused) {
+        adminPausedRef.current = snapshot.administration.paused;
+        setAdminPaused(snapshot.administration.paused);
+      }
       const timeline = presentationRef.current;
       const restarted = Boolean(timeline.current && snapshot.tick < 5 && timeline.current.tick > 20);
       if (timeline.current && snapshot.tick < timeline.current.tick && !restarted) {
@@ -581,6 +892,70 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         syncHud(snapshot);
       },
       onEvent: (peerId, event) => {
+        if (event.event === 'admin_request') {
+          if (launch.role !== 'host') return;
+          void (async () => {
+            const request = await verifyCoopAdminRequest(event.payload, session.sessionId);
+            if (!request) return;
+            const mappedPlayerId = launch.peerPlayerIds[peerId];
+            if (!mappedPlayerId || request.actorPlayerId !== mappedPlayerId) return;
+            const previousSequence = lastAdminSequenceByPeerRef.current.get(peerId) || 0;
+            if (request.sequence <= previousSequence) return;
+            lastAdminSequenceByPeerRef.current.set(peerId, request.sequence);
+            const result = executeAdminCommandAtHost(request.command, request.actorPlayerId);
+            session.sendEventTo(peerId, {
+              type: 'event',
+              version: MULTIPLAYER_PROTOCOL_VERSION,
+              event: 'admin_result',
+              payload: { requestId: request.id, ok: result.ok, message: result.message, modified: result.modified },
+            });
+          })();
+          return;
+        }
+        if (event.event === 'admin_result') {
+          if (!event.payload || typeof event.payload !== 'object') return;
+          const result = event.payload as CoopAdminResult;
+          if (typeof result.message === 'string' && typeof result.ok === 'boolean') addAdminLog(result.ok ? 'ok' : 'error', result.message.slice(0, 2_000));
+          return;
+        }
+        if (event.event === 'admin_notice') {
+          if (!event.payload || typeof event.payload !== 'object') return;
+          const notice = event.payload as { message?: unknown; kind?: unknown; paused?: unknown };
+          if (typeof notice.message !== 'string') return;
+          if (typeof notice.paused === 'boolean') {
+            adminPausedRef.current = notice.paused;
+            setAdminPaused(notice.paused);
+          }
+          setCombatNotice({ text: notice.message.slice(0, 180), color: notice.kind === 'warning' ? '#fbbf24' : notice.kind === 'kick' ? '#fb7185' : '#67e8f9' });
+          if (notice.kind === 'kick') {
+            setConnectionStatus('disconnected');
+            setConnectionMessage(notice.message.slice(0, 180));
+          }
+          return;
+        }
+        if (event.event === 'chat') {
+          if (launch.role === 'host') {
+            const text = parseCoopChatRequest(event.payload);
+            const playerId = launch.peerPlayerIds[peerId];
+            const player = playerId && (snapshotRef.current?.players.find(candidate => candidate.id === playerId)
+              || launch.players.find(candidate => candidate.id === playerId));
+            if (!text || !player) return;
+            const message: CoopChatMessage = {
+              id: `${player.id}:${Date.now().toString(36)}:${++chatMessageSequenceRef.current}`,
+              playerId: player.id,
+              playerLabel: player.label,
+              playerColor: player.color,
+              text,
+              sentAt: Date.now(),
+            };
+            addChatMessage(message);
+            session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'chat', payload: message });
+          } else {
+            const message = parseCoopChatMessage(event.payload);
+            if (message) addChatMessage(message);
+          }
+          return;
+        }
         if (event.event === 'inventory_drop' && launch.role === 'host') {
           const request = parseInventoryDrop(event.payload);
           const playerId = launch.peerPlayerIds[peerId];
@@ -589,8 +964,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         }
         if (event.event === 'ping' && launch.role === 'host') {
           const playerId = launch.peerPlayerIds[peerId];
-          const payload = event.payload as { x?: number; y?: number; z?: number; kind?: CoopPingKind; labelKey?: CoopTextKey; labelParams?: Record<string, string | number> } | undefined;
-          if (playerId && payload && typeof payload.x === 'number' && typeof payload.y === 'number') {
+          const payload = event.payload as { missionSiteId?: number; x?: number; y?: number; z?: number; kind?: CoopPingKind; labelKey?: CoopTextKey; labelParams?: Record<string, string | number> } | undefined;
+          if (playerId && payload && Number.isInteger(payload.missionSiteId)) {
+            simulationRef.current?.addMissionPing(playerId, payload.missionSiteId!);
+          } else if (playerId && payload && typeof payload.x === 'number' && typeof payload.y === 'number') {
             simulationRef.current?.addPing(playerId, payload.x, payload.y, payload.z || 0, payload.kind || 'location', isCoopTextKey(payload.labelKey) ? payload.labelKey : 'ping.waypoint', payload.labelParams);
           }
           return;
@@ -670,7 +1047,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           if (!simulation.addPlayer(player)) return;
           launch.peerPlayerIds[peerId] = player.id;
           const players = simulation.getPlayerSeeds();
-          session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: players });
+          session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: { players, worldId: simulation.createSnapshot().world?.id || launch.worldId } });
           publishSnapshot(simulation.createSnapshot(), performance.now());
           setHud(current => ({ ...current, players: players.length }));
           launch.hostedLobby?.update(players.length, 'in_game');
@@ -679,7 +1056,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         }
         if (event.event === 'spectate' && launch.role === 'host') {
           const players = simulationRef.current?.getPlayerSeeds();
-          if (players?.length) session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: players });
+          if (players?.length) session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: { players, worldId: simulationRef.current?.createSnapshot().world?.id || launch.worldId } });
           return;
         }
         if (event.event === 'leave') {
@@ -751,6 +1128,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     let firing = false;
     let sequence = inputRef.current.sequence;
     let fireActionId = inputRef.current.fireActionId || 0;
+    let altFireActionId = inputRef.current.altFireActionId || 0;
     let interactActionId = inputRef.current.interactActionId || 0;
     const updateInput = () => {
       const movement = (movementBindings.up.some(key => keys.has(key)) ? 1 : 0)
@@ -776,7 +1154,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     let lastPingClickTime = 0;
     const triggerPing = (forcedKind?: CoopPingKind) => {
-      if (isSpectator || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current) return;
+      if (isSpectator || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
       const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
       if (!local || local.lifeState === 'eliminated') return;
       const target = renderer.calculatePingTarget(snapshotRef.current, launch.localPlayerId);
@@ -887,9 +1265,63 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
+      const typingTarget = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+      if (ownerAvailableRef.current && !event.repeat && !typingTarget && event.key === 'F1') {
+        event.preventDefault();
+        renderer.exitPointerLock();
+        firing = false;
+        keys.clear();
+        updateInput();
+        setBuildMode(false);
+        setStationPanelOpen(false);
+        setFoundryPanelOpen(false);
+        setBackpackPanelOpen(false);
+        setTacticalMapPanelOpen(false);
+        setChatPanelOpen(false);
+        setAdminPanelOpen(true);
+        return;
+      }
+      if (adminOpenRef.current || adminPausedRef.current) {
+        event.preventDefault();
+        return;
+      }
       if (deploymentBlockedRef.current) {
         if (event.key === 'Escape') return;
         event.preventDefault();
+        return;
+      }
+      if (chatOpenRef.current) {
+        event.preventDefault();
+        return;
+      }
+      if (event.key === 'Enter' && !event.repeat && !isSpectator) {
+        event.preventDefault();
+        renderer.exitPointerLock();
+        firing = false;
+        keys.clear();
+        updateInput();
+        setBuildMode(false);
+        setStationPanelOpen(false);
+        setFoundryPanelOpen(false);
+        setBackpackPanelOpen(false);
+        setTacticalMapPanelOpen(false);
+        setChatPanelOpen(true);
+        return;
+      }
+      if (tacticalMapOpenRef.current) {
+        event.preventDefault(); event.stopPropagation();
+        if (!event.repeat && (event.key === 'Tab' || event.key === 'Escape')) {
+          setTacticalMapPanelOpen(false);
+          resumeGameplayInteraction();
+        }
+        return;
+      }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        if (!event.repeat) {
+          renderer.exitPointerLock(); firing = false; keys.clear(); updateInput(); setBuildMode(false);
+          setTacticalMapPanelOpen(true);
+        }
         return;
       }
       if (backpackOpenRef.current) {
@@ -904,7 +1336,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           || movementBindings.left.includes(key) || movementBindings.right.includes(key);
         if (event.code === 'Space') {
           event.preventDefault();
-          if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: true };
+          if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: true, jetHeld: true };
           return;
         }
         event.preventDefault();
@@ -961,10 +1393,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       if (event.code === 'Space') {
         event.preventDefault();
         if (!event.repeat) {
-          if (rendererRef.current ? rendererRef.current.canLocalJump() : true) {
-            soundManager.playJump();
-          }
-          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: true };
+          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: true, jetHeld: true };
         }
         return;
       }
@@ -1018,11 +1447,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         const station = local && snapshot?.buyStations.find(candidate => candidate.state === 'active' && Math.hypot(local.x - candidate.x, local.y - candidate.y) <= candidate.radius + 48);
         const foundry = local && snapshot?.weaponFoundry?.state === 'active' && Math.hypot(local.x - snapshot.weaponFoundry.x, local.y - snapshot.weaponFoundry.y) <= snapshot.weaponFoundry.radius + 48 ? snapshot.weaponFoundry : undefined;
         const revivableTeammate = local && snapshot?.players.some(player => player.id !== local.id && player.lifeState === 'downed' && Math.hypot(local.x - player.x, local.y - player.y) <= COOP_REVIVE_RANGE);
-        const nearbyManualDrop = local?.lifeState === 'alive' && snapshot?.items.some(item => item.manualDropKind
+        const nearbyManualDrop = local?.lifeState === 'alive' && local.z <= 20 && snapshot?.items.some(item => item.manualDropKind
           && !(item.manualDropKind === 'self_revive' && local.selfRevives > 0)
           && Math.hypot(local.x - item.x, local.y - item.y) <= COOP_MANUAL_PICKUP_RANGE);
         const repairableStructure = local?.lifeState === 'alive' && snapshot?.structures?.some(structure => structure.state !== 'destroying'
           && structure.health < structure.maxHealth && Math.hypot(local.x - structure.x, local.y - structure.y) <= COOP_STRUCTURE_ACTION_RANGE);
+        const fieldMissions = snapshot?.fieldMissions;
+        const activeMission = fieldMissions?.active;
+        const nearbyContract = local && !activeMission ? fieldMissions?.sites.find(site => site.state === 'available' && Math.hypot(local.x - site.x, local.y - site.y) <= 125) : undefined;
+        const nearbyHostage = local && activeMission?.hostage?.state === 'waiting' && Math.hypot(local.x - activeMission.hostage.x, local.y - activeMission.hostage.y) <= 120;
+        const nearbyDrive = local && activeMission?.drives.some(drive => !drive.collected && Math.hypot(local.x - drive.x, local.y - drive.y) <= 105);
+        const missionHoldStage = activeMission && ['plant_a', 'plant_b', 'activate', 'deliver'].includes(activeMission.stage);
+        const nearbyMissionHold = local && missionHoldStage && Math.hypot(local.x - activeMission.x, local.y - activeMission.y) <= 165;
         // Revive is deliberately first priority when both are possible. The
         // interaction key remains held in `keys` so the host owns validation.
         if (local?.lifeState === 'downed' || revivableTeammate) {
@@ -1032,6 +1468,20 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         }
         if (nearbyManualDrop) {
           if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), interactActionId: ++interactActionId };
+          return;
+        }
+        if (nearbyHostage) {
+          keys.add(key);
+          updateInput();
+          return;
+        }
+        if (nearbyContract || nearbyDrive) {
+          if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), interactActionId: ++interactActionId };
+          return;
+        }
+        if (nearbyMissionHold) {
+          keys.add(key);
+          updateInput();
           return;
         }
         if (repairableStructure) {
@@ -1077,6 +1527,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     const onKeyUp = (event: KeyboardEvent) => {
       if (deploymentBlockedRef.current) return;
+      if (chatOpenRef.current) { event.preventDefault(); return; }
       if (event.key.toLowerCase() === 'b') {
         const held = buildBPressedAtRef.current > 0 && performance.now() - buildBPressedAtRef.current >= 220;
         buildBPressedAtRef.current = 0;
@@ -1085,6 +1536,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         else if (buildBWasActiveRef.current) setBuildMode(false);
         return;
       }
+      if (event.code === 'Space') { inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: false, jetHeld: false }; return; }
       if (event.key.toLowerCase() === 'r') { inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), reloadPressed: false }; return; }
       keys.delete(event.key.toLowerCase());
       if (event.key.toLowerCase() === 'alt') buildSnappingRef.current = true;
@@ -1092,7 +1544,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     const onMouseMove = (event: MouseEvent) => {
       if (deploymentBlockedRef.current) return;
-      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || isSpectator) return;
+      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || isSpectator) return;
       inputRef.current = {
         ...inputRef.current,
         aimAngle: quantizeAngle(renderer.getAimAngle()),
@@ -1103,7 +1555,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       if (deploymentBlockedRef.current) return;
       // A Buy Station is a focused modal. Do not let a click on its buttons,
       // list, or backdrop leak through to pointer lock, fire, or aiming.
-      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current) return;
+      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
       // Middle mouse button (click scroll wheel) pings
       if (event.button === 1) {
         event.preventDefault();
@@ -1137,23 +1589,28 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         if (event.button === 0) { event.preventDefault(); renderer.requestPointerLock(); placeStructure(); }
         return;
       }
-      if (event.button === 2) { inputRef.current = { ...inputRef.current, aiming: true, sequence: ++sequence, clientTime: Date.now() }; return; }
+      if (event.button === 2) {
+        const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
+        if (local?.selectedSlot === 3) inputRef.current = { ...inputRef.current, altFireActionId: ++altFireActionId, aiming: false, sequence: ++sequence, clientTime: Date.now() };
+        else inputRef.current = { ...inputRef.current, aiming: true, sequence: ++sequence, clientTime: Date.now() };
+        return;
+      }
       if (event.button !== 0) return;
       renderer.requestPointerLock();
       fireActionId++;
       firing = true;
       updateInput();
       inputRef.current = { ...inputRef.current, fireActionId };
-      const weaponId = COOP_WEAPON_SLOTS[inputRef.current.selectedSlot];
       const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
       const weapon = local?.weaponStates[inputRef.current.selectedSlot];
+      const weaponId = weapon?.weaponId;
       if (weaponId && local?.lifeState === 'alive' && weapon?.state === 'ready' && weapon.magazineAmmo > 0 && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
         renderer.predictLocalFire(weaponId, fireActionId);
       }
     };
     const onMouseUp = (event: MouseEvent) => {
       if (deploymentBlockedRef.current) return;
-      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current) {
+      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) {
         firing = false;
         updateInput();
         return;
@@ -1175,7 +1632,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       if (deploymentBlockedRef.current) { event.preventDefault(); return; }
       // The station owns wheel input completely; it must never leak into
       // weapon selection or scroll the game page behind the modal.
-      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current) { event.preventDefault(); return; }
+      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) { event.preventDefault(); return; }
       if (isSpectator) return;
       event.preventDefault();
       const direction = event.deltaY > 0 ? 1 : -1;
@@ -1186,13 +1643,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         } else buildRotationRef.current += direction * Math.PI / 12;
         return;
       }
-      const selectedSlot = (inputRef.current.selectedSlot + direction + COOP_WEAPON_SLOTS.length) % COOP_WEAPON_SLOTS.length;
+      const slotCount = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.weaponStates.length || COOP_WEAPON_SLOTS.length;
+      const selectedSlot = (inputRef.current.selectedSlot + direction + slotCount) % slotCount;
       inputRef.current = { ...inputRef.current, selectedSlot };
       setHud(current => ({ ...current, selectedSlot }));
     };
     const clearControls = () => {
       keys.clear(); firing = false; updateInput();
-      inputRef.current = { ...inputRef.current, aiming: false, jumpPressed: false, reloadPressed: false };
+      inputRef.current = { ...inputRef.current, aiming: false, jumpPressed: false, jetHeld: false, reloadPressed: false };
     };
     const onVisibilityChange = () => { if (document.hidden) clearControls(); };
     const onContextMenu = (event: MouseEvent) => event.preventDefault();
@@ -1215,6 +1673,21 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     let inputAccumulator = 0;
     const hostClock = launch.role === 'host' ? new HostSimulationClock(INPUT_INTERVAL_MS, (now) => {
       const simulation = simulationRef.current!;
+      if (adminPausedRef.current) {
+        stateAccumulator += INPUT_INTERVAL_MS;
+        if (stateAccumulator >= SNAPSHOT_INTERVAL_MS) {
+          stateAccumulator %= SNAPSHOT_INTERVAL_MS;
+          const baseSnapshot = simulation.createSnapshot();
+          const snapshot: CoopSnapshot = { ...baseSnapshot, administration: { ...baseSnapshot.administration, modified: Boolean(baseSnapshot.administration?.modified), paused: true } };
+          publishSnapshot(snapshot, now);
+          session.broadcastState(
+            { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Date.now(), payload: snapshot },
+            peerId => createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]),
+          );
+          syncHud(snapshot);
+        }
+        return;
+      }
       inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
       simulation.setInput(launch.localPlayerId, inputRef.current);
       const simulationStartedAt = performance.now();
@@ -1239,7 +1712,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       lastTime = now;
       accumulator += elapsed;
       inputAccumulator += elapsed;
-      if (stationOpenRef.current || foundryOpenRef.current) clearControls();
+      if (stationOpenRef.current || foundryOpenRef.current || chatOpenRef.current) clearControls();
       if (launch.role === 'guest') {
         while (inputAccumulator >= INPUT_INTERVAL_MS) {
           inputAccumulator -= INPUT_INTERVAL_MS;
@@ -1279,6 +1752,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         const placementIssue = pose ? validateCoopBuildPreview(frameSnapshot, launch.localPlayerId, type, pose.x, pose.y, pose.angle) : { code: 'range' as const };
         renderer.setBuildPreview(type, pose, Boolean(pose && !placementIssue));
       } else renderer.setBuildPreview(undefined);
+      const localJetpack = frameSnapshot?.players.find(player => player.id === launch.localPlayerId);
+      soundManager.updateJetpack(
+        Boolean(localJetpack?.lifeState === 'alive' && localJetpack.jetActive),
+        (localJetpack?.jetFuel ?? 100) / 100,
+      );
       const renderStartedAt = performance.now();
       renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId, latestLifeState === 'alive');
       performanceMonitor?.recordFrame(elapsed, performance.now() - renderStartedAt, renderer.getPerformanceStats());
@@ -1319,6 +1797,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       window.removeEventListener('contextmenu', onContextMenu);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       document.removeEventListener('pointerlockchange', syncPointerLock);
+      soundManager.stopJetpack();
       soundManager.stopTowerCharge();
       renderer.destroy();
       rendererRef.current = null;
@@ -1337,7 +1816,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     return () => window.clearTimeout(timeout);
   }, [combatNotice]);
 
-  const interactionBlocked = deploymentStage === 'briefing' || deploymentStage === 'ready' || stationOpen || foundryOpen || backpackOpen || Boolean(matchSnapshot?.results) || hud.matchState !== 'active' || connectionStatus === 'disconnected';
+  const interactionBlocked = deploymentStage === 'briefing' || deploymentStage === 'ready' || stationOpen || foundryOpen || backpackOpen || tacticalMapOpen || chatOpen || adminOpen || adminPaused || Boolean(matchSnapshot?.results) || hud.matchState !== 'active' || connectionStatus === 'disconnected';
   const interactionBlockedRef = useRef(false);
 
   useEffect(() => {
@@ -1352,7 +1831,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       return;
     }
     const focusModal = window.requestAnimationFrame(() => {
-      const target = document.querySelector<HTMLElement>('.coop-arena [role="dialog"] button:not(:disabled), .coop-arena [role="dialog"] [tabindex="0"]');
+      const target = document.querySelector<HTMLElement>('.coop-admin-console input, .coop-arena [role="dialog"] button:not(:disabled), .coop-arena [role="dialog"] [tabindex="0"]');
       target?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(focusModal);
@@ -1361,6 +1840,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   useEffect(() => {
     const results = matchSnapshot?.results;
     if (!results || isSpectator || settledRunRef.current === results.runId) return;
+    if (matchSnapshot?.administration?.modified) {
+      settledRunRef.current = results.runId;
+      return;
+    }
     const localResult = results.players.find(player => player.playerId === launch.localPlayerId);
     if (!localResult) return;
     settledRunRef.current = results.runId;
@@ -1373,7 +1856,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       depth: results.bossesDefeated,
     });
     applyLocalImprintProfile(settled);
-  }, [matchSnapshot?.results?.runId, isSpectator, launch.localPlayerId, localOperatorId]);
+  }, [matchSnapshot?.results?.runId, matchSnapshot?.administration?.modified, isSpectator, launch.localPlayerId, localOperatorId]);
 
   // Ambient gas and respirator breathing audio loop
   useEffect(() => {
@@ -1396,6 +1879,53 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   }, [launch.localPlayerId]);
 
   const localSnapshot = matchSnapshot?.players.find(player => player.id === (isSpectator ? spectatorTargetRef.current : launch.localPlayerId));
+  const classOperator = getCoopOperator(localSnapshot?.operatorId, localSnapshot?.skinId);
+  const specialEffectActive = Boolean(localSnapshot && matchSnapshot?.artifactEffects?.some(effect =>
+    effect.ownerId === localSnapshot.id
+    && ((classOperator.id === 'solar_guard' && effect.kind === 'dawnwall')
+      || (classOperator.id === 'royal_inferno' && effect.kind === 'hellseed'))
+  ));
+  const specialReady = !isSpectator
+    && localSnapshot?.lifeState === 'alive'
+    && isCoopArtifactSpenderCharged(classOperator.id, localSnapshot.artifactResource)
+    && !specialEffectActive;
+
+  useEffect(() => {
+    if (specialReadyOperatorRef.current !== classOperator.id) {
+      specialReadyOperatorRef.current = classOperator.id;
+      specialWasReadyRef.current = false;
+    }
+    const becameReady = specialReady && !specialWasReadyRef.current;
+    specialWasReadyRef.current = specialReady;
+    if (!becameReady || deploymentStageRef.current !== 'complete') return;
+
+    if (specialReadyTimerRef.current !== null) window.clearTimeout(specialReadyTimerRef.current);
+    setSpecialReadyCue({ id: ++specialReadySequenceRef.current, name: classOperator.spenderName, color: classOperator.color });
+    specialReadyTimerRef.current = window.setTimeout(() => {
+      setSpecialReadyCue(null);
+      specialReadyTimerRef.current = null;
+    }, 2_200);
+  }, [classOperator.id, classOperator.spenderName, classOperator.color, specialReady]);
+
+  useEffect(() => () => {
+    if (specialReadyTimerRef.current !== null) window.clearTimeout(specialReadyTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const worldId = matchSnapshot?.world?.id;
+    if (!worldId || matchSnapshot?.administration?.modified) return;
+    writeCoopWorldProgress(unlockCoopWorld(readCoopWorldProgress(), worldId));
+  }, [matchSnapshot?.world?.id, matchSnapshot?.administration?.modified]);
+  const pingMissionFromMap = (missionSiteId: number) => {
+    const snapshot = snapshotRef.current;
+    const player = snapshot?.players.find(candidate => candidate.id === launch.localPlayerId);
+    const site = snapshot?.fieldMissions?.sites.find(candidate => candidate.id === missionSiteId && candidate.state !== 'completed');
+    if (!player || player.lifeState === 'eliminated' || player.lifeState === 'extracted' || !site) return;
+    soundManager.playTacticalPing(false);
+    if (launch.role === 'host') simulationRef.current?.addMissionPing(launch.localPlayerId, missionSiteId);
+    else launch.session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'ping', payload: { missionSiteId } });
+    setCombatNotice({ text: tr('notice.pingTarget', { label: COOP_FIELD_MISSION_LABELS[site.kind] }), color: site.kind === 'demolition' ? '#fb7185' : site.kind === 'hostage_recovery' ? '#fbbf24' : site.kind === 'courier_intercept' ? '#c084fc' : site.kind === 'toxic_hunt' ? '#4ade80' : '#22d3ee' });
+  };
   const gasZone = matchSnapshot?.gasZone;
   const isLocalInGas = Boolean(
     localSnapshot &&
@@ -1411,16 +1941,39 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       && structure.state !== 'destroying'
       && Math.hypot(localSnapshot.x - structure.x, localSnapshot.y - structure.y) <= COOP_STRUCTURE_DEFINITIONS.recovery_relay.radius + COOP_PLAYER_RADIUS)
     : undefined;
-  const nearbyStation = !isSpectator && localSnapshot && matchSnapshot?.buyStations.find(station => station.state === 'active' && Math.hypot(localSnapshot.x - station.x, localSnapshot.y - station.y) <= station.radius + 48);
-  const nearbyFoundry = !isSpectator && localSnapshot && matchSnapshot?.weaponFoundry?.state === 'active'
+  const nearbyStation = !isSpectator && localSnapshot && localSnapshot.z <= 20 && matchSnapshot?.buyStations.find(station => station.state === 'active' && Math.hypot(localSnapshot.x - station.x, localSnapshot.y - station.y) <= station.radius + 48);
+  const nearbyFoundry = !isSpectator && localSnapshot && localSnapshot.z <= 20 && matchSnapshot?.weaponFoundry?.state === 'active'
     && Math.hypot(localSnapshot.x - matchSnapshot.weaponFoundry.x, localSnapshot.y - matchSnapshot.weaponFoundry.y) <= matchSnapshot.weaponFoundry.radius + 48
     ? matchSnapshot.weaponFoundry : undefined;
-  const nearbyManualDrop = !isSpectator && localSnapshot?.lifeState === 'alive'
+  const nearbyManualDrop = !isSpectator && localSnapshot?.lifeState === 'alive' && localSnapshot.z <= 20
     ? matchSnapshot?.items.filter(item => item.manualDropKind
       && !(item.manualDropKind === 'self_revive' && localSnapshot.selfRevives > 0)
       && Math.hypot(localSnapshot.x - item.x, localSnapshot.y - item.y) <= COOP_MANUAL_PICKUP_RANGE)
       .sort((left, right) => Math.hypot(localSnapshot.x - left.x, localSnapshot.y - left.y) - Math.hypot(localSnapshot.x - right.x, localSnapshot.y - right.y))[0]
     : undefined;
+  const nearbyMissionPrompt = (() => {
+    if (isSpectator || !localSnapshot || localSnapshot.lifeState !== 'alive' || !matchSnapshot?.fieldMissions) return undefined;
+    const missions = matchSnapshot.fieldMissions, active = missions.active;
+    if (!active) {
+      const site = missions.sites.find(candidate => candidate.state === 'available' && Math.hypot(localSnapshot.x - candidate.x, localSnapshot.y - candidate.y) <= 125);
+      return site ? `ACCEPT ${COOP_FIELD_MISSION_LABELS[site.kind]} · ¤ ${site.reward} EACH` : undefined;
+    }
+    if (active.hostage?.state === 'waiting' && Math.hypot(localSnapshot.x - active.hostage.x, localSnapshot.y - active.hostage.y) <= 120) return 'HOLD TO FREE HOSTAGE · THEN CARRY TO RECOVERY';
+    if (active.drives.some(drive => !drive.collected && Math.hypot(localSnapshot.x - drive.x, localSnapshot.y - drive.y) <= 105)) return 'RECOVER ENCRYPTED DRIVE';
+    // Demolition gets a dedicated interaction card below. A one-line generic
+    // prompt could not communicate arming progress or interrupted planting.
+    if (['plant_a', 'plant_b'].includes(active.stage) && Math.hypot(localSnapshot.x - active.x, localSnapshot.y - active.y) <= 165) return undefined;
+    if (active.stage === 'activate' && Math.hypot(localSnapshot.x - active.x, localSnapshot.y - active.y) <= 165) return 'HOLD TO ACTIVATE RELAY';
+    if (active.stage === 'deliver' && Math.hypot(localSnapshot.x - active.x, localSnapshot.y - active.y) <= 165) return 'HOLD TO DEPOSIT DRIVES';
+    return undefined;
+  })();
+  const demolitionMission = matchSnapshot?.fieldMissions?.active?.kind === 'demolition' ? matchSnapshot.fieldMissions.active : undefined;
+  const demolitionPlantStage = demolitionMission?.stage === 'plant_a' || demolitionMission?.stage === 'plant_b';
+  const demolitionSite = demolitionMission?.stage.endsWith('_b') ? 'B' : 'A';
+  const demolitionProgress = demolitionMission ? Math.max(0, Math.min(100, demolitionMission.progress / Math.max(1, demolitionMission.required) * 100)) : 0;
+  const nearDemolitionPlant = Boolean(!isSpectator && demolitionMission && demolitionPlantStage && localSnapshot?.lifeState === 'alive'
+    && Math.hypot(localSnapshot.x - demolitionMission.x, localSnapshot.y - demolitionMission.y) <= 165);
+  const activelyPlanting = nearDemolitionPlant && inputRef.current.reviving;
   const captureCandidates = matchSnapshot?.buyStations.filter(station => station.state === 'capturing' || station.state === 'available') || [];
 
   useEffect(() => {
@@ -1443,8 +1996,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     ? matchSnapshot?.players.find(player => player.lifeState === 'downed' && player.reviverId === launch.localPlayerId)
     : undefined;
   const run = matchSnapshot?.run;
+  const activeWorld = getWorldDefinition(matchSnapshot?.world?.id || launch.worldId);
   const encounter = matchSnapshot?.encounter;
-  const activeWeaponId = COOP_WEAPON_SLOTS[hud.selectedSlot];
+  const activeWeaponId = hud.weapons[hud.selectedSlot]?.weaponId;
   const activeWeapon = COOP_WEAPON_DETAILS[activeWeaponId];
   const activeWeaponState = hud.weapons[hud.selectedSlot];
   const spectatedSquadmate = matchSnapshot?.players.find(p => p.id === downedSpectatorTarget?.id);
@@ -1452,7 +2006,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const squadmates = hud.squad.filter(player => player.id !== launch.localPlayerId);
   const engineeringTarget = buildMode && localSnapshot && matchSnapshot ? (() => {
     const aim = rendererRef.current?.getAimAngle() ?? localSnapshot.angle;
-    return (matchSnapshot.structures || []).filter(structure => structure.state !== 'destroying').map(structure => {
+    return (matchSnapshot.structures || []).filter(structure => structure.state !== 'destroying' && structure.type !== 'bridge_segment').map(structure => {
       const distance = Math.hypot(structure.x - localSnapshot.x, structure.y - localSnapshot.y);
       const bearing = Math.atan2(structure.y - localSnapshot.y, structure.x - localSnapshot.x);
       const difference = Math.abs(Math.atan2(Math.sin(bearing - aim), Math.cos(bearing - aim)));
@@ -1462,12 +2016,56 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   })() : undefined;
   const objectiveHud = run ? (() => {
     const base = {
-      title: run.objective ? tr(run.objective.titleKey) : run.boss ? tr(run.boss.nameKey) : tr(run.noticeKey, run.boss ? { boss: tr(run.boss.nameKey) } : undefined),
+      title: run.objective ? tr(run.objective.titleKey) : run.boss ? (run.boss.displayName || tr(run.boss.nameKey)) : tr(run.noticeKey, run.boss ? { boss: run.boss.displayName || tr(run.boss.nameKey) } : undefined),
       label: tr(coopRunPhaseKey(run.phase)),
       detail: '',
       progress: undefined as number | undefined,
+      progressText: '',
       tone: 'cyan' as 'cyan' | 'rose' | 'amber' | 'emerald' | 'fuchsia',
     };
+    // Once accepted, a field contract owns the primary HUD until completion.
+    // Optional world-link/exfil panels previously hid demolition feedback.
+    const fieldMission = matchSnapshot?.fieldMissions?.active;
+    if (fieldMission) {
+      const navigationTarget = resolveCoopMissionNavigationTarget(fieldMission, matchSnapshot.enemies) || fieldMission;
+      const distance = localSnapshot ? Math.max(1, Math.round(Math.hypot(navigationTarget.x - localSnapshot.x, navigationTarget.y - localSnapshot.y) / 12)) : 0;
+      const commander = fieldMission.kind === 'toxic_hunt' ? matchSnapshot.enemies.find(enemy => fieldMission.targetEnemyIds.includes(enemy.id) && !enemy.dying) : undefined;
+      if (fieldMission.kind === 'demolition') {
+        const site = fieldMission.stage.endsWith('_b') ? 'B' : 'A';
+        const planting = fieldMission.stage === 'plant_a' || fieldMission.stage === 'plant_b';
+        const defending = !planting;
+        const percent = Math.round(fieldMission.progress / Math.max(1, fieldMission.required) * 100);
+        const seconds = Math.max(0, Math.ceil((fieldMission.timerRemainingMs || 0) / 1000));
+        const detail = planting
+          ? fieldMission.stage === 'plant_b' ? `${seconds}s PLANT WINDOW · ${distance}m` : `${distance}m · HOLD F AT THE CHARGE`
+          : `DETONATION IN ${seconds}s · DEFEND THE CHARGE`;
+        return {
+          ...base,
+          title: `DEMOLITION · SITE ${site}`,
+          label: coopFieldMissionStageLabel(fieldMission),
+          detail,
+          progress: fieldMission.progress / Math.max(1, fieldMission.required) * 100,
+          progressText: defending ? `${seconds}s` : `${percent}% PLANTED`,
+          tone: defending ? 'rose' as const : 'amber' as const,
+        };
+      }
+      const detail = commander ? `${Math.ceil(commander.health).toLocaleString()} HP · ${distance}m`
+        : fieldMission.timerRemainingMs !== undefined ? `${Math.ceil(fieldMission.timerRemainingMs / 1000)}s · ${distance}m`
+          : `${distance}m · ¤ ${fieldMission.reward} EACH`;
+      return { ...base, title: COOP_FIELD_MISSION_LABELS[fieldMission.kind], label: coopFieldMissionStageLabel(fieldMission), detail, progress: fieldMission.required > 1 ? fieldMission.progress / fieldMission.required * 100 : undefined, progressText: fieldMission.required > 1 ? `${Math.round(fieldMission.progress / fieldMission.required * 100)}%` : '', tone: fieldMission.kind === 'toxic_hunt' ? 'rose' as const : 'emerald' as const };
+    }
+    const bridge = matchSnapshot?.bridge;
+    if (bridge && bridge.destinationWorldId && bridge.state !== 'locked' && bridge.state !== 'terminal') {
+      const destination = getWorldDefinition(bridge.destinationWorldId);
+      const distance = localSnapshot ? Math.round(Math.hypot(bridge.buildX - localSnapshot.x, bridge.buildY - localSnapshot.y)) : 0;
+      if (bridge.state === 'complete' || bridge.state === 'crossing') return { ...base, title: `WORLDLINK TO ${destination.name}`, label: 'BRIDGE COMPLETE · CROSS THE SPAN', detail: `${Math.round(bridge.endX - bridge.startX)}m TRANSIT`, progress: 100, tone: 'amber' as const };
+      return { ...base, title: `BUILD WORLDLINK TO ${destination.name}`, label: 'SELECT WORLDLINK SPAN IN BUILD MODE', detail: `${distance}m · ${bridge.builtSegments}/${bridge.requiredSegments} SPANS`, progress: bridge.builtSegments / Math.max(1, bridge.requiredSegments) * 100, tone: 'amber' as const };
+    }
+    if (matchSnapshot?.privateExfil) {
+      const exfil = matchSnapshot.privateExfil;
+      const remaining = exfil.state === 'inbound' ? exfil.arrivalRemainingMs : exfil.windowRemainingMs;
+      return { ...base, title: 'PRIVATE EXFIL', label: exfil.state === 'inbound' ? 'INBOUND' : 'EXTRACTION ACTIVE', detail: `${Math.ceil(remaining / 1000)}s`, progress: exfil.state === 'active' ? exfil.holdProgressMs / Math.max(1, exfil.holdRequiredMs) * 100 : (1 - exfil.arrivalRemainingMs / 20_000) * 100, tone: 'amber' as const };
+    }
     if (run.boss) return { ...base, label: tr('hud.bossPhase', { phase: run.boss.phase }), detail: `${Math.ceil(run.boss.health).toLocaleString()} ${tr('unit.hp')}`, progress: run.boss.health / Math.max(1, run.boss.maxHealth) * 100, tone: 'rose' as const };
     if (run.exfil) return { ...base, label: tr('hud.extraction'), detail: tr('unit.seconds', { value: Math.ceil(run.exfil.remainingMs / 1000) }), progress: run.exfil.holdProgressMs / Math.max(1, run.exfil.holdRequiredMs) * 100, tone: 'amber' as const };
     if (currentCaptureStation && (run.phase === 'insertion' || localInsideCapture || currentCaptureStation.captureProgressMs > 0)) {
@@ -1497,6 +2095,54 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   return (
     <div className={`coop-arena absolute inset-0 z-[110] bg-[#05080e] ${interactionBlocked ? 'coop-arena--interaction-blocked' : ''} ${deploymentStage === 'briefing' || deploymentStage === 'ready' ? 'coop-arena--deploying' : deploymentStage === 'released' ? 'coop-arena--releasing' : 'coop-arena--deployed'}`}>
       <div ref={sceneRef} className="coop-arena__scene absolute inset-0 h-full w-full" />
+      {ownerAvailable && !adminOpen && <button
+        type="button"
+        className="coop-owner-trigger"
+        aria-label="Open owner console"
+        onMouseDown={event => event.stopPropagation()}
+        onClick={() => { rendererRef.current?.exitPointerLock(); setAdminPanelOpen(true); }}
+      ><ShieldCheck size={13} /><span>Owner</span><kbd>F1</kbd></button>}
+      {adminOpen && ownerAvailable && <section className="coop-admin-console" role="dialog" aria-modal="true" aria-label="Owner control console" onMouseDown={event => event.stopPropagation()}>
+        <header>
+          <div><ShieldCheck size={16} /><span>Owner Control Mesh</span><small>{launch.role === 'host' ? 'LOCAL AUTHORITY' : 'SIGNED REMOTE AUTHORITY'}</small></div>
+          <button type="button" onClick={closeAdminAndResume} aria-label="Close owner console"><X size={15} /></button>
+        </header>
+        <div className="coop-admin-console__status">
+          <span data-online="true">OWNER KEY VERIFIED</span>
+          <span>{adminPaused ? 'SIMULATION PAUSED' : 'SIMULATION RUNNING'}</span>
+          <span>{matchSnapshot?.administration?.modified ? 'MODIFIED RUN' : 'CLEAN RUN'}</span>
+        </div>
+        <div className="coop-admin-console__log" role="log" aria-live="polite">
+          {adminLog.map(entry => <pre key={entry.id} data-tone={entry.tone}>{entry.text}</pre>)}
+        </div>
+        <form onSubmit={event => { event.preventDefault(); void submitAdminCommand(); }}>
+          <Terminal size={15} />
+          <span>&gt;</span>
+          <input
+            ref={adminInputRef}
+            value={adminDraft}
+            onChange={event => setAdminDraft(event.target.value)}
+            onKeyDown={event => {
+              event.stopPropagation();
+              if (event.key === 'Escape') { event.preventDefault(); closeAdminAndResume(); }
+              if (event.key === 'ArrowUp' && adminHistory.length) { event.preventDefault(); setAdminDraft(adminHistory[adminHistory.length - 1]); }
+            }}
+            onKeyUp={event => event.stopPropagation()}
+            placeholder="help"
+            maxLength={512}
+            autoComplete="off"
+            spellCheck="false"
+          />
+          <button type="submit" disabled={!adminDraft.trim()}>Execute</button>
+        </form>
+      </section>}
+      {adminPaused && !adminOpen && <div className="coop-admin-paused"><ShieldCheck size={16} /><b>OPERATION PAUSED BY OWNER</b>{ownerAvailable && <small>Press F1 to open Owner Control</small>}</div>}
+      {matchSnapshot?.administration?.modified && <div className="coop-admin-modified">MODIFIED CO-OP RUN · CAREER REWARDS DISABLED</div>}
+      {deploymentStage === 'complete' && matchSnapshot?.world && <div className="pointer-events-none absolute left-5 top-5 z-50 border bg-black/65 px-3 py-2 font-mono uppercase backdrop-blur-sm" style={{ borderColor: `#${activeWorld.theme.accentColor.toString(16).padStart(6, '0')}88`, boxShadow: `0 0 24px #${activeWorld.theme.accentColor.toString(16).padStart(6, '0')}22` }}>
+        <div className="text-[8px] font-black tracking-[.24em] text-white/45">World {activeWorld.tier} · Threat ×{activeWorld.difficulty.threatMultiplier.toFixed(2)}</div>
+        <div className="mt-0.5 text-[11px] font-black tracking-[.15em]" style={{ color: `#${activeWorld.theme.accentColor.toString(16).padStart(6, '0')}` }}>{activeWorld.name}</div>
+        <div className="mt-1 text-[7px] font-bold tracking-[.12em] text-white/50">{WORLD_CONDITIONS[activeWorld.id]}</div>
+      </div>}
       {deploymentStage !== 'complete' && <CoopDeploymentOverlay
         stage={deploymentStage}
         players={launch.players}
@@ -1519,6 +2165,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       )}
       {!isSpectator && hud.lifeState === 'alive' && !backpackOpen && <div className="pointer-events-none absolute bottom-5 right-5 z-[54] border border-white/10 bg-black/55 px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white/55 backdrop-blur-sm"><kbd className="mr-1.5 text-cyan-200">G</kbd>{tr('backpack.open')}</div>}
       {nearbyManualDrop && !backpackOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[5.5rem] left-1/2 z-[86] -translate-x-1/2 border border-amber-300/45 bg-black/80 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,.18)]"><kbd className="mr-2 border border-amber-200/40 bg-amber-300/10 px-1.5 py-0.5">F</kbd>{tr(nearbyManualDrop.manualDropKind === 'cash' ? 'backpack.pickupCash' : 'backpack.pickupRevive', { amount: nearbyManualDrop.value })}</div>}
+      {nearbyMissionPrompt && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[8.5rem] left-1/2 z-[86] -translate-x-1/2 border border-emerald-300/50 bg-black/85 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-emerald-100 shadow-[0_0_26px_rgba(45,212,191,.2)]"><kbd className="mr-2 border border-emerald-200/40 bg-emerald-300/10 px-1.5 py-0.5">F</kbd>{nearbyMissionPrompt}</div>}
+      {nearDemolitionPlant && demolitionMission && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className={`coop-demolition-interact pointer-events-none absolute ${activelyPlanting ? 'coop-demolition-interact--active' : ''}`}>
+        <div className="coop-demolition-interact__eyebrow">SITE {demolitionSite} · EXPLOSIVE CHARGE</div>
+        <div className="coop-demolition-interact__action">
+          <kbd>F</kbd>
+          <span>{activelyPlanting ? 'PLANTING CHARGE' : demolitionMission.progress > 0 ? 'PLANT INTERRUPTED · HOLD TO CONTINUE' : 'HOLD TO PLANT CHARGE'}</span>
+          <b>{Math.round(demolitionProgress)}%</b>
+        </div>
+        <div className="coop-demolition-interact__meter" role="progressbar" aria-label={`Plant charge at site ${demolitionSite}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(demolitionProgress)}><i style={{ width: `${demolitionProgress}%` }} /></div>
+        <small>{activelyPlanting ? 'KEEP F HELD · REMAIN INSIDE THE MARKED SITE' : demolitionMission.progress > 0 ? 'PROGRESS IS DECAYING' : 'STAND CLOSE TO THE DEVICE AND KEEP F HELD'}</small>
+      </div>}
+      {localSnapshot?.carryingHostage && <div className="pointer-events-none absolute left-1/2 top-[31%] z-[55] -translate-x-1/2 border border-amber-300/50 bg-black/80 px-4 py-2 text-center text-[10px] font-black uppercase tracking-[.18em] text-amber-100"><div>CARRYING HOSTAGE</div><small className="mt-1 block font-mono text-[8px] text-white/55">WEAPON / SPRINT / JET DISABLED · SPEED −18% · SQUAD PROTECTION REQUIRED</small></div>}
       {backpackOpen && localSnapshot && <CoopBackpackModal
         player={localSnapshot}
         message={backpackMessage}
@@ -1596,14 +2254,55 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           </div>;
         })}
       </div>}
+      {(chatMessages.length > 0 || chatOpen) && <section className={`coop-chat ${chatOpen ? 'coop-chat--open' : ''}`} aria-label={tr('chat.open')}>
+        <div className="coop-chat__messages" role="log" aria-live="polite" aria-relevant="additions">
+          {chatMessages.slice(chatOpen ? -8 : -4).map(message => <div key={message.id} className="coop-chat__message">
+            <b style={{ color: message.playerColor }}>{message.playerLabel}</b>
+            <span>{message.text}</span>
+          </div>)}
+        </div>
+        {chatOpen && <form className="coop-chat__composer" onSubmit={event => { event.preventDefault(); if (sendChatMessage()) closeChatAndResume(); }} onMouseDown={event => event.stopPropagation()}>
+          <MessageSquare size={13} aria-hidden="true" />
+          <input
+            ref={chatInputRef}
+            value={chatDraft}
+            onChange={event => setChatDraft(event.target.value)}
+            onKeyDown={event => {
+              event.stopPropagation();
+              if (event.key === 'Escape') { event.preventDefault(); closeChatAndResume(); }
+            }}
+            onKeyUp={event => event.stopPropagation()}
+            maxLength={COOP_CHAT_MAX_LENGTH * 2}
+            placeholder={tr('chat.placeholder')}
+            aria-label={tr('chat.placeholder')}
+            autoComplete="off"
+            spellCheck="true"
+          />
+          <span className="coop-chat__count">{Math.min(COOP_CHAT_MAX_LENGTH, Array.from(chatDraft).length)}/{COOP_CHAT_MAX_LENGTH}</span>
+          <button type="submit" disabled={!normalizeCoopChatText(chatDraft)} aria-label={tr('chat.send')}><Send size={13} /></button>
+          <button type="button" onClick={closeChatAndResume} aria-label={tr('chat.close')}><X size={13} /></button>
+        </form>}
+      </section>}
       {isSpectator && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span>{tr('hud.spectating')}</span><b>{spectatorTarget?.label || tr('hud.acquireTarget')}</b><small>{tr('hud.nextPlayer')}</small></div>}
-      {!isSpectator && !fallCinematicActive && (hud.lifeState === 'downed' || hud.lifeState === 'eliminated') && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span className={hud.lifeState === 'downed' ? 'text-amber-300 font-black' : 'text-rose-300 font-black'}>● {tr(hud.lifeState === 'downed' ? 'hud.downedSpectating' : 'hud.eliminatedSpectating')}</span><b style={{ color: spectatedSquadmate?.color || '#f0abfc' }}>{spectatedSquadmate?.label || downedSpectatorTarget?.label || tr('hud.squad')}</b><small>{tr('hud.cycleSquad')}</small></div>}
+      {!isSpectator && !fallCinematicActive && (hud.lifeState === 'downed' || hud.lifeState === 'eliminated' || hud.lifeState === 'extracted') && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span className={hud.lifeState === 'downed' ? 'text-amber-300 font-black' : hud.lifeState === 'extracted' ? 'text-emerald-300 font-black' : 'text-rose-300 font-black'}>● {hud.lifeState === 'extracted' ? 'EXTRACTED · SPECTATING' : tr(hud.lifeState === 'downed' ? 'hud.downedSpectating' : 'hud.eliminatedSpectating')}</span><b style={{ color: spectatedSquadmate?.color || '#f0abfc' }}>{spectatedSquadmate?.label || downedSpectatorTarget?.label || tr('hud.squad')}</b><small>{tr('hud.cycleSquad')}</small></div>}
       {objectiveHud && <div className={`coop-objective coop-objective--${objectiveHud.tone} pointer-events-none absolute z-50`}>
         <div className="coop-objective__meta"><span>{objectiveHud.label}</span><span>{objectiveHud.detail}</span></div>
         <div className="coop-objective__title">{objectiveHud.title}</div>
-        {objectiveHud.progress !== undefined && <div className="coop-objective__meter"><i style={{ width: `${Math.max(0, Math.min(100, objectiveHud.progress))}%` }} /></div>}
+        {demolitionMission && <div className="coop-objective__demolition-steps">
+          {demolitionMission.points.map((point, index) => <span key={point.id} data-state={point.state}>
+            <b>SITE {index === 0 ? 'A' : 'B'}</b>
+            <small>{point.state === 'completed' ? 'DESTROYED' : point.state === 'defending' ? 'ARMED' : point.state === 'arming' ? 'PLANTING' : point.state === 'locked' ? 'LOCKED' : 'TARGET'}</small>
+          </span>)}
+        </div>}
+        {objectiveHud.progress !== undefined && <div className="coop-objective__progress"><div className="coop-objective__meter"><i style={{ width: `${Math.max(0, Math.min(100, objectiveHud.progress))}%` }} /></div>{objectiveHud.progressText && <b>{objectiveHud.progressText}</b>}</div>}
       </div>}
       {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[24%] z-50 -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
+      {specialReadyCue && <div
+        key={specialReadyCue.id}
+        className="coop-special-ready pointer-events-none absolute z-50"
+        style={{ '--special-color': specialReadyCue.color } as CSSProperties}
+        aria-live="polite"
+      ><kbd>RMB</kbd><span>{tr('hud.specialReady', { name: specialReadyCue.name })}</span></div>}
       {activeRecoveryRelay && <div className="coop-healing-field-status pointer-events-none absolute left-1/2 top-[56%] z-50 -translate-x-1/2" aria-label={`Recovery field ${COOP_RECOVERY_RELAY_HEAL_PER_SECOND} HP per second`}>
         <HeartPulse size={13} strokeWidth={2.6} />
         <span>{hud.health < hud.maxHealth ? `+${COOP_RECOVERY_RELAY_HEAL_PER_SECOND} HP/s` : 'RECOVERY FIELD READY'}</span>
@@ -1627,23 +2326,23 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         <CoopReticleCompass
           localPlayer={localSnapshot}
           players={matchSnapshot.players}
+          enemies={matchSnapshot.enemies}
+          mission={matchSnapshot.fieldMissions?.active}
           pings={matchSnapshot.pings}
           renderer={rendererRef.current}
           language={launch.language}
         />
       )}
       {!isSpectator && hud.lifeState === 'alive' && !buildMode && activeWeapon && <div className="coop-weapons pointer-events-none absolute z-50">
+        <div className="coop-weapons__class" style={{ color: classOperator.color }}><b>{classOperator.className}</b><span>{classOperator.role}</span></div>
+        <div className="coop-weapons__meter"><span style={{ color: classOperator.color }}>{classOperator.resourceLabel}</span><i><em style={{ width: `${Math.max(0, Math.min(100, (localSnapshot?.artifactResource || 0) / classOperator.resourceMax * 100))}%`, backgroundColor: classOperator.color }} /></i><b>{Math.floor(localSnapshot?.artifactResource || 0)}/{classOperator.resourceMax}</b></div>
+        <div className="coop-weapons__meter coop-weapons__meter--jet"><span>BURST PACK</span><i><em style={{ width: `${Math.max(0, Math.min(100, localSnapshot?.jetFuel ?? 100))}%` }} /></i><b>{Math.round(localSnapshot?.jetFuel ?? 100)}</b></div>
+        {hud.selectedSlot === 3 && <div className="coop-weapons__artifact" data-ready={specialReady} style={{ '--special-color': classOperator.color } as CSSProperties}><kbd>RMB</kbd><b>{classOperator.spenderName}</b><span>{classOperator.spenderDescription}</span>{specialReady && <small className="coop-weapons__artifact-ready">{tr('hud.specialCharged')}</small>}{localSnapshot?.artifactProc && <small>{localSnapshot.artifactProc.replaceAll('_', ' ')}</small>}</div>}
         <div className="coop-weapons__name" style={{ color: activeWeapon.color }}><span>{tr(coopWeaponShortNameKey(activeWeaponState?.weaponId || 'plasma_gun'))}</span><small>{tr('hud.weaponLevel', { level: activeWeaponState?.level || 1 })}</small></div>
         <div className="coop-weapons__ammo"><b>{activeWeaponState?.magazineAmmo ?? '—'}</b><span>/ {activeWeaponState?.reserveAmmo ?? '—'}</span></div>
-        <div className="coop-weapons__slots">{COOP_WEAPON_SLOTS.map((weaponId, index) => <span key={weaponId} data-selected={hud.selectedSlot === index}>{index + 1}</span>)}</div>
+        <div className="coop-weapons__slots">{hud.weapons.map((weapon, index) => <span key={`${weapon.weaponId}-${index}`} data-selected={hud.selectedSlot === index}>{index + 1}</span>)}</div>
         {hud.isReloading && <div className="coop-weapons__reload">{tr('hud.reloading')}</div>}
       </div>}
-      {!isSpectator && hud.lifeState === 'alive' && !buildMode && (
-        <div className="pointer-events-none absolute bottom-5 right-5 z-50 border border-cyan-300/25 bg-[#050b13]/80 px-3 py-2 font-mono text-[9px] uppercase tracking-[.16em] text-cyan-100/70 backdrop-blur-sm">
-          <kbd className="mr-2 border border-cyan-200/35 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-100">B</kbd>
-          {tr('build.fieldEngineering')} · {hud.fabricatorCharges}/{COOP_MAX_FABRICATOR_CHARGES}
-        </div>
-      )}
       {!isSpectator && hud.lifeState === 'alive' && buildMode && (
         <div className={`pointer-events-none absolute bottom-5 left-1/2 z-[70] -translate-x-1/2 border border-cyan-300/45 bg-[#050b13]/94 p-3 shadow-[0_0_32px_rgba(34,211,238,.2)] backdrop-blur-md ${buildPaletteExpanded ? 'w-[min(880px,calc(100vw-2rem))]' : 'w-[min(390px,calc(100vw-2rem))]'}`}>
           <div className="flex items-center justify-between gap-4 border-b border-cyan-100/15 pb-2">
@@ -1652,7 +2351,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           </div>
           {engineeringTarget && <div className="mt-2 flex items-center gap-3 border border-white/10 bg-white/[.035] px-2 py-1.5 font-mono text-[8px] uppercase tracking-wider text-white/65"><span style={{ color: engineeringTarget.ownerColor }}>{tr(`build.${engineeringTarget.type}.name` as CoopTextKey)}</span><span>{tr('build.integrity', { percent: Math.round(engineeringTarget.health / Math.max(1, engineeringTarget.maxHealth) * 100) })}</span><span>{tr('build.lifetime', { seconds: Math.ceil(Math.max(0, engineeringTarget.expiresAtMs - (matchSnapshot?.elapsedMs || 0)) / 1000) })}</span>{engineeringTarget.tacticalBonus && <span className="text-emerald-300">{tr('build.tacticalBonus')}</span>}{Boolean(engineeringTarget.linkedStructureIds?.length) && <span className="text-violet-300">{tr('build.linked', { count: engineeringTarget.linkedStructureIds?.length || 0 })}</span>}</div>}
           {!buildPaletteExpanded && <div className="mt-2 flex items-center justify-between border px-3 py-2" style={{ borderColor: `${COOP_STRUCTURE_DEFINITIONS[buildType].color}66`, backgroundColor: `${COOP_STRUCTURE_DEFINITIONS[buildType].color}16`, boxShadow: `inset 0 0 18px ${COOP_STRUCTURE_DEFINITIONS[buildType].color}12` }}><span className="text-[10px] font-black uppercase" style={{ color: COOP_STRUCTURE_DEFINITIONS[buildType].color }}>{tr(`build.${buildType}.name` as CoopTextKey)}</span><span className="font-mono text-[8px] uppercase text-white/45">{tr('build.holdPalette')}</span></div>}
-          {buildPaletteExpanded && <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {buildPaletteExpanded && <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
             {COOP_BUILD_TYPES.map((type, index) => {
               const definition = COOP_STRUCTURE_DEFINITIONS[type];
               const selected = type === buildType;
@@ -1665,7 +2364,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           <div className="mt-2 flex items-center justify-between gap-3 text-[8px] uppercase tracking-wider text-white/45"><span>{tr(buildPaletteExpanded ? 'build.controls' : 'build.controlsCompact')}</span><span className={buildMessage?.includes('deployed') ? 'text-emerald-300' : 'text-amber-200'}>{buildMessage}</span></div>
         </div>
       )}
-      {matchSnapshot && localSnapshot && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} language={launch.language} />}
+      {matchSnapshot && localSnapshot && !tacticalMapOpen && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} language={launch.language} />}
+      {tacticalMapOpen && matchSnapshot && localSnapshot && <EnhancedCoopTacticalMap snapshot={matchSnapshot} localPlayer={localSnapshot} onPingMission={pingMissionFromMap} onClose={() => { setTacticalMapPanelOpen(false); resumeGameplayInteraction(); }} />}
       {stationOpen && nearbyStation && <div onMouseDown={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} className="absolute inset-0 z-[80] bg-black/55 backdrop-blur-[2px]" aria-hidden="true" />}
       {nearbyStation && !stationOpen && <div onMouseDown={event => event.stopPropagation()} className="absolute bottom-5 left-5 z-[85] w-[min(420px,calc(100vw-2.5rem))] border border-cyan-300/35 bg-[#07111b]/95 p-4 shadow-[0_0_28px_rgba(34,211,238,.14)] backdrop-blur-md">
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-cyan-200/20 pb-3">
@@ -1808,7 +2508,6 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       />}
       </div>
       {connectionStatus !== 'connected' && <div className={`absolute left-1/2 top-20 z-30 -translate-x-1/2 border px-4 py-3 text-center text-xs backdrop-blur-sm ${connectionStatus === 'reconnecting' ? 'border-amber-300/45 bg-amber-950/80 text-amber-100' : 'border-red-300/45 bg-red-950/80 text-red-100'}`}><div>{connectionMessage}</div>{connectionStatus === 'disconnected' && <button onClick={onExit} className="mt-2 border border-red-200/35 px-3 py-1 text-[10px] font-black uppercase tracking-wider hover:bg-red-300/10">{tr('connection.backServers')}</button>}</div>}
-      <button onClick={onExit} aria-label={tr('arena.leaveLabel')} className="coop-exit absolute"><ArrowLeft size={13} /><span>{tr('arena.leave')}</span></button>
     </div>
   );
 }
@@ -2093,12 +2792,16 @@ function CoopOffscreenThreats({
 function CoopReticleCompass({
   localPlayer,
   players,
+  enemies,
+  mission,
   pings,
   renderer,
   language,
 }: {
   localPlayer: CoopSnapshot['players'][number];
   players: CoopSnapshot['players'];
+  enemies: CoopSnapshot['enemies'];
+  mission?: CoopActiveFieldMissionSnapshot;
   pings?: CoopPing[];
   renderer: MultiplayerRendererBridge | null;
   language: CoopLanguage;
@@ -2124,8 +2827,9 @@ function CoopReticleCompass({
     player => player.id !== localPlayer.id && player.lifeState !== 'eliminated'
   );
   const activePings = (pings || []).filter(ping => ping.playerId !== localPlayer.id);
+  const missionTarget = resolveCoopMissionNavigationTarget(mission, enemies);
 
-  if (!teammates.length && !activePings.length) return null;
+  if (!teammates.length && !activePings.length && !missionTarget) return null;
 
   const orbitRadius = 54;
   const badgeRadius = orbitRadius + 18;
@@ -2133,6 +2837,33 @@ function CoopReticleCompass({
   return (
     <div className="coop-reticle-compass">
       <div className="coop-reticle-ring" />
+      {mission && missionTarget && (() => {
+        const dx = missionTarget.x - localPlayer.x;
+        const dy = missionTarget.y - localPlayer.y;
+        const distanceM = Math.max(1, Math.round(Math.hypot(dx, dy) / 12));
+        let relativeAngle = Math.atan2(dy, dx) - liveAimAngle;
+        while (relativeAngle > Math.PI) relativeAngle -= Math.PI * 2;
+        while (relativeAngle < -Math.PI) relativeAngle += Math.PI * 2;
+        const screenAngle = relativeAngle - Math.PI / 2;
+        const arrowRadius = 69;
+        const labelRadius = 98;
+        const arrowX = Math.cos(screenAngle) * arrowRadius;
+        const arrowY = Math.sin(screenAngle) * arrowRadius;
+        const labelX = Math.cos(screenAngle) * labelRadius;
+        const labelY = Math.sin(screenAngle) * labelRadius;
+        const color = mission.kind === 'toxic_hunt' ? '#4ade80'
+          : mission.kind === 'demolition' ? '#fb7185'
+            : mission.kind === 'hostage_recovery' ? '#fbbf24'
+              : mission.kind === 'courier_intercept' ? '#c084fc' : '#22d3ee';
+        return <div className="coop-reticle-objective" style={{ color }}>
+          <div className="coop-reticle-objective-chevron" style={{ transform: `translate(${arrowX}px, ${arrowY}px) rotate(${relativeAngle * 180 / Math.PI}deg)` }}><i /></div>
+          <div className="coop-reticle-objective-badge" style={{ transform: `translate(calc(-50% + ${labelX}px), calc(-50% + ${labelY}px))` }}>
+            <small>MISSION OBJECTIVE</small>
+            <b>{COOP_FIELD_MISSION_LABELS[mission.kind]}</b>
+            <span>{coopFieldMissionStageLabel(mission)} · {tr('unit.meters', { value: distanceM })}</span>
+          </div>
+        </div>;
+      })()}
       {/* Squadmates */}
       {teammates.map(teammate => {
         const dx = teammate.x - localPlayer.x;
@@ -2225,6 +2956,8 @@ function CoopReticleCompass({
           ? `🛒 ${tr('ping.buy')}`
           : ping.kind === 'revive'
           ? tr('hud.reviveBadge')
+          : ping.kind === 'objective'
+          ? `📍 ${tr(ping.labelKey, ping.labelParams)}`
           : `📍 ${tr('ping.marker')}`;
 
         return (
@@ -2262,13 +2995,13 @@ function CoopReticleCompass({
 function CoopMinimap({ snapshot, localPlayer, language }: { snapshot: CoopSnapshot; localPlayer: CoopSnapshot['players'][number]; language: CoopLanguage }) {
   const tr = (key: CoopTextKey, params?: Record<string, string | number>) => coopText(language, key, params);
   const range = 2_400;
-  const radarCenter = 56;
-  const radarRadius = 47;
+  const radarCenter = 50;
+  const radarRadius = 42;
   const point = (x: number, y: number) => {
     const dx = x - localPlayer.x, dy = y - localPlayer.y;
     const angle = Math.atan2(dy, dx) - localPlayer.angle;
     const radius = Math.min(1, Math.hypot(dx, dy) / range) * radarRadius;
-    return { left: radarCenter + Math.sin(angle) * radius, top: radarCenter - Math.cos(angle) * radius };
+    return { left: `${radarCenter + Math.sin(angle) * radius}%`, top: `${radarCenter - Math.cos(angle) * radius}%` };
   };
   const threats = [...snapshot.enemies].sort((left, right) => Math.hypot(left.x - localPlayer.x, left.y - localPlayer.y) - Math.hypot(right.x - localPlayer.x, right.y - localPlayer.y)).slice(0, 40);
   const objective = snapshot.run.objective;
@@ -2287,10 +3020,10 @@ function CoopMinimap({ snapshot, localPlayer, language }: { snapshot: CoopSnapsh
             title={tr('minimap.gas', { state: tr(coopGasStateKey(snapshot.gasZone.state)) })}
             className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-400/80 bg-emerald-500/15 shadow-[0_0_12px_rgba(74,222,128,0.35)] pointer-events-none"
             style={{
-              left: `${gasCenter.left}px`,
-              top: `${gasCenter.top}px`,
-              width: `${gasScreenRadius * 2}px`,
-              height: `${gasScreenRadius * 2}px`,
+              left: gasCenter.left,
+              top: gasCenter.top,
+              width: `${gasScreenRadius * 2}%`,
+              height: `${gasScreenRadius * 2}%`,
             }}
           >
             <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-black text-emerald-300 opacity-80">
@@ -2302,11 +3035,14 @@ function CoopMinimap({ snapshot, localPlayer, language }: { snapshot: CoopSnapsh
       {snapshot.players.filter(player => player.id !== localPlayer.id && player.lifeState !== 'eliminated').map(player => { const position = point(player.x, player.y); return <span key={player.id} className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-white shadow-[0_0_7px_currentColor]" style={{ ...position, backgroundColor: player.color, color: player.color }} />; })}
       {snapshot.buyStations.filter(station => station.state === 'active').map(station => { const position = point(station.x, station.y); return <span key={station.id} title={tr('minimap.station')} className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-cyan-50 bg-cyan-300 shadow-[0_0_12px_#22d3ee]" style={position} />; })}
       {snapshot.buyStations.filter(station => station.state === 'available' || station.state === 'capturing').map(station => { const position = point(station.x, station.y); return <span key={`capture-${station.id}`} title={tr('minimap.captureStation')} className={`absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 ${station.contested ? 'border-rose-100 bg-rose-500 shadow-[0_0_12px_#fb7185]' : 'border-teal-100 bg-teal-400/50 shadow-[0_0_10px_#2dd4bf]'}`} style={position} />; })}
+      {snapshot.fieldMissions?.sites.filter(site => site.state === 'available').map(site => <span key={`mission-${site.id}`} title={COOP_FIELD_MISSION_LABELS[site.kind]} className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-violet-400 shadow-[0_0_12px_#c084fc]" style={point(site.x, site.y)} />)}
+      {snapshot.fieldMissions?.active && <span title={COOP_FIELD_MISSION_LABELS[snapshot.fieldMissions.active.kind]} className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rotate-45 border-2 border-white bg-emerald-300 shadow-[0_0_14px_#6ee7b7]" style={point(snapshot.fieldMissions.active.x, snapshot.fieldMissions.active.y)} />}
       {snapshot.weaponFoundry && snapshot.weaponFoundry.state !== 'locked' && <span title={tr('minimap.foundry')} className={`absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 ${snapshot.weaponFoundry.state === 'active' ? 'rotate-45 bg-amber-300' : 'rounded-full bg-amber-500/50'} border-2 border-amber-100 shadow-[0_0_14px_#f59e0b]`} style={point(snapshot.weaponFoundry.x, snapshot.weaponFoundry.y)} />}
       {snapshot.structures?.filter(structure => structure.state !== 'destroying').map(structure => { const color = COOP_STRUCTURE_DEFINITIONS[structure.type].color; return <span key={`structure-${structure.id}`} title={tr(`build.${structure.type}.name` as CoopTextKey)} className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border ${structure.type === 'barricade' ? 'rotate-45' : 'rounded-full'}`} style={{ ...point(structure.x, structure.y), borderColor: '#ecfeff', backgroundColor: color, boxShadow: `0 0 10px ${color}` }} />; })}
       {objective && <span title={tr(objective.titleKey)} className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-100 bg-emerald-300 shadow-[0_0_12px_#6ee7b7]" style={point(objective.x, objective.y)} />}
       {boss && <span title={tr(boss.nameKey)} className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-rose-100 bg-rose-500 shadow-[0_0_14px_#fb7185] animate-pulse" style={point(boss.x, boss.y)} />}
       {exfil && <span title={tr('minimap.extraction')} className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-amber-100 bg-amber-300 shadow-[0_0_13px_#fbbf24]" style={point(exfil.x, exfil.y)} />}
+      {snapshot.privateExfil && <span title="Private Exfil" className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rotate-45 border-2 border-amber-50 bg-orange-500 shadow-[0_0_14px_#f59e0b]" style={point(snapshot.privateExfil.x, snapshot.privateExfil.y)} />}
       {snapshot.pings?.map(ping => {
         const position = point(ping.x, ping.y);
         const isDanger = ping.kind === 'enemy' || ping.kind === 'boss';
@@ -2336,7 +3072,7 @@ function CoopMinimap({ snapshot, localPlayer, language }: { snapshot: CoopSnapsh
 }
 
 function createInput(): MultiplayerInputFrame {
-  return { type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence: 0, clientTime: Date.now(), movement: 0, aimAngle: 0, aimPitch: quantizePitch(0), selectedSlot: 0, firing: false, fireActionId: 0, interactActionId: 0, reloadPressed: false, aiming: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, dashPressed: false };
+  return { type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence: 0, clientTime: Date.now(), movement: 0, aimAngle: 0, aimPitch: quantizePitch(0), selectedSlot: 0, firing: false, fireActionId: 0, altFireActionId: 0, interactActionId: 0, reloadPressed: false, aiming: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, jetHeld: false, dashPressed: false };
 }
 
 function parseSnapshot(payload: unknown): CoopSnapshot | null {
@@ -2353,7 +3089,7 @@ function parsePlayer(value: unknown): CoopPlayerSeed | null {
   if (!value || typeof value !== 'object') return null;
   const player = value as Partial<CoopPlayerSeed>;
   return typeof player.id === 'string' && typeof player.label === 'string' && typeof player.color === 'string'
-    ? { id: player.id, label: player.label.slice(0, 24), color: player.color, skinId: normalizeCoopSkinId(player.skinId), imprint: normalizeCoopImprintLoadout(player.imprint) }
+    ? { id: player.id, label: player.label.slice(0, 24), color: player.color, skinId: normalizeCoopSkinId(player.skinId), operatorId: normalizeCoopOperatorId(player.operatorId, player.skinId), imprint: normalizeCoopImprintLoadout(player.imprint) }
     : null;
 }
 
@@ -2409,7 +3145,7 @@ function parseFoundryUpgrade(value: unknown): { foundryId: number; weaponId: Coo
   if (!value || typeof value !== 'object') return null;
   const request = value as { foundryId?: unknown; weaponId?: unknown };
   if (typeof request.foundryId !== 'number' || !Number.isInteger(request.foundryId)
-    || typeof request.weaponId !== 'string' || !COOP_WEAPON_SLOTS.includes(request.weaponId as CoopFirearmId)) return null;
+    || typeof request.weaponId !== 'string' || !COOP_FIREARM_IDS.includes(request.weaponId as CoopFirearmId)) return null;
   return { foundryId: request.foundryId, weaponId: request.weaponId as CoopFirearmId };
 }
 
@@ -2417,7 +3153,7 @@ const FOUNDRY_RESULT_CODES = new Set<CoopFoundryUpgradeResult['code']>(['forged'
 function parseFoundryUpgradeResult(value: unknown): CoopFoundryUpgradeResult | null {
   if (!value || typeof value !== 'object') return null;
   const result = value as Partial<Record<keyof CoopFoundryUpgradeResult, unknown>>;
-  if (typeof result.playerId !== 'string' || typeof result.weaponId !== 'string' || !COOP_WEAPON_SLOTS.includes(result.weaponId as CoopFirearmId)
+  if (typeof result.playerId !== 'string' || typeof result.weaponId !== 'string' || !COOP_FIREARM_IDS.includes(result.weaponId as CoopFirearmId)
     || typeof result.code !== 'string' || !FOUNDRY_RESULT_CODES.has(result.code as CoopFoundryUpgradeResult['code'])
     || (result.amount !== undefined && typeof result.amount !== 'number')) return null;
   return { playerId: result.playerId, weaponId: result.weaponId as CoopFirearmId, code: result.code as CoopFoundryUpgradeResult['code'], amount: result.amount as number | undefined };
@@ -2455,7 +3191,7 @@ function parseStructureAction(value: unknown): { requestId: number; structureId:
     : null;
 }
 
-const BUILD_RESULT_CODES = new Set<CoopBuildResult['code']>(['built', 'alive_required', 'invalid_blueprint', 'charges', 'player_limit', 'squad_limit', 'range', 'build_zone', 'obstructed', 'stale_request']);
+const BUILD_RESULT_CODES = new Set<CoopBuildResult['code']>(['built', 'alive_required', 'invalid_blueprint', 'charges', 'player_limit', 'squad_limit', 'range', 'build_zone', 'obstructed', 'bridge_locked', 'bridge_range', 'bridge_complete', 'stale_request']);
 function parseBuildResult(value: unknown): CoopBuildResult | null {
   if (!value || typeof value !== 'object') return null;
   const result = value as Record<string, unknown>;
@@ -2526,6 +3262,31 @@ function drawArena(canvas: HTMLCanvasElement | null, snapshot: CoopSnapshot | nu
       ctx.beginPath(); ctx.arc(point.x, point.y, Math.max(4, hazard.radius * scale * (hazard.kind === 'shockwave' ? progress : .42)), 0, Math.PI * 2); ctx.stroke();
     }
     ctx.restore();
+  }
+  for (const effect of snapshot.artifactEffects || []) {
+    const point = project(effect.x, effect.y);
+    const color = effect.kind === 'stormcall' ? '#60a5fa' : effect.kind === 'dawnwall' ? '#fbbf24' : effect.kind === 'emberling' ? '#fde68a' : '#fb923c';
+    const radius = Math.max(5, effect.radius * scale), pulse = .9 + Math.sin(snapshot.elapsedMs * .012) * .1;
+    ctx.save(); ctx.translate(point.x, point.y); ctx.strokeStyle = color; ctx.fillStyle = `${color}18`; ctx.shadowColor = color; ctx.shadowBlur = 18; ctx.lineWidth = effect.kind === 'dawnwall' ? 4 : 2;
+    ctx.beginPath(); ctx.arc(0, 0, radius * pulse, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    const sides = effect.kind === 'dawnwall' ? 12 : effect.kind === 'stormcall' ? 8 : 6;
+    ctx.beginPath();
+    for (let side = 0; side < sides; side++) {
+      const angle = side / sides * Math.PI * 2 + snapshot.elapsedMs * .001;
+      const x = Math.cos(angle) * radius * .62, y = Math.sin(angle) * radius * .62;
+      if (side === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.stroke(); ctx.restore();
+  }
+  for (const event of snapshot.combatEvents) {
+    if (event.kind !== 'artifact_cast' || event.targetX === undefined || event.targetY === undefined) continue;
+    const from = project(event.x, event.y), to = project(event.targetX, event.targetY);
+    const age = Math.max(0, snapshot.elapsedMs - event.atMs), alpha = Math.max(0, 1 - age / 750);
+    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = event.color || '#ffffff'; ctx.shadowColor = event.color || '#ffffff'; ctx.shadowBlur = 24; ctx.lineWidth = event.weaponId === 'shatter_lance' ? 6 : event.weaponId === 'reckoning' ? 4 : 3;
+    if (event.weaponId === 'echo_collapse') ctx.setLineDash([10, 7]);
+    const traces = event.weaponId === 'reckoning' ? 5 : event.weaponId === 'shatter_lance' ? 3 : 1;
+    for (let trace = 0; trace < traces; trace++) { const offset = (trace - (traces - 1) / 2) * 3; ctx.beginPath(); ctx.moveTo(from.x, from.y + offset); ctx.lineTo(to.x, to.y + offset * .25); ctx.stroke(); }
+    ctx.fillStyle = event.weaponId === 'shatter_lance' ? '#effcff' : event.color || '#ffffff'; ctx.beginPath(); ctx.arc(to.x, to.y, 5 + traces * 1.5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
   }
   for (const projectile of snapshot.projectiles) drawProjectile(ctx, project(projectile.x, projectile.y), projectile, scale);
   ctx.shadowBlur = 0;
@@ -2770,6 +3531,60 @@ function drawProjectile(ctx: CanvasRenderingContext2D, point: { x: number; y: nu
       ctx.lineTo(r * 1.5, r * 0.28);
       ctx.lineTo(-r * 2.5, r * 0.45);
       ctx.fill();
+      break;
+    }
+    case 'goreline_repeater': {
+      const r = Math.max(4, projectile.radius * scale);
+      ctx.shadowColor = '#fb7185'; ctx.shadowBlur = 20;
+      const trail = ctx.createLinearGradient(-r * 8, 0, r * 2, 0);
+      trail.addColorStop(0, 'rgba(127,29,29,0)'); trail.addColorStop(.65, 'rgba(251,113,133,.5)'); trail.addColorStop(1, '#fff1f2');
+      ctx.fillStyle = trail; ctx.beginPath();
+      ctx.moveTo(-r * 8, 0); ctx.lineTo(-r, -r * .58); ctx.lineTo(r * 2.6, 0); ctx.lineTo(-r, r * .58); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#ffe4e6'; ctx.lineWidth = Math.max(1, r * .24); ctx.beginPath(); ctx.moveTo(-r * 2, 0); ctx.lineTo(r * 2.5, 0); ctx.stroke();
+      break;
+    }
+    case 'riftspike_array': {
+      const r = Math.max(3.5, projectile.radius * scale);
+      ctx.shadowColor = '#c084fc'; ctx.shadowBlur = 22;
+      for (let spike = -1; spike <= 1; spike++) {
+        ctx.strokeStyle = spike === 0 ? '#ffffff' : '#c084fc';
+        ctx.lineWidth = spike === 0 ? r * .42 : r * .28;
+        ctx.beginPath(); ctx.moveTo(-r * 6, spike * r * .58); ctx.lineTo(r * 3, spike * r * .22); ctx.stroke();
+      }
+      ctx.strokeStyle = '#e9d5ff'; ctx.lineWidth = Math.max(1, r * .18); ctx.beginPath(); ctx.arc(-r, 0, r * 1.25, 0, Math.PI * 2); ctx.stroke();
+      break;
+    }
+    case 'dawnwall_cannon': {
+      const r = Math.max(4.5, projectile.radius * scale);
+      ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 24;
+      const solar = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.2);
+      solar.addColorStop(0, '#ffffff'); solar.addColorStop(.28, '#fde68a'); solar.addColorStop(.7, 'rgba(251,191,36,.45)'); solar.addColorStop(1, 'rgba(251,191,36,0)');
+      ctx.fillStyle = solar; ctx.beginPath(); ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff7d6'; ctx.lineWidth = Math.max(1.5, r * .26);
+      ctx.beginPath(); ctx.moveTo(-r * 3.4, 0); ctx.lineTo(r * 2.8, 0); ctx.moveTo(0, -r * 1.4); ctx.lineTo(0, r * 1.4); ctx.stroke();
+      break;
+    }
+    case 'winterglass_projector': {
+      const r = Math.max(4, projectile.radius * scale);
+      ctx.shadowColor = '#7dd3fc'; ctx.shadowBlur = 20;
+      ctx.fillStyle = '#e8fbff'; ctx.beginPath();
+      ctx.moveTo(r * 2.6, 0); ctx.lineTo(0, -r); ctx.lineTo(-r * 2.8, 0); ctx.lineTo(0, r); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = Math.max(1, r * .18); ctx.stroke();
+      for (const offset of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-r * 2.5, offset * r * .65); ctx.lineTo(-r * 4.5, offset * r * 1.15); ctx.stroke(); }
+      break;
+    }
+    case 'cinderhex_engine': {
+      const r = Math.max(4.5, projectile.radius * scale);
+      ctx.shadowColor = '#fb923c'; ctx.shadowBlur = 24;
+      ctx.fillStyle = '#7c2d12'; ctx.strokeStyle = '#ffedd5'; ctx.lineWidth = Math.max(1.2, r * .22);
+      ctx.beginPath();
+      for (let vertex = 0; vertex < 6; vertex++) {
+        const angle = vertex / 6 * Math.PI * 2;
+        const x = Math.cos(angle) * r * 1.35, y = Math.sin(angle) * r * 1.35;
+        if (vertex === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = '#fb923c'; ctx.beginPath(); ctx.arc(-r * 1.5, 0, r * 2.1, 0, Math.PI * 2); ctx.stroke();
       break;
     }
     default: {

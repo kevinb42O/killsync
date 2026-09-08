@@ -1,7 +1,9 @@
 import type { CSSProperties } from 'react';
 import { Check, Crown } from 'lucide-react';
 import { COOP_SKINS, type CoopSkinId } from '../game/multiplayer/CoopSkins';
-import { coopSkinDescriptionKey, coopText, type CoopLanguage } from '../game/multiplayer/i18n';
+import { COOP_OPERATOR_BY_ID } from '../game/multiplayer/CoopOperators';
+import { COOP_FIREARM_BY_ID } from '../game/combat/coopFirearms';
+import { coopOperatorClassKey, coopOperatorRoleKey, coopText, coopWeaponNameKey, type CoopLanguage } from '../game/multiplayer/i18n';
 
 export function CoopSkinSelector({ value, language, disabled = false, onChange }: {
   value: CoopSkinId;
@@ -22,6 +24,8 @@ export function CoopSkinSelector({ value, language, disabled = false, onChange }
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {COOP_SKINS.map(skin => {
           const selected = skin.id === value;
+          const operator = COOP_OPERATOR_BY_ID[skin.id];
+          const signature = COOP_FIREARM_BY_ID[operator.signatureWeaponId];
           return (
             <button
               key={skin.id}
@@ -29,7 +33,7 @@ export function CoopSkinSelector({ value, language, disabled = false, onChange }
               aria-pressed={selected}
               disabled={disabled}
               onClick={() => onChange(skin.id)}
-              title={tr(coopSkinDescriptionKey(skin.id))}
+              title={`${operator.passiveName}: ${operator.passiveDescription}`}
               className={`group relative min-h-32 overflow-hidden border p-2 text-left transition ${selected ? 'border-cyan-200 bg-cyan-400/15 shadow-[0_0_18px_rgba(34,211,238,.22)]' : 'border-white/10 bg-white/[0.025] hover:-translate-y-0.5 hover:border-white/35'} disabled:cursor-not-allowed disabled:opacity-50`}
               style={{ '--skin-armor': skin.palette.armor, '--skin-glow': skin.palette.glow, '--skin-suit': skin.palette.undersuit, '--skin-trim': skin.palette.trim } as CSSProperties}
             >
@@ -39,7 +43,9 @@ export function CoopSkinSelector({ value, language, disabled = false, onChange }
                 <span className="coop-skin-preview__head"><i /><i /></span>
                 <span className="coop-skin-preview__body" />
               </div>
-              <div className="mt-1 truncate text-[8px] font-black uppercase tracking-wide text-white">{skin.name}</div>
+              <div className="mt-1 truncate text-[8px] font-black uppercase tracking-wide" style={{ color: operator.color }}>{tr(coopOperatorClassKey(operator.id))}</div>
+              <div className="mt-1 truncate text-[6px] font-bold uppercase tracking-wide text-white">{tr(coopWeaponNameKey(signature.id))}</div>
+              <div className="mt-0.5 line-clamp-2 text-[6px] leading-tight text-white/45">{tr(coopOperatorRoleKey(operator.id))}</div>
               <div className="mt-1 flex gap-1" aria-hidden="true">
                 {[skin.palette.undersuit, skin.palette.armor, skin.palette.trim, skin.palette.glow].map(color => <span key={color} className="h-1 flex-1" style={{ background: color }} />)}
               </div>

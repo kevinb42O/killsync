@@ -33,6 +33,8 @@ import { getCoopOperatorImprint, normalizeCoopImprintLoadout, purchaseCoopImprin
 import { CoopImprintSummary } from './CoopImprintSummary';
 import { normalizeCoopSkinId, readCoopSkinId, writeCoopSkinId, type CoopSkinId } from '../game/multiplayer/CoopSkins';
 import { CoopSkinBadge, CoopSkinSelector } from './CoopSkinSelector';
+import { normalizeCoopOperatorId } from '../game/multiplayer/CoopOperators';
+import { getWorldDefinition, normalizeWorldId, readCoopWorldProgress, WORLD_IDS, type WorldId } from '../game/world/WorldDefinitions';
 
 type SetupMode = 'choose' | 'host' | 'guest' | 'direct_host' | 'direct_guest';
 
@@ -47,6 +49,37 @@ export interface MultiplayerLaunch {
   soloTest?: boolean;
   /** Local-only preference. It is never imposed on peers. */
   language: CoopLanguage;
+  /** Host-selected deployment. Guests receive this in the reliable start event. */
+  worldId: WorldId;
+}
+
+export function createSoloMultiplayerLaunch({
+  player = createLocalPlayerSeed(),
+  language = readCoopLanguage(),
+  worldId = readCoopWorldProgress().unlockedWorldIds.at(-1) || 'neon_bastion',
+}: {
+  player?: CoopPlayerSeed;
+  language?: CoopLanguage;
+  worldId?: WorldId;
+} = {}): MultiplayerLaunch {
+  const soloPlayer = {
+    ...player,
+    // The setup screen normally validates a callsign first. The main-menu
+    // shortcut must also work for a completely fresh browser profile.
+    label: player.label || 'OPERATOR',
+  };
+  const session = new ManualWebRTCSession({ role: 'host', iceServers: [] });
+
+  return {
+    role: 'host',
+    session,
+    localPlayerId: soloPlayer.id,
+    players: [soloPlayer],
+    peerPlayerIds: {},
+    soloTest: true,
+    language,
+    worldId,
+  };
 }
 
 export function ManualMultiplayerSetup({
@@ -87,6 +120,8 @@ export function ManualMultiplayerSetup({
   const [operatorId] = useState(selectedCoopOperatorId);
   const [selectedSkinId, setSelectedSkinId] = useState(() => normalizeCoopSkinId(localPlayerRef.current.skinId));
   const [imprintProfile, setImprintProfile] = useState(readCoopImprintProfile);
+  const [worldProgress] = useState(readCoopWorldProgress);
+  const [selectedWorldId, setSelectedWorldId] = useState<WorldId>(() => readCoopWorldProgress().unlockedWorldIds.at(-1) || 'neon_bastion');
   const operatorImprint = getCoopOperatorImprint(imprintProfile, operatorId);
   const tr = (key: CoopTextKey, params?: Record<string, string | number>) => coopText(language, key, params);
   const selectLanguage = (next: CoopLanguage) => {
@@ -94,15 +129,15 @@ export function ManualMultiplayerSetup({
   };
   const selectSkin = (skinId: CoopSkinId) => {
     const normalized = writeCoopSkinId(skinId);
-    localPlayerRef.current = { ...localPlayerRef.current, skinId: normalized };
+    localPlayerRef.current = { ...localPlayerRef.current, skinId: normalized, operatorId: normalizeCoopOperatorId(normalized) };
     setSelectedSkinId(normalized);
-    setRosterPlayers(current => current.map(player => player.id === localPlayerRef.current.id ? { ...player, skinId: normalized } : player));
+    setRosterPlayers(current => current.map(player => player.id === localPlayerRef.current.id ? { ...player, skinId: normalized, operatorId: normalizeCoopOperatorId(normalized) } : player));
     const session = sessionRef.current;
     if (!session) return;
     if (mode === 'host' || mode === 'direct_host') {
       session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'roster', payload: [localPlayerRef.current, ...guestPlayersRef.current] });
     } else if ((mode === 'guest' || mode === 'direct_guest') && readySentRef.current) {
-      session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'skin_update', payload: { skinId: normalized } });
+      session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'skin_update', payload: { skinId: normalized, operatorId: normalizeCoopOperatorId(normalized) } });
     }
   };
   const allocateImprintRank = (statId: CoopImprintStatId) => {
@@ -241,16 +276,17 @@ export function ManualMultiplayerSetup({
           if (!playerId || !event.payload || typeof event.payload !== 'object') return;
           const requested = (event.payload as { skinId?: unknown }).skinId;
           if (normalizeCoopSkinId(requested) !== requested) return;
-          const next = guestPlayersRef.current.map(player => player.id === playerId ? { ...player, skinId: requested as CoopSkinId } : player);
+          const next = guestPlayersRef.current.map(player => player.id === playerId ? { ...player, skinId: requested as CoopSkinId, operatorId: normalizeCoopOperatorId((event.payload as { operatorId?: unknown }).operatorId, requested) } : player);
           guestPlayersRef.current = next;
           setGuestPlayers(next);
           session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'roster', payload: [localPlayerRef.current, ...next] });
         }
         if (event.event === 'start' && role === 'guest') {
-          const players = parsePlayers(event.payload, spectatingRef.current ? 1 : 2);
+          const start = parseStartPayload(event.payload, spectatingRef.current ? 1 : 2);
+          const players = start?.players;
           if (!players || (!spectatingRef.current && !players.some(player => player.id === localPlayerRef.current.id))) return;
           handedOffRef.current = true;
-          onLaunch({ role: spectatingRef.current ? 'spectator' : 'guest', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: {}, lobbyJoin: joinRef.current || undefined, language });
+          onLaunch({ role: spectatingRef.current ? 'spectator' : 'guest', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: {}, lobbyJoin: joinRef.current || undefined, language, worldId: start.worldId });
         }
       },
     });
@@ -387,20 +423,21 @@ export function ManualMultiplayerSetup({
     const session = sessionRef.current;
     if (!session) return;
     const players = [localPlayerRef.current, ...guestPlayersRef.current];
-    session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: players });
+    session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: { players, worldId: selectedWorldId } });
     hostedLobbyRef.current?.update(players.length, 'in_game');
     handedOffRef.current = true;
-    onLaunch({ role: 'host', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: { ...peerPlayerIdsRef.current }, hostedLobby: hostedLobbyRef.current || undefined, language });
+    onLaunch({ role: 'host', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: { ...peerPlayerIdsRef.current }, hostedLobby: hostedLobbyRef.current || undefined, language, worldId: selectedWorldId });
   };
 
   const launchSolo = () => {
     if (!applyNickname()) return;
     sessionRef.current?.close();
-    sessionRef.current = new ManualWebRTCSession({ role: 'host', iceServers: [] });
+    const launch = createSoloMultiplayerLaunch({ player: localPlayerRef.current, language, worldId: selectedWorldId });
+    sessionRef.current = launch.session;
     guestPlayersRef.current = [];
     peerPlayerIdsRef.current = {};
     handedOffRef.current = true;
-    onLaunch({ role: 'host', session: sessionRef.current, localPlayerId: localPlayerRef.current.id, players: [localPlayerRef.current], peerPlayerIds: {}, soloTest: true, language });
+    onLaunch(launch);
   };
 
   // Direct manual code fallback actions
@@ -552,6 +589,40 @@ export function ManualMultiplayerSetup({
           {/* MAIN VIEW: CHOOSE / LOBBY BROWSER */}
           {mode === 'choose' && (
             <div className="space-y-6">
+              <div>
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-white">Deployment world</div>
+                    <div className="mt-1 text-[10px] uppercase tracking-wider text-white/45">Discover worlds in order. Redeploy directly to any world your squad leader has unlocked.</div>
+                  </div>
+                  <div className="shrink-0 font-mono text-[9px] font-black text-cyan-300">{worldProgress.unlockedWorldIds.length}/{WORLD_IDS.length} LINKED</div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {WORLD_IDS.map(worldId => {
+                    const world = getWorldDefinition(worldId);
+                    const unlocked = worldProgress.unlockedWorldIds.includes(worldId);
+                    const selected = selectedWorldId === worldId;
+                    return (
+                      <button
+                        key={worldId}
+                        type="button"
+                        disabled={!unlocked || loading}
+                        onClick={() => setSelectedWorldId(worldId)}
+                        style={{ borderColor: selected ? `#${world.theme.accentColor.toString(16).padStart(6, '0')}` : undefined }}
+                        className={`min-h-28 border bg-black/35 p-3 text-left transition ${selected ? 'shadow-[0_0_22px_rgba(34,211,238,.18)]' : 'border-white/10 hover:border-white/30'} disabled:cursor-not-allowed disabled:opacity-35`}
+                      >
+                        <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-white/45">
+                          <span>World {world.tier}</span><span>{unlocked ? `T${world.tier}` : 'LOCKED'}</span>
+                        </div>
+                        <div className="mt-2 text-[11px] font-black tracking-[.12em] text-white">{world.name}</div>
+                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/50">{world.subtitle}</div>
+                        <div className="mt-2 font-mono text-[8px] text-white/35">THREAT ×{world.difficulty.threatMultiplier.toFixed(2)} · LOOT ×{world.difficulty.rewardMultiplier.toFixed(2)}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* PRIMARY ACTION BAR */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
@@ -706,6 +777,13 @@ export function ManualMultiplayerSetup({
           {/* HOST VIEW: SQUAD READY ROOM */}
           {mode === 'host' && (
             <div className="space-y-6">
+              <div className="flex items-center justify-between gap-4 border border-amber-300/30 bg-amber-400/[.06] px-4 py-3">
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-[.2em] text-amber-200">Locked deployment vector</div>
+                  <div className="mt-1 text-sm font-black tracking-[.14em] text-white">WORLD {getWorldDefinition(selectedWorldId).tier} · {getWorldDefinition(selectedWorldId).name}</div>
+                </div>
+                <div className="text-right font-mono text-[9px] text-white/45">THREAT ×{getWorldDefinition(selectedWorldId).difficulty.threatMultiplier.toFixed(2)}<br />LOOT ×{getWorldDefinition(selectedWorldId).difficulty.rewardMultiplier.toFixed(2)}</div>
+              </div>
               {/* CODE & SHARE HERO CARD */}
               <div className="border border-cyan-400/40 bg-gradient-to-br from-cyan-950/40 to-black/60 p-5 shadow-[0_0_30px_rgba(0,240,255,0.15)]">
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -972,14 +1050,15 @@ function createLocalId() {
 function createLocalPlayerSeed(): CoopPlayerSeed {
   const operatorId = selectedCoopOperatorId();
   const imprint = getCoopOperatorImprint(readCoopImprintProfile(), operatorId);
-  return { id: createLocalId(), label: savedNickname(), color: '#22d3ee', skinId: readCoopSkinId(), imprint: normalizeCoopImprintLoadout(imprint, operatorId) };
+  const skinId = readCoopSkinId();
+  return { id: createLocalId(), label: savedNickname(), color: '#22d3ee', skinId, operatorId: normalizeCoopOperatorId(skinId), imprint: normalizeCoopImprintLoadout(imprint, operatorId) };
 }
 
 function parsePlayer(value: unknown): CoopPlayerSeed | null {
   if (!value || typeof value !== 'object') return null;
   const player = value as Partial<CoopPlayerSeed>;
   return typeof player.id === 'string' && typeof player.label === 'string' && typeof player.color === 'string'
-    ? { id: player.id, label: player.label.slice(0, 24), color: player.color, skinId: normalizeCoopSkinId(player.skinId), imprint: normalizeCoopImprintLoadout(player.imprint) }
+    ? { id: player.id, label: player.label.slice(0, 24), color: player.color, skinId: normalizeCoopSkinId(player.skinId), operatorId: normalizeCoopOperatorId(player.operatorId, player.skinId), imprint: normalizeCoopImprintLoadout(player.imprint) }
     : null;
 }
 
@@ -987,6 +1066,19 @@ function parsePlayers(value: unknown, minimumPlayers: number = 2): CoopPlayerSee
   if (!Array.isArray(value) || value.length < minimumPlayers || value.length > 4) return null;
   const players = value.map(parsePlayer);
   return players.every((player): player is CoopPlayerSeed => player !== null) ? players : null;
+}
+
+function parseStartPayload(value: unknown, minimumPlayers: number) {
+  // Array support keeps older clients capable of joining a World 1 lobby while
+  // the richer deployment envelope rolls out.
+  if (Array.isArray(value)) {
+    const players = parsePlayers(value, minimumPlayers);
+    return players ? { players, worldId: 'neon_bastion' as WorldId } : null;
+  }
+  if (!value || typeof value !== 'object') return null;
+  const payload = value as { players?: unknown; worldId?: unknown };
+  const players = parsePlayers(payload.players, minimumPlayers);
+  return players ? { players, worldId: normalizeWorldId(payload.worldId) } : null;
 }
 
 function guestColor(index: number) {

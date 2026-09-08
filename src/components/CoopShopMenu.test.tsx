@@ -3,10 +3,11 @@ import { COOP_BUY_STATION_STOCK } from '../game/multiplayer/CoopBuyStation';
 import { coopShopItemsForCategory, resolveCoopShopKey } from './CoopShopMenu';
 
 describe('Counter-Strike-style co-op shop keys', () => {
-  it('maps the root digits to five categories and zero to close', () => {
+  it('maps the root digits to six categories and zero to close', () => {
     expect(resolveCoopShopKey(null, '1', COOP_BUY_STATION_STOCK)).toEqual({ type: 'category', categoryId: 'health_armor' });
     expect(resolveCoopShopKey(null, '4', COOP_BUY_STATION_STOCK)).toEqual({ type: 'category', categoryId: 'support' });
     expect(resolveCoopShopKey(null, '5', COOP_BUY_STATION_STOCK)).toEqual({ type: 'category', categoryId: 'reinforcements' });
+    expect(resolveCoopShopKey(null, '6', COOP_BUY_STATION_STOCK)).toEqual({ type: 'category', categoryId: 'extraction' });
     expect(resolveCoopShopKey(null, '0', COOP_BUY_STATION_STOCK)).toEqual({ type: 'close' });
   });
 
@@ -25,10 +26,10 @@ describe('Counter-Strike-style co-op shop keys', () => {
     expect(resolveCoopShopKey('ammunition', 'f', COOP_BUY_STATION_STOCK)).toEqual({ type: 'close' });
   });
 
-  it('keeps all twelve stocked products reachable without global product keys', () => {
-    const allItems = ['health_armor', 'ammunition', 'equipment', 'support'].flatMap(category =>
+  it('keeps every stocked product reachable without global product keys', () => {
+    const allItems = ['health_armor', 'ammunition', 'equipment', 'support', 'extraction'].flatMap(category =>
       coopShopItemsForCategory(category as Parameters<typeof coopShopItemsForCategory>[0], COOP_BUY_STATION_STOCK));
     expect(new Set(allItems)).toEqual(new Set(COOP_BUY_STATION_STOCK));
-    expect(allItems).toHaveLength(12);
+    expect(allItems).toHaveLength(13);
   });
 });

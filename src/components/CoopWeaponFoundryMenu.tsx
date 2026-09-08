@@ -1,5 +1,5 @@
 import { Coins, Hammer, X } from 'lucide-react';
-import { COOP_FIREARM_BY_ID, COOP_WEAPON_SLOTS, type CoopFirearmId } from '../game/combat/coopFirearms';
+import { COOP_FIREARM_BY_ID, type CoopFirearmId } from '../game/combat/coopFirearms';
 import { coopFoundryUpgradeCost, COOP_FOUNDRY_MAX_WEAPON_LEVEL } from '../game/multiplayer/CoopWeaponFoundry';
 import type { CoopPlayerSnapshot } from '../game/multiplayer/CoopSimulation';
 import { coopAmmoTypeKey, coopWeaponNameKey, type CoopTextKey } from '../game/multiplayer/i18n';
@@ -18,8 +18,8 @@ export function CoopWeaponFoundryMenu({ player, message, tr, onForge, onClose }:
         <div className="flex items-center gap-4"><span className="font-mono text-amber-200"><Coins className="mr-1 inline" size={14} />{player.coins}</span><button autoFocus onClick={onClose} aria-label={tr('foundry.close')} className="border border-amber-200/30 p-1.5 text-amber-100 hover:bg-amber-300/10"><X size={16} /></button></div>
       </header>
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {COOP_WEAPON_SLOTS.map(weaponId => {
-          const runtime = player.weaponStates.find(weapon => weapon.weaponId === weaponId)!;
+        {player.weaponStates.map(runtime => {
+          const weaponId = runtime.weaponId;
           const maxed = runtime.level >= COOP_FOUNDRY_MAX_WEAPON_LEVEL;
           const cost = maxed ? 0 : coopFoundryUpgradeCost(runtime.level);
           const disabled = maxed || player.coins < cost;

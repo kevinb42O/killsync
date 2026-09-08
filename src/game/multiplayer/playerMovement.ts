@@ -1,5 +1,5 @@
-import { GAME_HEIGHT, GAME_WIDTH } from '../../constants';
 import { getWorldWallContact, resolveWorldCollisions } from '../world/WorldLayout';
+import { getWorldDefinition, isWorldSurfaceWalkable, sampleWorldSurface, type WorldId } from '../world/WorldDefinitions';
 import type { MultiplayerInputFrame } from './protocol';
 
 export const COOP_STEP_MS = 1000 / 30;
@@ -8,6 +8,16 @@ export const COOP_JUMP_VELOCITY = 560;
 export const COOP_WALL_JUMP_VELOCITY = 520;
 export const COOP_DOUBLE_JUMP_BOOST = 420;
 export const COOP_DOUBLE_JUMP_MAX_VELOCITY = 520;
+export const COOP_JET_FUEL_MAX = 100;
+/** Two seconds of uninterrupted thrust from a full tank. */
+export const COOP_JET_DRAIN_PER_SECOND = 50;
+export const COOP_JET_RECHARGE_PER_SECOND = 50;
+export const COOP_JET_RECHARGE_DELAY_MS = 800;
+/** Kept as an exported tuning contract: ground launch and air ignition are immediate. */
+export const COOP_JET_IGNITION_DELAY_MS = 0;
+export const COOP_JET_SOFT_CEILING = 120;
+export const COOP_JET_HARD_CEILING = 150;
+export const COOP_JET_THRUST_ACCELERATION = 2_400;
 /** Renderer contract used to keep jump arcs clear of visual-only overheads. */
 export const COOP_FIRST_PERSON_EYE_HEIGHT = 26;
 export const COOP_CAMERA_OVERHEAD_SAFETY_MARGIN = 90;
@@ -31,17 +41,23 @@ export interface PlayerMotionState {
   lastDoubleJumpSequence?: number;
   wallJumpDirectionX?: number;
   wallJumpDirectionY?: number;
-  /** Shared by the double jump and wall-jump; only a real landing restores it. */
+  /** Shared by Burst Pack ignition and wall-jump; only a real landing restores it. */
   airActionConsumedSinceGrounded?: boolean;
   slideAngle: number;
   /** Host-derived from the player's validated Operator Imprint. */
   movementMultiplier?: number;
+  carryingHostage?: boolean;
+  jetFuel?: number;
+  jetActive?: boolean;
+  jetIgnitedThisAirTime?: boolean;
+  airborneMs?: number;
+  groundedMs?: number;
 }
 
 /** The co-op city is a physical floating platform, not a collision box. Once
  * an operative's centre crosses this footprint the host owns the fall death. */
-export function isOnCoopPlatform(x: number, y: number) {
-  return x >= 0 && x <= GAME_WIDTH && y >= 0 && y <= GAME_HEIGHT;
+export function isOnCoopPlatform(x: number, y: number, worldId: WorldId = 'neon_bastion') {
+  return isWorldSurfaceWalkable(worldId, x, y, COOP_PLAYER_RADIUS * .7);
 }
 
 export function advancePlayerMovement(
@@ -50,12 +66,17 @@ export function advancePlayerMovement(
   deltaMs: number,
   resolveAdditionalCollisions?: PlayerCollisionResolver,
   getAdditionalWallContact?: PlayerWallContactDetector,
+  worldId: WorldId = 'neon_bastion',
 ) {
   const seconds = Math.max(0, Math.min(50, deltaMs)) / 1000;
   if (input) {
     player.angle = input.aimAngle / 65535 * Math.PI * 2;
-    player.sprinting = input.sprinting;
+    player.sprinting = input.sprinting && !player.carryingHostage;
     const grounded = player.z <= 0.001;
+    const groundSurface = sampleWorldSurface(worldId, player.x, player.y);
+    player.jetFuel = Math.max(0, Math.min(COOP_JET_FUEL_MAX, player.jetFuel ?? COOP_JET_FUEL_MAX));
+    player.airborneMs = grounded ? 0 : (player.airborneMs || 0) + deltaMs;
+    player.groundedMs = grounded ? (player.groundedMs || 0) + deltaMs : 0;
     const forward = (input.movement & 1 ? 1 : 0) - (input.movement & 2 ? 1 : 0);
     const strafe = (input.movement & 8 ? 1 : 0) - (input.movement & 4 ? 1 : 0);
     const magnitude = Math.hypot(forward, strafe) || 1;
@@ -63,16 +84,19 @@ export function advancePlayerMovement(
       x: (Math.cos(player.angle) * forward - Math.sin(player.angle) * strafe) / magnitude,
       y: (Math.sin(player.angle) * forward + Math.cos(player.angle) * strafe) / magnitude,
     };
-    if (input.sliding && input.sprinting && (forward !== 0 || strafe !== 0) && grounded && !player.sliding) {
+    if (input.sliding && input.sprinting && !player.carryingHostage && (forward !== 0 || strafe !== 0) && grounded && !player.sliding) {
       player.slideAngle = Math.atan2(requested.y, requested.x);
       player.sliding = true;
     }
     if (!input.sliding || !grounded) player.sliding = false;
     player.crouching = input.sliding && !player.sliding && grounded;
     const movement = player.sliding ? { x: Math.cos(player.slideAngle), y: Math.sin(player.slideAngle) } : requested;
-    const speed = 300 * Math.max(1, Math.min(1.16, player.movementMultiplier || 1)) * (player.sliding ? 2.35 : player.crouching ? 0.55 : player.sprinting ? 1.65 : 1);
+    const carryMultiplier = player.carryingHostage ? .82 : 1;
+    const surfaceMultiplier = grounded ? groundSurface.movementMultiplier : 1;
+    const slideMultiplier = groundSurface.kind === 'thin_ice' ? 2.8 : 2.35;
+    const speed = 300 * Math.max(1, Math.min(1.16, player.movementMultiplier || 1)) * carryMultiplier * surfaceMultiplier * (player.sliding ? slideMultiplier : player.crouching ? 0.55 : !grounded ? 1.10 : player.sprinting ? 1.65 : 1);
     const contactBeforeMovement = !grounded
-      ? getWorldWallContact(player.x, player.y, COOP_PLAYER_RADIUS) || getAdditionalWallContact?.(player, COOP_PLAYER_RADIUS)
+      ? getWorldWallContact(player.x, player.y, COOP_PLAYER_RADIUS, 3, worldId) || getAdditionalWallContact?.(player, COOP_PLAYER_RADIUS)
       : undefined;
     const position = {
       x: player.x + movement.x * speed * seconds,
@@ -80,10 +104,10 @@ export function advancePlayerMovement(
     };
     // Architecture remains solid, but the platform edge deliberately does
     // not: crossing it is handled as a fall by the authoritative simulation.
-    const worldCollision = resolveWorldCollisions(position, COOP_PLAYER_RADIUS, false);
+    const worldCollision = resolveWorldCollisions(position, COOP_PLAYER_RADIUS, false, worldId);
     const touchedAdditionalSurface = resolveAdditionalCollisions?.(position, COOP_PLAYER_RADIUS) || false;
     const wallContact = contactBeforeMovement || (!grounded
-      ? getWorldWallContact(position.x, position.y, COOP_PLAYER_RADIUS) || getAdditionalWallContact?.(position, COOP_PLAYER_RADIUS)
+      ? getWorldWallContact(position.x, position.y, COOP_PLAYER_RADIUS, 3, worldId) || getAdditionalWallContact?.(position, COOP_PLAYER_RADIUS)
       : undefined);
     player.x = position.x;
     player.y = position.y;
@@ -98,24 +122,46 @@ export function advancePlayerMovement(
         // player is facing or already moving away from the wall.
         player.wallJumpDirectionX = wallContact?.normalX ?? -movement.x;
         player.wallJumpDirectionY = wallContact?.normalY ?? -movement.y;
-      } else if (!player.airActionConsumedSinceGrounded) {
-        // A bounded jet impulse avoids punishing an early second press while
-        // preventing two full jump arcs from stacking into excessive height.
-        player.verticalVelocity = Math.min(
-          COOP_DOUBLE_JUMP_MAX_VELOCITY,
-          Math.max(0, player.verticalVelocity) + COOP_DOUBLE_JUMP_BOOST,
-        );
-        player.airActionConsumedSinceGrounded = true;
-        player.lastDoubleJumpSequence = input.sequence;
       }
     }
+    // Holding jump on the floor is a direct jet-assisted launch. Releasing
+    // early produces a short hop; continuing to hold keeps the engine lit.
+    // The same held input may also ignite while already in the air.
+    const canGroundLaunch = grounded && !player.jetIgnitedThisAirTime && (player.jetFuel || 0) > 0;
+    const canAirIgnite = !grounded && !player.airActionConsumedSinceGrounded
+      && !player.jetIgnitedThisAirTime && (player.airborneMs || 0) >= COOP_JET_IGNITION_DELAY_MS
+      && (player.jetFuel || 0) > 0;
+    if (input.jetHeld && !player.carryingHostage && (canGroundLaunch || canAirIgnite)) {
+      if (canGroundLaunch) player.verticalVelocity = Math.max(player.verticalVelocity, COOP_JUMP_VELOCITY);
+      player.jetIgnitedThisAirTime = true;
+      player.airActionConsumedSinceGrounded = true;
+      player.jetActive = true;
+      player.lastDoubleJumpSequence = input.sequence;
+    }
+    if (!input.jetHeld || player.carryingHostage || (player.jetFuel || 0) <= 0) player.jetActive = false;
+    if (player.jetActive) {
+      const taper = player.z <= COOP_JET_SOFT_CEILING ? 1 : Math.max(0, (COOP_JET_HARD_CEILING - player.z) / (COOP_JET_HARD_CEILING - COOP_JET_SOFT_CEILING));
+      player.verticalVelocity += COOP_JET_THRUST_ACCELERATION * taper * seconds;
+      player.jetFuel = Math.max(0, (player.jetFuel || 0) - COOP_JET_DRAIN_PER_SECOND * seconds);
+      if (player.jetFuel <= 0) player.jetActive = false;
+    }
   }
-  player.verticalVelocity -= 1550 * seconds;
+  player.verticalVelocity -= getWorldDefinition(worldId).movementGravity * seconds;
   player.z += player.verticalVelocity * seconds;
   if (player.z <= 0) {
     player.z = 0;
     player.verticalVelocity = 0;
     player.airActionConsumedSinceGrounded = false;
+    player.jetActive = false;
+    player.jetIgnitedThisAirTime = false;
+    player.airborneMs = 0;
+    if (player.groundedMs >= COOP_JET_RECHARGE_DELAY_MS) {
+      const surface = sampleWorldSurface(worldId, player.x, player.y);
+      player.jetFuel = Math.min(COOP_JET_FUEL_MAX, (player.jetFuel ?? COOP_JET_FUEL_MAX) + COOP_JET_RECHARGE_PER_SECOND * surface.jetRechargeMultiplier * seconds);
+    }
+  } else if (player.z >= COOP_JET_HARD_CEILING) {
+    player.z = COOP_JET_HARD_CEILING;
+    player.verticalVelocity = Math.min(0, player.verticalVelocity);
   }
   if (player.z > 0.001) { player.sliding = false; player.crouching = false; }
 }

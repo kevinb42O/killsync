@@ -7,6 +7,7 @@ type EnemyRig = {
   core: THREE.Mesh;
   limbs: THREE.Group[];
   rotor: THREE.Mesh;
+  worldOrbiters: THREE.Object3D[];
   armor: THREE.MeshStandardMaterial;
   glow: THREE.MeshBasicMaterial;
   health: THREE.Group;
@@ -178,18 +179,79 @@ export function createCoopEnemyRig(enemy: Enemy): THREE.Group {
   const root = new THREE.Group(), hull = new THREE.Group(), details = new THREE.Group();
   root.add(hull); hull.add(details);
   const radius = enemy.radius;
-  const armor = new THREE.MeshStandardMaterial({ color: armorColor(enemy.type), metalness: .78, roughness: .31, emissive: enemy.color, emissiveIntensity: .11 });
+  const armor = new THREE.MeshStandardMaterial({ color: armorColor(enemy.type, enemy.presentationWorldId), metalness: enemy.presentationWorldId === 'cinderworks' ? .48 : .78, roughness: enemy.presentationWorldId === 'white_silence' ? .16 : .31, emissive: enemy.color, emissiveIntensity: enemy.presentationWorldId === 'null_garden' ? .24 : .11 });
   const glow = new THREE.MeshBasicMaterial({ color: enemy.color, toneMapped: false });
   const add = (geometry: THREE.BufferGeometry, material: THREE.Material, scale: [number, number, number], position: [number, number, number], parent: THREE.Object3D = hull) => {
     const mesh = new THREE.Mesh(geometry, material); mesh.scale.set(...scale); mesh.position.set(...position); parent.add(mesh); return mesh;
   };
   const heavy = enemy.type === 'tank' || enemy.type === 'titan';
   const flying = enemy.type === 'phantom';
-  const bodyGeometry = enemy.type === 'fast' ? GEOMETRY.wedge : enemy.type === 'ranged' ? GEOMETRY.plate : flying ? GEOMETRY.sphere : GEOMETRY.box;
+  const worldOrbiters: THREE.Object3D[] = [];
+  const bodyGeometry = enemy.presentationWorldId === 'white_silence'
+    ? (enemy.type === 'fast' ? GEOMETRY.cone : flying ? GEOMETRY.sphere : GEOMETRY.plate)
+    : enemy.presentationWorldId === 'null_garden'
+      ? (enemy.type === 'ranged' ? GEOMETRY.cone : enemy.type === 'fast' || flying || enemy.type === 'titan' ? GEOMETRY.sphere : GEOMETRY.plate)
+      : enemy.type === 'fast' ? GEOMETRY.wedge : enemy.type === 'ranged' ? GEOMETRY.plate : flying ? GEOMETRY.sphere : GEOMETRY.box;
   const body = add(bodyGeometry, armor, [radius * (heavy ? 1.65 : 1.3), radius * (heavy ? 1.15 : .78), radius * (heavy ? 1.45 : 1.25)], [0, 0, 0]);
   if (enemy.type === 'fast') body.rotation.x = Math.PI / 2;
   add(GEOMETRY.box, glow, [radius * .82, radius * .13, radius * .06], [0, radius * .10, radius * .69]);
   const core = add(GEOMETRY.sphere, glow, [radius * .22, radius * .22, radius * .18], [0, radius * .08, radius * .78], details);
+
+  // Every expedition faction keeps the shared role silhouette (and therefore
+  // batching/performance), then adds a small world-readable vocabulary.
+  if (enemy.presentationWorldId === 'cinderworks') {
+    for (const side of [-1, 1]) {
+      const chimney = add(GEOMETRY.cylinder, armor, [radius * .16, radius * .75, radius * .16], [side * radius * .42, radius * .62, -radius * .28], details);
+      chimney.rotation.z = side * .12;
+      add(GEOMETRY.cone, glow, [radius * .18, radius * .55, radius * .18], [side * radius * .42, radius * 1.02, -radius * .28], details);
+    }
+    if (enemy.type === 'titan') {
+      // The Cinder titan reads as a walking blast furnace: a broad glowing
+      // hearth with four exhaust towers instead of the shared crown alone.
+      add(GEOMETRY.box, glow, [radius * 1.18, radius * .52, radius * .12], [0, radius * .08, radius * .82], details);
+      for (let index = 0; index < 4; index++) {
+        const angle = index / 4 * Math.PI * 2 + Math.PI / 4;
+        const tower = add(GEOMETRY.cylinder, armor, [radius * .24, radius * 1.7, radius * .24], [Math.cos(angle) * radius * .78, radius * .84, Math.sin(angle) * radius * .65], details);
+        tower.rotation.z = Math.cos(angle) * .12;
+        add(GEOMETRY.ring, glow, [radius * .5, radius * .5, radius * .5], [Math.cos(angle) * radius * .78, radius * 1.68, Math.sin(angle) * radius * .65], details).rotation.x = Math.PI / 2;
+      }
+    }
+  } else if (enemy.presentationWorldId === 'white_silence') {
+    const shardCount = enemy.type === 'titan' ? 11 : enemy.type === 'tank' ? 7 : 5;
+    for (let index = 0; index < shardCount; index++) {
+      const angle = index / shardCount * Math.PI * 2;
+      const tall = enemy.type === 'titan' ? 1.35 + (index % 3) * .22 : .92;
+      const shard = add(GEOMETRY.cone, index % 3 === 0 ? glow : armor, [radius * .22, radius * tall, radius * .22], [Math.cos(angle) * radius * .62, radius * (.58 + tall * .12), Math.sin(angle) * radius * .62], details);
+      shard.rotation.z = -Math.cos(angle) * .38; shard.rotation.x = Math.sin(angle) * .38;
+    }
+    if (enemy.type === 'titan') {
+      // A long keel and lateral fins turn the Pale Leviathan into a glacial
+      // creature rather than a recoloured industrial walker.
+      const keel = add(GEOMETRY.cone, armor, [radius * .55, radius * 2.5, radius * .55], [0, radius * .52, -radius * .32], details);
+      keel.rotation.x = -.72;
+      for (const side of [-1, 1]) {
+        const fin = add(GEOMETRY.plate, glow, [radius * 1.2, radius * .22, radius * .72], [side * radius * 1.12, radius * .18, -radius * .08], details);
+        fin.rotation.z = side * .28;
+      }
+    }
+  } else if (enemy.presentationWorldId === 'null_garden') {
+    const ringCount = enemy.type === 'titan' ? 6 : enemy.type === 'elite' ? 4 : 3;
+    for (let index = 0; index < ringCount; index++) {
+      const ring = add(GEOMETRY.ring, index === 1 ? armor : glow, [radius * (1 + index * .18), radius * (1 + index * .18), radius * (1 + index * .18)], [0, radius * (.2 + index * .23), 0], details);
+      ring.rotation.set(Math.PI / 2 + index * .35, index * .48, 0);
+      worldOrbiters.push(ring);
+    }
+    if (enemy.type === 'titan') {
+      // The Eclipse Heart has no mechanical head: a dark seed is suspended
+      // inside the orbiting petals and opens only through its luminous seams.
+      add(GEOMETRY.sphere, sharedDark, [radius * 1.25, radius * 1.25, radius * 1.25], [0, radius * .25, 0], details);
+      for (let index = 0; index < 5; index++) {
+        const angle = index / 5 * Math.PI * 2;
+        const petal = add(GEOMETRY.plate, index % 2 ? armor : glow, [radius * .48, radius * 1.35, radius * .22], [Math.cos(angle) * radius * 1.08, radius * .30, Math.sin(angle) * radius * 1.08], details);
+        petal.rotation.set(Math.sin(angle) * .5, angle, -Math.cos(angle) * .5);
+      }
+    }
+  }
 
   const limbs: THREE.Group[] = [];
   // Phantoms use the same articulated slots as four suspended energy talons;
@@ -260,7 +322,7 @@ export function createCoopEnemyRig(enemy: Enemy): THREE.Group {
   const deathShards = new THREE.InstancedMesh(GEOMETRY.plate, deathGlow, shardCount); deathShards.instanceMatrix.setUsage(THREE.DynamicDrawUsage); deathFx.add(deathShards);
   const deathBeam = new THREE.Mesh(GEOMETRY.beam, deathGlow); deathBeam.visible = false; deathFx.add(deathBeam);
 
-  root.userData.coopRig = { hull, body, core, limbs, rotor, armor, glow, health, fill, details, spawnRing, deathFx, deathShell, deathRings, deathShards, deathBeam, deathGlow, deathWire, shardCount, phase: numericId(enemy.id) * 1.73, createdAt: Date.now() } satisfies EnemyRig;
+  root.userData.coopRig = { hull, body, core, limbs, rotor, worldOrbiters, armor, glow, health, fill, details, spawnRing, deathFx, deathShell, deathRings, deathShards, deathBeam, deathGlow, deathWire, shardCount, phase: numericId(enemy.id) * 1.73, createdAt: Date.now() } satisfies EnemyRig;
   return root;
 }
 
@@ -270,7 +332,9 @@ export function animateCoopEnemyRig(root: THREE.Group, enemy: Enemy, camera: THR
   const death = THREE.MathUtils.clamp(enemy.presentationDeathProgress || 0, 0, 1);
   const charging = THREE.MathUtils.clamp(enemy.presentationAttackCharge || 0, 0, 1);
   const spawn = THREE.MathUtils.smoothstep(now - rig.createdAt, 0, 420);
-  const hover = enemy.type === 'phantom' ? enemy.radius * .55 + Math.sin(phase) * 7 : 0;
+  const worldHover = enemy.presentationWorldId === 'null_garden' ? 7 + Math.sin(phase * .72) * 4
+    : enemy.presentationWorldId === 'white_silence' && enemy.type === 'fast' ? 2 + Math.sin(phase * 1.35) * 2 : 0;
+  const hover = (enemy.type === 'phantom' ? enemy.radius * .55 + Math.sin(phase) * 7 : 0) + worldHover;
   root.position.set(enemy.position.x, enemy.radius * .72 + hover, enemy.position.y);
   const velocityFacing = Math.hypot(enemy.velocity.x, enemy.velocity.y) > .001 ? Math.atan2(enemy.velocity.y, enemy.velocity.x) : 0;
   root.rotation.y = Math.PI / 2 - (enemy.presentationFacingAngle ?? velocityFacing);
@@ -294,13 +358,18 @@ export function animateCoopEnemyRig(root: THREE.Group, enemy: Enemy, camera: THR
   });
   rig.rotor.rotation.z = phase * (enemy.type === 'phantom' ? 1.2 : .55);
   rig.rotor.scale.setScalar(1 + charging * .38);
+  rig.worldOrbiters.forEach((orbiter, index) => {
+    orbiter.rotation.z = phase * (.18 + index * .035) * (index % 2 ? -1 : 1);
+    orbiter.rotation.y = index * .48 + Math.sin(phase * .35 + index) * .28;
+  });
   const hit = Boolean(enemy.hitFlash && enemy.hitFlash > 0);
   const bossHit = hit && enemy.type === 'titan';
   // Large bosses retain their dark silhouette on impact. Their existing crown,
   // rotor, trim, and core carry the confirmation pulse instead of bleaching the
   // entire armor material white behind the player's reticle.
   rig.armor.emissive.set(hit && !bossHit ? '#ffffff' : enemy.color);
-  rig.armor.emissiveIntensity = hit && !bossHit ? 2.2 : bossHit ? .72 : .11 + charging * .8 + (death > 0 ? (1 - death) * 1.7 : 0);
+  const worldEmission = enemy.presentationWorldId === 'null_garden' ? .28 : enemy.presentationWorldId === 'cinderworks' ? .17 : enemy.presentationWorldId === 'white_silence' ? .07 : .11;
+  rig.armor.emissiveIntensity = hit && !bossHit ? 2.2 : bossHit ? .72 : worldEmission + charging * .8 + (death > 0 ? (1 - death) * 1.7 : 0);
   rig.glow.color.set(death > 0 ? '#ffffff' : bossHit ? '#ffe7a3' : hit ? '#ffffff' : charging > 0 ? '#fff7d6' : enemy.color);
   rig.core.scale.setScalar(1 + Math.sin(phase * 2.4) * .09 + charging * .42 + (bossHit ? .42 : 0) + (death > 0 ? Math.sin(death * Math.PI) * 1.15 : 0));
   const distanceToCamera = camera.position.distanceTo(root.position);
@@ -369,7 +438,10 @@ export function disposeCoopEnemyRig(root: THREE.Object3D) {
   materials.forEach(material => material.dispose());
 }
 
-function armorColor(type: Enemy['type']) {
+function armorColor(type: Enemy['type'], worldId?: Enemy['presentationWorldId']) {
+  if (worldId === 'cinderworks') return type === 'phantom' ? '#4a2115' : type === 'tank' || type === 'titan' ? '#28130d' : '#3b2118';
+  if (worldId === 'white_silence') return type === 'phantom' ? '#39758b' : type === 'tank' || type === 'titan' ? '#17384b' : '#2f6478';
+  if (worldId === 'null_garden') return type === 'phantom' ? '#2e1252' : type === 'tank' || type === 'titan' ? '#261238' : '#35204a';
   if (type === 'phantom') return '#b9cbd4';
   if (type === 'tank' || type === 'titan' || type === 'boss') return '#26333d';
   if (type === 'fast') return '#3f3428';

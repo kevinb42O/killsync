@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../../constants';
 import { isWorldPositionClear } from '../world/WorldLayout';
 import { GAS_MAX_RADIUS } from './CoopGasZone';
 import type { CoopStationState } from './CoopBuyStation';
+import type { WorldId } from '../world/WorldDefinitions';
 
 export const COOP_FOUNDRY_CAPTURE_RADIUS = 180;
 export const COOP_FOUNDRY_INTERACTION_RADIUS = 120;
@@ -83,7 +84,7 @@ export function isCoopFirearmId(value: unknown, ids: readonly CoopFirearmId[]): 
 
 /** Deterministic, collision-safe site selected at match creation. The Foundry
  * is kept viable for the entire run and cannot overlap any Buy Station. */
-export function generateCoopWeaponFoundrySite(seed: number, insertion: Actor, gasCentre: Actor, stations: readonly Actor[]) {
+export function generateCoopWeaponFoundrySite(seed: number, insertion: Actor, gasCentre: Actor, stations: readonly Actor[], worldId: WorldId = 'neon_bastion') {
   let state = (seed ^ 0xa8c4f31d) >>> 0;
   const random = () => {
     state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
@@ -99,20 +100,20 @@ export function generateCoopWeaponFoundrySite(seed: number, insertion: Actor, ga
     for (let x = FOUNDRY_MARGIN + ((offset + Math.round(y)) % 337); x <= GAME_WIDTH - FOUNDRY_MARGIN; x += 360) candidates.push({ x, y });
   }
   const valid = candidates.map(point => ({ x: Math.round(point.x), y: Math.round(point.y) })).filter(point => {
-    if (!isWorldPositionClear(point.x, point.y, COOP_FOUNDRY_CAPTURE_RADIUS)) return false;
+    if (!isWorldPositionClear(point.x, point.y, COOP_FOUNDRY_CAPTURE_RADIUS, worldId)) return false;
     if (Math.hypot(point.x - insertion.x, point.y - insertion.y) < 2_200) return false;
     if (Math.hypot(point.x - gasCentre.x, point.y - gasCentre.y) < GAS_MAX_RADIUS + GAS_CLEARANCE) return false;
     if (stations.some(site => Math.hypot(point.x - site.x, point.y - site.y) < COOP_FOUNDRY_STATION_CLEARANCE)) return false;
-    return hasStreetAccess(point);
+    return hasStreetAccess(point, worldId);
   });
   if (!valid.length) throw new Error(`No safe co-op Weapon Foundry site for seed ${seed}`);
   valid.sort((a, b) => foundryScore(b, insertion, gasCentre, stations) - foundryScore(a, insertion, gasCentre, stations) || a.x - b.x || a.y - b.y);
   return valid[0];
 }
 
-function hasStreetAccess(site: Actor) {
+function hasStreetAccess(site: Actor, worldId: WorldId) {
   return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).some(([dx, dy]) => [235, 330].every(distance =>
-    isWorldPositionClear(site.x + dx * distance, site.y + dy * distance, 28)));
+    isWorldPositionClear(site.x + dx * distance, site.y + dy * distance, 28, worldId)));
 }
 
 function foundryScore(candidate: Actor, insertion: Actor, gasCentre: Actor, stations: readonly Actor[]) {

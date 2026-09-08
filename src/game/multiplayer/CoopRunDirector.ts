@@ -6,6 +6,7 @@
 import { findClearRunPosition } from './runPlacement';
 import type { RunPlacementExclusion } from './runPlacement';
 import type { CoopTextKey } from './i18n';
+import type { WorldId } from '../world/WorldDefinitions';
 
 export type CoopRunPhase = 'insertion' | 'contract' | 'mini_boss' | 'checkpoint' | 'final_boss' | 'exfil' | 'success' | 'failed';
 export type CoopObjectiveKind = 'uplink' | 'elite_hunt';
@@ -36,6 +37,8 @@ export interface CoopBossSnapshot {
   phase: number;
   x: number;
   y: number;
+  /** World-specific identity while the compact ability kind stays reusable. */
+  displayName?: string;
 }
 
 export interface CoopExfilSnapshot {
@@ -99,7 +102,7 @@ export class CoopRunDirector {
   private noticeKey: CoopTextKey = 'objective.dropIn';
   private nextId = 1;
 
-  constructor(private readonly seed: number, private readonly stationExclusions: readonly RunPlacementExclusion[] = []) {}
+  constructor(private readonly seed: number, private readonly stationExclusions: readonly RunPlacementExclusion[] = [], private readonly worldId: WorldId = 'neon_bastion') {}
 
   get currentPhase() { return this.phase; }
   get currentObjective() { return this.objective; }
@@ -117,7 +120,7 @@ export class CoopRunDirector {
     if (this.phase !== 'insertion' && this.phase !== 'mini_boss') return;
     const kind = this.contractIndex === 0 ? 'uplink' : 'elite_hunt';
     const offset = this.offset(this.contractIndex + 1, 560);
-    const { x, y } = findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, COOP_UPLINK_RADIUS, this.stationExclusions);
+    const { x, y } = findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, COOP_UPLINK_RADIUS, this.stationExclusions, this.worldId);
     this.objective = kind === 'uplink'
       ? { id: this.nextId++, kind, titleKey: 'objective.secureUplink', descriptionKey: 'objective.districtUplink', x, y, progress: 0, required: 100, completed: false, contested: false, occupants: 0 }
       : { id: this.nextId++, kind, titleKey: 'objective.huntElite', descriptionKey: 'objective.huntEliteDescription', x, y, progress: 0, required: 1, completed: false };
@@ -160,7 +163,7 @@ export class CoopRunDirector {
   private completeObjective() {
     if (!this.objective) return;
     const offset = this.offset(this.contractIndex + 4, 620);
-    const position = findClearRunPosition({ x: this.objective.x + offset.x, y: this.objective.y + offset.y }, 170, this.stationExclusions);
+    const position = findClearRunPosition({ x: this.objective.x + offset.x, y: this.objective.y + offset.y }, 170, this.stationExclusions, this.worldId);
     this.objective.completed = true;
     this.objective = undefined;
     this.phase = 'mini_boss';
@@ -191,7 +194,7 @@ export class CoopRunDirector {
       if (this.contractIndex <= 2) {
         const offset = this.offset(this.contractIndex + 9, 260);
         this.phase = 'checkpoint';
-        this.exfil = { ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 120, this.stationExclusions), radius: 100, holdProgressMs: 0, holdRequiredMs: COOP_CHECKPOINT_HOLD_MS, remainingMs: COOP_CHECKPOINT_DECISION_MS };
+        this.exfil = { ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 120, this.stationExclusions, this.worldId), radius: 100, holdProgressMs: 0, holdRequiredMs: COOP_CHECKPOINT_HOLD_MS, remainingMs: COOP_CHECKPOINT_DECISION_MS };
         this.noticeKey = 'objective.exfilMove';
         return 'checkpoint' as const;
       }
@@ -202,7 +205,7 @@ export class CoopRunDirector {
       this.bossesDefeated++;
       const offset = this.offset(7, 330);
       this.phase = 'exfil';
-      this.exfil = { ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 120, this.stationExclusions), radius: 100, holdProgressMs: 0, holdRequiredMs: EXFIL_HOLD_MS, remainingMs: EXFIL_MS };
+      this.exfil = { ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 120, this.stationExclusions, this.worldId), radius: 100, holdProgressMs: 0, holdRequiredMs: EXFIL_HOLD_MS, remainingMs: EXFIL_MS };
       this.noticeKey = 'objective.exfilMove';
       return 'exfil' as const;
     }
@@ -231,7 +234,7 @@ export class CoopRunDirector {
     if (this.phase !== 'mini_boss' || this.contractIndex !== 2) return false;
     const offset = this.offset(6, 720);
     this.phase = 'final_boss';
-    this.boss = { id: this.nextId++, kind: 'singularity', nameKey: bossNameKey('singularity'), health: 0, maxHealth: 0, phase: 1, ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 170, this.stationExclusions) };
+    this.boss = { id: this.nextId++, kind: 'singularity', nameKey: bossNameKey('singularity'), health: 0, maxHealth: 0, phase: 1, ...findClearRunPosition({ x: centre.x + offset.x, y: centre.y + offset.y }, 170, this.stationExclusions, this.worldId) };
     this.noticeKey = 'objective.finalBreach';
     return true;
   }

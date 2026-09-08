@@ -18,6 +18,11 @@ const WEAPON_PALETTES: Record<CoopFirearmId, { dark: number; panel: number; stee
   combat_shotgun: { dark: 0x21130c, panel: 0x61321b, steel: 0xd0a064, trim: 0xfb923c, rubber: 0x140b07 },
   arc_launcher: { dark: 0x0c1830, panel: 0x1d4f78, steel: 0x8fb9d9, trim: 0x60a5fa, rubber: 0x07101d },
   smg: { dark: 0x121b0d, panel: 0x385322, steel: 0x9caf8e, trim: 0xa3e635, rubber: 0x0a1007 },
+  goreline_repeater: { dark: 0x24090d, panel: 0x641923, steel: 0xc58b91, trim: 0xfb7185, rubber: 0x160609 },
+  riftspike_array: { dark: 0x180b2b, panel: 0x4c1d72, steel: 0xc4a7dc, trim: 0xc084fc, rubber: 0x0e0718 },
+  dawnwall_cannon: { dark: 0x251805, panel: 0x69470b, steel: 0xe1c879, trim: 0xfbbf24, rubber: 0x160f04 },
+  winterglass_projector: { dark: 0x071b2a, panel: 0x15506b, steel: 0xb8e3f2, trim: 0x7dd3fc, rubber: 0x04101a },
+  cinderhex_engine: { dark: 0x2a0c05, panel: 0x743019, steel: 0xe3a16f, trim: 0xfb923c, rubber: 0x180803 },
 };
 const flashTexture = (() => {
   if (typeof document === 'undefined') return new THREE.Texture();
@@ -113,6 +118,11 @@ export function createRemoteFirearm(id: CoopFirearmId) { const rig = new CoopFir
 
 function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
   const definition = COOP_FIREARM_BY_ID[id], root = new THREE.Group(), palette = WEAPON_PALETTES[id], isHandgun = id === 'plasma_gun';
+  const archetype = id === 'goreline_repeater' ? 'assault_rifle'
+    : id === 'riftspike_array' || id === 'dawnwall_cannon' ? 'arc_launcher'
+      : id === 'winterglass_projector' ? 'smg'
+        : id === 'cinderhex_engine' ? 'combat_shotgun'
+          : id;
   const dark = new THREE.MeshStandardMaterial({ color: palette.dark, emissive: isHandgun ? 0x07101d : palette.dark, emissiveIntensity: isHandgun ? .65 : .28, metalness: .92, roughness: isHandgun ? .19 : .24 });
   const panel = new THREE.MeshStandardMaterial({ color: palette.panel, emissive: isHandgun ? 0x0b1829 : palette.dark, emissiveIntensity: isHandgun ? .75 : .34, metalness: .8, roughness: isHandgun ? .24 : .28 });
   const steel = new THREE.MeshStandardMaterial({ color: palette.steel, emissive: isHandgun ? 0x182b3d : palette.dark, emissiveIntensity: isHandgun ? .45 : .16, metalness: .96, roughness: isHandgun ? .12 : .18 });
@@ -174,7 +184,7 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
   let magazine: THREE.Object3D | undefined, bolt: THREE.Object3D | undefined, pump: THREE.Object3D | undefined;
   const mountMuzzle = (z: number) => { const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, z); root.add(muzzle); const flashMaterial = new THREE.SpriteMaterial({ map: flashTexture, color: new THREE.Color(definition.visual.muzzleColor), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }); const flash = new THREE.Sprite(flashMaterial); flash.scale.setScalar(firstPerson ? 1.7 : .7); muzzle.add(flash); return { muzzle, flash, flashMaterial }; };
   if (id === 'plasma_gun') { chassis.scale.z = .85; chassis.position.z = -1.1; addTube(.31, 2.6, [0, .03, -4.32], panel); addRail(-3.9, 2.6); magazine = addBox([.58, .95, .88], [0, -.92, -1.32], dark); addBox([.15, .48, .70], [.43, -.94, -1.32], accent); }
-  if (id === 'assault_rifle') {
+  if (archetype === 'assault_rifle') {
     // Emerald service rifle: layered stock, armored handguard and a visible
     // power spine keep the silhouette readable without turning it into a slab.
     addBox([1.18, .62, 2.05], [0, -.02, 1.08], dark);
@@ -196,7 +206,7 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
     addBox([.45, .22, .86], [0, -.46, -3.65], steel);
     addSupportArm(-4.10);
   }
-  if (id === 'combat_shotgun') {
+  if (archetype === 'combat_shotgun') {
     // Amber breacher: broad receiver, ventilated heat shield, ribbed pump and
     // individual shell-status lamps sell weight and close-range purpose.
     chassis.scale.x = 1.25;
@@ -221,7 +231,7 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
     addBox([.95, .48, 1.05], [0, -.20, -7.88], dark);
     addSupportArm(-4.18);
   }
-  if (id === 'arc_launcher') {
+  if (archetype === 'arc_launcher') {
     // Electric crowd-control platform: a compact accelerator barrel, exposed
     // charge chamber, and paired induction rings replace the sniper silhouette.
     chassis.scale.set(1.18, 1.08, .92); chassis.position.z = -1.46;
@@ -245,7 +255,7 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
     addReflex(root, dark, steel, glass, accent, -1.82);
     addSupportArm(-4.36);
   }
-  if (id === 'smg') {
+  if (archetype === 'smg') {
     // Acid-lime compact: short vented shroud, skeletal stock and a translucent
     // magazine witness strip distinguish it from the full-size rifle.
     chassis.scale.set(1.20, 1.03, .82); chassis.position.z = -1.28;
@@ -267,7 +277,44 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
     for (let slot = 0; slot < 5; slot++) addBox([.14, .28, .32], [slot % 2 ? .62 : -.62, .02, -2.4 - Math.floor(slot / 2) * .44], accent);
     addSupportArm(-3.42);
   }
-  const muzzleData = mountMuzzle(id === 'arc_launcher' ? -7.82 : id === 'combat_shotgun' ? -8.85 : id === 'assault_rifle' ? -7.90 : id === 'smg' ? -6.18 : -6.15);
+  // Artifact silhouettes deliberately read at a glance even when operator
+  // colors are obscured by muzzle light or gas. These parts are decorative;
+  // combat dimensions stay wholly host-authored in coopFirearms.ts.
+  if (id === 'goreline_repeater') {
+    for (let tooth = 0; tooth < 4; tooth++) {
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(.13, .62, 4), accentMetal);
+      fang.rotation.x = Math.PI / 2; fang.position.set((tooth - 1.5) * .25, -.56, -6.30 - tooth * .25); root.add(fang);
+    }
+    const vial = addTube(.23, 1.35, [-.58, .36, -1.15], glass); vial.rotation.z = .16;
+  }
+  if (id === 'riftspike_array') {
+    for (let prong = 0; prong < 3; prong++) {
+      const phase = prong / 3 * Math.PI * 2;
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(.20, 1.55, 5), prong === 1 ? glass : accentMetal);
+      spike.rotation.x = -Math.PI / 2; spike.position.set(Math.cos(phase) * .62, Math.sin(phase) * .62, -7.32); root.add(spike);
+    }
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(.93, .07, 8, 24), accent); halo.position.z = -6.65; root.add(halo);
+  }
+  if (id === 'dawnwall_cannon') {
+    for (const x of [-1, 1]) {
+      const shield = addBox([.30, 1.38, 2.65], [x * 1.05, .02, -3.25], panel); shield.rotation.z = x * -.12;
+      addBox([.06, 1.05, 2.18], [x * 1.23, .03, -3.25], accent);
+    }
+    const sun = new THREE.Mesh(new THREE.TorusGeometry(.48, .13, 8, 20), accentMetal); sun.rotation.x = Math.PI / 2; sun.position.set(0, .88, -1.45); root.add(sun);
+  }
+  if (id === 'winterglass_projector') {
+    for (const x of [-.56, .56]) {
+      const tank = addTube(.31, 1.75, [x, -.58, -1.55], glass); tank.rotation.z = x * .08;
+      addTube(.37, .18, [x, -.58, -2.40], steel);
+    }
+    for (const x of [-.32, .32]) addTube(.20, 2.65, [x, .02, -5.15], accentMetal);
+  }
+  if (id === 'cinderhex_engine') {
+    const furnace = addTube(.68, 1.85, [0, .05, -2.80], glass); furnace.scale.x *= 1.15; furnace.scale.z *= 1.15;
+    for (let fin = 0; fin < 5; fin++) addBox([1.65, .13, .18], [0, -.10, -4.25 - fin * .58], fin % 2 ? accentMetal : steel);
+    for (const x of [-.73, .73]) addTube(.14, 3.10, [x, -.34, -4.65], accent);
+  }
+  const muzzleData = mountMuzzle(archetype === 'arc_launcher' ? -7.82 : archetype === 'combat_shotgun' ? -8.85 : archetype === 'assault_rifle' ? -7.90 : archetype === 'smg' ? -6.18 : -6.15);
   root.traverse(node => { if (node instanceof THREE.Mesh) { node.castShadow = false; node.receiveShadow = false; } });
   return { root, bolt, magazine, pump, magazineHome: magazine?.position.clone(), magazineRotationHome: magazine?.rotation.clone(), pumpHome: pump?.position.clone(), boltHome: bolt?.position.clone(), muzzle: muzzleData.muzzle, flash: muzzleData.flash, flashMaterial: muzzleData.flashMaterial, accent, suit };
 }

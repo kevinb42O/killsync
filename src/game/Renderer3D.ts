@@ -12,6 +12,7 @@ import { animateCoopEnemyRig, CoopEnemyBatchRenderer, createCoopEnemyRig, dispos
 import { ENEMY_ATTACK_PROFILES } from './combat/enemyDomain';
 import { COOP_FIRST_PERSON_EYE_HEIGHT } from './multiplayer/playerMovement';
 import { createFloatingPlatformShell } from './rendering/floatingPlatformShell';
+import { getWorldDefinition, sampleWorldSurface, type WorldId, type WorldSurfaceKind } from './world/WorldDefinitions';
 
 export interface Renderer3DOptions {
   /** Co-op takes place on a finite floating megastructure. Its edge is open
@@ -19,6 +20,8 @@ export interface Renderer3DOptions {
   floatingPlatform?: boolean;
   /** Development A/B escape hatch; production co-op leaves this enabled. */
   coopEnemyBatching?: boolean;
+  /** The co-op environment is built only for this active world. */
+  worldId?: WorldId;
 }
 
 export interface RendererSuitPalette {
@@ -144,6 +147,8 @@ export class Renderer3D {
   floorMesh!: THREE.Mesh;
   boundaryPillars: THREE.Mesh[] = [];
   private readonly floatingPlatform: boolean;
+  private worldId: WorldId;
+  private environmentObjects: THREE.Object3D[] = [];
   private coopSuitPalette?: RendererSuitPalette;
   gasZoneGroup!: THREE.Group;
   gasWallMesh!: THREE.Mesh;
@@ -383,6 +388,7 @@ export class Renderer3D {
 
   constructor(options: Renderer3DOptions = {}) {
     this.floatingPlatform = options.floatingPlatform ?? false;
+    this.worldId = options.worldId || 'neon_bastion';
     // 1. Initialize Three.js Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0b1830);
@@ -421,7 +427,7 @@ export class Renderer3D {
     this.setupLighting();
 
     // 5. Setup Environment (Grid floor, sky/horizon, pillars)
-    this.setupEnvironment();
+    this.rebuildEnvironment();
 
     // 6. Setup High-End FPS Viewmodel (Production Cyber Arm & Blaster)
     this.setupFPSViewmodel();
@@ -440,6 +446,31 @@ export class Renderer3D {
 
   setCoopSuitPalette(palette?: RendererSuitPalette) {
     this.coopSuitPalette = palette;
+  }
+
+  /** Replaces only static world geometry. Player rigs, weapons, particles and
+   * network presentation remain alive through an inter-world bridge crossing. */
+  setCoopWorld(worldId: WorldId) {
+    if (!this.floatingPlatform || worldId === this.worldId) return;
+    this.worldId = worldId;
+    this.rebuildEnvironment();
+  }
+
+  private rebuildEnvironment() {
+    for (const object of this.environmentObjects) {
+      this.scene.remove(object);
+      object.traverse(child => {
+        const renderable = child as THREE.Mesh;
+        renderable.geometry?.dispose?.();
+        const materials = Array.isArray(renderable.material) ? renderable.material : renderable.material ? [renderable.material] : [];
+        for (const material of materials) material.dispose();
+      });
+    }
+    this.environmentObjects = [];
+    this.boundaryPillars = [];
+    const existing = new Set(this.scene.children);
+    this.setupEnvironment();
+    this.environmentObjects = this.scene.children.filter(child => !existing.has(child));
   }
 
   mount(container: HTMLElement) {
@@ -564,6 +595,11 @@ export class Renderer3D {
   }
 
   private setupEnvironment() {
+    if (this.floatingPlatform && this.worldId !== 'neon_bastion') {
+      this.setupDistinctCoopWorld();
+      this.setupGasZoneVisuals();
+      return;
+    }
     this.setupSkyDome();
     // Cyber Neon Floor Grid
     const floorWidth = this.floatingPlatform ? GAME_WIDTH : Math.max(GAME_WIDTH, GAME_HEIGHT) * 2.5;
@@ -630,6 +666,7 @@ export class Renderer3D {
     // Collidable architecture comes from the same deterministic layout used by
     // Engine movement. These are real city blocks, not decorative ghosts.
     this.setupDistrictCity();
+    if (this.floatingPlatform) this.setupWorldBridgehead();
     if (!this.floatingPlatform) this.setupDistantSkyline();
 
     // Distant Cyber Pillars / Horizon Monoliths
@@ -654,6 +691,403 @@ export class Renderer3D {
     }
 
     this.setupGasZoneVisuals();
+  }
+
+  /**
+   * Worlds after Neon Bastion deliberately avoid the city renderer entirely.
+   * Their floor is sampled from the same analytic surface map used by movement,
+   * spawning and fall detection, so every visible fracture is a real fracture.
+   * Tiles and landmarks are instanced by material/kind to keep the extra visual
+   * identity to a small, stable number of draw calls.
+   */
+  private setupDistinctCoopWorld() {
+    const definition = getWorldDefinition(this.worldId);
+    const theme = definition.theme;
+    this.scene.background = new THREE.Color(theme.clearColor);
+    this.scene.fog = new THREE.FogExp2(theme.fogColor, this.worldId === 'white_silence' ? 0.00014 : 0.00015);
+    this.ambientLight.color.setHex(theme.ambientColor);
+    this.ambientLight.intensity = this.worldId === 'white_silence' ? 2.15 : 2.65;
+    this.dirLight.color.setHex(theme.sunColor);
+    this.dirLight.intensity = this.worldId === 'cinderworks' ? 3.35 : this.worldId === 'white_silence' ? 2.05 : 2.45;
+
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(24_000, 40, 24),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        uniforms: {
+          zenith: { value: new THREE.Color(theme.zenithColor) },
+          horizon: { value: new THREE.Color(theme.horizonColor) },
+          underglow: { value: new THREE.Color(theme.underglowColor) },
+        },
+        vertexShader: `varying vec3 vPosition; void main() { vPosition = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `
+          uniform vec3 zenith; uniform vec3 horizon; uniform vec3 underglow; varying vec3 vPosition;
+          void main() {
+            float h = normalize(vPosition).y * .5 + .5;
+            vec3 color = mix(underglow, horizon, smoothstep(.08, .48, h));
+            color = mix(color, zenith, smoothstep(.5, 1., h));
+            gl_FragColor = vec4(color, 1.);
+          }
+        `,
+      }),
+    );
+    sky.name = `${this.worldId}-sky`;
+    this.scene.add(sky);
+
+    // Lifecycle compatibility for code shared with the original city world.
+    this.floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial());
+    this.floorMesh.visible = false;
+    this.gridHelper = new THREE.GridHelper(1, 1);
+    this.gridHelper.visible = false;
+
+    // Smaller Null Garden cells keep its visible hex shore within one player
+    // stride of the analytic collision edge. All tile tops stay at y=0 because
+    // authoritative co-op movement uses z=0 as ground on every world.
+    const tileSize = this.worldId === 'null_garden' ? 140 : 180;
+    const surfaceBuckets = new Map<WorldSurfaceKind, Array<{ x: number; z: number }>>();
+    for (let z = tileSize * .5; z < GAME_HEIGHT; z += tileSize) {
+      for (let x = tileSize * .5; x < GAME_WIDTH; x += tileSize) {
+        const surface = sampleWorldSurface(this.worldId, x, z);
+        if (!surface.walkable) continue;
+        const bucket = surfaceBuckets.get(surface.kind) || [];
+        bucket.push({ x, z });
+        surfaceBuckets.set(surface.kind, bucket);
+      }
+    }
+
+    const surfaceColor = (kind: WorldSurfaceKind) => {
+      if (kind === 'burning') return theme.dangerColor;
+      if (kind === 'thin_ice') return 0x4f91a8;
+      if (kind === 'energy') return theme.accentColor;
+      return theme.groundColor;
+    };
+    for (const [kind, tiles] of surfaceBuckets) {
+      const geometry = this.worldId === 'null_garden'
+        ? new THREE.CylinderGeometry(tileSize * .59, tileSize * .64, 24, 6)
+        : new THREE.BoxGeometry(tileSize + 2, 24, tileSize + 2);
+      const luminous = kind === 'burning' || kind === 'energy' || kind === 'thin_ice';
+      const material = new THREE.MeshStandardMaterial({
+        color: surfaceColor(kind),
+        emissive: luminous ? surfaceColor(kind) : 0x000000,
+        emissiveIntensity: kind === 'burning' ? 1.6 : kind === 'energy' ? 1.05 : kind === 'thin_ice' ? .08 : 0,
+        roughness: this.worldId === 'white_silence' ? .42 : .82,
+        metalness: this.worldId === 'cinderworks' ? .42 : .08,
+        transparent: kind === 'energy',
+        opacity: kind === 'energy' ? .82 : 1,
+      });
+      const mesh = new THREE.InstancedMesh(geometry, material, tiles.length);
+      mesh.name = `${this.worldId}-surface-${kind}`;
+      const matrix = new THREE.Matrix4();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3(1, 1, 1);
+      tiles.forEach((tile, index) => {
+        matrix.compose(new THREE.Vector3(tile.x, -12, tile.z), quaternion, scale);
+        mesh.setMatrixAt(index, matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.receiveShadow = false;
+      this.scene.add(mesh);
+    }
+
+    // A deep under-layer is never collision. It communicates the consequence
+    // of a fall through authored holes without disguising those holes as floor.
+    if (this.worldId !== 'null_garden') {
+      const underMaterial = new THREE.MeshBasicMaterial({
+        color: this.worldId === 'cinderworks' ? 0xff3500 : 0x020713,
+        transparent: true,
+        opacity: this.worldId === 'cinderworks' ? .82 : .96,
+      });
+      const under = new THREE.Mesh(new THREE.PlaneGeometry(GAME_WIDTH * 1.4, GAME_HEIGHT * 1.4), underMaterial);
+      under.rotation.x = -Math.PI / 2;
+      under.position.set(GAME_WIDTH / 2, -260, GAME_HEIGHT / 2);
+      under.name = `${this.worldId}-abyss`;
+      this.scene.add(under);
+    }
+
+    this.setupDistinctWorldSurfaceDetails();
+    this.setupDistinctWorldObstacles();
+    this.setupDistinctWorldSkyLandmarks();
+    this.setupWorldBridgehead();
+  }
+
+  /** Low-profile instanced markings give every surface its own close-up
+   * language without introducing decorative collision or per-object updates. */
+  private setupDistinctWorldSurfaceDetails() {
+    const group = new THREE.Group();
+    group.name = `${this.worldId}-surface-details`;
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const positions: Array<{ x: number; z: number; rotation: number; scale: number }> = [];
+    const hash = (index: number, salt: number) => Math.abs(Math.sin(index * 73.137 + salt * 19.91 + getWorldDefinition(this.worldId).tier * 11.3)) % 1;
+    const wantedKind: WorldSurfaceKind = this.worldId === 'cinderworks' ? 'burning' : this.worldId === 'white_silence' ? 'thin_ice' : 'energy';
+    for (let index = 0; index < 260 && positions.length < 92; index++) {
+      const x = 220 + hash(index, .2) * (GAME_WIDTH - 440);
+      const z = 220 + hash(index, .8) * (GAME_HEIGHT - 440);
+      if (sampleWorldSurface(this.worldId, x, z).kind !== wantedKind) continue;
+      positions.push({ x, z, rotation: hash(index, 1.7) * Math.PI, scale: .65 + hash(index, 2.4) * .9 });
+    }
+    if (this.worldId === 'cinderworks' && positions.length > 0) {
+      const material = new THREE.MeshBasicMaterial({ color: 0xffc04a, transparent: true, opacity: .78, toneMapped: false });
+      const cracks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, positions.length * 2);
+      positions.forEach((position, index) => {
+        const y = 1.5;
+        for (let branch = 0; branch < 2; branch++) {
+          quaternion.setFromEuler(new THREE.Euler(0, position.rotation + branch * 1.12, 0));
+          matrix.compose(new THREE.Vector3(position.x, y, position.z), quaternion, new THREE.Vector3(105 * position.scale, 2, 5));
+          cracks.setMatrixAt(index * 2 + branch, matrix);
+        }
+      });
+      cracks.instanceMatrix.needsUpdate = true; cracks.name = 'cinderworks-heat-fissures'; group.add(cracks);
+    } else if (this.worldId === 'white_silence' && positions.length > 0) {
+      const material = new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: .46, toneMapped: false, side: THREE.DoubleSide });
+      const fractures = new THREE.InstancedMesh(new THREE.RingGeometry(.58, 1, 7), material, positions.length);
+      positions.forEach((position, index) => {
+        quaternion.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, position.rotation));
+        matrix.compose(new THREE.Vector3(position.x, 2.2, position.z), quaternion, new THREE.Vector3(36 * position.scale, 36 * position.scale * .72, 1));
+        fractures.setMatrixAt(index, matrix);
+      });
+      fractures.instanceMatrix.needsUpdate = true; fractures.name = 'white-silence-ice-fractures'; group.add(fractures);
+    } else if (positions.length > 0) {
+      const material = new THREE.MeshBasicMaterial({ color: 0xf0abfc, transparent: true, opacity: .82, toneMapped: false });
+      const glyphs = new THREE.InstancedMesh(new THREE.TorusGeometry(.72, .055, 5, 12), material, positions.length);
+      positions.forEach((position, index) => {
+        quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, position.rotation, 0));
+        matrix.compose(new THREE.Vector3(position.x, 2, position.z), quaternion, new THREE.Vector3(34 * position.scale, 34 * position.scale, 34 * position.scale));
+        glyphs.setMatrixAt(index, matrix);
+      });
+      glyphs.instanceMatrix.needsUpdate = true; glyphs.name = 'null-garden-causeway-glyphs'; group.add(glyphs);
+    }
+
+    // A second, denser layer breaks up the broad play surface. It remains only
+    // a few centimetres high, so it adds visual texture without inventing cover
+    // that the host simulation does not know about.
+    const texturePositions: Array<{ x: number; z: number; rotation: number; scale: number }> = [];
+    for (let index = 0; index < 720 && texturePositions.length < 165; index++) {
+      const x = 110 + hash(index, 3.1) * (GAME_WIDTH - 220);
+      const z = 110 + hash(index, 4.7) * (GAME_HEIGHT - 220);
+      const surface = sampleWorldSurface(this.worldId, x, z);
+      if (!surface.walkable || surface.kind === wantedKind) continue;
+      texturePositions.push({ x, z, rotation: hash(index, 5.3) * Math.PI, scale: .55 + hash(index, 6.2) * 1.1 });
+    }
+    if (this.worldId === 'cinderworks') {
+      const seams = new THREE.InstancedMesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshStandardMaterial({ color: 0x120b09, metalness: .72, roughness: .56 }),
+        texturePositions.length * 2,
+      );
+      texturePositions.forEach((position, index) => {
+        for (let branch = 0; branch < 2; branch++) {
+          quaternion.setFromEuler(new THREE.Euler(0, position.rotation + branch * Math.PI / 2, 0));
+          matrix.compose(new THREE.Vector3(position.x, 1.1, position.z), quaternion, new THREE.Vector3(76 * position.scale, 2, branch ? 3 : 5));
+          seams.setMatrixAt(index * 2 + branch, matrix);
+        }
+      });
+      seams.instanceMatrix.needsUpdate = true; seams.name = 'cinderworks-deck-seams'; group.add(seams);
+    } else if (this.worldId === 'white_silence') {
+      const ridges = new THREE.InstancedMesh(
+        new THREE.ConeGeometry(.5, 1, 5),
+        new THREE.MeshStandardMaterial({ color: 0x102c3b, emissive: 0x071c2b, emissiveIntensity: .2, roughness: .62 }),
+        texturePositions.length,
+      );
+      texturePositions.forEach((position, index) => {
+        quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, position.rotation, 0));
+        matrix.compose(new THREE.Vector3(position.x, 3.5, position.z), quaternion, new THREE.Vector3(12 * position.scale, 7, 55 * position.scale));
+        ridges.setMatrixAt(index, matrix);
+      });
+      ridges.instanceMatrix.needsUpdate = true; ridges.name = 'white-silence-basalt-ridges'; group.add(ridges);
+    } else {
+      const veins = new THREE.InstancedMesh(
+        new THREE.TorusGeometry(.65, .04, 4, 10, Math.PI * 1.35),
+        new THREE.MeshBasicMaterial({ color: 0x6ee7b7, transparent: true, opacity: .54, toneMapped: false }),
+        texturePositions.length,
+      );
+      texturePositions.forEach((position, index) => {
+        quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, position.rotation, 0));
+        matrix.compose(new THREE.Vector3(position.x, 2.3, position.z), quaternion, new THREE.Vector3(26 * position.scale, 26 * position.scale, 26 * position.scale));
+        veins.setMatrixAt(index, matrix);
+      });
+      veins.instanceMatrix.needsUpdate = true; veins.name = 'null-garden-living-veins'; group.add(veins);
+    }
+    if (group.children.length > 0) this.scene.add(group);
+  }
+
+  private setupDistinctWorldObstacles() {
+    const obstacles = getWorldObstacles(this.worldId);
+    const theme = getWorldDefinition(this.worldId).theme;
+    for (const kind of [...new Set(obstacles.map((obstacle) => obstacle.kind))]) {
+      const batch = obstacles.filter((obstacle) => obstacle.kind === kind);
+      let geometry: THREE.BufferGeometry;
+      if (kind === 'ice_spire' || kind === 'void_crystal') geometry = new THREE.ConeGeometry(.52, 1, kind === 'void_crystal' ? 5 : 7);
+      else if (kind === 'forge_stack') geometry = new THREE.CylinderGeometry(.42, .55, 1, 10);
+      else if (kind === 'alien_root' || kind === 'garden_rib') geometry = new THREE.TorusGeometry(.38, .11, 7, 18, Math.PI * 1.3);
+      else if (kind === 'basalt' || kind === 'glacier') geometry = new THREE.DodecahedronGeometry(.58, 0);
+      else geometry = new THREE.BoxGeometry(1, 1, 1);
+      const isGlow = kind === 'furnace' || kind === 'void_crystal' || kind === 'garden_rib';
+      const material = new THREE.MeshStandardMaterial({
+        color: kind === 'ice_spire' ? 0x78b6c9 : kind === 'glacier' ? 0x426f84 : kind === 'cryo_ruin' ? 0x29485d : kind === 'void_crystal' ? 0x8b5cf6 : theme.groundColor,
+        emissive: isGlow ? theme.accentColor : 0x000000,
+        emissiveIntensity: isGlow ? 1.1 : 0,
+        roughness: this.worldId === 'white_silence' ? .28 : .72,
+        metalness: this.worldId === 'cinderworks' ? .5 : .1,
+      });
+      const mesh = new THREE.InstancedMesh(geometry, material, batch.length);
+      mesh.name = `${this.worldId}-landmark-${kind}`;
+      const matrix = new THREE.Matrix4();
+      const quaternion = new THREE.Quaternion();
+      batch.forEach((obstacle, index) => {
+        const width = Math.max(34, obstacle.width);
+        const depth = Math.max(34, obstacle.height);
+        const height = Math.max(45, obstacle.elevation);
+        quaternion.setFromEuler(new THREE.Euler(0, ((index * 37) % 180) * Math.PI / 180, kind === 'alien_root' ? Math.PI / 2 : 0));
+        matrix.compose(
+          new THREE.Vector3(obstacle.x + obstacle.width / 2, height / 2, obstacle.y + obstacle.height / 2),
+          quaternion,
+          new THREE.Vector3(width, height, depth),
+        );
+        mesh.setMatrixAt(index, matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      this.scene.add(mesh);
+    }
+    this.setupDistinctWorldObstacleDetails(obstacles);
+  }
+
+  /** Secondary landmark pieces sit completely inside the authoritative AABBs.
+   * They make the worlds richer while keeping every apparent wall honest. */
+  private setupDistinctWorldObstacleDetails(obstacles: ReturnType<typeof getWorldObstacles>) {
+    const authored = obstacles.filter(obstacle => obstacle.kind !== 'bridge_pylon');
+    if (authored.length === 0) return;
+    const group = new THREE.Group(); group.name = `${this.worldId}-landmark-details`;
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    if (this.worldId === 'cinderworks') {
+      const bands = new THREE.InstancedMesh(new THREE.CylinderGeometry(.5, .5, 1, 10), new THREE.MeshBasicMaterial({ color: 0xff6a1a, toneMapped: false }), authored.length * 2);
+      authored.forEach((obstacle, index) => {
+        const width = Math.max(34, obstacle.width), depth = Math.max(34, obstacle.height), height = Math.max(45, obstacle.elevation);
+        for (let level = 0; level < 2; level++) {
+          matrix.compose(new THREE.Vector3(obstacle.x + obstacle.width / 2, height * (.32 + level * .39), obstacle.y + obstacle.height / 2), quaternion, new THREE.Vector3(width * .62, 5, depth * .62));
+          bands.setMatrixAt(index * 2 + level, matrix);
+        }
+      });
+      bands.instanceMatrix.needsUpdate = true; group.add(bands);
+      const stacks = authored.filter(obstacle => obstacle.kind === 'furnace' || obstacle.kind === 'forge_stack');
+      const caps = new THREE.InstancedMesh(new THREE.ConeGeometry(.5, 1, 8), new THREE.MeshStandardMaterial({ color: 0x160c09, emissive: 0xff3b0a, emissiveIntensity: .5, metalness: .65, roughness: .5 }), stacks.length * 2);
+      stacks.forEach((obstacle, index) => {
+        for (const [sideIndex, side] of [-1, 1].entries()) {
+          const size = Math.min(obstacle.width, obstacle.height) * .24;
+          matrix.compose(new THREE.Vector3(obstacle.x + obstacle.width / 2 + side * obstacle.width * .22, obstacle.elevation + size * .42, obstacle.y + obstacle.height / 2), quaternion, new THREE.Vector3(size, size * .85, size));
+          caps.setMatrixAt(index * 2 + sideIndex, matrix);
+        }
+      });
+      caps.instanceMatrix.needsUpdate = true; group.add(caps);
+    } else if (this.worldId === 'white_silence') {
+      const cores = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(.5, 0), new THREE.MeshStandardMaterial({ color: 0x0b2433, emissive: 0x0e7490, emissiveIntensity: .28, roughness: .5 }), authored.length);
+      const beacons = new THREE.InstancedMesh(new THREE.ConeGeometry(.5, 1, 6), new THREE.MeshBasicMaterial({ color: 0x67e8f9, toneMapped: false }), authored.length * 3);
+      authored.forEach((obstacle, index) => {
+        const width = Math.max(34, obstacle.width), depth = Math.max(34, obstacle.height), height = Math.max(45, obstacle.elevation);
+        matrix.compose(new THREE.Vector3(obstacle.x + obstacle.width / 2, height * .30, obstacle.y + obstacle.height / 2), quaternion, new THREE.Vector3(width * .62, height * .44, depth * .62));
+        cores.setMatrixAt(index, matrix);
+        for (let shard = 0; shard < 3; shard++) {
+          const angle = index * 1.71 + shard / 3 * Math.PI * 2;
+          const size = Math.min(width, depth) * (.12 + shard * .025);
+          quaternion.setFromEuler(new THREE.Euler(Math.sin(angle) * .22, angle, Math.cos(angle) * .22));
+          matrix.compose(new THREE.Vector3(obstacle.x + obstacle.width / 2 + Math.cos(angle) * width * .25, height * (.67 + shard * .08), obstacle.y + obstacle.height / 2 + Math.sin(angle) * depth * .25), quaternion, new THREE.Vector3(size, height * .28, size));
+          beacons.setMatrixAt(index * 3 + shard, matrix);
+        }
+      });
+      cores.instanceMatrix.needsUpdate = true; beacons.instanceMatrix.needsUpdate = true; group.add(cores, beacons);
+    } else {
+      const nodes = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.5, 1), new THREE.MeshStandardMaterial({ color: 0x07150f, emissive: 0xa3ff6f, emissiveIntensity: .8, roughness: .38 }), authored.length);
+      const halos = new THREE.InstancedMesh(new THREE.TorusGeometry(.5, .055, 5, 18), new THREE.MeshBasicMaterial({ color: 0xff4fd8, toneMapped: false }), authored.length * 2);
+      authored.forEach((obstacle, index) => {
+        const width = Math.max(34, obstacle.width), depth = Math.max(34, obstacle.height), height = Math.max(45, obstacle.elevation);
+        quaternion.identity(); matrix.compose(new THREE.Vector3(obstacle.x + obstacle.width / 2, height * .68, obstacle.y + obstacle.height / 2), quaternion, new THREE.Vector3(width * .38, height * .22, depth * .38)); nodes.setMatrixAt(index, matrix);
+        for (let ring = 0; ring < 2; ring++) {
+          quaternion.setFromEuler(new THREE.Euler(Math.PI / 2 + ring * .5, index * .72 + ring, 0));
+          matrix.compose(new THREE.Vector3(obstacle.x + obstacle.width / 2, height * (.45 + ring * .28), obstacle.y + obstacle.height / 2), quaternion, new THREE.Vector3(width * (.58 + ring * .12), depth * (.58 + ring * .12), Math.min(width, depth) * .65));
+          halos.setMatrixAt(index * 2 + ring, matrix);
+        }
+      });
+      nodes.instanceMatrix.needsUpdate = true; halos.instanceMatrix.needsUpdate = true; group.add(nodes, halos);
+    }
+    this.scene.add(group);
+  }
+
+  private setupDistinctWorldSkyLandmarks() {
+    const definition = getWorldDefinition(this.worldId);
+    const theme = definition.theme;
+    const center = new THREE.Vector3(GAME_WIDTH / 2, 900, GAME_HEIGHT / 2);
+    const celestial = new THREE.Group();
+    celestial.name = `${this.worldId}-celestial-landmark`;
+    if (this.worldId === 'cinderworks') {
+      const sun = new THREE.Mesh(new THREE.SphereGeometry(780, 24, 16), new THREE.MeshBasicMaterial({ color: theme.sunColor }));
+      sun.position.set(-7_500, 4_900, -10_500);
+      celestial.add(sun);
+    } else if (this.worldId === 'white_silence') {
+      const planet = new THREE.Mesh(new THREE.SphereGeometry(1_550, 28, 20), new THREE.MeshStandardMaterial({ color: 0xabc3ce, roughness: .92 }));
+      planet.position.set(-8_200, 5_600, -11_500);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(2_050, 3_300, 64), new THREE.MeshBasicMaterial({ color: 0xbdeaff, transparent: true, opacity: .38, side: THREE.DoubleSide, depthWrite: false }));
+      ring.position.copy(planet.position);
+      ring.rotation.set(Math.PI * .68, .18, -.12);
+      celestial.add(planet, ring);
+      for (let i = 0; i < 3; i++) {
+        const aurora = new THREE.Mesh(new THREE.PlaneGeometry(7_000, 780), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x8b5cf6 : 0x4fffd2, transparent: true, opacity: .12, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+        aurora.position.set(GAME_WIDTH / 2 + (i - 1) * 1_400, 2_300 + i * 220, -4_500);
+        aurora.rotation.x = -.18;
+        aurora.userData.auroraBaseY = aurora.position.y;
+        aurora.userData.auroraPhase = i * 1.7;
+        celestial.add(aurora);
+      }
+    } else {
+      const eclipse = new THREE.Mesh(new THREE.SphereGeometry(1_050, 30, 20), new THREE.MeshBasicMaterial({ color: 0x010104 }));
+      eclipse.position.set(-8_500, 5_200, -10_000);
+      const corona = new THREE.Mesh(new THREE.RingGeometry(1_080, 1_420, 64), new THREE.MeshBasicMaterial({ color: theme.sunColor, transparent: true, opacity: .72, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+      corona.position.copy(eclipse.position);
+      corona.lookAt(center);
+      celestial.add(corona, eclipse);
+    }
+    this.scene.add(celestial);
+
+    const particleCount = 360;
+    const positions = new Float32Array(particleCount * 3);
+    for (let index = 0; index < particleCount; index++) {
+      // Deterministic pseudo-random field: repeatable screenshots and no saved
+      // world state are both useful while iterating on authored landmarks.
+      const hash = (value: number) => Math.abs(Math.sin(value * 91.733 + definition.tier * 17.17)) % 1;
+      positions[index * 3] = hash(index + .1) * 20_000 - 4_000;
+      positions[index * 3 + 1] = 180 + hash(index + .7) * 4_800;
+      positions[index * 3 + 2] = hash(index + 1.4) * 20_000 - 4_000;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const particles = new THREE.Points(geometry, new THREE.PointsMaterial({ color: this.worldId === 'cinderworks' ? 0xff7a20 : theme.accentColor, size: this.worldId === 'cinderworks' ? 13 : 8, transparent: true, opacity: .58, depthWrite: false, blending: THREE.AdditiveBlending }));
+    particles.name = `${this.worldId}-atmosphere`;
+    this.scene.add(particles);
+  }
+
+  private setupWorldBridgehead() {
+    const definition = getWorldDefinition(this.worldId);
+    const group = new THREE.Group();
+    group.position.set(definition.bridgehead.x, 0, definition.bridgehead.y);
+    group.name = `${this.worldId}-bridgehead`;
+    const baseMaterial = new THREE.MeshStandardMaterial({ color: definition.theme.groundColor, metalness: .7, roughness: .28 });
+    const glowMaterial = new THREE.MeshBasicMaterial({ color: definition.theme.accentColor, transparent: true, opacity: .82, toneMapped: false });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(96, 120, 26, 8), baseMaterial);
+    base.position.y = 13;
+    group.add(base);
+    for (const side of [-1, 1]) {
+      const pylon = new THREE.Mesh(new THREE.BoxGeometry(22, 170, 22), baseMaterial);
+      pylon.position.set(0, 85, side * 82);
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(15, 12, 8), glowMaterial);
+      beacon.position.set(0, 174, side * 82);
+      group.add(pylon, beacon);
+    }
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(24, 80, 4), glowMaterial);
+    arrow.rotation.z = -Math.PI / 2;
+    arrow.position.set(92, 32, 0);
+    group.add(arrow);
+    this.scene.add(group);
   }
 
   /** Gives co-op's finite play space an honest physical silhouette. The top
@@ -958,9 +1392,39 @@ export class Renderer3D {
   }
 
   private updateWorldAtmosphere(position: { x: number; y: number }, deltaTime: number, gasZone?: { x: number; y: number; radius: number }) {
-    const district = getWorldDistrictAt(position.x, position.y);
     const fog = this.scene.fog as THREE.FogExp2;
     const inGas = gasZone && Math.hypot(position.x - gasZone.x, position.y - gasZone.y) <= gasZone.radius;
+
+    if (this.floatingPlatform && this.worldId !== 'neon_bastion') {
+      const definition = getWorldDefinition(this.worldId);
+      const theme = definition.theme;
+      const baseDensity = this.worldId === 'white_silence' ? .00014 : this.worldId === 'null_garden' ? .000105 : .00015;
+      const baseAmbient = this.worldId === 'white_silence' ? 2.15 : this.worldId === 'null_garden' ? 2.25 : 2.65;
+      const baseDirectional = this.worldId === 'cinderworks' ? 3.35 : this.worldId === 'white_silence' ? 2.05 : 2.35;
+      const blend = 1 - Math.exp(-deltaTime * .002);
+      fog.color.lerp(new THREE.Color(inGas ? 0x1a3d12 : theme.fogColor), blend);
+      fog.density = THREE.MathUtils.lerp(fog.density, inGas ? .0032 : baseDensity, blend);
+      this.ambientLight.color.lerp(new THREE.Color(inGas ? 0x284f18 : theme.ambientColor), blend);
+      this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, inGas ? 1.25 : baseAmbient, blend);
+      this.dirLight.color.lerp(new THREE.Color(theme.sunColor), blend);
+      this.dirLight.intensity = THREE.MathUtils.lerp(this.dirLight.intensity, inGas ? .45 : baseDirectional, blend);
+
+      const atmosphere = this.scene.getObjectByName(`${this.worldId}-atmosphere`);
+      if (atmosphere) atmosphere.rotation.y += deltaTime * (this.worldId === 'null_garden' ? .000025 : .000012);
+      const celestial = this.scene.getObjectByName(`${this.worldId}-celestial-landmark`);
+      if (celestial) {
+        celestial.rotation.y += deltaTime * (this.worldId === 'null_garden' ? .000004 : .0000015);
+        celestial.traverse(child => {
+          if (child.userData.auroraBaseY === undefined) return;
+          child.position.y = child.userData.auroraBaseY + Math.sin(performance.now() * .00035 + child.userData.auroraPhase) * 75;
+          const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
+          if (material) material.opacity = .1 + (Math.sin(performance.now() * .00055 + child.userData.auroraPhase) + 1) * .035;
+        });
+      }
+      return;
+    }
+
+    const district = getWorldDistrictAt(position.x, position.y);
 
     const targetFog = inGas ? new THREE.Color(0x1a3d12) : new THREE.Color(district.skyColor);
     const targetDensity = inGas ? 0.0032 : 0.00018;
@@ -3275,6 +3739,20 @@ export class Renderer3D {
         && Math.hypot(p.velocity.x, p.velocity.y) > 20) {
         this.orientProjectileAlongFlightVector(mesh, p.rotation, p.presentationPitch);
       }
+      if (visualKind === 'cinderhex_engine') {
+        const rune = mesh.getObjectByName('cinderhex-rune');
+        if (rune) rune.rotation.z = animationTime * 11;
+      } else if (visualKind === 'riftspike_array') {
+        const gate = mesh.getObjectByName('riftspike-gate');
+        if (gate) gate.rotation.z = animationTime * 8;
+      } else if (visualKind === 'dawnwall_cannon') {
+        const pulse = .94 + Math.sin(animationTime * 18) * .08;
+        mesh.traverse(node => { if (node.name === 'dawnwall-halo') node.scale.setScalar(pulse); });
+      } else if (visualKind === 'goreline_repeater') {
+        const pulse = .96 + Math.sin(animationTime * 24) * .06;
+        const tip = mesh.getObjectByName('goreline-tip');
+        if (tip) tip.scale.setScalar(pulse);
+      }
 
       // A projectile can be perfectly valid in gameplay while spawning inside
       // the first-person camera. Fade/scale it in only after it clears a small
@@ -3725,6 +4203,107 @@ export class Renderer3D {
       exhaust.rotation.x = -Math.PI / 2;
       exhaust.position.z = -radius * 2.2;
       group.add(exhaust);
+      return group;
+    }
+
+    // WINTERGLASS PROJECTOR — compact crystalline spray shards. Gameplay is
+    // sampled as an instant cone, but replicated presentation-only rounds use
+    // this mesh so the stream remains visible without applying damage twice.
+    if (weaponId === 'winterglass_projector') {
+      const group = new THREE.Group();
+      const crystal = new THREE.Mesh(
+        new THREE.OctahedronGeometry(radius * .72, 0),
+        new THREE.MeshStandardMaterial({
+          color: 0xbff5ff,
+          emissive: color,
+          emissiveIntensity: 1.9,
+          metalness: .18,
+          roughness: .08,
+          transparent: true,
+          opacity: .9,
+        }),
+      );
+      crystal.scale.set(.65, .65, 2.1);
+      group.add(crystal);
+      const frostHalo = new THREE.Mesh(
+        new THREE.OctahedronGeometry(radius * 1.05, 0),
+        new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: .48, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      frostHalo.scale.set(.7, .7, 2.25);
+      group.add(frostHalo);
+      return group;
+    }
+
+    // GORELINE REPEATER — a predatory crimson flechette with a split barb.
+    if (weaponId === 'goreline_repeater') {
+      const group = new THREE.Group();
+      const bloodMetal = new THREE.MeshStandardMaterial({ color: 0x3f0714, emissive: color, emissiveIntensity: 1.45, metalness: .82, roughness: .18 });
+      const hot = new THREE.MeshBasicMaterial({ color: 0xffd6df, transparent: true, opacity: .94, blending: THREE.AdditiveBlending, depthWrite: false });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(radius * .34, radius * 2.8, 4, 8), bloodMetal);
+      body.rotation.x = Math.PI / 2; group.add(body);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(radius * .72, radius * 2.1, 5), hot);
+      tip.name = 'goreline-tip'; tip.rotation.x = Math.PI / 2; tip.position.z = radius * 2.25; group.add(tip);
+      for (const side of [-1, 1]) {
+        const barb = new THREE.Mesh(new THREE.ConeGeometry(radius * .28, radius * 1.25, 4), bloodMetal);
+        barb.rotation.set(Math.PI / 2, 0, side * .62); barb.position.set(side * radius * .55, 0, -radius * 1.15); group.add(barb);
+      }
+      return group;
+    }
+
+    // RIFTSPIKE ARRAY — three phase-locked needles wrapped around a dark core.
+    if (weaponId === 'riftspike_array') {
+      const group = new THREE.Group();
+      const phase = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .88, blending: THREE.AdditiveBlending, depthWrite: false });
+      const voidMaterial = new THREE.MeshStandardMaterial({ color: 0x120726, emissive: 0x6d28d9, emissiveIntensity: 1.1, metalness: .72, roughness: .16 });
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(radius * .18, radius * .18, radius * 4.6, 6), voidMaterial);
+      core.rotation.x = Math.PI / 2; group.add(core);
+      for (let spike = 0; spike < 3; spike++) {
+        const angle = spike / 3 * Math.PI * 2;
+        const needle = new THREE.Mesh(new THREE.ConeGeometry(radius * .25, radius * 4.2, 4), spike === 1 ? new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false }) : phase);
+        needle.rotation.x = Math.PI / 2;
+        needle.position.set(Math.cos(angle) * radius * .58, Math.sin(angle) * radius * .58, radius * .35);
+        group.add(needle);
+      }
+      const gate = new THREE.Mesh(new THREE.TorusGeometry(radius * .82, Math.max(.35, radius * .07), 6, 18), phase);
+      gate.name = 'riftspike-gate'; gate.position.z = -radius * 1.55; group.add(gate);
+      return group;
+    }
+
+    // DAWNWALL CANNON — a miniature solar ram with shield vanes.
+    if (weaponId === 'dawnwall_cannon') {
+      const group = new THREE.Group();
+      const solar = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
+      const armor = new THREE.MeshStandardMaterial({ color: 0x713f12, emissive: color, emissiveIntensity: 1.25, metalness: .86, roughness: .22 });
+      const core = new THREE.Mesh(new THREE.CapsuleGeometry(radius * .38, radius * 2.8, 4, 9), armor);
+      core.rotation.x = Math.PI / 2; group.add(core);
+      for (let vane = 0; vane < 4; vane++) {
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(radius * .16, radius * 1.5, radius * 1.9), vane % 2 ? solar : armor);
+        panel.rotation.z = vane * Math.PI / 2; panel.position.z = -radius * .15; group.add(panel);
+      }
+      for (const z of [-radius * 1.5, radius * 1.35]) {
+        const halo = new THREE.Mesh(new THREE.TorusGeometry(radius * .82, Math.max(.4, radius * .08), 7, 20), solar);
+        halo.name = 'dawnwall-halo'; halo.position.z = z; group.add(halo);
+      }
+      const sun = new THREE.Mesh(new THREE.SphereGeometry(radius * .32, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false }));
+      sun.position.z = radius * 2.15; group.add(sun);
+      return group;
+    }
+
+    // CINDERHEX ENGINE — a molten hex slug with orbiting curse fragments.
+    if (weaponId === 'cinderhex_engine') {
+      const group = new THREE.Group();
+      const ember = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
+      const char = new THREE.MeshStandardMaterial({ color: 0x281006, emissive: 0xea580c, emissiveIntensity: 1.7, metalness: .48, roughness: .3 });
+      const slug = new THREE.Mesh(new THREE.CylinderGeometry(radius * .62, radius * .42, radius * 3.7, 6), char);
+      slug.rotation.x = Math.PI / 2; group.add(slug);
+      const rune = new THREE.Mesh(new THREE.TorusGeometry(radius * .68, Math.max(.4, radius * .075), 5, 6), ember);
+      rune.name = 'cinderhex-rune'; rune.position.z = radius * 1.3; group.add(rune);
+      for (let fragment = 0; fragment < 3; fragment++) {
+        const angle = fragment / 3 * Math.PI * 2;
+        const coal = new THREE.Mesh(new THREE.TetrahedronGeometry(radius * .3, 0), fragment === 0 ? ember : char);
+        coal.position.set(Math.cos(angle) * radius * .95, Math.sin(angle) * radius * .95, -radius * .65);
+        group.add(coal);
+      }
       return group;
     }
 

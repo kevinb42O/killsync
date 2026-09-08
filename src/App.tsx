@@ -9,6 +9,7 @@ import { AchievementsPage } from './components/AchievementsPage';
 import { ShopMenu } from './components/ShopMenu';
 import { ManualMultiplayerSetup, MultiplayerLaunch } from './components/ManualMultiplayerSetup';
 import { MultiplayerArena } from './components/MultiplayerArena';
+import { SoloRunSetup } from './components/SoloRunSetup';
 import { GameState, Inventory, ViewMode } from './types';
 import { soundManager } from './game/SoundManager';
 import { PERMANENT_UPGRADES, OPERATOR_DEFINITIONS, WEAPON_DEFINITIONS } from './constants';
@@ -33,6 +34,7 @@ import {
   getAccountXPRequired
 } from './game/xpProgression';
 import { CONTROL_SCHEME_DETAILS, ControlScheme, getCoopSlideBinding, getMovementBindings, parseControlScheme } from './game/controls';
+import { importCoopOwnerRecoveryCode } from './game/multiplayer/CoopOwnerIdentity';
 
 const EMPTY_INVENTORY: Inventory = { armorTier: 0, hasRevive: false, nukeCount: 0 };
 
@@ -225,6 +227,24 @@ export default function App() {
       cheatFeedbackTimerRef.current = null;
     }, 3000);
   }, []);
+
+  // Private owner provisioning is intentionally separate from the visible
+  // admin dashboard. Anyone may open the importer, but only the matching
+  // recovery key can create the credential accepted by co-op hosts.
+  useEffect(() => {
+    const provisionOwner = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey && event.shiftKey && event.code === 'KeyO')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const recoveryCode = window.prompt('Import KILLSYNC owner recovery code');
+      if (!recoveryCode) return;
+      void importCoopOwnerRecoveryCode(recoveryCode)
+        .then(() => showCheatFeedback('Owner identity installed on this browser.'))
+        .catch(error => window.alert(error instanceof Error ? error.message : 'Owner identity import failed.'));
+    };
+    window.addEventListener('keydown', provisionOwner);
+    return () => window.removeEventListener('keydown', provisionOwner);
+  }, [showCheatFeedback]);
 
   useEffect(() => {
     return () => {
@@ -925,6 +945,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameState, showCheatFeedback]);
 
+  // Legacy top-down single-player entry point. It is intentionally retained
+  // for possible future reuse, but the main menu now launches co-op practice.
   const startGame = () => {
     soundManager.playUIClick();
     if (engineRef.current) {
@@ -1516,6 +1538,7 @@ export default function App() {
 
       {/* HUD */}
       {gameState === 'PLAYING' && <GameHUD engine={engineRef.current} />}
+      {gameState === 'SOLO_SETUP' && <SoloRunSetup onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
       {gameState === 'MULTIPLAYER_SETUP' && <ManualMultiplayerSetup initialRoomCode={initialRoomQuery.current} onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
       {gameState === 'MULTIPLAYER_PLAYING' && multiplayerLaunch && <MultiplayerArena launch={multiplayerLaunch} controlScheme={controlScheme} onExit={() => { setMultiplayerLaunch(null); setGameState('MENU'); }} />}
 
@@ -1710,7 +1733,7 @@ export default function App() {
                     onClick={(e) => {
                       triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
                       soundManager.playUIClick();
-                      setTimeout(() => startGame(), 400);
+                      setTimeout(() => setGameState('SOLO_SETUP'), 400);
                     }}
                     onMouseEnter={() => soundManager.playUIHover()}
                     className="group relative flex items-center h-14 cursor-pointer overflow-hidden"
@@ -1725,7 +1748,7 @@ export default function App() {
                       <div className="w-8 h-8 rounded-sm bg-black/20 flex items-center justify-center mr-4 group-hover:bg-black/10 transition-colors">
                         <Play size={16} fill="currentColor" className="text-black ml-0.5" />
                       </div>
-                      <span className="text-black font-black text-sm uppercase tracking-[0.15em]">{hasExfillCarryover ? 'Resume Run' : 'Initialize Run'}</span>
+                      <span className="text-black font-black text-sm uppercase tracking-[0.15em]">Initialize Run</span>
                       <ChevronRight size={18} className="text-black/40 ml-auto group-hover:translate-x-1 transition-transform" />
                     </div>
                     {/* Bottom accent line */}

@@ -70,6 +70,9 @@ export interface Enemy extends Entity {
   presentationFacingAngle?: number;
   presentationDeathProgress?: number;
   presentationAttackCharge?: number;
+  /** Co-op world faction skin; gameplay still uses the compact shared role. */
+  presentationWorldId?: 'neon_bastion' | 'cinderworks' | 'white_silence' | 'null_garden';
+  presentationArchetypeName?: string;
   /** Solo-mode authored attack state. Co-op carries equivalent state in its
    * authoritative snapshot rather than trusting renderer-local timers. */
   attackCooldownMs?: number;
@@ -226,7 +229,7 @@ export interface OperatorDefinition {
   colorBoots: string;
 }
 
-export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'TREASURE' | 'PERMANENT_UPGRADES' | 'OPERATOR_SELECT' | 'PAUSED' | 'INTEL_ARCHIVE' | 'EXFILL_SUMMARY' | 'ADMIN_DASHBOARD' | 'WAVE_UPGRADE' | 'SHOP' | 'ACHIEVEMENTS' | 'SETTINGS' | 'MULTIPLAYER_SETUP' | 'MULTIPLAYER_PLAYING';
+export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'TREASURE' | 'PERMANENT_UPGRADES' | 'OPERATOR_SELECT' | 'PAUSED' | 'INTEL_ARCHIVE' | 'EXFILL_SUMMARY' | 'ADMIN_DASHBOARD' | 'WAVE_UPGRADE' | 'SHOP' | 'ACHIEVEMENTS' | 'SETTINGS' | 'SOLO_SETUP' | 'MULTIPLAYER_SETUP' | 'MULTIPLAYER_PLAYING';
 
 export interface Inventory {
   armorTier: number; // 0=none, 1=tier1, 2=tier2, 3=tier3

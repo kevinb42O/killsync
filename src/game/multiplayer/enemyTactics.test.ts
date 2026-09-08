@@ -5,6 +5,10 @@ import { ENEMY_ATTACK_PROFILES, type EnemyType } from '../combat/enemyDomain';
 
 const setup = (type: EnemyType = 'ranged', distance = 500) => {
   const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff' }]);
+  // These unit cases isolate one tactical archetype from the persistent gas
+  // enclave that is present in normal gameplay.
+  simulation['enemies'] = [];
+  simulation['gasEnclave'] = undefined;
   const player = simulation.createSnapshot().players[0];
   simulation['spawnEnemy'](type, 'host', 1, { x: player.x + distance, y: player.y });
   return simulation;

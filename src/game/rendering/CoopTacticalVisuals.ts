@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import type { CoopPing, CoopSnapshot } from '../multiplayer/CoopSimulation';
+import type { CoopArtifactEffectSnapshot, CoopPing, CoopSnapshot } from '../multiplayer/CoopSimulation';
+import { resolveCoopMissionNavigationTarget } from '../multiplayer/CoopFieldMissions';
 import { COOP_UPLINK_RADIUS } from '../multiplayer/CoopRunDirector';
 
 export class CoopTacticalVisuals {
@@ -116,6 +117,76 @@ export class CoopTacticalVisuals {
       beaconCore.material.opacity = .34 * pulse * lockedPower;
       beaconHalo.material.opacity = .065 * pulse * lockedPower;
     }
+    const missionColors = {
+      toxic_hunt: '#4ade80', demolition: '#fb7185', hostage_recovery: '#fbbf24',
+      signal_hijack: '#22d3ee', courier_intercept: '#c084fc',
+    } as const;
+    for (const site of snapshot.fieldMissions?.sites || []) {
+      if (site.state !== 'available') continue;
+      const key = `field-mission-pickup-${site.id}`;
+      active.add(key);
+      const beacon = this.getMissionBeacon(key, missionColors[site.kind], 'pickup');
+      this.updateMissionBeacon(beacon, site.x, site.y, elapsedMs, 44, true);
+    }
+    const fieldMission = snapshot.fieldMissions?.active;
+    if (fieldMission) {
+      const color = missionColors[fieldMission.kind];
+      const navigationTarget = resolveCoopMissionNavigationTarget(fieldMission, snapshot.enemies);
+      if (navigationTarget) {
+        const key = `field-mission-objective-${fieldMission.id}`;
+        active.add(key);
+        const beacon = this.getMissionBeacon(key, color, 'objective');
+        const defending = fieldMission.points.some(point => point.state === 'defending');
+        this.updateMissionBeacon(beacon, navigationTarget.x, navigationTarget.y, elapsedMs, defending ? 96 : 72, true);
+      }
+      if (fieldMission.kind === 'demolition') {
+        for (const [pointIndex, point] of fieldMission.points.entries()) {
+          if (point.state === 'locked') continue;
+          const key = `field-mission-demolition-${fieldMission.id}-${point.id}`;
+          active.add(key);
+          const charge = this.getDemolitionCharge(key);
+          const isCurrentPoint = (fieldMission.stage.endsWith('_a') ? pointIndex === 0 : pointIndex === 1);
+          const progress = isCurrentPoint ? Math.max(0, Math.min(1, fieldMission.progress / Math.max(1, fieldMission.required))) : point.state === 'completed' ? 1 : 0;
+          this.updateDemolitionCharge(charge, point.x, point.y, point.state, progress, elapsedMs);
+        }
+      }
+      for (const drive of fieldMission.drives) {
+        if (drive.collected) continue;
+        const key = `field-mission-drive-${drive.id}`;
+        active.add(key);
+        const beacon = this.getMissionBeacon(key, '#c084fc', 'drive');
+        this.updateMissionBeacon(beacon, drive.x, drive.y, elapsedMs, 25, false);
+      }
+      if (fieldMission.hostage && fieldMission.hostage.state !== 'secured') {
+        const hostage = fieldMission.hostage;
+        const carrier = hostage.carrierId ? snapshot.players.find(player => player.id === hostage.carrierId) : undefined;
+        const carrierAngle = carrier?.angle || 0;
+        const hostageX = carrier ? carrier.x - Math.cos(carrierAngle) * 23 + Math.cos(carrierAngle + Math.PI / 2) * 9 : hostage.x;
+        const hostageY = carrier ? carrier.y - Math.sin(carrierAngle) * 23 + Math.sin(carrierAngle + Math.PI / 2) * 9 : hostage.y;
+        const key = `field-mission-hostage-${fieldMission.id}`;
+        active.add(key);
+        const beacon = this.getMissionBeacon(key, '#fbbf24', 'hostage');
+        this.updateMissionBeacon(beacon, hostageX, hostageY, elapsedMs, hostage.state === 'carried' ? 18 : 42, hostage.state !== 'carried');
+        const rig = beacon.getObjectByName('marker')!;
+        rig.rotation.y = carrier ? -carrierAngle + Math.PI / 2 : elapsedMs / 1_400;
+        rig.scale.y = hostage.state === 'captive' ? .74 : 1;
+        const restraint = rig.getObjectByName('hostage-restraint') as THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+        if (restraint) restraint.visible = hostage.state !== 'carried';
+        if (hostage.state === 'carried') {
+          const recovery = fieldMission.points[1];
+          const recoveryKey = `field-mission-hostage-recovery-${fieldMission.id}`;
+          active.add(recoveryKey);
+          const recoveryBeacon = this.getMissionBeacon(recoveryKey, '#fde68a', 'exfil');
+          this.updateMissionBeacon(recoveryBeacon, recovery.x, recovery.y, elapsedMs, 125, true);
+        }
+      }
+    }
+    if (snapshot.privateExfil?.state === 'inbound') {
+      const key = 'private-exfil-inbound';
+      active.add(key);
+      const beacon = this.getMissionBeacon(key, '#f59e0b', 'exfil');
+      this.updateMissionBeacon(beacon, snapshot.privateExfil.x, snapshot.privateExfil.y, elapsedMs, 90, true);
+    }
     for (const hazard of snapshot.hazards || []) {
       const key = `hazard-${hazard.id}`;
       active.add(key);
@@ -143,6 +214,34 @@ export class CoopTacticalVisuals {
       marker.rotation.y = elapsedMs / (hazard.kind === 'ambush' ? 90 : 180);
       marker.scale.setScalar(hazard.radius * (.10 + progress * .055));
       marker.material.opacity = detonated ? 0 : .35 + progress * .6;
+    }
+    for (const effect of snapshot.artifactEffects || []) {
+      const key = `artifact-${effect.id}`;
+      active.add(key);
+      const zone = this.getArtifactZone(key, effect.kind);
+      zone.position.set(effect.x, 3, effect.y);
+      const color = effect.kind === 'stormcall' ? '#60a5fa' : effect.kind === 'dawnwall' ? '#fbbf24' : effect.kind === 'emberling' ? '#fde68a' : '#fb923c';
+      const pulse = .88 + Math.sin(elapsedMs * (effect.kind === 'stormcall' ? .018 : .009)) * .12;
+      const ring = zone.getObjectByName('ring') as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+      const fill = zone.getObjectByName('fill') as THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>;
+      const inner = zone.getObjectByName('inner') as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+      const marker = zone.getObjectByName('marker') as THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshBasicMaterial>;
+      ring.material.color.set(color); fill.material.color.set(color); inner.material.color.set(effect.empowered ? '#fff7ed' : color); marker.material.color.set(color);
+      ring.scale.setScalar(effect.radius * pulse); fill.scale.setScalar(effect.radius); inner.scale.setScalar(effect.radius * (.3 + .12 * pulse));
+      ring.material.opacity = effect.kind === 'dawnwall' ? .9 : .65; fill.material.opacity = effect.kind === 'dawnwall' ? .11 : .055; inner.material.opacity = .6;
+      marker.visible = effect.kind === 'hellseed' || effect.kind === 'emberling';
+      marker.position.y = effect.kind === 'emberling' ? 18 + Math.sin(elapsedMs * .012) * 4 : 34 + Math.sin(elapsedMs * .008) * 5;
+      marker.rotation.y = elapsedMs * (effect.kind === 'emberling' ? .009 : .004);
+      marker.scale.setScalar(effect.kind === 'emberling' ? 8 : effect.empowered ? 18 : 13);
+      const signature = zone.getObjectByName('artifact-signature') as THREE.Group;
+      signature.scale.setScalar(effect.radius * (effect.kind === 'emberling' ? .9 : 1));
+      signature.rotation.y = elapsedMs * (effect.kind === 'stormcall' ? .0028 : effect.kind === 'dawnwall' ? -.00045 : .0018);
+      const signaturePulse = .88 + Math.sin(elapsedMs * (effect.kind === 'stormcall' ? .015 : .01)) * .12;
+      signature.traverse(node => {
+        if (!(node instanceof THREE.Mesh)) return;
+        const material = node.material as THREE.MeshBasicMaterial;
+        if (material.transparent) material.opacity = (material.userData.baseOpacity as number || .62) * signaturePulse;
+      });
     }
     for (const ping of snapshot.pings || []) {
       const key = `ping-${ping.id}`;
@@ -178,6 +277,64 @@ export class CoopTacticalVisuals {
   dispose() {
     for (const zone of this.zones.values()) this.disposeZone(zone);
     this.zones.clear();
+  }
+
+  /** Each persistent class artifact gets a recognizable world silhouette in
+   * addition to its exact gameplay-radius floor ring. All dimensions below
+   * are normalized and scaled by the authoritative effect radius in update. */
+  private getArtifactZone(key: string, kind: CoopArtifactEffectSnapshot['kind']) {
+    const existing = this.zones.get(key);
+    if (existing) return existing;
+    const group = this.getZone(key, false, 'artifact');
+    const signature = new THREE.Group(); signature.name = 'artifact-signature'; group.add(signature);
+    const color = kind === 'stormcall' ? '#60a5fa' : kind === 'dawnwall' ? '#fbbf24' : kind === 'emberling' ? '#fde68a' : '#fb923c';
+    const glow = (value = color, opacity = .62) => {
+      const material = new THREE.MeshBasicMaterial({ color: value, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+      material.userData.baseOpacity = opacity;
+      return material;
+    };
+
+    if (kind === 'stormcall') {
+      signature.userData.artifactKind = 'stormcall-crown';
+      for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(.34 + ringIndex * .22, .014 + ringIndex * .004, 6, 36), glow(ringIndex === 1 ? '#e0f2fe' : color, .55 + ringIndex * .1));
+        ring.rotation.x = Math.PI / 2; ring.position.y = .23 + ringIndex * .09; ring.rotation.z = ringIndex * .42; signature.add(ring);
+      }
+      for (let rodIndex = 0; rodIndex < 4; rodIndex++) {
+        const angle = rodIndex / 4 * Math.PI * 2;
+        const rod = new THREE.Mesh(new THREE.ConeGeometry(.028, .30, 5), glow('#ffffff', .82));
+        rod.position.set(Math.cos(angle) * .58, .18, Math.sin(angle) * .58); signature.add(rod);
+      }
+    } else if (kind === 'dawnwall') {
+      signature.userData.artifactKind = 'dawnwall-bastion';
+      for (let panelIndex = 0; panelIndex < 12; panelIndex++) {
+        const angle = panelIndex / 12 * Math.PI * 2;
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(.22, .28, .025), glow(panelIndex % 3 === 0 ? '#fff7d6' : color, panelIndex % 3 === 0 ? .88 : .54));
+        panel.position.set(Math.cos(angle) * .91, .15, Math.sin(angle) * .91); panel.rotation.y = -angle; signature.add(panel);
+      }
+      const crown = new THREE.Mesh(new THREE.TorusGeometry(.48, .022, 6, 28), glow('#fff7d6', .78));
+      crown.rotation.x = Math.PI / 2; crown.position.y = .34; signature.add(crown);
+    } else if (kind === 'hellseed') {
+      signature.userData.artifactKind = 'hellseed-crown';
+      const seed = new THREE.Mesh(new THREE.IcosahedronGeometry(.13, 0), glow('#fff7ed', .88)); seed.position.y = .20; signature.add(seed);
+      for (let thornIndex = 0; thornIndex < 8; thornIndex++) {
+        const angle = thornIndex / 8 * Math.PI * 2;
+        const thorn = new THREE.Mesh(new THREE.ConeGeometry(.035, .28 + thornIndex % 2 * .1, 5), glow(thornIndex % 2 ? color : '#7c2d12', .68));
+        thorn.position.set(Math.cos(angle) * .34, .14, Math.sin(angle) * .34); thorn.rotation.z = Math.PI * .16; thorn.rotation.y = -angle; signature.add(thorn);
+      }
+      for (const radius of [.28, .52]) {
+        const rune = new THREE.Mesh(new THREE.TorusGeometry(radius, .014, 5, 6), glow(color, .58)); rune.rotation.x = Math.PI / 2; signature.add(rune);
+      }
+    } else {
+      signature.userData.artifactKind = 'emberling-core';
+      const core = new THREE.Mesh(new THREE.DodecahedronGeometry(.22, 0), glow('#fff7d6', .9)); core.position.y = .35; signature.add(core);
+      for (let moteIndex = 0; moteIndex < 4; moteIndex++) {
+        const angle = moteIndex / 4 * Math.PI * 2;
+        const mote = new THREE.Mesh(new THREE.TetrahedronGeometry(.07, 0), glow(color, .72));
+        mote.position.set(Math.cos(angle) * .42, .25 + (moteIndex % 2) * .18, Math.sin(angle) * .42); signature.add(mote);
+      }
+    }
+    return group;
   }
 
   private getZone(key: string, objective: boolean, hazardKind?: string) {
@@ -247,6 +404,170 @@ export class CoopTacticalVisuals {
     this.scene.add(group);
     this.zones.set(key, group);
     return group;
+  }
+
+  private getMissionBeacon(key: string, color: string, kind: 'pickup' | 'objective' | 'drive' | 'hostage' | 'exfil') {
+    const existing = this.zones.get(key);
+    if (existing) return existing;
+    const group = new THREE.Group();
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(.82, 1, kind === 'pickup' ? 6 : 40),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .82, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }),
+    );
+    ring.name = 'ring'; ring.rotation.x = -Math.PI / 2; group.add(ring);
+    const beamHeight = kind === 'objective' ? 9_000 : kind === 'exfil' ? 2_400 : 850;
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(kind === 'objective' ? 7 : 1.4, kind === 'objective' ? 28 : kind === 'exfil' ? 16 : 7, beamHeight, kind === 'objective' ? 20 : 10, 1, true),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: kind === 'objective' ? .16 : .10, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, depthTest: kind !== 'objective', toneMapped: false }),
+    );
+    beam.name = 'beam'; beam.position.y = beamHeight / 2; beam.renderOrder = kind === 'objective' ? 22 : 0; group.add(beam);
+    if (kind === 'objective') {
+      const core = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.5, 6, 9_300, 10, 1, true),
+        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: .48, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, depthTest: false, toneMapped: false }),
+      );
+      core.name = 'objective-core'; core.position.y = 4_650; core.renderOrder = 23; group.add(core);
+      const bands = new THREE.Group(); bands.name = 'objective-bands';
+      for (let index = 0; index < 11; index++) {
+        const band = new THREE.Mesh(
+          new THREE.TorusGeometry(34 + index % 2 * 8, 2.8, 5, 20, Math.PI * 1.42),
+          new THREE.MeshBasicMaterial({ color: index % 3 === 0 ? '#ffffff' : color, transparent: true, opacity: .78, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }),
+        );
+        band.name = `objective-band-${index}`; band.rotation.x = Math.PI / 2; band.position.y = 320 + index * 720; band.renderOrder = 24; bands.add(band);
+      }
+      group.add(bands);
+      const crown = new THREE.Mesh(
+        new THREE.OctahedronGeometry(24, 0),
+        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: .95, wireframe: true, depthWrite: false, depthTest: false, toneMapped: false }),
+      );
+      crown.name = 'objective-crown'; crown.position.y = 150; crown.renderOrder = 25; group.add(crown);
+    }
+    if (kind === 'hostage') group.add(this.createHostageMarker());
+    else {
+      const geometry = kind === 'drive' ? new THREE.BoxGeometry(12, 5, 18)
+        : kind === 'pickup' ? new THREE.CylinderGeometry(9, 14, 28, 6)
+          : new THREE.OctahedronGeometry(kind === 'exfil' ? 16 : 11, 0);
+      const marker = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .92, wireframe: kind === 'objective' || kind === 'exfil', toneMapped: false }));
+      marker.name = 'marker'; marker.position.y = kind === 'pickup' ? 18 : 28; group.add(marker);
+    }
+    group.userData.beaconKind = kind;
+    group.name = `field-mission-${kind}-beacon`;
+    this.scene.add(group); this.zones.set(key, group); return group;
+  }
+
+  private updateMissionBeacon(group: THREE.Group, x: number, y: number, elapsedMs: number, radius: number, tall: boolean) {
+    group.position.set(x, 2, y);
+    const pulse = .88 + Math.sin(elapsedMs / 330) * .12;
+    const ring = group.getObjectByName('ring') as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+    ring.scale.setScalar(radius * pulse);
+    const beam = group.getObjectByName('beam') as THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
+    const objective = group.userData.beaconKind === 'objective';
+    beam.visible = tall; beam.material.opacity = tall ? objective ? .12 + pulse * .08 : .075 + pulse * .035 : 0;
+    const marker = group.getObjectByName('marker')!;
+    marker.rotation.y = elapsedMs / (group.userData.beaconKind === 'pickup' ? 900 : 600);
+    marker.position.y = (group.userData.beaconKind === 'hostage' ? 0 : group.userData.beaconKind === 'pickup' ? 18 : 28) + Math.sin(elapsedMs / 420) * (group.userData.beaconKind === 'hostage' ? 1.2 : 4);
+    if (objective) {
+      const core = group.getObjectByName('objective-core') as THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
+      core.material.opacity = .34 + pulse * .18;
+      const bands = group.getObjectByName('objective-bands') as THREE.Group;
+      bands.rotation.y = elapsedMs / 1_050;
+      bands.children.forEach((band, index) => {
+        band.rotation.z = elapsedMs / (1_250 + index * 45) * (index % 2 ? -1 : 1);
+        (band as THREE.Mesh).scale.setScalar(.88 + pulse * .14);
+      });
+      const crown = group.getObjectByName('objective-crown') as THREE.Mesh;
+      crown.rotation.y = elapsedMs / 430;
+      crown.rotation.z = elapsedMs / 760;
+      crown.position.y = 150 + Math.sin(elapsedMs / 240) * 12;
+    }
+  }
+
+  /** A readable, persistent charge prop. The old demolition objective was
+   * represented only by the generic navigation diamond, so arming, countdown,
+   * and the detonated site were visually indistinguishable. */
+  private getDemolitionCharge(key: string) {
+    const existing = this.zones.get(key);
+    if (existing) return existing;
+    const group = new THREE.Group();
+    group.name = 'demolition-charge-site';
+
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(26, 31, 5, 10), new THREE.MeshStandardMaterial({ color: '#24171b', emissive: '#7f1d1d', emissiveIntensity: .2, metalness: .82, roughness: .38 }));
+    pad.name = 'charge-pad'; pad.position.y = 2.5; group.add(pad);
+    const body = new THREE.Group(); body.name = 'charge-body'; body.position.y = 8; group.add(body);
+    for (const x of [-9, 0, 9]) {
+      const canister = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 26, 8), new THREE.MeshStandardMaterial({ color: '#48151c', emissive: '#fb7185', emissiveIntensity: .22, metalness: .44, roughness: .48 }));
+      canister.rotation.z = Math.PI / 2; canister.position.set(x, 7, 0); body.add(canister);
+    }
+    const controller = new THREE.Mesh(new THREE.BoxGeometry(21, 13, 12), new THREE.MeshStandardMaterial({ color: '#111827', emissive: '#fb7185', emissiveIntensity: .18, metalness: .78, roughness: .28 }));
+    controller.name = 'charge-controller'; controller.position.set(0, 15, 0); body.add(controller);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(13, 6, 1.2), new THREE.MeshBasicMaterial({ color: '#fb7185', transparent: true, opacity: .72, toneMapped: false }));
+    screen.name = 'charge-screen'; screen.position.set(0, 16, 6.5); body.add(screen);
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.4, 17, 6), new THREE.MeshStandardMaterial({ color: '#64748b', metalness: .9, roughness: .25 }));
+    antenna.position.set(9, 28, 0); body.add(antenna);
+    const status = new THREE.Mesh(new THREE.SphereGeometry(3.2, 10, 7), new THREE.MeshBasicMaterial({ color: '#fb7185', transparent: true, opacity: .9, toneMapped: false }));
+    status.name = 'charge-status'; status.position.set(-8, 16, 6.7); body.add(status);
+
+    const armingRing = new THREE.Group(); armingRing.name = 'charge-progress'; group.add(armingRing);
+    const segments: THREE.Mesh[] = [];
+    for (let index = 0; index < 16; index++) {
+      const angle = index / 16 * Math.PI * 2;
+      const segment = new THREE.Mesh(new THREE.BoxGeometry(8, 1.5, 3.5), new THREE.MeshBasicMaterial({ color: '#3f1720', transparent: true, opacity: .3, toneMapped: false, depthWrite: false }));
+      segment.position.set(Math.cos(angle) * 38, 1.3, Math.sin(angle) * 38);
+      segment.rotation.y = -angle; armingRing.add(segment); segments.push(segment);
+    }
+    const crater = new THREE.Mesh(new THREE.CircleGeometry(38, 28), new THREE.MeshBasicMaterial({ color: '#090405', transparent: true, opacity: .82, depthWrite: false, side: THREE.DoubleSide }));
+    crater.name = 'charge-crater'; crater.rotation.x = -Math.PI / 2; crater.position.y = .4; crater.visible = false; group.add(crater);
+    group.userData.progressSegments = segments;
+    this.scene.add(group); this.zones.set(key, group); return group;
+  }
+
+  private updateDemolitionCharge(group: THREE.Group, x: number, y: number, state: 'available' | 'arming' | 'defending' | 'completed', progress: number, elapsedMs: number) {
+    group.position.set(x, 2, y);
+    const detonated = state === 'completed';
+    const armed = state === 'defending';
+    const body = group.getObjectByName('charge-body') as THREE.Group;
+    const pad = group.getObjectByName('charge-pad') as THREE.Mesh;
+    const crater = group.getObjectByName('charge-crater') as THREE.Mesh;
+    body.visible = !detonated; pad.visible = !detonated; crater.visible = detonated;
+    if (detonated) return;
+
+    const fastPulse = .45 + Math.sin(elapsedMs / (armed ? 85 : 240)) * .45;
+    const status = group.getObjectByName('charge-status') as THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+    const screen = group.getObjectByName('charge-screen') as THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>;
+    status.material.color.set(armed ? '#fef2f2' : state === 'arming' ? '#fb923c' : '#fb7185');
+    status.material.opacity = armed ? .5 + fastPulse * .5 : .64 + fastPulse * .24;
+    screen.material.color.set(armed ? '#ef4444' : state === 'arming' ? '#fb923c' : '#fb7185');
+    screen.material.opacity = armed ? .55 + fastPulse * .4 : .68;
+    body.rotation.y = Math.sin(elapsedMs / 1_400) * .04;
+
+    const ratio = armed ? progress : state === 'arming' ? progress : 0;
+    const segments = group.userData.progressSegments as THREE.Mesh[];
+    const lit = Math.ceil(ratio * segments.length);
+    segments.forEach((segment, index) => {
+      const material = segment.material as THREE.MeshBasicMaterial;
+      const active = index < lit;
+      material.color.set(active ? armed ? '#ef4444' : '#fb923c' : '#3f1720');
+      material.opacity = active ? .72 + fastPulse * .2 : .3;
+    });
+  }
+
+  private createHostageMarker() {
+    const rig = new THREE.Group(); rig.name = 'marker'; rig.userData.isHostageNpc = true;
+    const clothing = new THREE.MeshStandardMaterial({ color: '#6b4f24', emissive: '#fbbf24', emissiveIntensity: .16, roughness: .82 });
+    const dark = new THREE.MeshStandardMaterial({ color: '#1f2937', emissive: '#fbbf24', emissiveIntensity: .06, roughness: .9 });
+    const skin = new THREE.MeshStandardMaterial({ color: '#d6a77a', roughness: .9 });
+    const glow = new THREE.MeshBasicMaterial({ color: '#fde68a', transparent: true, opacity: .9, toneMapped: false });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(15, 19, 9), clothing); torso.name = 'hostage-torso'; torso.position.y = 27; rig.add(torso);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 8), skin); head.name = 'hostage-head'; head.position.y = 42; rig.add(head);
+    for (const side of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(2.8, 13, 3, 7), dark); leg.name = `hostage-leg-${side}`; leg.position.set(side * 4, 10, 0); rig.add(leg);
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(2.2, 12, 3, 7), clothing); arm.name = `hostage-arm-${side}`; arm.position.set(side * 9, 27, 2); arm.rotation.z = side * .42; rig.add(arm);
+    }
+    const restraint = new THREE.Mesh(new THREE.TorusGeometry(4.2, 1.1, 5, 14), glow);
+    restraint.name = 'hostage-restraint'; restraint.position.set(0, 22, 7); restraint.rotation.x = Math.PI / 2; rig.add(restraint);
+    const outline = new THREE.Mesh(new THREE.CapsuleGeometry(11, 31, 4, 10), new THREE.MeshBasicMaterial({ color: '#fbbf24', transparent: true, opacity: .09, wireframe: true, depthWrite: false, toneMapped: false }));
+    outline.name = 'hostage-outline'; outline.position.y = 21; rig.add(outline);
+    return rig;
   }
 
   private getCaptureStationZone(key: string) {

@@ -72,6 +72,79 @@ describe('CoopSimulation firearm authority', () => {
     expect(player.weaponStates.map(weapon => [weapon.magazineAmmo, weapon.reserveAmmo])).toEqual([[12, 72], [60, 240], [8, 40], [8, 40], [60, 240]]);
   });
 
+  it.each([
+    ['neon_vanguard', 'arc_launcher', 'static', 5],
+    ['crimson_strike', 'goreline_repeater', 'fury', 100],
+    ['void_runner', 'riftspike_array', 'echo_seals', 5],
+    ['solar_guard', 'dawnwall_cannon', 'conviction', 5],
+    ['black_ice', 'winterglass_projector', 'rime', 5],
+    ['royal_inferno', 'cinderhex_engine', 'soul_fragments', 5],
+  ] as const)('binds %s to its artifact and resource without changing the four shared firearms', (operatorId, signature, resource, maximum) => {
+    const player = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId }]).createSnapshot().players[0];
+    expect(player.weaponStates.map(weapon => weapon.weaponId)).toEqual(['plasma_gun', 'assault_rifle', 'combat_shotgun', signature, 'smg']);
+    expect(player).toMatchObject({ operatorId, artifactResource: 0, artifactResourceKind: resource, artifactResourceMax: maximum, jetFuel: 100, jetActive: false });
+  });
+
+  it('executes each class spender only from its host-owned resource', () => {
+    const enemy = (id: number, x: number, y: number) => ({ id, x, y, health: 1_000, maxHealth: 1_000, type: 'basic' as const, color: '#fff', radius: 16, damage: 0, speed: 0, experienceValue: 0, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, chillStacks: 0, isHolder: false, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: 0 });
+    const cases = [
+      ['neon_vanguard', 5, 'stormcall'],
+      ['solar_guard', 5, 'dawnwall'],
+      ['royal_inferno', 5, 'hellseed'],
+    ] as const;
+    for (const [operatorId, resource, effectKind] of cases) {
+      const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId }]);
+      const player = simulation['players'].get('host')!;
+      const target = enemy(700, player.x + 100, player.y);
+      simulation['enemies'].push(target); simulation['enemySpatialIndex'].rebuild(simulation['enemies']);
+      player.selectedSlot = 3; player.selectedWeaponId = player.weaponStates[3].weaponId; player.artifactResource = resource;
+      simulation['tryArtifactSpender'](player);
+      expect(simulation.createSnapshot().artifactEffects).toContainEqual(expect.objectContaining({ kind: effectKind, ownerId: 'host' }));
+      expect(simulation.createSnapshot().combatEvents).toContainEqual(expect.objectContaining({ kind: 'artifact_cast', weaponId: effectKind, playerId: 'host' }));
+      expect(player.artifactResource).toBe(0);
+    }
+
+    const blood = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId: 'crimson_strike' }]);
+    const bloodPlayer = blood['players'].get('host')!, bloodTarget = enemy(701, bloodPlayer.x + 100, bloodPlayer.y);
+    blood['enemies'].push(bloodTarget); blood['enemySpatialIndex'].rebuild(blood['enemies']); bloodPlayer.artifactResource = 50;
+    blood['tryArtifactSpender'](bloodPlayer);
+    expect(bloodTarget.health).toBeLessThan(bloodTarget.maxHealth); expect(bloodPlayer.artifactResource).toBe(0);
+    expect(blood.createSnapshot().combatEvents).toContainEqual(expect.objectContaining({ kind: 'artifact_cast', weaponId: 'reckoning', targetX: bloodTarget.x, targetY: bloodTarget.y }));
+
+    const rift = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId: 'void_runner' }]);
+    const riftPlayer = rift['players'].get('host')!, riftTarget = enemy(702, riftPlayer.x + 100, riftPlayer.y);
+    rift['enemies'].push(riftTarget); rift['enemySpatialIndex'].rebuild(rift['enemies']); riftPlayer.artifactTargetId = riftTarget.id; riftPlayer.artifactResource = 3; riftPlayer.echoPositions = [{ x: riftPlayer.x, y: riftPlayer.y }];
+    rift['tryArtifactSpender'](riftPlayer);
+    expect(riftTarget.health).toBeLessThan(riftTarget.maxHealth); expect(riftPlayer.artifactResource).toBe(0);
+    expect(rift.createSnapshot().combatEvents).toContainEqual(expect.objectContaining({ kind: 'artifact_cast', weaponId: 'echo_collapse', targetX: riftTarget.x, targetY: riftTarget.y }));
+
+    const frost = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId: 'black_ice' }]);
+    const frostPlayer = frost['players'].get('host')!, frostTarget = enemy(703, frostPlayer.x + 100, frostPlayer.y);
+    frostTarget.chillStacks = 5; frost['enemies'].push(frostTarget); frost['enemySpatialIndex'].rebuild(frost['enemies']); frostPlayer.artifactResource = 3;
+    frost['tryArtifactSpender'](frostPlayer);
+    expect(frostTarget.health).toBeLessThan(frostTarget.maxHealth); expect(frostTarget.chillStacks).toBe(0); expect(frostPlayer.artifactResource).toBe(0);
+    expect(frost.createSnapshot().combatEvents).toContainEqual(expect.objectContaining({ kind: 'artifact_cast', weaponId: 'shatter_lance', amount: 5, targetX: frostTarget.x, targetY: frostTarget.y }));
+  });
+
+  it('keeps the Burst Pack tactical: contact and shockwaves can be cleared, but airborne station actions are rejected', () => {
+    const contact = sim(), player = contact['players'].get('host')!;
+    player.z = 60;
+    contact['enemies'].push({ id: 800, x: player.x, y: player.y, health: 100, maxHealth: 100, type: 'basic', color: '#fff', radius: 16, damage: 100, speed: 0, experienceValue: 0, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1, isHolder: false, dying: false, deathRemainingMs: 0, targetPlayerId: player.id, targetLeaseUntilMs: 10_000 });
+    contact.setInput('host', input()); contact.tick(50);
+    expect(player.health).toBe(player.maxHealth);
+
+    const shockwave = sim(), airborne = shockwave['players'].get('host')!;
+    airborne.z = 46;
+    shockwave['hazards'].push({ id: 801, enemyId: 800, kind: 'shockwave', x: airborne.x, y: airborne.y, radius: 200, damage: 30, startsAtMs: 0, resolvesAtMs: 0, color: '#fff', resolved: false });
+    shockwave.setInput('host', input()); shockwave.tick(50);
+    expect(airborne.health).toBe(airborne.maxHealth);
+
+    const station = captureOpeningStation(shockwave);
+    airborne.x = station.x; airborne.y = station.y; airborne.z = 21; airborne.coins = 5_000;
+    expect(shockwave.purchase('host', station.id, 'gas_mask')).toEqual({ code: 'alive_required' });
+    expect(shockwave.forgeWeapon('host', shockwave.createSnapshot().weaponFoundry!.id, 'plasma_gun')).toEqual({ code: 'alive_required' });
+  });
+
   it('uses magazines, auto reload, and host-side fire cadence', () => {
     const simulation = sim();
     const state = (simulation as any).players.get('host').weaponStates[0];
@@ -181,9 +254,66 @@ describe('CoopSimulation firearm authority', () => {
     expect(new Set(pellets.map(p => p.angle)).size).toBeGreaterThan(3);
     const arc = sim(); arc.setInput('host', input({ selectedSlot: 3, aiming: true })); for (let i = 0; i < 6; i++) arc.tick(50); arc.setInput('host', input({ selectedSlot: 3, aiming: true, firing: true })); arc.tick(50);
     const arcSnapshot = arc.createSnapshot();
-    expect(arcSnapshot.players[0]).toMatchObject({ selectedWeaponId: 'arc_launcher', isAiming: true });
+    expect(arcSnapshot.players[0]).toMatchObject({ selectedWeaponId: 'arc_launcher', isAiming: false });
     expect(arcSnapshot.projectiles.some(projectile => projectile.weaponId === 'arc_launcher')).toBe(false);
     expect(arcSnapshot.combatEvents).toContainEqual(expect.objectContaining({ kind: 'arc_beam', weaponId: 'arc_launcher', targetX: expect.any(Number), targetY: expect.any(Number) }));
+  });
+
+  it('replicates visible Winterglass shards without applying projectile damage twice', () => {
+    const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId: 'black_ice' }]);
+    const player = simulation['players'].get('host')!;
+    const target = {
+      id: 49, x: player.x + 100, y: player.y, health: 1_000, maxHealth: 1_000,
+      type: 'basic' as const, color: '#fff', radius: 16, damage: 0, speed: 0,
+      experienceValue: 0, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1,
+      chillStacks: 0, isHolder: false, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: 0,
+    };
+    player.selectedSlot = 3; player.selectedWeaponId = 'winterglass_projector';
+    simulation['enemies'].push(target); simulation['enemySpatialIndex'].rebuild(simulation['enemies']);
+
+    simulation['tryCastWeapon'](player, true, 1);
+    const healthAfterCone = target.health;
+    expect(healthAfterCone).toBe(1_000 - COOP_FIREARM_BY_ID.winterglass_projector.baseDamage);
+    expect(simulation.createSnapshot().projectiles).toHaveLength(3);
+    expect(simulation.createSnapshot().projectiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ weaponId: 'winterglass_projector', presentationOnly: true }),
+    ]));
+
+    simulation.tick(50);
+    expect(target.health).toBe(healthAfterCone);
+  });
+
+  it('keeps Winterglass cone damage and Shatter targeting aligned with vertical aim', () => {
+    const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId: 'black_ice' }]);
+    const player = simulation['players'].get('host')!;
+    const target = {
+      id: 50, x: player.x + 100, y: player.y, health: 1_000, maxHealth: 1_000,
+      type: 'basic' as const, color: '#fff', radius: 16, damage: 0, speed: 0,
+      experienceValue: 0, hitFlashMs: 0, hitFlashUntilMs: 0, slowMultiplier: 1,
+      chillStacks: 5, isHolder: false, dying: false, deathRemainingMs: 0, targetLeaseUntilMs: 0,
+    };
+    player.aimPitch = 1;
+    player.artifactResource = 3;
+    simulation['enemies'].push(target); simulation['enemySpatialIndex'].rebuild(simulation['enemies']);
+
+    simulation['fireWinterBreath'](player, 4);
+    simulation['castShatter'](player);
+
+    expect(target.health).toBe(1_000);
+    expect(target.chillStacks).toBe(5);
+    expect(player.artifactResource).toBe(3);
+  });
+
+  it('places Stormcall on the near side of solid world geometry', () => {
+    const obstacle = getWorldObstacles().find(candidate => candidate.kind === 'tower')!;
+    const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId: 'neon_vanguard' }]);
+    const player = simulation['players'].get('host')!;
+    player.x = obstacle.x - 30; player.y = obstacle.y + obstacle.height / 2; player.angle = 0; player.artifactResource = 5;
+
+    simulation['castStormcall'](player);
+
+    expect(simulation.createSnapshot().artifactEffects[0].x).toBeLessThan(obstacle.x);
+    expect(player.artifactResource).toBe(0);
   });
 
   it('chains Arc Launcher hits by distance then id and converts unused boss chains into core damage', () => {
@@ -199,7 +329,7 @@ describe('CoopSimulation firearm authority', () => {
     const bossSimulation = sim(), boss = enemy(99, 2000, 2000, 'titan');
     bossSimulation['enemies'].push(boss); bossSimulation['enemySpatialIndex'].rebuild(bossSimulation['enemies']);
     bossSimulation['applyArcImpact']('host', 42, boss);
-    expect(boss.health).toBeCloseTo(1000 - 42 - 42 * .18 * 3, 5);
+    expect(boss.health).toBeCloseTo(1000 - 42 - 42 * .08 * 3, 5);
   });
 
   it('stops firearm projectiles and Arc Launcher beams at solid buildings', () => {
@@ -365,7 +495,7 @@ describe('CoopSimulation encounter authority', () => {
     const simulation = sim();
     const nextId = simulation['nextEntityId'];
     for (let index = 0; index < 20; index++) simulation['spawnEnemy']('basic', 'host', index);
-    const ids = simulation.createSnapshot().enemies.map(enemy => enemy.id);
+    const ids = simulation.createSnapshot().enemies.filter(enemy => enemy.missionId === undefined).map(enemy => enemy.id);
     expect(ids).toEqual(Array.from({ length: 20 }, (_, index) => nextId + index));
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -373,11 +503,11 @@ describe('CoopSimulation encounter authority', () => {
   it('keeps the opening insertion enemy-free, then hands off to round-one topology spawns', () => {
     const simulation = sim();
     const player = simulation.createSnapshot().players[0];
-    expect(simulation.createSnapshot().enemies).toHaveLength(0);
+    expect(simulation.createSnapshot().enemies.filter(enemy => enemy.spawnPacketId !== undefined)).toHaveLength(0);
     for (let elapsed = 0; elapsed < COOP_SAFE_INSERTION_MS - 50; elapsed += 50) simulation.tick(50);
-    expect(simulation.createSnapshot().enemies).toHaveLength(0);
+    expect(simulation.createSnapshot().enemies.filter(enemy => enemy.spawnPacketId !== undefined)).toHaveLength(0);
     simulation.tick(50);
-    const enemies = simulation.createSnapshot().enemies;
+    const enemies = simulation.createSnapshot().enemies.filter(enemy => enemy.spawnPacketId !== undefined);
     expect(enemies.length).toBeGreaterThan(0);
     expect(enemies.every(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) >= 720)).toBe(true);
     expect(new Set(enemies.map(enemy => enemy.spawnPacketId)).size).toBe(1);
@@ -601,6 +731,10 @@ describe('CoopSimulation player lifecycle', () => {
     const gas = (simulation as any).gasZone;
     host.x = gas.x;
     host.y = gas.y;
+    // Isolate inhalation from the persistent Chem Commander encounter; its
+    // combat damage is covered by mission tests rather than this mask test.
+    (simulation as any).enemies = [];
+    (simulation as any).gasEnclave = undefined;
     const initialHealth = host.health;
 
     // Tick inside gas for 1 second in 50ms steps: gas mask absorbs damage, health remains 100%

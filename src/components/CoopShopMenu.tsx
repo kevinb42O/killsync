@@ -10,11 +10,11 @@ import {
 } from '../game/multiplayer/CoopBuyStation';
 import { coopItemDescriptionKey, coopItemNameKey, type CoopTextKey } from '../game/multiplayer/i18n';
 
-export type CoopShopCategoryId = 'health_armor' | 'ammunition' | 'equipment' | 'support' | 'reinforcements';
+export type CoopShopCategoryId = 'health_armor' | 'ammunition' | 'equipment' | 'support' | 'reinforcements' | 'extraction';
 
 export const COOP_SHOP_CATEGORIES: ReadonlyArray<{
   id: CoopShopCategoryId;
-  key: '1' | '2' | '3' | '4' | '5';
+  key: '1' | '2' | '3' | '4' | '5' | '6';
   labelKey: CoopTextKey;
   itemIds: readonly CoopShopItemId[];
 }> = [
@@ -23,6 +23,7 @@ export const COOP_SHOP_CATEGORIES: ReadonlyArray<{
   { id: 'equipment', key: '3', labelKey: 'shop.category.equipment', itemIds: ['emergency_reboot', 'gas_mask'] },
   { id: 'support', key: '4', labelKey: 'shop.category.support', itemIds: ['orbit_drones', 'data_scythe', 'void_aura', 'frost_aura', 'neural_pulse'] },
   { id: 'reinforcements', key: '5', labelKey: 'shop.category.reinforcements', itemIds: [] },
+  { id: 'extraction', key: '6', labelKey: 'shop.category.extraction', itemIds: ['private_exfil'] },
 ];
 
 export function coopShopCategoryForKey(key: string) {

@@ -58,6 +58,12 @@ export class SoundManager {
   private stationCaptureGain: GainNode | null = null;
   private stationCaptureFilter: BiquadFilterNode | null = null;
   private stationCaptureWasActive = false;
+  private jetpackTurbineOsc: OscillatorNode | null = null;
+  private jetpackSubOsc: OscillatorNode | null = null;
+  private jetpackNoise: AudioBufferSourceNode | null = null;
+  private jetpackNoiseFilter: BiquadFilterNode | null = null;
+  private jetpackGain: GainNode | null = null;
+  private jetpackWasActive = false;
 
   /**
    * Call this from a direct input handler before the first shot. Browsers only
@@ -276,6 +282,26 @@ export class SoundManager {
     // without adding the harsh sustained whine used by the old objectives.
     this.playTone(170, 'sine', .13, .09, 620, .004);
     this.playTone(760, 'triangle', .09, .035, -210, .003);
+  }
+
+  /** Layered class-artifact stingers. These are intentionally short so the
+   * payoff reads as powerful without masking squad callouts or sustained fire. */
+  playArtifactCast(artifactId: string) {
+    this.ensureRunning();
+    if (artifactId === 'reckoning') {
+      this.playKick(.28, .42); this.playNoise(.22, .14, 900);
+      for (let shot = 0; shot < 5; shot++) setTimeout(() => this.playTone(180 - shot * 12, 'sawtooth', .09, .075, -70, .002), shot * 34);
+    } else if (artifactId === 'echo_collapse') {
+      this.playTone(240, 'sine', .42, .16, 780, .025); this.playTone(960, 'triangle', .28, .08, -520, .01);
+    } else if (artifactId === 'shatter_lance') {
+      this.playTone(1480, 'triangle', .20, .13, 520, .002); this.playNoise(.26, .16, 5200); this.playKick(.18, .24);
+    } else if (artifactId === 'stormcall') {
+      this.playTone(92, 'sine', .48, .22, 310, .02); this.playNoise(.32, .12, 1800); this.playArcDischarge();
+    } else if (artifactId === 'dawnwall') {
+      this.playKick(.34, .34); this.playTone(150, 'square', .34, .12, 260, .008); this.playTone(620, 'sine', .45, .08, 190, .025);
+    } else if (artifactId === 'hellseed') {
+      this.playTone(105, 'sawtooth', .46, .18, -55, .012); this.playNoise(.38, .15, 720); this.playKick(.30, .35);
+    }
   }
 
   /** Plays a firearm-specific CC0 reload recording after a host-approved reload. */
@@ -552,6 +578,97 @@ export class SoundManager {
       exhaust.connect(filter); filter.connect(gain); gain.connect(this.masterGain);
       exhaust.start(t); exhaust.stop(t + .18);
     }
+  }
+
+  /**
+   * Continuous local Burst Pack engine. Repeated frame updates reuse one
+   * turbine/noise graph, so holding thrust cannot stack dozens of sound nodes.
+   * Fuel subtly lowers the turbine pitch without turning low-fuel thrust quiet.
+   */
+  updateJetpack(active: boolean, fuelRatio: number = 1) {
+    if (!active && !this.jetpackGain) return;
+    this.ensureRunning();
+    if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
+    const now = this.ctx.currentTime;
+    const fuel = Math.max(0, Math.min(1, fuelRatio));
+
+    if (active && !this.jetpackGain) {
+      this.jetpackGain = this.ctx.createGain();
+      this.jetpackGain.gain.setValueAtTime(0, now);
+      this.jetpackGain.connect(this.masterGain);
+
+      this.jetpackNoiseFilter = this.ctx.createBiquadFilter();
+      this.jetpackNoiseFilter.type = 'bandpass';
+      this.jetpackNoiseFilter.Q.value = .85;
+      this.jetpackNoiseFilter.frequency.setValueAtTime(1_050, now);
+      this.jetpackNoiseFilter.connect(this.jetpackGain);
+
+      if (!this.noiseBuffer) this.noiseBuffer = this.createNoiseBuffer();
+      if (this.noiseBuffer) {
+        this.jetpackNoise = this.ctx.createBufferSource();
+        this.jetpackNoise.buffer = this.noiseBuffer;
+        this.jetpackNoise.loop = true;
+        this.jetpackNoise.connect(this.jetpackNoiseFilter);
+        this.jetpackNoise.start(now);
+      }
+
+      this.jetpackTurbineOsc = this.ctx.createOscillator();
+      this.jetpackTurbineOsc.type = 'sawtooth';
+      this.jetpackTurbineOsc.frequency.setValueAtTime(138, now);
+      this.jetpackTurbineOsc.connect(this.jetpackGain);
+      this.jetpackTurbineOsc.start(now);
+
+      this.jetpackSubOsc = this.ctx.createOscillator();
+      this.jetpackSubOsc.type = 'sine';
+      this.jetpackSubOsc.frequency.setValueAtTime(58, now);
+      this.jetpackSubOsc.connect(this.jetpackGain);
+      this.jetpackSubOsc.start(now);
+    }
+
+    if (!this.jetpackGain) return;
+    if (active !== this.jetpackWasActive) {
+      this.jetpackGain.gain.cancelScheduledValues(now);
+      this.jetpackGain.gain.setValueAtTime(this.jetpackGain.gain.value, now);
+      // The engine is continuous and therefore needs far less peak gain than
+      // transient weapons or impacts. Keep it as a quiet movement cue beneath
+      // combat instead of letting the turbine dominate the mix.
+      this.jetpackGain.gain.linearRampToValueAtTime(active ? .016 : 0, now + (active ? .045 : .11));
+      this.jetpackWasActive = active;
+    }
+    if (active) {
+      const turbinePitch = 118 + fuel * 38;
+      this.jetpackTurbineOsc?.frequency.cancelScheduledValues(now);
+      this.jetpackTurbineOsc?.frequency.setValueAtTime(this.jetpackTurbineOsc.frequency.value, now);
+      this.jetpackTurbineOsc?.frequency.linearRampToValueAtTime(turbinePitch, now + .08);
+      this.jetpackNoiseFilter?.frequency.cancelScheduledValues(now);
+      this.jetpackNoiseFilter?.frequency.setValueAtTime(this.jetpackNoiseFilter.frequency.value, now);
+      this.jetpackNoiseFilter?.frequency.linearRampToValueAtTime(900 + fuel * 420, now + .08);
+    }
+  }
+
+  /** Tear down the persistent engine graph when leaving the arena. */
+  stopJetpack() {
+    if (this.jetpackGain && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.jetpackGain.gain.cancelScheduledValues(now);
+      this.jetpackGain.gain.setValueAtTime(0, now);
+    }
+    try {
+      this.jetpackNoise?.stop();
+      this.jetpackNoise?.disconnect();
+      this.jetpackTurbineOsc?.stop();
+      this.jetpackTurbineOsc?.disconnect();
+      this.jetpackSubOsc?.stop();
+      this.jetpackSubOsc?.disconnect();
+      this.jetpackNoiseFilter?.disconnect();
+      this.jetpackGain?.disconnect();
+    } catch {}
+    this.jetpackNoise = null;
+    this.jetpackTurbineOsc = null;
+    this.jetpackSubOsc = null;
+    this.jetpackNoiseFilter = null;
+    this.jetpackGain = null;
+    this.jetpackWasActive = false;
   }
 
   /** Wall-contact snap and lateral thrust. Pan points toward the contacted wall. */

@@ -65,6 +65,7 @@ export class ManualWebRTCSession {
   private onEvent?: ManualWebRTCSessionOptions['onEvent'];
   private onError?: ManualWebRTCSessionOptions['onError'];
   private latestStateTick = -1;
+  private remoteSessionId?: string;
   private readonly snapshotAssemblers = new Map<string, SnapshotAssembler>();
 
   constructor(options: ManualWebRTCSessionOptions) {
@@ -82,6 +83,12 @@ export class ManualWebRTCSession {
 
   get connectedPeerCount(): number {
     return [...this.peers.values()].filter(peer => peer.connection.connectionState === 'connected').length;
+  }
+
+  /** Session id controlled by the authoritative host. Owner-signed commands
+   * bind to this value so they cannot be replayed into another match. */
+  get authoritySessionId(): string {
+    return this.role === 'host' ? this.sessionId : this.remoteSessionId || this.sessionId;
   }
 
   get peerInfo(): MultiplayerPeerInfo[] {
@@ -130,6 +137,7 @@ export class ManualWebRTCSession {
   async acceptOffer(offerCode: string): Promise<string> {
     this.assertRole('guest');
     const offer = decodeSignal(offerCode, 'offer');
+    this.remoteSessionId = offer.sessionId;
     const peer = this.createPeer(offer.peerId);
     await peer.connection.setRemoteDescription(offer.description);
     await peer.connection.setLocalDescription(await peer.connection.createAnswer());
@@ -180,6 +188,26 @@ export class ManualWebRTCSession {
       sent = this.send(peer.reliableChannel, message) || sent;
     }
     return sent;
+  }
+
+  /** Reliable point-to-point delivery for private owner results and notices. */
+  sendEventTo(peerId: string, event: MultiplayerReliableEvent): boolean {
+    const peer = this.peers.get(peerId);
+    return Boolean(peer && this.send(peer.reliableChannel, JSON.stringify(event)));
+  }
+
+  /** Close one peer without disbanding the remaining co-op session. */
+  disconnectPeer(peerId: string): boolean {
+    const peer = this.peers.get(peerId);
+    if (!peer) return false;
+    peer.inputChannel?.close();
+    peer.stateChannel?.close();
+    peer.reliableChannel?.close();
+    peer.connection.close();
+    this.peers.delete(peerId);
+    this.snapshotAssemblers.delete(peerId);
+    this.notifyPeers();
+    return true;
   }
 
   close() {

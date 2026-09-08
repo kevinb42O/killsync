@@ -611,6 +611,7 @@ export function updateCoopOperatorRig(
   const isMoving = player.sprinting || player.sliding || player.z > 0.5;
   const isSliding = player.sliding;
   const isAirborne = player.z > 0.5;
+  const jetActive = Boolean(player.jetActive || player.motion?.jetActive);
   const doubleJumpSequence = player.motion?.lastDoubleJumpSequence ?? -1;
   if (doubleJumpSequence >= 0 && doubleJumpSequence !== rig.lastDoubleJumpSequence) {
     rig.lastDoubleJumpSequence = doubleJumpSequence;
@@ -631,8 +632,8 @@ export function updateCoopOperatorRig(
       flame.visible = true;
       if (coreFlame) coreFlame.visible = true;
       const flicker = 0.85 + Math.sin(elapsedMs * 0.05 + i) * 0.25;
-      const stretch = (isSliding ? 2.9 : 3.8) * flicker * (1 + doubleJumpFlare * .8);
-      const girth = (isSliding ? 2.0 : 2.5) * (0.95 + Math.sin(elapsedMs * 0.03) * 0.1) * (1 + doubleJumpFlare * .35);
+      const stretch = (isSliding ? 2.9 : jetActive ? 5.2 : 2.4) * flicker * (1 + doubleJumpFlare * .35);
+      const girth = (isSliding ? 2.0 : jetActive ? 2.8 : 1.65) * (0.95 + Math.sin(elapsedMs * 0.03) * 0.1) * (1 + doubleJumpFlare * .2);
       flame.scale.set(girth, stretch, girth);
       if (coreFlame) coreFlame.scale.set(girth * 0.65, stretch * 0.75, girth * 0.65);
     } else if (isMoving) {

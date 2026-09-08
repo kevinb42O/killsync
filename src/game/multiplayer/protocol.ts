@@ -6,8 +6,8 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v24 adds synchronized operator cosmetics to lobby and player state. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 24;
+/** v29 adds host-resolved tactical-map mission pings. */
+export const MULTIPLAYER_PROTOCOL_VERSION = 29;
 
 export type MultiplayerRole = 'host' | 'guest';
 
@@ -25,6 +25,9 @@ export interface MultiplayerInputFrame {
   /** Monotonic trigger-pull id. Repeated input frames make semi-auto fire
    * resilient to loss without allowing the host to execute an action twice. */
   fireActionId?: number;
+  /** Monotonic right-click artifact-spender request. Ordinary guns still use
+   * `aiming`; only the selected signature weapon consumes this action. */
+  altFireActionId?: number;
   /** Edge-triggered reload request, consumed by the authoritative host. */
   reloadPressed?: boolean;
   /** Held right-mouse aim state; spread is validated by the host. */
@@ -36,9 +39,12 @@ export interface MultiplayerInputFrame {
   /** Monotonic F-key press id. Manual backpack drops are collected only when
    * the host observes a new action id while the operator is in range. */
   interactActionId?: number;
-  /** One input-sequence pulse. The host permits a ground jump followed by at
-   * most one shared air action: either a double jump or a wall-jump. */
+  /** One input-sequence pulse used for the initial ground-launch impulse and
+   * discrete wall-jump attempts. */
   jumpPressed: boolean;
+  /** Held Space state. The host turns this into bounded Burst Pack thrust from
+   * the floor or in the air. Ignition and wall-jump share one aerial action. */
+  jetHeld?: boolean;
   dashPressed: boolean;
 }
 
@@ -69,9 +75,35 @@ export interface CoopPing {
   createdAtMs: number;
   expiresAtMs: number;
   remainingMs?: number;
+  /** Present for long-lived host-resolved tactical-map contract waypoints. */
+  missionSiteId?: number;
 }
 
-type MultiplayerReliableEventName = 'ready' | 'spectate' | 'roster' | 'start' | 'skin_update' | 'cast' | 'revive' | 'station_purchase' | 'station_purchase_result' | 'operator_redeploy' | 'operator_redeploy_result' | 'foundry_upgrade' | 'foundry_upgrade_result' | 'build_structure' | 'build_structure_result' | 'dismantle_structure' | 'dismantle_structure_result' | 'structure_action' | 'structure_action_result' | 'inventory_drop' | 'imprint_update' | 'leave' | 'error' | 'ping';
+export interface CoopAdminRequest {
+  id: string;
+  sessionId: string;
+  actorPlayerId: string;
+  issuedAt: number;
+  sequence: number;
+  command: string;
+  signature: string;
+}
+
+export interface CoopAdminResult {
+  requestId: string;
+  ok: boolean;
+  message: string;
+  modified?: boolean;
+}
+
+export interface CoopAdminNotice {
+  message: string;
+  kind: 'info' | 'warning' | 'kick';
+  paused?: boolean;
+  modified?: boolean;
+}
+
+type MultiplayerReliableEventName = 'ready' | 'spectate' | 'roster' | 'start' | 'skin_update' | 'cast' | 'revive' | 'station_purchase' | 'station_purchase_result' | 'operator_redeploy' | 'operator_redeploy_result' | 'foundry_upgrade' | 'foundry_upgrade_result' | 'build_structure' | 'build_structure_result' | 'dismantle_structure' | 'dismantle_structure_result' | 'structure_action' | 'structure_action_result' | 'inventory_drop' | 'imprint_update' | 'leave' | 'error' | 'ping' | 'chat' | 'admin_request' | 'admin_result' | 'admin_notice';
 
 interface MultiplayerReliableEventBase {
   type: 'event';
@@ -79,6 +111,18 @@ interface MultiplayerReliableEventBase {
 }
 
 export type MultiplayerReliableEvent =
+  | (MultiplayerReliableEventBase & {
+    event: 'admin_request';
+    payload: CoopAdminRequest;
+  })
+  | (MultiplayerReliableEventBase & {
+    event: 'admin_result';
+    payload: CoopAdminResult;
+  })
+  | (MultiplayerReliableEventBase & {
+    event: 'admin_notice';
+    payload: CoopAdminNotice;
+  })
   | (MultiplayerReliableEventBase & {
     event: 'station_purchase_result';
     payload: import('./CoopBuyStation').CoopPurchaseResult;
@@ -104,7 +148,7 @@ export type MultiplayerReliableEvent =
     payload: import('./CoopFieldEngineering').CoopStructureActionResult;
   })
   | (MultiplayerReliableEventBase & {
-  event: Exclude<MultiplayerReliableEventName, 'station_purchase_result' | 'foundry_upgrade_result' | 'operator_redeploy_result' | 'build_structure_result' | 'dismantle_structure_result' | 'structure_action_result'>;
+  event: Exclude<MultiplayerReliableEventName, 'admin_request' | 'admin_result' | 'admin_notice' | 'station_purchase_result' | 'foundry_upgrade_result' | 'operator_redeploy_result' | 'build_structure_result' | 'dismantle_structure_result' | 'structure_action_result'>;
   payload?: unknown;
   });
 
@@ -148,6 +192,7 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   clientTime: boundedInteger(frame.clientTime, Number.MAX_SAFE_INTEGER),
   firing: Boolean(frame.firing),
   fireActionId: boundedInteger(frame.fireActionId, Number.MAX_SAFE_INTEGER),
+  altFireActionId: boundedInteger(frame.altFireActionId, Number.MAX_SAFE_INTEGER),
   reloadPressed: Boolean(frame.reloadPressed),
   aiming: Boolean(frame.aiming),
   sprinting: Boolean(frame.sprinting),
@@ -155,5 +200,6 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   reviving: Boolean(frame.reviving),
   interactActionId: boundedInteger(frame.interactActionId, Number.MAX_SAFE_INTEGER),
   jumpPressed: Boolean(frame.jumpPressed),
+  jetHeld: Boolean(frame.jetHeld),
   dashPressed: Boolean(frame.dashPressed),
 });

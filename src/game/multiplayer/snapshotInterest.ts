@@ -45,7 +45,7 @@ export function createInterestSnapshot(snapshot: CoopSnapshot, playerId?: string
     items: snapshot.items.filter(interested).map(entity => quantizePosition(entity)),
     ammoCaches: snapshot.ammoCaches.filter(interested).map(entity => quantizePosition(entity)),
     hazards: (snapshot.hazards || []).filter(interested).map(hazard => ({ ...quantizePosition(hazard), radius: q(hazard.radius) })),
-    combatEvents: snapshot.combatEvents.filter(event => event.kind === 'station_online' || event.kind === 'foundry_online' || event.kind === 'arc_beam' || event.kind === 'arc_chain' || interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId),
+    combatEvents: snapshot.combatEvents.filter(event => event.kind === 'station_online' || event.kind === 'foundry_online' || event.kind === 'arc_beam' || event.kind === 'arc_chain' || event.kind === 'artifact_cast' || interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId),
     pings: snapshot.pings?.map(ping => quantizePosition(ping)),
     structures: snapshot.structures?.filter(interested).map(structure => ({ ...quantizePosition(structure), angle: q(structure.angle, 1_000), health: q(structure.health, 10) })),
   };

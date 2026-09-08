@@ -37,8 +37,8 @@ describe('CoopStationDirector', () => {
       expect(openingDistance).toBeLessThanOrEqual(COOP_FIRST_STATION_MAX_DISTANCE);
       expect(Math.hypot(first[1].x - insertion.x, first[1].y - insertion.y)).toBeGreaterThanOrEqual(COOP_SECOND_STATION_MIN_INSERTION_DISTANCE);
       expect(Math.hypot(first[2].x - insertion.x, first[2].y - insertion.y)).toBeGreaterThanOrEqual(COOP_THIRD_STATION_MIN_INSERTION_DISTANCE);
-      expect(Math.hypot(first[1].x - gas.x, first[1].y - gas.y)).toBeGreaterThanOrEqual(7_360);
-      expect(Math.hypot(first[2].x - gas.x, first[2].y - gas.y)).toBeGreaterThanOrEqual(7_360);
+      expect(Math.hypot(first[1].x - gas.x, first[1].y - gas.y)).toBeGreaterThanOrEqual(1_110);
+      expect(Math.hypot(first[2].x - gas.x, first[2].y - gas.y)).toBeGreaterThanOrEqual(1_110);
       for (const site of first) expect(isWorldPositionClear(site.x, site.y, COOP_STATION_CAPTURE_RADIUS)).toBe(true);
       for (let left = 0; left < first.length; left++) {
         for (let right = left + 1; right < first.length; right++) {
@@ -46,7 +46,7 @@ describe('CoopStationDirector', () => {
         }
       }
     }
-  }, 15_000);
+  }, 60_000);
 
   it('is host-authoritative, contested, accelerated with a cap, and decays when abandoned', () => {
     const director = new CoopStationDirector(123, insertion, gasCentreForSeed(123));

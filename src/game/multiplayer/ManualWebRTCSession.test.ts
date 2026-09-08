@@ -44,6 +44,26 @@ describe('multiplayer input normalization', () => {
 });
 
 describe('gameplay transport', () => {
+  it('targets reliable owner replies and disconnects only the selected peer', () => {
+    const session = new ManualWebRTCSession({ role: 'host' });
+    const sendA = vi.fn(), sendB = vi.fn(), close = vi.fn();
+    const peer = (send: ReturnType<typeof vi.fn>) => ({
+      peerId: 'peer',
+      connection: { close, connectionState: 'connected' },
+      reliableChannel: { readyState: 'open', label: 'reliable', bufferedAmount: 0, send, close },
+      estimatedOneWayMs: 0,
+      latencySampledAt: 0,
+    });
+    session['peers'].set('a', { ...peer(sendA), peerId: 'a' } as never);
+    session['peers'].set('b', { ...peer(sendB), peerId: 'b' } as never);
+    const event = { type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'admin_result', payload: { requestId: 'x', ok: true, message: 'done' } } as const;
+    expect(session.sendEventTo('a', event)).toBe(true);
+    expect(sendA).toHaveBeenCalledOnce();
+    expect(sendB).not.toHaveBeenCalled();
+    expect(session.disconnectPeer('a')).toBe(true);
+    expect(session.peerInfo.map(info => info.peerId)).toEqual(['b']);
+  });
+
   it('ignores reordered snapshots while accepting a retry with a newer transport tick', () => {
     const onState = vi.fn();
     const session = new ManualWebRTCSession({ role: 'guest', onState });

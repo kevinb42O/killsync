@@ -2,6 +2,7 @@ import type { CoopPlayerSnapshot, CoopSnapshot } from './CoopSimulation';
 import { getBarricadeWallContact, resolveBarricadeCollision, type CoopStructureSnapshot } from './CoopFieldEngineering';
 import { advancePlayerMovement, COOP_STEP_MS, type PlayerMotionState } from './playerMovement';
 import type { MultiplayerInputFrame } from './protocol';
+import type { WorldId } from '../world/WorldDefinitions';
 
 export class LocalPlayerPrediction {
   private pending: MultiplayerInputFrame[] = [];
@@ -10,15 +11,18 @@ export class LocalPlayerPrediction {
   private lifeState?: CoopPlayerSnapshot['lifeState'];
   private structures: CoopStructureSnapshot[] = [];
   private correction = { x: 0, y: 0, z: 0 };
+  private worldId: WorldId = 'neon_bastion';
 
   constructor(private readonly playerId: string) {}
 
   reconcile(snapshot: CoopSnapshot) {
     const player = snapshot.players.find(candidate => candidate.id === this.playerId);
-    const reset = snapshot.tick < this.latestTick || player?.lifeState !== this.lifeState || snapshot.matchState !== 'active';
+    const nextWorldId = snapshot.world?.id || 'neon_bastion';
+    const reset = snapshot.tick < this.latestTick || player?.lifeState !== this.lifeState || snapshot.matchState !== 'active' || nextWorldId !== this.worldId;
     this.latestTick = snapshot.tick;
     this.lifeState = player?.lifeState;
     this.structures = snapshot.structures || [];
+    this.worldId = nextWorldId;
     if (reset) { this.pending = []; this.motion = undefined; this.correction = { x: 0, y: 0, z: 0 }; }
     if (!player || player.lifeState !== 'alive') return;
     const previous = this.motion;
@@ -47,7 +51,7 @@ export class LocalPlayerPrediction {
       ...snapshot,
       players: snapshot.players.map(player => player.id !== this.playerId || player.lifeState !== 'alive' ? player : {
         ...player, x: motion.x + this.correction.x, y: motion.y + this.correction.y, z: motion.z + this.correction.z,
-        angle: motion.angle, sprinting: motion.sprinting, sliding: motion.sliding, crouching: motion.crouching,
+        angle: motion.angle, sprinting: motion.sprinting, sliding: motion.sliding, crouching: motion.crouching, jetFuel: motion.jetFuel, jetActive: motion.jetActive,
         motion: {
           ...player.motion,
           verticalVelocity: motion.verticalVelocity,
@@ -57,6 +61,11 @@ export class LocalPlayerPrediction {
           wallJumpDirectionX: motion.wallJumpDirectionX,
           wallJumpDirectionY: motion.wallJumpDirectionY,
           airActionConsumedSinceGrounded: motion.airActionConsumedSinceGrounded,
+          jetIgnitedThisAirTime: motion.jetIgnitedThisAirTime,
+          airborneMs: motion.airborneMs,
+          groundedMs: motion.groundedMs,
+          jetFuel: motion.jetFuel,
+          jetActive: motion.jetActive,
           slideAngle: motion.slideAngle,
         },
       }),
@@ -86,6 +95,7 @@ export class LocalPlayerPrediction {
         }
         return undefined;
       },
+      this.worldId,
     );
   }
 }

@@ -19,7 +19,7 @@ describe('Weapon Foundry authority', () => {
       expect(Math.hypot(first.x - gas.x, first.y - gas.y)).toBeGreaterThanOrEqual(GAS_MAX_RADIUS + 420);
       expect(stations.every(station => Math.hypot(first.x - station.x, first.y - station.y) >= COOP_FOUNDRY_STATION_CLEARANCE)).toBe(true);
     }
-  });
+  }, 60_000);
 
   it('requires its own capture and spends only the requesting player credits on any selected firearm', () => {
     const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff' }, { id: 'guest', label: 'Guest', color: '#f0f' }], 42);

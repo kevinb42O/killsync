@@ -104,7 +104,7 @@ export class EncounterDirector {
   private intermissionEndsAtMs = 0;
   private readonly roundEvents: EncounterRoundEvent[] = [];
 
-  constructor(readonly seed: number, firstSpawnAtMs: number = 0) {
+  constructor(readonly seed: number, firstSpawnAtMs: number = 0, private readonly threatMultiplier = 1) {
     this.randomState = (seed ^ 0x9e3779b9) >>> 0;
     this.nextSpawnAtMs = Math.max(0, firstSpawnAtMs);
   }
@@ -157,7 +157,7 @@ export class EncounterDirector {
     this.activeEnemyCount += orders.length;
     this.spawnedThisRound += orders.length;
     this.spawnedThreat += packThreat;
-    this.nextSpawnAtMs = elapsedMs + spawnCadenceMs(this.round);
+    this.nextSpawnAtMs = elapsedMs + spawnCadenceMs(this.round) / Math.sqrt(Math.max(1, this.threatMultiplier));
     return orders;
   }
 
@@ -188,11 +188,11 @@ export class EncounterDirector {
 
   private beginRound(elapsedMs: number, playerCount: number) {
     this.phase = 'combat';
-    this.roundTotal = Math.min(64, 10 + this.round * 5 + Math.max(0, playerCount - 1) * 6);
+    this.roundTotal = Math.min(72, Math.round((10 + this.round * 5 + Math.max(0, playerCount - 1) * 6) * Math.max(1, this.threatMultiplier)));
     this.spawnedThisRound = 0;
     this.spawnedThreat = 0;
     this.roundThreatBudget = round2(this.roundTotal * (1 + (this.tier - 1) * .16));
-    this.desiredThreat = round2(Math.min(48, 6 + this.round * 2.4) * (1 + Math.max(0, playerCount - 1) * .45));
+    this.desiredThreat = round2(Math.min(56, (6 + this.round * 2.4) * Math.max(1, this.threatMultiplier)) * (1 + Math.max(0, playerCount - 1) * .45));
     this.nextSpawnAtMs = elapsedMs;
     this.roundEvents.push({ kind: 'round_started', round: this.round, tier: this.tier });
   }

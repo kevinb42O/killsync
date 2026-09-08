@@ -1,11 +1,12 @@
 import { GAME_HEIGHT, GAME_WIDTH } from '../../constants';
 import { isWorldPositionClear } from '../world/WorldLayout';
+import type { WorldId } from '../world/WorldDefinitions';
 
 export interface RunPlacementExclusion { x: number; y: number; radius?: number }
 
 /** Run beats are placed away from pre-generated station sites, ensuring the
  * objectives, bosses, and extraction route cannot overlap a capture node. */
-export function findClearRunPosition(desired: { x: number; y: number }, radius: number, exclusions: readonly RunPlacementExclusion[] = []) {
+export function findClearRunPosition(desired: { x: number; y: number }, radius: number, exclusions: readonly RunPlacementExclusion[] = [], worldId: WorldId = 'neon_bastion') {
   const margin = radius + 20;
   const origin = { x: Math.max(margin, Math.min(GAME_WIDTH - margin, desired.x)), y: Math.max(margin, Math.min(GAME_HEIGHT - margin, desired.y)) };
   const candidates: Array<{ x: number; y: number }> = [];
@@ -16,7 +17,7 @@ export function findClearRunPosition(desired: { x: number; y: number }, radius: 
       const x = origin.x + Math.cos(angle) * ring * 50;
       const y = origin.y + Math.sin(angle) * ring * 50;
       if (x < margin || y < margin || x > GAME_WIDTH - margin || y > GAME_HEIGHT - margin) continue;
-      if (isWorldPositionClear(x, y, radius) && clearsExclusions(x, y, radius, exclusions)) return { x, y };
+      if (isWorldPositionClear(x, y, radius, worldId) && clearsExclusions(x, y, radius, exclusions)) return { x, y };
     }
   }
 
@@ -24,7 +25,7 @@ export function findClearRunPosition(desired: { x: number; y: number }, radius: 
   // never the old unconditional map-centre escape hatch.
   for (let y = margin; y <= GAME_HEIGHT - margin; y += 240) {
     for (let x = margin; x <= GAME_WIDTH - margin; x += 240) {
-      if (isWorldPositionClear(x, y, radius) && clearsExclusions(x, y, radius, exclusions)) candidates.push({ x, y });
+      if (isWorldPositionClear(x, y, radius, worldId) && clearsExclusions(x, y, radius, exclusions)) candidates.push({ x, y });
     }
   }
   if (!candidates.length) throw new Error('No clear run position is available');

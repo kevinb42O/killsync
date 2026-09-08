@@ -1,8 +1,9 @@
 import { isWorldPositionClear } from '../world/WorldLayout';
+import type { WorldId } from '../world/WorldDefinitions';
 import { isOnCoopPlatform } from './playerMovement';
 import type { CoopSnapshot } from './CoopSimulation';
 
-export type CoopStructureType = 'barricade' | 'arc_fence' | 'recovery_relay' | 'decoy_beacon';
+export type CoopStructureType = 'barricade' | 'arc_fence' | 'recovery_relay' | 'decoy_beacon' | 'bridge_segment';
 export type CoopStructureState = 'active' | 'damaged' | 'destroying';
 
 export interface CoopStructureDefinition {
@@ -63,6 +64,11 @@ export const COOP_STRUCTURE_DEFINITIONS: Readonly<Record<CoopStructureType, Coop
     description: 'Projects a false operator signature that draws ordinary enemies away from the squad.',
     chargeCost: 1, maxHealth: 190, width: 48, depth: 48, radius: 42, color: '#ff3da7', blocksMovement: false,
   },
+  bridge_segment: {
+    type: 'bridge_segment', name: 'Worldlink Span',
+    description: 'Contribute a permanent bridge span toward the next world at any time. Crossing early is your risk.',
+    chargeCost: 1, maxHealth: 10_000, width: 260, depth: 170, radius: 154, color: '#fbbf24', blocksMovement: false,
+  },
 });
 
 export interface CoopStructureSnapshot {
@@ -98,6 +104,9 @@ export type CoopBuildErrorCode =
   | 'range'
   | 'build_zone'
   | 'obstructed'
+  | 'bridge_locked'
+  | 'bridge_range'
+  | 'bridge_complete'
   | 'stale_request';
 
 export interface CoopBuildError { code: CoopBuildErrorCode; amount?: number; }
@@ -135,7 +144,7 @@ export interface CoopBuildAnchor { x: number; y: number; radius?: number; }
 export interface CoopPlacementBody { x: number; y: number; radius: number; }
 
 export function isCoopStructureType(value: unknown): value is CoopStructureType {
-  return value === 'barricade' || value === 'arc_fence' || value === 'recovery_relay' || value === 'decoy_beacon';
+  return value === 'barricade' || value === 'arc_fence' || value === 'recovery_relay' || value === 'decoy_beacon' || value === 'bridge_segment';
 }
 
 export function isCoopStructureAction(value: unknown): value is CoopStructureAction {
@@ -235,13 +244,15 @@ export function isStructurePlacementClear(
   angle: number,
   bodies: readonly CoopPlacementBody[],
   structures: readonly CoopStructureSnapshot[],
+  worldId: WorldId = 'neon_bastion',
 ) {
   const definition = COOP_STRUCTURE_DEFINITIONS[type];
+  if (type === 'bridge_segment') return true;
   const circular = type === 'recovery_relay' || type === 'decoy_beacon';
   const samples = circular
     ? [{ x, y }]
     : [-.42, 0, .42].map(offset => ({ x: x + Math.cos(angle) * definition.width * offset, y: y + Math.sin(angle) * definition.width * offset }));
-  if (samples.some(sample => !isWorldPositionClear(sample.x, sample.y, Math.max(24, definition.depth * .5)))) return false;
+  if (samples.some(sample => !isWorldPositionClear(sample.x, sample.y, Math.max(24, definition.depth * .5), worldId))) return false;
   if (bodies.some(body => circular
     ? Math.hypot(body.x - x, body.y - y) <= structureRadius(type) + body.radius + 18
     : structureContainsCircle({ type, x, y, angle }, body.x, body.y, body.radius, 18))) return false;
@@ -292,17 +303,23 @@ export function validateCoopBuildPreview(snapshot: CoopSnapshot | null, playerId
   const definition = COOP_STRUCTURE_DEFINITIONS[type];
   const charges = player.fabricatorCharges || 0;
   if (charges < definition.chargeCost) return { code: 'charges', amount: definition.chargeCost - charges };
-  const structures = (snapshot.structures || []).filter(structure => structure.state !== 'destroying');
+  if (type === 'bridge_segment') {
+    if (!snapshot.bridge || snapshot.bridge.state === 'locked' || snapshot.bridge.state === 'terminal') return { code: 'bridge_locked' };
+    if (snapshot.bridge.state === 'complete' || snapshot.bridge.state === 'crossing') return { code: 'bridge_complete' };
+    if (Math.hypot(player.x - snapshot.bridge.buildX, player.y - snapshot.bridge.buildY) > COOP_BUILD_RANGE + 180) return { code: 'bridge_range' };
+    return undefined;
+  }
+  const structures = (snapshot.structures || []).filter(structure => structure.state !== 'destroying' && structure.type !== 'bridge_segment');
   if (structures.filter(structure => structure.ownerId === playerId).length >= COOP_MAX_STRUCTURES_PER_PLAYER) return { code: 'player_limit' };
   if (structures.length >= COOP_MAX_SQUAD_STRUCTURES) return { code: 'squad_limit' };
   if (!Number.isFinite(x) || !Number.isFinite(y) || Math.hypot(x - player.x, y - player.y) > COOP_BUILD_RANGE) return { code: 'range' };
-  if (!isOnCoopPlatform(x, y)) return { code: 'obstructed' };
+  if (!isOnCoopPlatform(x, y, snapshot.world?.id)) return { code: 'obstructed' };
   const bodies = [
     ...snapshot.players.filter(member => member.lifeState !== 'eliminated').map(member => ({ x: member.x, y: member.y, radius: 19 })),
     ...snapshot.enemies.filter(enemy => !enemy.dying).map(enemy => ({ x: enemy.x, y: enemy.y, radius: enemy.radius })),
     ...coopSnapshotProtectedBodies(snapshot),
   ];
-  return isStructurePlacementClear(type, x, y, normalizeStructureAngle(angle), bodies, structures) ? undefined : { code: 'obstructed' };
+  return isStructurePlacementClear(type, x, y, normalizeStructureAngle(angle), bodies, structures, snapshot.world?.id) ? undefined : { code: 'obstructed' };
 }
 
 /** Gentle endpoint snapping for fast, clean barricade/fence runs. */

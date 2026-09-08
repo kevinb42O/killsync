@@ -80,15 +80,14 @@ describe('co-op presentation', () => {
     snapshot.buyStations = [];
     snapshot.hazards = [{ id: 10, enemyId: 20, kind: 'artillery', x: 6000, y: 6000, radius: 76, startsAtMs: 0, resolvesAtMs: 1000, color: '#4ade80' }];
     visuals.update(snapshot, 500);
-    const zone = scene.children[0];
+    const zone = scene.children.find(child => child.position.x === 6000 && child.position.z === 6000)!;
     const ring = zone.getObjectByName('ring') as THREE.Mesh;
     const dispose = vi.spyOn(ring.geometry, 'dispose');
     expect(ring.scale.x).toBe(76);
     visuals.update(snapshot, 750);
-    expect(scene.children).toHaveLength(1);
-    expect(scene.children[0]).toBe(zone);
+    expect(scene.children).toContain(zone);
     visuals.update({ ...snapshot, hazards: [] }, 1200);
-    expect(scene.children).toHaveLength(0);
+    expect(scene.children).not.toContain(zone);
     expect(dispose).toHaveBeenCalledOnce();
   });
 
@@ -104,15 +103,39 @@ describe('co-op presentation', () => {
       { id: 3, enemyId: 13, kind: 'ambush', x: 300, y: 100, radius: 82, startsAtMs: 0, resolvesAtMs: 1000, color: '#e2e8f0' },
     ];
     visuals.update(snapshot, 500);
-    const artillery = scene.children[0] as THREE.Group;
-    const shockwave = scene.children[1] as THREE.Group;
-    const ambush = scene.children[2] as THREE.Group;
+    const artillery = scene.children.find(child => child.position.x === 100) as THREE.Group;
+    const shockwave = scene.children.find(child => child.position.x === 200) as THREE.Group;
+    const ambush = scene.children.find(child => child.position.x === 300) as THREE.Group;
     expect(artillery.getObjectByName('inner')!.visible).toBe(true);
     expect((shockwave.getObjectByName('inner') as THREE.Mesh).scale.x).toBeGreaterThan((artillery.getObjectByName('inner') as THREE.Mesh).scale.x);
     expect(ambush.getObjectByName('marker')!.visible).toBe(true);
     expect(artillery.getObjectByName('marker')!.visible).toBe(false);
     visuals.dispose();
     expect(scene.children).toHaveLength(0);
+  });
+
+  it('gives every persistent class artifact a bespoke animated silhouette', () => {
+    const scene = new THREE.Scene();
+    const visuals = new CoopTacticalVisuals(scene);
+    const snapshot = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff' }]).createSnapshot();
+    snapshot.buyStations = [];
+    snapshot.artifactEffects = [
+      { id: 101, kind: 'stormcall', ownerId: 'host', x: 100, y: 100, radius: 260, remainingMs: 1_000 },
+      { id: 102, kind: 'dawnwall', ownerId: 'host', x: 200, y: 100, radius: 260, remainingMs: 5_000 },
+      { id: 103, kind: 'hellseed', ownerId: 'host', x: 300, y: 100, radius: 200, remainingMs: 1_000 },
+      { id: 104, kind: 'emberling', ownerId: 'host', x: 400, y: 100, radius: 32, remainingMs: 3_000 },
+    ];
+
+    visuals.update(snapshot, 500);
+    const signatures = [100, 200, 300, 400].map(x => (scene.children.find(child => child.position.x === x) as THREE.Group).getObjectByName('artifact-signature') as THREE.Group);
+    expect(signatures.map(signature => signature.userData.artifactKind)).toEqual(['stormcall-crown', 'dawnwall-bastion', 'hellseed-crown', 'emberling-core']);
+    expect(new Set(signatures.map(signature => signature.children.length)).size).toBeGreaterThan(2);
+    expect(signatures.every(signature => signature.scale.x > 20)).toBe(true);
+
+    const rotations = signatures.map(signature => signature.rotation.y);
+    visuals.update(snapshot, 800);
+    expect(signatures.every((signature, index) => signature.rotation.y !== rotations[index])).toBe(true);
+    visuals.dispose();
   });
 
   it('renders every revealed capture site identically with compact segmented progress', () => {
@@ -140,6 +163,104 @@ describe('co-op presentation', () => {
     expect(secondPartNames).toEqual(firstPartNames);
     expect(second.getObjectByName('capture-signal')!.visible).toBe(true);
     expect((second.getObjectByName('ring') as THREE.Mesh).scale.x).toBe(snapshot.buyStations[1].captureRadius);
+    visuals.dispose();
+  });
+
+  it('uses a skyline-height, occlusion-proof beacon only for the accepted mission objective', () => {
+    const scene = new THREE.Scene();
+    const visuals = new CoopTacticalVisuals(scene);
+    const snapshot = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff' }]).createSnapshot();
+    const site = snapshot.fieldMissions!.sites.find(candidate => candidate.kind === 'signal_hijack')!;
+    site.state = 'active';
+    snapshot.fieldMissions!.active = {
+      ...site,
+      stage: 'activate',
+      progress: 0,
+      required: 3_000,
+      points: [{ id: 'relay', x: 4_000, y: 4_500, state: 'available' }],
+      targetEnemyIds: [], guardEnemyIds: [], courierEnemyIds: [], drives: [],
+      x: 4_000, y: 4_500,
+    };
+
+    visuals.update(snapshot, 500);
+    const objective = scene.getObjectByName('field-mission-objective-beacon') as THREE.Group;
+    const beam = objective.getObjectByName('beam') as THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
+    const core = objective.getObjectByName('objective-core') as THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
+    const bands = objective.getObjectByName('objective-bands') as THREE.Group;
+    expect(beam.geometry.parameters.height).toBe(9_000);
+    expect(beam.material.depthTest).toBe(false);
+    expect(core.geometry.parameters.height).toBe(9_300);
+    expect(core.material.depthTest).toBe(false);
+    expect(bands.children).toHaveLength(11);
+    expect(scene.getObjectByName('field-mission-pickup-beacon')).toBeDefined();
+
+    snapshot.fieldMissions!.active.x = 5_000;
+    snapshot.fieldMissions!.active.y = 5_500;
+    visuals.update(snapshot, 800);
+    expect(scene.getObjectByName('field-mission-objective-beacon')).toBe(objective);
+    expect(objective.position.x).toBe(5_000);
+    expect(objective.position.z).toBe(5_500);
+    visuals.dispose();
+  });
+
+  it('shows demolition charge hardware, arming progress, armed countdown, and a destroyed site', () => {
+    const scene = new THREE.Scene();
+    const visuals = new CoopTacticalVisuals(scene);
+    const snapshot = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff' }]).createSnapshot();
+    const site = snapshot.fieldMissions!.sites.find(candidate => candidate.kind === 'demolition')!;
+    site.state = 'active';
+    snapshot.fieldMissions!.active = {
+      ...site, stage: 'plant_a', progress: 2_000, required: 4_000,
+      points: [{ id: 'a', x: 3_000, y: 3_200, state: 'arming' }, { id: 'b', x: 5_000, y: 5_200, state: 'locked' }],
+      targetEnemyIds: [], guardEnemyIds: [], courierEnemyIds: [], drives: [],
+      x: 3_000, y: 3_200,
+    };
+
+    visuals.update(snapshot, 500);
+    const charge = scene.children.find(child => child.name === 'demolition-charge-site') as THREE.Group;
+    expect(charge).toBeDefined();
+    expect(charge.getObjectByName('charge-body')?.visible).toBe(true);
+    const segments = charge.userData.progressSegments as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
+    expect(segments.filter(segment => segment.material.opacity > .5)).toHaveLength(8);
+
+    snapshot.fieldMissions!.active.stage = 'defend_a';
+    snapshot.fieldMissions!.active.progress = 10_000;
+    snapshot.fieldMissions!.active.required = 20_000;
+    snapshot.fieldMissions!.active.points[0].state = 'defending';
+    snapshot.fieldMissions!.active.points[1].state = 'available';
+    visuals.update(snapshot, 700);
+    expect(scene.children.filter(child => child.name === 'demolition-charge-site')).toHaveLength(2);
+    expect((charge.getObjectByName('charge-status') as THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>).material.color.getHexString()).toBe('fef2f2');
+
+    snapshot.fieldMissions!.active.points[0].state = 'completed';
+    visuals.update(snapshot, 900);
+    expect(charge.getObjectByName('charge-body')?.visible).toBe(false);
+    expect(charge.getObjectByName('charge-crater')?.visible).toBe(true);
+    visuals.dispose();
+  });
+
+  it('renders a readable hostage NPC and a separate recovery beacon while carried', () => {
+    const scene = new THREE.Scene();
+    const visuals = new CoopTacticalVisuals(scene);
+    const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff' }]);
+    const snapshot = simulation.createSnapshot();
+    const site = snapshot.fieldMissions!.sites.find(candidate => candidate.kind === 'hostage_recovery')!;
+    site.state = 'active';
+    snapshot.fieldMissions!.active = {
+      ...site, stage: 'escort', progress: 0, required: 10_000,
+      points: [{ id: 'hostage', x: 3_000, y: 3_200, state: 'completed' }, { id: 'recovery', x: 5_000, y: 5_200, state: 'available' }],
+      targetEnemyIds: [], guardEnemyIds: [], courierEnemyIds: [], drives: [],
+      x: 5_000, y: 5_200, hostage: { x: snapshot.players[0].x, y: snapshot.players[0].y, state: 'carried', carrierId: 'host' },
+    };
+    visuals.update(snapshot, 600);
+    const hostage = scene.getObjectByName('field-mission-hostage-beacon') as THREE.Group;
+    expect(hostage.getObjectByName('hostage-torso')).toBeDefined();
+    expect(hostage.getObjectByName('hostage-head')).toBeDefined();
+    expect(hostage.getObjectByName('hostage-restraint')?.visible).toBe(false);
+    const recovery = scene.getObjectByName('field-mission-exfil-beacon') as THREE.Group;
+    expect(recovery.position.x).toBe(5_000);
+    expect(recovery.position.z).toBe(5_200);
+    expect((recovery.getObjectByName('ring') as THREE.Mesh).scale.x).toBeGreaterThan(100);
     visuals.dispose();
   });
 });

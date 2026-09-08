@@ -125,17 +125,31 @@ function createStructureRig(type: CoopStructureType, ownerColor: string, preview
   if (type === 'barricade') createBarricade(group, steel, edge, accent, energy);
   else if (type === 'arc_fence') createArcFence(group, steel, edge, accent, energy);
   else if (type === 'recovery_relay') createRecoveryRelay(group, steel, edge, accent, energy);
-  else createDecoyBeacon(group, steel, edge, accent, energy);
+  else if (type === 'decoy_beacon') createDecoyBeacon(group, steel, edge, accent, energy);
+  else createBridgeSegment(group, steel, edge, accent, energy);
   const healthTrack = addBox(group, 68, 5, 3, 0, 105, 0, steel, 'health-track');
   const healthFill = addBox(group, 62, 3, 4, 0, 105, -.5, ownerAccent, 'health-fill');
-  healthTrack.visible = !preview;
-  healthFill.visible = !preview;
-  const light = new THREE.PointLight(energyColor, preview ? 0 : 3.6, type === 'recovery_relay' ? 340 : 240, 1.65);
+  healthTrack.visible = !preview && type !== 'bridge_segment';
+  healthFill.visible = !preview && type !== 'bridge_segment';
+  const light = new THREE.PointLight(energyColor, preview ? 0 : 3.6, type === 'recovery_relay' ? 340 : type === 'bridge_segment' ? 430 : 240, 1.65);
   light.position.set(0, type === 'recovery_relay' ? 60 : type === 'arc_fence' ? 42 : 35, 0);
   light.userData.visualRole = 'structure-light';
   group.add(light);
   for (const mat of [steel, edge, accent, energy, ownerAccent]) mat.dispose();
   return group;
+}
+
+function createBridgeSegment(group: THREE.Group, steel: THREE.Material, edge: THREE.Material, accent: THREE.Material, energy: THREE.Material) {
+  addBox(group, 258, 16, 168, 0, 8, 0, steel, 'base');
+  addBox(group, 244, 5, 142, 0, 18, 0, edge, 'armor');
+  for (const z of [-69, 69]) {
+    addBox(group, 258, 5, 7, 0, 23, z, accent, 'accent');
+    for (const x of [-108, -54, 0, 54, 108]) addBox(group, 20, 2.5, 10, x, 26, z, energy, 'energy');
+  }
+  for (const x of [-112, 0, 112]) {
+    addBox(group, 8, 26, 156, x, -3, 0, steel, 'brace', 0, 0, x === 0 ? 0 : x > 0 ? .07 : -.07);
+    addBox(group, 30, 3, 42, x, 21, 0, energy, 'scan');
+  }
 }
 
 function createBarricade(group: THREE.Group, steel: THREE.Material, edge: THREE.Material, accent: THREE.Material, energy: THREE.Material) {

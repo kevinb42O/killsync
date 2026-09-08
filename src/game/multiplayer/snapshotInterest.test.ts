@@ -12,11 +12,16 @@ describe('per-peer snapshot interest', () => {
       { id: 2, x: local.x + SNAPSHOT_INTEREST_RADIUS + 100, y: local.y, health: 1, maxHealth: 1, type: 'basic', color: '#fff', radius: 10, damage: 1, speed: 1, experienceValue: 1, hitFlashMs: 0, slowMultiplier: 1, isHolder: false, dying: false, deathRemainingMs: 0 },
     ];
     snapshot.gems = Array.from({ length: MAX_VISIBLE_GEMS + 20 }, (_, id) => ({ id, x: local.x + id, y: local.y, value: 1, color: '#0ff' }));
+    snapshot.combatEvents = [
+      { id: 10, tick: 1, atMs: 0, kind: 'artifact_cast', x: local.x + SNAPSHOT_INTEREST_RADIUS + 100, y: local.y, targetX: local.x, targetY: local.y, weaponId: 'shatter_lance' },
+      { id: 11, tick: 1, atMs: 0, kind: 'enemy_hit', x: local.x + SNAPSHOT_INTEREST_RADIUS + 100, y: local.y },
+    ];
     const view = createInterestSnapshot(snapshot, 'host');
     expect(view.players).toHaveLength(snapshot.players.length);
     expect(view.run).toEqual(snapshot.run);
     expect(view.enemies.map(enemy => enemy.id)).toEqual([1]);
     expect(view.gems).toHaveLength(MAX_VISIBLE_GEMS);
+    expect(view.combatEvents.map(event => event.id)).toEqual([10]);
   });
 
   it('keeps every living teammate neighbourhood available while downed or spectating', () => {

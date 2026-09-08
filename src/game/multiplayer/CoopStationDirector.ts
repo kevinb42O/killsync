@@ -1,5 +1,6 @@
 import { GAME_HEIGHT, GAME_WIDTH } from '../../constants';
 import { isWorldPositionClear } from '../world/WorldLayout';
+import type { WorldId } from '../world/WorldDefinitions';
 import { COOP_BUY_STATION_STOCK, type CoopBuyStationSnapshot } from './CoopBuyStation';
 
 export const COOP_STATION_COUNT = 3;
@@ -17,13 +18,7 @@ interface Point { x: number; y: number }
 interface CaptureActor extends Point { id?: string | number; lifeState?: string; radius?: number }
 
 const SITE_MARGIN = COOP_STATION_CAPTURE_RADIUS + 40;
-const GAS_REVEAL_ESTIMATES_MS = [0, 180_000, 330_000] as const;
-const GAS_INITIAL_RADIUS = 750;
-const GAS_SPREAD_AT_MS = 140_000;
-const GAS_SURGE_AT_MS = 300_000;
-const GAS_BASE_RATE = 12;
-const GAS_SURGE_RATE = 16;
-const GAS_MAX_RADIUS = 7_000;
+const GAS_FIXED_RADIUS = 750;
 const GAS_REVEAL_BUFFER = 360;
 /** Body-overlap allowance plus a short empty grace prevents edge flicker while
  * an operator strafes, slides, or receives a corrected host position. */
@@ -38,8 +33,8 @@ export class CoopStationDirector {
   private readonly sites: StationSite[];
   private readonly vacantForMs = new Map<number, number>();
 
-  constructor(seed: number, insertion: Point, gasCentre: Point) {
-    this.sites = generateCoopStationSites(seed, insertion, gasCentre).map((position, index) => ({
+  constructor(seed: number, insertion: Point, gasCentre: Point, worldId: WorldId = 'neon_bastion') {
+    this.sites = generateCoopStationSites(seed, insertion, gasCentre, worldId).map((position, index) => ({
       id: index + 1,
       ...position,
       radius: COOP_STATION_SHOP_RADIUS,
@@ -103,7 +98,7 @@ export class CoopStationDirector {
 }
 
 /** Exported for seed/property tests without constructing a combat simulation. */
-export function generateCoopStationSites(seed: number, insertion: Point, gasCentre: Point): Point[] {
+export function generateCoopStationSites(seed: number, insertion: Point, gasCentre: Point, worldId: WorldId = 'neon_bastion'): Point[] {
   const sites: Point[] = [];
   let state = (seed ^ 0x51a7105) >>> 0;
   const random = () => {
@@ -135,7 +130,7 @@ export function generateCoopStationSites(seed: number, insertion: Point, gasCent
     // avoids rounding a barely-valid candidate across a clearance boundary.
     const valid = candidates
       .map(candidate => ({ x: Math.round(candidate.x), y: Math.round(candidate.y) }))
-      .filter(candidate => validSite(candidate, index, insertion, gasCentre, sites));
+      .filter(candidate => validSite(candidate, index, insertion, gasCentre, sites, worldId));
     if (valid.length === 0) throw new Error(`No separated co-op station site for seed ${seed} at index ${index}`);
     const scored = valid.map(candidate => ({ candidate, score: scoreSite(candidate, index, insertion, gasCentre, sites) }));
     scored.sort((a, b) => b.score - a.score || a.candidate.x - b.candidate.x || a.candidate.y - b.candidate.y);
@@ -144,41 +139,33 @@ export function generateCoopStationSites(seed: number, insertion: Point, gasCent
   return sites;
 }
 
-function validSite(candidate: Point, index: number, insertion: Point, gasCentre: Point, sites: readonly Point[]) {
+function validSite(candidate: Point, index: number, insertion: Point, gasCentre: Point, sites: readonly Point[], worldId: WorldId) {
   if (candidate.x < SITE_MARGIN || candidate.y < SITE_MARGIN || candidate.x > GAME_WIDTH - SITE_MARGIN || candidate.y > GAME_HEIGHT - SITE_MARGIN) return false;
-  if (!isWorldPositionClear(candidate.x, candidate.y, COOP_STATION_CAPTURE_RADIUS)) return false;
-  if (!hasNearbyStreetAccess(candidate)) return false;
+  if (!isWorldPositionClear(candidate.x, candidate.y, COOP_STATION_CAPTURE_RADIUS, worldId)) return false;
+  if (!hasNearbyStreetAccess(candidate, worldId)) return false;
   const insertionDistance = Math.hypot(candidate.x - insertion.x, candidate.y - insertion.y);
   if (index === 0 && (insertionDistance < COOP_FIRST_STATION_MIN_DISTANCE || insertionDistance > COOP_FIRST_STATION_MAX_DISTANCE)) return false;
   const laterInsertionMinimum = index === 1 ? COOP_SECOND_STATION_MIN_INSERTION_DISTANCE : COOP_THIRD_STATION_MIN_INSERTION_DISTANCE;
   if (index > 0 && insertionDistance < laterInsertionMinimum) return false;
   if (sites.some(site => Math.hypot(candidate.x - site.x, candidate.y - site.y) < COOP_STATION_SEPARATION)) return false;
   const gasDistance = Math.hypot(candidate.x - gasCentre.x, candidate.y - gasCentre.y);
-  // Boss timing is player-dependent. Later sites must remain viable even on
-  // a slow run, so they sit beyond the gas zone's maximum possible extent.
-  const relevantGasRadius = index === 0 ? predictedGasRadius(GAS_REVEAL_ESTIMATES_MS[0]) : GAS_MAX_RADIUS;
-  return gasDistance >= relevantGasRadius + GAS_REVEAL_BUFFER;
+  // The cloud relocates but never grows. Keep initial station sites clear of
+  // its fixed footprint; the tactical map warns squads before every move.
+  return gasDistance >= GAS_FIXED_RADIUS + GAS_REVEAL_BUFFER;
 }
 
-function hasNearbyStreetAccess(site: Point) {
+function hasNearbyStreetAccess(site: Point, worldId: WorldId) {
   const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
   return directions.some(([dx, dy]) => [COOP_STATION_CAPTURE_RADIUS + 45, COOP_STATION_CAPTURE_RADIUS + 145]
     .every(distance => {
       const x = site.x + dx * distance, y = site.y + dy * distance;
-      return x >= 28 && y >= 28 && x <= GAME_WIDTH - 28 && y <= GAME_HEIGHT - 28 && isWorldPositionClear(x, y, 28);
+      return x >= 28 && y >= 28 && x <= GAME_WIDTH - 28 && y <= GAME_HEIGHT - 28 && isWorldPositionClear(x, y, 28, worldId);
     }));
-}
-
-function predictedGasRadius(elapsedMs: number) {
-  if (elapsedMs <= GAS_SPREAD_AT_MS) return GAS_INITIAL_RADIUS;
-  const normalSeconds = Math.max(0, Math.min(elapsedMs, GAS_SURGE_AT_MS) - GAS_SPREAD_AT_MS) / 1000;
-  const surgeSeconds = Math.max(0, elapsedMs - GAS_SURGE_AT_MS) / 1000;
-  return Math.min(GAS_MAX_RADIUS, GAS_INITIAL_RADIUS + normalSeconds * GAS_BASE_RATE + surgeSeconds * GAS_SURGE_RATE);
 }
 
 function scoreSite(candidate: Point, index: number, insertion: Point, gasCentre: Point, sites: readonly Point[]) {
   const nearestStation = sites.length ? Math.min(...sites.map(site => Math.hypot(candidate.x - site.x, candidate.y - site.y))) : 0;
-  const gasClearance = Math.hypot(candidate.x - gasCentre.x, candidate.y - gasCentre.y) - (index === 0 ? predictedGasRadius(GAS_REVEAL_ESTIMATES_MS[0]) : GAS_MAX_RADIUS);
+  const gasClearance = Math.hypot(candidate.x - gasCentre.x, candidate.y - gasCentre.y) - GAS_FIXED_RADIUS;
   const edgeClearance = Math.min(candidate.x, candidate.y, GAME_WIDTH - candidate.x, GAME_HEIGHT - candidate.y);
   const insertionDistance = Math.hypot(candidate.x - insertion.x, candidate.y - insertion.y);
   if (index === 0) return -Math.abs(insertionDistance - 1_050) + gasClearance * .12 + edgeClearance * .05;

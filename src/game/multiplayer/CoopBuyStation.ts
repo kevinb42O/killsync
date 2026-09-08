@@ -1,7 +1,7 @@
 import { COOP_PASSIVE_BY_ID, passiveRankCost, type CoopPassiveModuleId } from './CoopPassiveModules';
 import { COOP_FIREARM_BY_ID, type CoopWeaponRuntime } from '../combat/coopFirearms';
 
-export type CoopShopItemId = 'selected_ammo' | 'full_ammo' | 'trauma_patch' | 'emergency_reboot' | 'armor_1' | 'armor_2' | 'gas_mask' | CoopPassiveModuleId;
+export type CoopShopItemId = 'selected_ammo' | 'full_ammo' | 'trauma_patch' | 'emergency_reboot' | 'armor_1' | 'armor_2' | 'gas_mask' | 'private_exfil' | CoopPassiveModuleId;
 
 export type CoopStationState = 'locked' | 'available' | 'capturing' | 'active' | 'disabled';
 
@@ -38,7 +38,9 @@ export type CoopPurchaseErrorCode =
   | 'armor_1_owned'
   | 'armor_1_required'
   | 'armor_2_owned'
-  | 'mask_full';
+  | 'mask_full'
+  | 'exfil_locked'
+  | 'exfil_called';
 
 export interface CoopPurchaseError {
   code: CoopPurchaseErrorCode;
@@ -78,6 +80,8 @@ export interface CoopShopBuyerState {
   gasMaskHp: number;
   gasMaskMaxHp: number;
   passiveModules: Array<{ id: CoopPassiveModuleId; rank: number }>;
+  privateExfilAvailable?: boolean;
+  privateExfilCalled?: boolean;
 }
 
 export const COOP_SHOP_ITEMS: Readonly<Record<CoopShopItemId, CoopShopItemDefinition>> = Object.freeze({
@@ -88,6 +92,7 @@ export const COOP_SHOP_ITEMS: Readonly<Record<CoopShopItemId, CoopShopItemDefini
   armor_1: { id: 'armor_1', name: 'Armor Plating I', description: 'A 50 HP rechargeable protective shield.', cost: 350 },
   armor_2: { id: 'armor_2', name: 'Armor Plating II', description: 'Upgrade your shield to 100 HP.', cost: 700 },
   gas_mask: { id: 'gas_mask', name: 'Tactical Gas Mask', description: 'CBRN respirator. Takes 100% of toxic gas damage until destroyed.', cost: 350 },
+  private_exfil: { id: 'private_exfil', name: 'Private Exfil', description: 'Call a one-use extraction reserved for your squad.', cost: 1_500 },
   orbit_drones: { id: 'orbit_drones', name: COOP_PASSIVE_BY_ID.orbit_drones.name, description: COOP_PASSIVE_BY_ID.orbit_drones.description, cost: COOP_PASSIVE_BY_ID.orbit_drones.purchaseCost },
   data_scythe: { id: 'data_scythe', name: COOP_PASSIVE_BY_ID.data_scythe.name, description: COOP_PASSIVE_BY_ID.data_scythe.description, cost: COOP_PASSIVE_BY_ID.data_scythe.purchaseCost },
   void_aura: { id: 'void_aura', name: COOP_PASSIVE_BY_ID.void_aura.name, description: COOP_PASSIVE_BY_ID.void_aura.description, cost: COOP_PASSIVE_BY_ID.void_aura.purchaseCost },
@@ -96,7 +101,7 @@ export const COOP_SHOP_ITEMS: Readonly<Record<CoopShopItemId, CoopShopItemDefini
 });
 
 export const COOP_BUY_STATION_STOCK: readonly CoopShopItemId[] = Object.freeze([
-  'selected_ammo', 'full_ammo', 'trauma_patch', 'emergency_reboot', 'armor_1', 'armor_2', 'gas_mask',
+  'selected_ammo', 'full_ammo', 'trauma_patch', 'emergency_reboot', 'armor_1', 'armor_2', 'gas_mask', 'private_exfil',
   'orbit_drones', 'data_scythe', 'void_aura', 'frost_aura', 'neural_pulse',
 ]);
 
@@ -125,6 +130,8 @@ export function coopShopDisabledReason(player: CoopShopBuyerState, itemId: CoopS
     if (player.armorTier < 1) return { code: 'armor_1_required' };
     if (player.armorTier >= 2) return { code: 'armor_2_owned' };
   } else if (itemId === 'gas_mask' && player.gasMaskHp > 0 && player.gasMaskHp >= player.gasMaskMaxHp) return { code: 'mask_full' };
+  else if (itemId === 'private_exfil' && !player.privateExfilAvailable) return { code: 'exfil_locked' };
+  else if (itemId === 'private_exfil' && player.privateExfilCalled) return { code: 'exfil_called' };
 
   const cost = coopShopItemCost(player, itemId);
   return player.coins < cost ? { code: 'credits', amount: cost - player.coins } : undefined;
