@@ -3,6 +3,8 @@
  * independent of React makes controller behaviour deterministic and testable.
  */
 export const GAMEPAD_DEAD_ZONE = 0.2;
+/** Triggers are analogue; treat a deliberate light pull as an action. */
+export const GAMEPAD_TRIGGER_THRESHOLD = 0.15;
 
 export const GAMEPAD_BUTTON = {
   jump: 0,
@@ -14,6 +16,9 @@ export const GAMEPAD_BUTTON = {
   aim: 6,
   fire: 7,
   sprint: 10,
+  build: 8,
+  dpadUp: 12,
+  dpadDown: 13,
   dpadLeft: 14,
   dpadRight: 15,
 } as const;
@@ -46,6 +51,17 @@ export function gamepadLookAxes(gamepad: GamepadAxes) {
 export function isGamepadButtonDown(gamepad: GamepadButtons, button: number) {
   const state = gamepad.buttons[button];
   return Boolean(state?.pressed || (state?.value || 0) > 0.5);
+}
+
+/**
+ * Standard-mapped pads expose LT/RT as buttons 6/7. Some otherwise usable
+ * generic browser mappings expose them as axes 4/5, so accept either shape.
+ */
+export function isGamepadTriggerDown(gamepad: GamepadAxes & GamepadButtons, button: number, fallbackAxis: number) {
+  const state = gamepad.buttons[button];
+  const value = state?.value || 0;
+  const axisValue = gamepad.axes[fallbackAxis] || 0;
+  return Boolean(state?.pressed || value > GAMEPAD_TRIGGER_THRESHOLD || axisValue > GAMEPAD_TRIGGER_THRESHOLD);
 }
 
 export function firstConnectedGamepad(gamepads: readonly (Gamepad | null)[]) {

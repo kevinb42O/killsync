@@ -2518,6 +2518,7 @@ export default function App() {
                       { label: 'Fire / aim / special', key: 'RT / LT' },
                       { label: 'Reload', key: 'X' },
                       { label: 'Weapons', key: 'LB / RB / D-PAD' },
+                      { label: 'Build / select type', key: 'VIEW / D-PAD ↑↓' },
                       { label: 'Revive / interact', key: 'Y' },
                     ] : [
                       { label: 'Sprint', key: 'SHIFT' },

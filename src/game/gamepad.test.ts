@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyGamepadDeadZone, gamepadLookAxes, gamepadMovementMask, isGamepadButtonDown } from './gamepad';
+import { applyGamepadDeadZone, gamepadLookAxes, gamepadMovementMask, isGamepadButtonDown, isGamepadTriggerDown } from './gamepad';
 
 const gamepad = (axes: number[], buttons: Array<{ pressed?: boolean; value?: number }> = []) => ({ axes, buttons }) as unknown as Gamepad;
 
@@ -17,5 +17,11 @@ describe('gamepad helpers', () => {
     expect(isGamepadButtonDown(gamepad([], [{ pressed: true }]), 0)).toBe(true);
     expect(isGamepadButtonDown(gamepad([], [{ value: .75 }]), 0)).toBe(true);
     expect(isGamepadButtonDown(gamepad([], [{ value: .49 }]), 0)).toBe(false);
+  });
+
+  it('recognizes standard trigger buttons and generic trigger axes', () => {
+    expect(isGamepadTriggerDown(gamepad([], [{ value: .2 }]), 0, 4)).toBe(true);
+    expect(isGamepadTriggerDown(gamepad([0, 0, 0, 0, .6], [{ value: 0 }]), 0, 4)).toBe(true);
+    expect(isGamepadTriggerDown(gamepad([], [{ value: .1 }]), 0, 4)).toBe(false);
   });
 });

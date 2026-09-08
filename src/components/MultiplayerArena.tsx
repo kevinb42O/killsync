@@ -10,7 +10,7 @@ import { MultiplayerLaunch } from './ManualMultiplayerSetup';
 import { CoopPing, CoopPingKind, MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION, type CoopAdminRequest, type CoopAdminResult } from '../game/multiplayer/protocol';
 import { COOP_OPERATOR_REDEPLOY_COST, COOP_SHOP_ITEMS, coopShopDisabledReason, type CoopPurchaseResult, type CoopRedeployResult, type CoopShopItemId } from '../game/multiplayer/CoopBuyStation';
 import { CONTROL_SCHEME_DETAILS, getCoopSlideBinding, getMovementBindings, isGamepadControlScheme, type ControlScheme } from '../game/controls';
-import { firstConnectedGamepad, GAMEPAD_BUTTON, gamepadLookAxes, gamepadMovementMask, isGamepadButtonDown } from '../game/gamepad';
+import { firstConnectedGamepad, GAMEPAD_BUTTON, gamepadLookAxes, gamepadMovementMask, isGamepadButtonDown, isGamepadTriggerDown } from '../game/gamepad';
 import { LocalPlayerPrediction } from '../game/multiplayer/LocalPlayerPrediction';
 import { advancePlayerMovement, COOP_PLAYER_RADIUS, COOP_STEP_MS } from '../game/multiplayer/playerMovement';
 import { HostSimulationClock } from '../game/multiplayer/HostSimulationClock';
@@ -1667,11 +1667,15 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     window.addEventListener('contextmenu', onContextMenu);
 
     let previousGamepadButtons: boolean[] = [];
+    let previousGamepadAimHeld = false;
     const pollGamepad = (elapsedMs: number) => {
       if (!isGamepadControlScheme(controlScheme) || typeof navigator === 'undefined' || !navigator.getGamepads) return;
       const gamepad = firstConnectedGamepad(Array.from(navigator.getGamepads()));
       if (!gamepad || deploymentBlockedRef.current || isSpectator || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current || adminPausedRef.current) {
-        if (gamepad) previousGamepadButtons = gamepad.buttons.map(button => Boolean(button.pressed || button.value > .5));
+        if (gamepad) {
+          previousGamepadButtons = gamepad.buttons.map(button => Boolean(button.pressed || button.value > .5));
+          previousGamepadAimHeld = isGamepadTriggerDown(gamepad, GAMEPAD_BUTTON.aim, 4);
+        }
         return;
       }
 
@@ -1683,15 +1687,31 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
 
       const fireHeld = down(GAMEPAD_BUTTON.fire);
       const firePressed = pressed(GAMEPAD_BUTTON.fire);
-      const aimHeld = down(GAMEPAD_BUTTON.aim);
-      const specialPressed = pressed(GAMEPAD_BUTTON.aim) && inputRef.current.selectedSlot === 3;
+      const aimHeld = isGamepadTriggerDown(gamepad, GAMEPAD_BUTTON.aim, 4);
+      const specialPressed = aimHeld && !previousGamepadAimHeld && inputRef.current.selectedSlot === 3;
       const jumpPressed = pressed(GAMEPAD_BUTTON.jump);
       const reloadPressed = pressed(GAMEPAD_BUTTON.reload);
       const interactPressed = pressed(GAMEPAD_BUTTON.interact);
-      if (pressed(GAMEPAD_BUTTON.previousWeapon) || pressed(GAMEPAD_BUTTON.dpadLeft)) changeSelectedWeapon(-1);
-      if (pressed(GAMEPAD_BUTTON.nextWeapon) || pressed(GAMEPAD_BUTTON.dpadRight)) changeSelectedWeapon(1);
+      if (pressed(GAMEPAD_BUTTON.build)) {
+        firing = false;
+        inputRef.current = { ...inputRef.current, firing: false, aiming: false };
+        setBuildMode(!buildModeRef.current);
+        setBuildMessage(null);
+      }
+      if (buildModeRef.current) {
+        if (pressed(GAMEPAD_BUTTON.dpadUp) || pressed(GAMEPAD_BUTTON.dpadDown)) {
+          const direction = pressed(GAMEPAD_BUTTON.dpadDown) ? 1 : -1;
+          const current = COOP_BUILD_TYPES.indexOf(buildTypeRef.current);
+          selectBuildType(COOP_BUILD_TYPES[(current + direction + COOP_BUILD_TYPES.length) % COOP_BUILD_TYPES.length]);
+        }
+        if (pressed(GAMEPAD_BUTTON.slide)) setBuildMode(false);
+        if (firePressed) placeStructure();
+      } else {
+        if (pressed(GAMEPAD_BUTTON.previousWeapon) || pressed(GAMEPAD_BUTTON.dpadLeft)) changeSelectedWeapon(-1);
+        if (pressed(GAMEPAD_BUTTON.nextWeapon) || pressed(GAMEPAD_BUTTON.dpadRight)) changeSelectedWeapon(1);
+      }
 
-      if (firePressed) {
+      if (firePressed && !buildModeRef.current) {
         fireActionId++;
         const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
         const weapon = local?.weaponStates[inputRef.current.selectedSlot];
@@ -1706,7 +1726,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       if (specialPressed) altFireActionId++;
       if (interactPressed) triggerContextualInteract();
       if (reloadPressed || jumpPressed || interactPressed || firePressed || specialPressed) sequence++;
-      firing = fireHeld;
+      firing = buildModeRef.current ? false : fireHeld;
       inputRef.current = {
         ...inputRef.current,
         sequence,
@@ -1714,12 +1734,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         movement: gamepadMovementMask(gamepad),
         aimAngle: quantizeAngle(renderer.getAimAngle()),
         aimPitch: quantizePitch(renderer.getAimPitch()),
-        firing: fireHeld,
+        firing: buildModeRef.current ? false : fireHeld,
         fireActionId,
         altFireActionId,
         reloadPressed: inputRef.current.reloadPressed || reloadPressed,
         sprinting: down(GAMEPAD_BUTTON.sprint),
-        sliding: down(GAMEPAD_BUTTON.slide),
+        sliding: !buildModeRef.current && down(GAMEPAD_BUTTON.slide),
         reviving: down(GAMEPAD_BUTTON.interact),
         interactActionId,
         jumpPressed: inputRef.current.jumpPressed || jumpPressed,
@@ -1727,6 +1747,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         aiming: inputRef.current.selectedSlot === 3 ? false : aimHeld,
       };
       previousGamepadButtons = buttons;
+      previousGamepadAimHeld = aimHeld;
     };
 
     let animationFrame = 0;
