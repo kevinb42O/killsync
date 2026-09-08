@@ -2515,7 +2515,7 @@ export default function App() {
                       { label: 'Sprint', key: 'L3' },
                       { label: 'Slide / crouch', key: 'B' },
                       { label: 'Jump / jet', key: 'A' },
-                      { label: 'Fire / aim', key: 'RT / LT' },
+                      { label: 'Fire / aim / special', key: 'RT / LT' },
                       { label: 'Reload', key: 'X' },
                       { label: 'Weapons', key: 'LB / RB / D-PAD' },
                       { label: 'Revive / interact', key: 'Y' },

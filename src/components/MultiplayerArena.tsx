@@ -1683,6 +1683,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
 
       const fireHeld = down(GAMEPAD_BUTTON.fire);
       const firePressed = pressed(GAMEPAD_BUTTON.fire);
+      const aimHeld = down(GAMEPAD_BUTTON.aim);
+      const specialPressed = pressed(GAMEPAD_BUTTON.aim) && inputRef.current.selectedSlot === 3;
       const jumpPressed = pressed(GAMEPAD_BUTTON.jump);
       const reloadPressed = pressed(GAMEPAD_BUTTON.reload);
       const interactPressed = pressed(GAMEPAD_BUTTON.interact);
@@ -1697,8 +1699,13 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           renderer.predictLocalFire(weapon.weaponId, fireActionId);
         }
       }
+      // Slot four is the operator artifact weapon. Mouse right-click already
+      // sends its edge-triggered action rather than entering ADS; make LT the
+      // exact controller equivalent so a charged special is never swallowed
+      // by ordinary aiming.
+      if (specialPressed) altFireActionId++;
       if (interactPressed) triggerContextualInteract();
-      if (reloadPressed || jumpPressed || interactPressed || firePressed) sequence++;
+      if (reloadPressed || jumpPressed || interactPressed || firePressed || specialPressed) sequence++;
       firing = fireHeld;
       inputRef.current = {
         ...inputRef.current,
@@ -1709,6 +1716,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         aimPitch: quantizePitch(renderer.getAimPitch()),
         firing: fireHeld,
         fireActionId,
+        altFireActionId,
         reloadPressed: inputRef.current.reloadPressed || reloadPressed,
         sprinting: down(GAMEPAD_BUTTON.sprint),
         sliding: down(GAMEPAD_BUTTON.slide),
@@ -1716,7 +1724,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         interactActionId,
         jumpPressed: inputRef.current.jumpPressed || jumpPressed,
         jetHeld: down(GAMEPAD_BUTTON.jump),
-        aiming: down(GAMEPAD_BUTTON.aim),
+        aiming: inputRef.current.selectedSlot === 3 ? false : aimHeld,
       };
       previousGamepadButtons = buttons;
     };
@@ -2393,7 +2401,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         <div className="coop-weapons__class" style={{ color: classOperator.color }}><b>{classOperator.className}</b><span>{classOperator.role}</span></div>
         <div className="coop-weapons__meter"><span style={{ color: classOperator.color }}>{classOperator.resourceLabel}</span><i><em style={{ width: `${Math.max(0, Math.min(100, (localSnapshot?.artifactResource || 0) / classOperator.resourceMax * 100))}%`, backgroundColor: classOperator.color }} /></i><b>{Math.floor(localSnapshot?.artifactResource || 0)}/{classOperator.resourceMax}</b></div>
         <div className="coop-weapons__meter coop-weapons__meter--jet"><span>BURST PACK</span><i><em style={{ width: `${Math.max(0, Math.min(100, localSnapshot?.jetFuel ?? 100))}%` }} /></i><b>{Math.round(localSnapshot?.jetFuel ?? 100)}</b></div>
-        {hud.selectedSlot === 3 && <div className="coop-weapons__artifact" data-ready={specialReady} style={{ '--special-color': classOperator.color } as CSSProperties}><kbd>RMB</kbd><b>{classOperator.spenderName}</b><span>{classOperator.spenderDescription}</span>{specialReady && <small className="coop-weapons__artifact-ready">{tr('hud.specialCharged')}</small>}{localSnapshot?.artifactProc && <small>{localSnapshot.artifactProc.replaceAll('_', ' ')}</small>}</div>}
+        {hud.selectedSlot === 3 && <div className="coop-weapons__artifact" data-ready={specialReady} style={{ '--special-color': classOperator.color } as CSSProperties}><kbd>{isGamepadControlScheme(controlScheme) ? 'LT' : 'RMB'}</kbd><b>{classOperator.spenderName}</b><span>{classOperator.spenderDescription}</span>{specialReady && <small className="coop-weapons__artifact-ready">{tr('hud.specialCharged')}</small>}{localSnapshot?.artifactProc && <small>{localSnapshot.artifactProc.replaceAll('_', ' ')}</small>}</div>}
         <div className="coop-weapons__name" style={{ color: activeWeapon.color }}><span>{tr(coopWeaponShortNameKey(activeWeaponState?.weaponId || 'plasma_gun'))}</span><small>{tr('hud.weaponLevel', { level: activeWeaponState?.level || 1 })}</small></div>
         <div className="coop-weapons__ammo"><b>{activeWeaponState?.magazineAmmo ?? '—'}</b><span>/ {activeWeaponState?.reserveAmmo ?? '—'}</span></div>
         <div className="coop-weapons__slots">{hud.weapons.map((weapon, index) => <span key={`${weapon.weaponId}-${index}`} data-selected={hud.selectedSlot === index}>{index + 1}</span>)}</div>
