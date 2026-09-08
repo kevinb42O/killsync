@@ -66,7 +66,7 @@ export const COOP_STRUCTURE_DEFINITIONS: Readonly<Record<CoopStructureType, Coop
   },
   bridge_segment: {
     type: 'bridge_segment', name: 'Worldlink Span',
-    description: 'Contribute a permanent bridge span toward the next world at any time. Crossing early is your risk.',
+    description: 'Contribute a permanent bridge span toward the next world. Every completed span is solid immediately.',
     chargeCost: 1, maxHealth: 10_000, width: 260, depth: 170, radius: 154, color: '#fbbf24', blocksMovement: false,
   },
 });

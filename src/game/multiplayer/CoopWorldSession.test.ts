@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { WORLD_IDS } from '../world/WorldDefinitions';
-import { CoopSimulation, quantizeAngle, quantizePitch } from './CoopSimulation';
+import { WORLD_IDS, getWorldDefinition } from '../world/WorldDefinitions';
+import { CoopSimulation, COOP_BRIDGE_SEGMENT_LENGTH, quantizeAngle, quantizePitch } from './CoopSimulation';
 import { MULTIPLAYER_PROTOCOL_VERSION } from './protocol';
 
 describe('co-op world sessions', () => {
@@ -96,5 +96,34 @@ describe('co-op world sessions', () => {
     expect(transitioned.run.phase).toBe('insertion');
     expect(transitioned.structures).toHaveLength(0);
     expect(transitioned.players[0].weaponStates.every(weapon => weapon.level >= 2)).toBe(true);
+  });
+
+  it.each(['neon_bastion', 'cinderworks', 'white_silence'] as const)('makes the first incomplete Worldlink span walkable from the %s dock', (worldId) => {
+    const simulation = new CoopSimulation([{ id: 'p1', label: 'ONE', color: '#22d3ee' }], 93, `partial-${worldId}`, worldId);
+    const internals = simulation as any;
+    const bridge = simulation.createSnapshot().bridge!;
+    const player = internals.players.get('p1');
+    player.x = bridge.buildX;
+    player.y = bridge.buildY;
+    simulation.adminGive(['p1'], 'fabricator', 1);
+    expect(simulation.buildStructure('p1', 'bridge_segment', 0, 0, 0, 1)).toBeUndefined();
+
+    const partial = simulation.createSnapshot().bridge!;
+    expect(partial).toMatchObject({ state: 'building', builtSegments: 1, startX: bridge.startX });
+    expect(partial.startX).toBe(getWorldDefinition(worldId).bridgehead.x);
+    expect(partial.startX).toBeLessThan(partial.buildX + COOP_BRIDGE_SEGMENT_LENGTH);
+    // Start on the safe shore, then cross into the one built span. This was
+    // previously a fatal gap in worlds whose shore ended before the old fixed
+    // bridge x-coordinate.
+    player.x = partial.startX - 25;
+    player.y = partial.buildY;
+    simulation.setInput('p1', {
+      type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence: 2, clientTime: 0,
+      movement: 1, aimAngle: quantizeAngle(0), aimPitch: quantizePitch(0), selectedSlot: 0,
+      firing: false, reloadPressed: false, aiming: false, sprinting: false, sliding: false,
+      reviving: false, jumpPressed: false, dashPressed: false,
+    });
+    simulation.tick(50);
+    expect(simulation.createSnapshot().players[0]).toMatchObject({ lifeState: 'alive' });
   });
 });

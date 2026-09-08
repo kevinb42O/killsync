@@ -1073,19 +1073,27 @@ export class Renderer3D {
     group.name = `${this.worldId}-bridgehead`;
     const baseMaterial = new THREE.MeshStandardMaterial({ color: definition.theme.groundColor, metalness: .7, roughness: .28 });
     const glowMaterial = new THREE.MeshBasicMaterial({ color: definition.theme.accentColor, transparent: true, opacity: .82, toneMapped: false });
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(96, 120, 26, 8), baseMaterial);
-    base.position.y = 13;
-    group.add(base);
+    // A broad, open dock rather than a solid plinth: the Worldlink connects
+    // through the centre, so its terminal must read as an approach, not a
+    // visual wall at the beginning of the first constructed segment.
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(180, 10, 170), baseMaterial);
+    deck.position.set(26, -5, 0);
+    const threshold = new THREE.Mesh(new THREE.BoxGeometry(164, 1.4, 142), glowMaterial);
+    threshold.position.set(28, .7, 0);
+    group.add(deck, threshold);
     for (const side of [-1, 1]) {
-      const pylon = new THREE.Mesh(new THREE.BoxGeometry(22, 170, 22), baseMaterial);
-      pylon.position.set(0, 85, side * 82);
+      const pylon = new THREE.Mesh(new THREE.BoxGeometry(18, 126, 18), baseMaterial);
+      pylon.position.set(16, 63, side * 96);
       const beacon = new THREE.Mesh(new THREE.SphereGeometry(15, 12, 8), glowMaterial);
-      beacon.position.set(0, 174, side * 82);
+      beacon.position.set(16, 134, side * 96);
+      const guide = new THREE.Mesh(new THREE.BoxGeometry(150, 2, 3), glowMaterial);
+      guide.position.set(50, 2, side * 77);
       group.add(pylon, beacon);
+      group.add(guide);
     }
-    const arrow = new THREE.Mesh(new THREE.ConeGeometry(24, 80, 4), glowMaterial);
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(18, 54, 4), glowMaterial);
     arrow.rotation.z = -Math.PI / 2;
-    arrow.position.set(92, 32, 0);
+    arrow.position.set(104, 21, 0);
     group.add(arrow);
     this.scene.add(group);
   }

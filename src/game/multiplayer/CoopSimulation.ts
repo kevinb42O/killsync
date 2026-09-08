@@ -515,7 +515,12 @@ export class CoopSimulation {
   private createBridgeState(state: CoopWorldBridgeSnapshot['state']): CoopWorldBridgeSnapshot {
     const definition = getWorldDefinition(this.currentWorldId);
     const destinationWorldId = nextWorldId(this.currentWorldId);
-    const startX = GAME_WIDTH - 130;
+    // The Worldlink begins at its authored dock, not at the global map edge.
+    // Later worlds have irregular shorelines, so using a fixed x near the
+    // arena edge left a genuine void between the terminal and the first span.
+    // Keeping one player radius of overlap at the dock lets every completed
+    // segment become traversable the instant its build event is accepted.
+    const startX = definition.bridgehead.x;
     return {
       sourceWorldId: this.currentWorldId,
       destinationWorldId,

@@ -219,8 +219,9 @@ function buildDistinctWorldObstacles(worldId: Exclude<WorldId, 'neon_bastion'>) 
       result.push({ id: `${worldId}:${sx}:${sy}`, x, y, width, height, elevation, district: 'signal_plaza', kind });
     }
   }
-  const bridgehead = getWorldDefinition(worldId).bridgehead;
-  result.push({ id: `${worldId}:bridgehead`, x: bridgehead.x - 48, y: bridgehead.y - 48, width: 96, height: 96, elevation: 90, district: 'signal_plaza', kind: 'bridge_pylon' });
+  // The Worldlink dock is an open approach. Its visual pylons stand beside
+  // the deck in Renderer3D; a central collision block here used to seal the
+  // only route onto a freshly constructed first span.
   cacheWorldObstacles(worldId, result);
   return result;
 }

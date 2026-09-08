@@ -24,7 +24,12 @@ export class CoopStructureVisuals {
         this.scene.add(rig);
       }
       const health = structure.maxHealth > 0 ? structure.health / structure.maxHealth : 0;
-      const construction = smoothstep(Math.min(1, Math.max(0, (elapsedMs - structure.createdAtMs) / 650)));
+      // Worldlink collision comes online at the same instant as the build is
+      // accepted. Do not scale the deck up from the void: that made a fully
+      // valid span look incomplete and left its visible surface above players.
+      const construction = structure.type === 'bridge_segment'
+        ? 1
+        : smoothstep(Math.min(1, Math.max(0, (elapsedMs - structure.createdAtMs) / 650)));
       const collapse = structure.state === 'destroying' ? Math.min(1, 1 - (structure.destroyRemainingMs || 0) / 500) : 0;
       // Damage remains readable without modulating a real world light at a
       // flashing frequency. Only the small emissive parts breathe slowly.
@@ -140,16 +145,23 @@ function createStructureRig(type: CoopStructureType, ownerColor: string, preview
 }
 
 function createBridgeSegment(group: THREE.Group, steel: THREE.Material, edge: THREE.Material, accent: THREE.Material, energy: THREE.Material) {
-  addBox(group, 258, 16, 168, 0, 8, 0, steel, 'base');
-  addBox(group, 244, 5, 142, 0, 18, 0, edge, 'armor');
-  for (const z of [-69, 69]) {
-    addBox(group, 258, 5, 7, 0, 23, z, accent, 'accent');
-    for (const x of [-108, -54, 0, 54, 108]) addBox(group, 20, 2.5, 10, x, 26, z, energy, 'energy');
+  // The top of the physical deck is y=0, exactly matching the authoritative
+  // player ground plane. Decorative structure hangs below it, never through
+  // the operator's feet.
+  addBox(group, 260, 12, 170, 0, -6, 0, steel, 'base');
+  addBox(group, 246, .8, 148, 0, -.4, 0, edge, 'armor');
+  for (const z of [-76, 76]) {
+    // The small perimeter curb keeps the silhouette readable from afar. It
+    // stays outside the authoritative walk lane, whose entire deck is flush.
+    addBox(group, 260, 1.2, 5, 0, .6, z, accent, 'accent');
+    addBox(group, 252, .7, 2.5, 0, 1.55, z, energy, 'energy');
+    for (const x of [-104, -52, 0, 52, 104]) addBox(group, 14, .5, 9, x, -.25, z * .82, energy, 'energy');
   }
-  for (const x of [-112, 0, 112]) {
-    addBox(group, 8, 26, 156, x, -3, 0, steel, 'brace', 0, 0, x === 0 ? 0 : x > 0 ? .07 : -.07);
-    addBox(group, 30, 3, 42, x, 21, 0, energy, 'scan');
+  for (const x of [-112, -56, 0, 56, 112]) {
+    addBox(group, 4, .7, 146, x, -.35, 0, accent, 'accent');
+    addBox(group, 8, 30, 154, x, -20, 0, steel, 'brace', 0, 0, x * .0011);
   }
+  for (const x of [-91, -30, 30, 91]) addBox(group, 34, .7, 66, x, -.35, 0, energy, 'scan');
 }
 
 function createBarricade(group: THREE.Group, steel: THREE.Material, edge: THREE.Material, accent: THREE.Material, energy: THREE.Material) {
