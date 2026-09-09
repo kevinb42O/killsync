@@ -2535,8 +2535,8 @@ export default function App() {
                     ] : isMobileControlScheme(controlScheme) ? [
                       { label: 'Move / look', key: 'STICK / SWIPE' },
                       { label: 'Fire / special', key: 'FIRE / AIM' },
-                      { label: 'Sprint / slide', key: 'HOLD' },
-                      { label: 'Jump / jet', key: 'TAP SCREEN' },
+                      { label: 'Sprint / slide', key: 'PULL / 2× STICK' },
+                      { label: 'Jump / jet', key: 'TAP / HOLD SCREEN' },
                       { label: 'Reload', key: 'RELOAD' },
                       { label: 'Weapons', key: 'PREV / NEXT' },
                       { label: 'Build / place', key: 'BUILD / PLACE' },

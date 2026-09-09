@@ -1139,7 +1139,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     const movementBindings = getMovementBindings(controlScheme);
     const slideBinding = getCoopSlideBinding(controlScheme);
     let firing = false;
-    const mobile = { moveX: 0, moveY: 0, fire: false, aim: false, jump: false, slide: false, sprint: false, interact: false };
+    const mobile = { moveX: 0, moveY: 0, fire: false, aim: false, jump: false, slide: false, sprint: false, stickSprint: false, interact: false };
     let sequence = inputRef.current.sequence;
     let fireActionId = inputRef.current.fireActionId || 0;
     let altFireActionId = inputRef.current.altFireActionId || 0;
@@ -1184,7 +1184,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         aimPitch: quantizePitch(renderer.getAimPitch()),
         firing,
         aiming: mobile.aim && !specialSelected,
-        sprinting: mobile.sprint,
+        sprinting: mobile.sprint || mobile.stickSprint,
         sliding: mobile.slide && !buildModeRef.current,
         reviving: mobile.interact,
         jetHeld: mobile.jump,
@@ -1369,6 +1369,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       if (action.type === 'move') {
         mobile.moveX = action.x;
         mobile.moveY = action.y;
+        mobile.stickSprint = action.sprinting;
         updateMobileInput();
         return;
       }
@@ -1760,7 +1761,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     const clearControls = () => {
       keys.clear(); firing = false; updateInput();
-      mobile.moveX = 0; mobile.moveY = 0; mobile.fire = false; mobile.aim = false; mobile.jump = false; mobile.slide = false; mobile.sprint = false; mobile.interact = false;
+      mobile.moveX = 0; mobile.moveY = 0; mobile.fire = false; mobile.aim = false; mobile.jump = false; mobile.slide = false; mobile.sprint = false; mobile.stickSprint = false; mobile.interact = false;
       inputRef.current = { ...inputRef.current, aiming: false, jumpPressed: false, jetHeld: false, reloadPressed: false };
     };
     const onVisibilityChange = () => { if (document.hidden) clearControls(); };

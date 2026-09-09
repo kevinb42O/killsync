@@ -3,7 +3,7 @@ import { Backpack, ChevronLeft, ChevronRight, Crosshair, Hammer, Map, MapPin, Me
 import type { CoopStructureType } from '../game/multiplayer/CoopFieldEngineering';
 
 export type MobileCoopAction =
-  | { type: 'move'; x: number; y: number }
+  | { type: 'move'; x: number; y: number; sprinting: boolean }
   | { type: 'look'; deltaX: number; deltaY: number }
   | { type: 'hold'; control: 'fire' | 'aim' | 'jump' | 'slide' | 'sprint' | 'interact'; pressed: boolean }
   | { type: 'tap'; control: 'reload' | 'previousWeapon' | 'nextWeapon' | 'toggleBuild' | 'placeBuild' | 'ping' | 'backpack' | 'map' | 'chat' | 'buildRotateLeft' | 'buildRotateRight' | 'buildActivate' | 'buildRelocate' | 'buildDismantle' }
@@ -45,91 +45,78 @@ function HoldButton({ label, title, className = '', control, onAction, children 
   </button>;
 }
 
-/** One low-profile movement button covers the two continuous movement actions:
- * hold for sprint and double tap for an immediate slide. Jump is intentionally
- * a tap anywhere in the free-look field, like modern touch shooters. */
-function MovementGestureButton({ onAction }: { onAction: Props['onAction'] }) {
-  const holdTimerRef = useRef<number | null>(null);
-  const lastTapAtRef = useRef(0);
-  const sprintingRef = useRef(false);
-  const activePointerRef = useRef<number | null>(null);
-  const finish = (event: PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    if (activePointerRef.current !== event.pointerId) return;
-    activePointerRef.current = null;
-    if (holdTimerRef.current !== null) { window.clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
-    if (sprintingRef.current) {
-      sprintingRef.current = false;
-      onAction({ type: 'hold', control: 'sprint', pressed: false });
-      return;
-    }
-    const now = performance.now();
-    if (now - lastTapAtRef.current < 280) {
-      lastTapAtRef.current = 0;
-      onAction({ type: 'hold', control: 'slide', pressed: true });
-      window.setTimeout(() => onAction({ type: 'hold', control: 'slide', pressed: false }), 180);
-    } else lastTapAtRef.current = now;
-  };
-  return <button type="button" className="coop-touch-button coop-touch-button--motion" aria-label="Hold to sprint, double tap to slide"
-    onPointerDown={event => {
-      event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId);
-      activePointerRef.current = event.pointerId;
-      holdTimerRef.current = window.setTimeout(() => { sprintingRef.current = true; onAction({ type: 'hold', control: 'sprint', pressed: true }); }, 180);
-    }}
-    onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish}>
-    <span>MOTION</span><small>hold run · 2× slide</small>
-  </button>;
-}
-
 /** Mobile-only co-op HUD. It emits high-level actions; MultiplayerArena keeps
  * authority, prediction, and all input sequencing in one place. */
 export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
   const joystickRef = useRef<HTMLDivElement>(null);
   const joystickPointerRef = useRef<number | null>(null);
+  const lastJoystickTapAtRef = useRef(0);
   const lookPointerRef = useRef<number | null>(null);
   const lastLookRef = useRef<{ x: number; y: number } | null>(null);
   const lookStartRef = useRef<{ x: number; y: number } | null>(null);
   const lookMovedRef = useRef(false);
+  const jumpHoldTimerRef = useRef<number | null>(null);
+  const jumpHeldRef = useRef(false);
   const [utilityOpen, setUtilityOpen] = useState(false);
+
+  const clearPendingJumpHold = () => {
+    if (jumpHoldTimerRef.current === null) return;
+    window.clearTimeout(jumpHoldTimerRef.current);
+    jumpHoldTimerRef.current = null;
+  };
 
   const moveJoystick = (event: PointerEvent<HTMLDivElement>) => {
     const element = joystickRef.current;
     if (!element || joystickPointerRef.current !== event.pointerId) return;
     const rect = element.getBoundingClientRect();
-    const x = clamp((event.clientX - (rect.left + rect.width / 2)) / (rect.width * .32));
-    const y = clamp((event.clientY - (rect.top + rect.height / 2)) / (rect.height * .32));
+    const rawX = (event.clientX - (rect.left + rect.width / 2)) / (rect.width * .32);
+    const rawY = (event.clientY - (rect.top + rect.height / 2)) / (rect.height * .32);
+    const x = clamp(rawX);
+    const y = clamp(rawY);
+    // The normal movement ring reaches full speed at 1.0. Pulling through the
+    // outer rim is a deliberate sprint gesture, with no extra button required.
+    const sprinting = Math.hypot(rawX, rawY) > 1.18;
     // Native-looking thumb feedback makes the stick usable without looking at
     // a player's thumb, while the movement value remains normalized.
     element.style.setProperty('--stick-x', `${Math.round(x * rect.width * .22)}px`);
     element.style.setProperty('--stick-y', `${Math.round(y * rect.height * .22)}px`);
-    onAction({ type: 'move', x, y });
+    onAction({ type: 'move', x, y, sprinting });
   };
   const releaseJoystick = (event: PointerEvent<HTMLDivElement>) => {
     if (joystickPointerRef.current !== event.pointerId) return;
     joystickPointerRef.current = null;
     joystickRef.current?.style.setProperty('--stick-x', '0px');
     joystickRef.current?.style.setProperty('--stick-y', '0px');
-    onAction({ type: 'move', x: 0, y: 0 });
+    onAction({ type: 'move', x: 0, y: 0, sprinting: false });
   };
   const moveLook = (event: PointerEvent<HTMLDivElement>) => {
     if (lookPointerRef.current !== event.pointerId || !lastLookRef.current) return;
     const deltaX = event.clientX - lastLookRef.current.x;
     const deltaY = event.clientY - lastLookRef.current.y;
     lastLookRef.current = { x: event.clientX, y: event.clientY };
-    if (lookStartRef.current && Math.abs(event.clientX - lookStartRef.current.x) + Math.abs(event.clientY - lookStartRef.current.y) > 8) lookMovedRef.current = true;
+    if (lookStartRef.current && Math.abs(event.clientX - lookStartRef.current.x) + Math.abs(event.clientY - lookStartRef.current.y) > 8) {
+      lookMovedRef.current = true;
+      // Swipes are camera-only unless a held jump has already begun. This lets
+      // a player turn while maintaining intentional jetpack thrust.
+      if (!jumpHeldRef.current) clearPendingJumpHold();
+    }
     if (deltaX || deltaY) onAction({ type: 'look', deltaX, deltaY });
   };
   const releaseLook = (event: PointerEvent<HTMLDivElement>, jumpOnTap: boolean) => {
     if (lookPointerRef.current !== event.pointerId) return;
     const wasTap = !lookMovedRef.current;
+    clearPendingJumpHold();
     lookPointerRef.current = null;
     lastLookRef.current = null;
     lookStartRef.current = null;
     lookMovedRef.current = false;
-    // A motionless touch is a jump. A dragged touch is camera-only, preventing
-    // accidental jumps while aiming. Each pointer is independent, so this can
-    // happen while the other thumbs hold MOVE and FIRE.
-    if (jumpOnTap && wasTap) {
+    // A quick, motionless touch remains a jump. Holding the same touch starts
+    // the jump before release and preserves jetHeld until release, allowing a
+    // natural jump-to-jetpack transition without a dedicated HUD button.
+    if (jumpHeldRef.current) {
+      jumpHeldRef.current = false;
+      onAction({ type: 'hold', control: 'jump', pressed: false });
+    } else if (jumpOnTap && wasTap) {
       onAction({ type: 'hold', control: 'jump', pressed: true });
       onAction({ type: 'hold', control: 'jump', pressed: false });
     }
@@ -150,14 +137,44 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
       </div>}
     </div>
 
-    <div ref={joystickRef} className="coop-touch-stick" aria-label="Move joystick"
-      onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); joystickPointerRef.current = event.pointerId; moveJoystick(event); }}
+    <div ref={joystickRef} className="coop-touch-stick" aria-label="Move joystick. Pull to the outer rim to sprint; double tap to slide."
+      onPointerDown={event => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        joystickPointerRef.current = event.pointerId;
+        const now = performance.now();
+        if (now - lastJoystickTapAtRef.current < 280) {
+          lastJoystickTapAtRef.current = 0;
+          onAction({ type: 'hold', control: 'sprint', pressed: true });
+          onAction({ type: 'hold', control: 'slide', pressed: true });
+          window.setTimeout(() => {
+            onAction({ type: 'hold', control: 'slide', pressed: false });
+            onAction({ type: 'hold', control: 'sprint', pressed: false });
+          }, 180);
+        } else lastJoystickTapAtRef.current = now;
+        moveJoystick(event);
+      }}
       onPointerMove={moveJoystick} onPointerUp={releaseJoystick} onPointerCancel={releaseJoystick} onLostPointerCapture={releaseJoystick}>
-      <i /><b>MOVE</b>
+      <i /><b>MOVE · PULL TO SPRINT</b>
     </div>
 
-    <div className="coop-touch-look" aria-label="Swipe anywhere outside controls to look around"
-      onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); lookPointerRef.current = event.pointerId; lookMovedRef.current = false; lookStartRef.current = { x: event.clientX, y: event.clientY }; lastLookRef.current = { x: event.clientX, y: event.clientY }; }}
+    <div className="coop-touch-look" aria-label="Swipe to look. Tap to jump; hold after jumping to use the jetpack."
+      onPointerDown={event => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        lookPointerRef.current = event.pointerId;
+        lookMovedRef.current = false;
+        jumpHeldRef.current = false;
+        lookStartRef.current = { x: event.clientX, y: event.clientY };
+        lastLookRef.current = { x: event.clientX, y: event.clientY };
+        const pointerId = event.pointerId;
+        clearPendingJumpHold();
+        jumpHoldTimerRef.current = window.setTimeout(() => {
+          if (lookPointerRef.current !== pointerId || lookMovedRef.current) return;
+          jumpHeldRef.current = true;
+          onAction({ type: 'hold', control: 'jump', pressed: true });
+        }, 115);
+      }}
       onPointerMove={moveLook} onPointerUp={event => releaseLook(event, true)} onPointerCancel={event => releaseLook(event, false)} onLostPointerCapture={event => releaseLook(event, false)}>
     </div>
 
@@ -165,7 +182,6 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
       <HoldButton label="AIM" control="aim" onAction={onAction} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
       <HoldButton label="FIRE" control="fire" onAction={onAction} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
       <HoldButton label="USE" control="interact" onAction={onAction} className="coop-touch-button--use"><ShieldPlus size={19} /></HoldButton>
-      <MovementGestureButton onAction={onAction} />
     </div>
 
     {buildMode && <div className="coop-touch-build" aria-label="Build controls">
