@@ -1077,7 +1077,7 @@
   .coop-touch-build__actions { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .coop-touch-build__actions .coop-touch-button { width: 100%; min-height: 40px; border-radius: 7px; background: rgba(15, 23, 42, .90); }
   .coop-touch-build__actions .coop-touch-button--place { border-color: rgba(74, 222, 128, .78); background: rgba(6, 78, 59, .78); }
-  .coop-world-readout { left: auto !important; right: max(10px, env(safe-area-inset-right)) !important; top: max(8px, env(safe-area-inset-top)) !important; max-width: min(38vw, 178px); }
+  .coop-world-readout { display: none; }
 }
 
 @media (pointer: coarse) and (max-width: 560px) {

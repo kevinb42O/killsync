@@ -33,13 +33,32 @@ function TapButton({ label, title, className = '', onAction, children }: { label
   </button>;
 }
 
-function HoldButton({ label, title, className = '', control, onAction, children }: { label: string; title?: string; className?: string; control: Extract<MobileCoopAction, { type: 'hold' }>['control']; onAction: Props['onAction']; children?: ReactNode }) {
+function HoldButton({ label, title, className = '', control, onAction, onDrag, children }: { label: string; title?: string; className?: string; control: Extract<MobileCoopAction, { type: 'hold' }>['control']; onAction: Props['onAction']; onDrag?: (deltaX: number, deltaY: number) => void; children?: ReactNode }) {
+  const pointerRef = useRef<number | null>(null);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   const release = (event: PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
+    if (pointerRef.current !== event.pointerId) return;
+    pointerRef.current = null;
+    lastPointRef.current = null;
     onAction({ type: 'hold', control, pressed: false });
   };
   return <button type="button" className={`coop-touch-button ${className}`} aria-label={title || label}
-    onPointerDown={event => { event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); onAction({ type: 'hold', control, pressed: true }); }}
+    onPointerDown={event => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      pointerRef.current = event.pointerId;
+      lastPointRef.current = { x: event.clientX, y: event.clientY };
+      onAction({ type: 'hold', control, pressed: true });
+    }}
+    onPointerMove={event => {
+      if (pointerRef.current !== event.pointerId || !lastPointRef.current || !onDrag) return;
+      const deltaX = event.clientX - lastPointRef.current.x;
+      const deltaY = event.clientY - lastPointRef.current.y;
+      lastPointRef.current = { x: event.clientX, y: event.clientY };
+      if (deltaX || deltaY) onDrag(deltaX, deltaY);
+    }}
     onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}>
     {children}<span>{label}</span>
   </button>;
@@ -177,7 +196,7 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
     </div>
 
     <div className="coop-touch-combat">
-      <HoldButton label="AIM" control="aim" onAction={onAction} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
+      <HoldButton label="AIM" title="Hold to aim; drag to look" control="aim" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
       <HoldButton label="FIRE" control="fire" onAction={onAction} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
       <HoldButton label="USE" control="interact" onAction={onAction} className="coop-touch-button--use"><ShieldPlus size={19} /></HoldButton>
       <TapButton label="PREV" title="Previous weapon" onAction={() => onAction({ type: 'tap', control: 'previousWeapon' })} className="coop-touch-button--previous"><ChevronLeft size={19} /></TapButton>
