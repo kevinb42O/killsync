@@ -34,6 +34,9 @@ export class SoundManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private enabled: boolean = false;
+  /** iOS and several embedded Android browsers need one silent source started
+   * from a real touch event before they will output later Web Audio nodes. */
+  private outputUnlocked = false;
   private gunfireBuffer: AudioBuffer | null = null;
   private gunfireLoad: Promise<void> | null = null;
   private gunfireAssetUnavailable = false;
@@ -73,8 +76,34 @@ export class SoundManager {
    */
   activate() {
     this.ensureRunning();
+    this.unlockMobileOutput();
     void this.loadGunfireAsset();
     this.preloadReloads();
+  }
+
+  /**
+   * Prime the output with an inaudible, one-sample buffer. This must be called
+   * synchronously from a trusted gesture; it is harmless on desktop browsers
+   * and prevents an otherwise fully-running AudioContext from remaining silent
+   * on iOS PWAs and embedded Android browsers.
+   */
+  private unlockMobileOutput() {
+    if (this.outputUnlocked || !this.ctx || !this.masterGain) return;
+    const context = this.ctx;
+    this.outputUnlocked = true;
+    if (context.state === 'suspended') void context.resume().catch(() => {});
+    try {
+      const source = context.createBufferSource();
+      source.buffer = context.createBuffer(1, 1, context.sampleRate);
+      const gain = context.createGain();
+      gain.gain.setValueAtTime(0, context.currentTime);
+      source.connect(gain);
+      gain.connect(this.masterGain);
+      source.start(context.currentTime);
+      source.stop(context.currentTime + .001);
+    } catch {
+      // Browsers that do not need a manual unlock keep the normal audio path.
+    }
   }
 
   /** Start loading the bundled CC0 firearm sound without playing it. */

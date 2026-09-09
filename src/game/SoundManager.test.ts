@@ -127,14 +127,16 @@ describe('SoundManager', () => {
     expect(createdOscillators[1].type).toBe('sine');
     expect(createdBufferSources).toHaveLength(1);
     expect(createdBufferSources[0].loop).toBe(true);
-    expect(createdGains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.016, 10.045);
+    const jetpackGain = createdGains.find(gain => gain.gain.linearRampToValueAtTime.mock.calls.some((call: unknown[]) => call[0] === .016 && call[1] === 10.045));
+    expect(jetpackGain).toBeDefined();
+    if (!jetpackGain) throw new Error('Jetpack gain was not created');
 
     sm.updateJetpack(true, .5);
     expect(createdOscillators).toHaveLength(2);
     expect(createdBufferSources).toHaveLength(1);
 
     sm.updateJetpack(false, .5);
-    expect(createdGains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10.11);
+    expect(jetpackGain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10.11);
     sm.stopJetpack();
     expect(createdOscillators[0].stop).toHaveBeenCalledOnce();
     expect(createdOscillators[1].stop).toHaveBeenCalledOnce();

@@ -1,6 +1,7 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { Backpack, ChevronLeft, ChevronRight, Crosshair, Hammer, Map, MapPin, MessageSquare, MoreHorizontal, RotateCcw, ShieldPlus, Wrench, X } from 'lucide-react';
 import type { CoopStructureType } from '../game/multiplayer/CoopFieldEngineering';
+import { soundManager } from '../game/SoundManager';
 
 export type MobileCoopAction =
   | { type: 'move'; x: number; y: number; sprinting: boolean }
@@ -145,7 +146,9 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
     }
   };
 
-  return <div className="coop-mobile-controls" aria-label="Mobile co-op controls">
+  // Capture happens before an individual touch control handles the event, so
+  // the very first tap reliably unlocks sound on mobile browsers.
+  return <div className="coop-mobile-controls" aria-label="Mobile co-op controls" onPointerDownCapture={() => soundManager.activate()}>
     <div className="coop-touch-utility">
       <TapButton label="MENU" title="Open quick actions" onAction={() => setUtilityOpen(open => !open)} className={utilityOpen ? 'coop-touch-button--active' : ''}><MoreHorizontal size={21} /></TapButton>
       {utilityOpen && <div className="coop-touch-utility__tray" aria-label="Quick actions">

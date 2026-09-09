@@ -1502,7 +1502,16 @@ export default function App() {
   };
 
   return (
-    <div ref={appRef} className="app-shell relative w-full bg-[#0a0a0a] overflow-hidden text-white font-sans">
+    <div
+      ref={appRef}
+      className="app-shell relative w-full bg-[#0a0a0a] overflow-hidden text-white font-sans"
+      onPointerDownCapture={() => {
+        // Mobile browsers only grant Web Audio permission from the first real
+        // touch. Keeping this at the shell also covers menu and deployment
+        // taps, before the in-game touch HUD has mounted.
+        if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) soundManager.activate();
+      }}
+    >
       {gameState === 'MENU' && <MenuEffects />}
       {/* 2D Canvas for Topdown Mode */}
       <canvas
