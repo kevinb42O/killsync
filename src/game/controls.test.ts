@@ -35,6 +35,11 @@ describe('control presets', () => {
     expect(getMovementBindings('GAMEPAD')).toEqual({ up: [], down: [], left: [], right: [] });
   });
 
+  it('persists the dedicated mobile profile without keyboard movement bindings', () => {
+    expect(parseControlScheme('MOBILE')).toBe('MOBILE');
+    expect(getMovementBindings('MOBILE')).toEqual({ up: [], down: [], left: [], right: [] });
+  });
+
   it('keeps co-op slide off QWERTY forward movement', () => {
     expect(getCoopSlideBinding('AZERTY')).toBe('w');
     expect(getCoopSlideBinding('QWERTY')).toBe('c');

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2, Radio, Gamepad2 } from 'lucide-react';
+import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2, Radio, Gamepad2, Smartphone } from 'lucide-react';
 import { GameEngine, BalanceTuning, DEFAULT_BALANCE_TUNING } from './game/Engine';
 import { GameHUD } from './components/GameHUD';
 import { MenuEffects, triggerMenuEffect } from './components/MenuEffects';
@@ -33,7 +33,7 @@ import {
   createExfillXPBreakdown,
   getAccountXPRequired
 } from './game/xpProgression';
-import { CONTROL_SCHEME_DETAILS, ControlScheme, getCoopSlideBinding, getMovementBindings, isGamepadControlScheme, parseControlScheme } from './game/controls';
+import { CONTROL_SCHEME_DETAILS, ControlScheme, getCoopSlideBinding, getMovementBindings, isGamepadControlScheme, isMobileControlScheme, parseControlScheme } from './game/controls';
 import { importCoopOwnerRecoveryCode } from './game/multiplayer/CoopOwnerIdentity';
 
 const EMPTY_INVENTORY: Inventory = { armorTier: 0, hasRevive: false, nukeCount: 0 };
@@ -2404,7 +2404,7 @@ export default function App() {
                       <h2 className="text-3xl font-black italic tracking-tight text-white sm:text-4xl">CONTROL SETTINGS</h2>
                     </div>
                   </div>
-                  <p className="max-w-2xl text-sm leading-relaxed text-white/50">Choose a keyboard layout or gamepad. Your choice is saved automatically; the gamepad profile drives direct co-op through the browser's standard controller support.</p>
+                  <p className="max-w-2xl text-sm leading-relaxed text-white/50">Choose a keyboard layout, gamepad, or mobile profile. Your choice is saved automatically; touch controls appear only on small touch devices.</p>
                 </div>
 
                 <div className="mb-6 flex w-fit border border-white/10 bg-black/30 p-1" role="tablist" aria-label="Settings categories">
@@ -2429,7 +2429,12 @@ export default function App() {
                         { label: 'Fire', key: 'RT' },
                         { label: 'Aim', key: 'LT' },
                       ]
-                      : [
+                      : isMobileControlScheme(scheme) ? [
+                        { label: 'Move', key: 'STICK' },
+                        { label: 'Look', key: 'SWIPE' },
+                        { label: 'Fire', key: 'HOLD' },
+                        { label: 'Use', key: 'TAP' },
+                      ] : [
                         { label: 'Forward', key: bindings.up[0].toUpperCase() },
                         { label: 'Left', key: bindings.left[0].toUpperCase() },
                         { label: 'Back', key: bindings.down[0].toUpperCase() },
@@ -2452,7 +2457,7 @@ export default function App() {
                         <div className={`absolute left-0 top-0 h-full w-1 transition-colors ${isActive ? 'bg-violet-300' : 'bg-white/10 group-hover:bg-violet-400/60'}`} />
                         <div className="mb-5 flex items-start justify-between gap-4">
                           <div>
-                            <div className="flex items-center gap-2 text-lg font-black italic tracking-wide text-white">{isGamepadControlScheme(scheme) && <Gamepad2 size={19} className="text-cyan-200" />}{details.label}</div>
+                            <div className="flex items-center gap-2 text-lg font-black italic tracking-wide text-white">{isGamepadControlScheme(scheme) && <Gamepad2 size={19} className="text-cyan-200" />}{isMobileControlScheme(scheme) && <Smartphone size={19} className="text-cyan-200" />}{details.label}</div>
                             <div className="mt-1 text-[10px] font-mono uppercase tracking-[0.12em] text-white/40">{details.description}</div>
                           </div>
                           <div className={`flex h-6 w-6 items-center justify-center border transition-all ${isActive ? 'border-violet-200 bg-violet-300 text-slate-950' : 'border-white/15 text-transparent'}`} aria-hidden="true">
@@ -2485,6 +2490,13 @@ export default function App() {
                       <div className="mt-4 flex gap-1.5" aria-label="Gamepad sticks and triggers are enabled for direct co-op">
                         {['L', 'R', 'LT', 'RT'].map((key) => <span key={key} className="flex h-8 min-w-8 items-center justify-center border border-cyan-200/30 bg-black/35 px-2 font-mono text-sm font-black text-cyan-100">{key}</span>)}
                       </div>
+                    </> : isMobileControlScheme(controlScheme) ? <>
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200"><Smartphone size={14} /> Touch ready</div>
+                      <div className="mt-2 text-sm font-bold text-white">The touch HUD only appears on phones and tablets.</div>
+                      <p className="mt-1 text-xs leading-relaxed text-white/45">It stays off on a mouse-and-keyboard PC, leaving the full battlefield visible.</p>
+                      <div className="mt-4 flex gap-1.5" aria-label="Mobile touch controls are enabled for direct co-op">
+                        {['MOVE', 'LOOK', 'USE'].map((key) => <span key={key} className="flex h-8 min-w-8 items-center justify-center border border-cyan-200/30 bg-black/35 px-2 font-mono text-xs font-black text-cyan-100">{key}</span>)}
+                      </div>
                     </> : <>
                       <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200"><Keyboard size={14} /> Always available</div>
                       <div className="mt-2 text-sm font-bold text-white">Arrow keys stay enabled in every keyboard profile.</div>
@@ -2508,7 +2520,7 @@ export default function App() {
 
                 <div className="mt-4 border border-fuchsia-300/25 bg-fuchsia-400/[0.045] p-5" style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}>
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-200"><Radio size={14} /> Direct co-op controls</div>
-                  <p className="mt-2 text-xs leading-relaxed text-white/50">{isGamepadControlScheme(controlScheme) ? 'Controller input uses the standard browser layout. Y interacts and revives; use the sticks for movement and look.' : <>Movement uses the selected profile above. <span className="font-bold text-white/75">F</span> is the shared action key on both keyboard layouts: revive a nearby teammate first, otherwise interact with a Buy Station.</>}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-white/50">{isGamepadControlScheme(controlScheme) ? 'Controller input uses the standard browser layout. Y interacts and revives; use the sticks for movement and look.' : isMobileControlScheme(controlScheme) ? 'The mobile HUD puts movement at the lower left, combat at the lower right, and utilities at the top edge so the center stays clear.' : <>Movement uses the selected profile above. <span className="font-bold text-white/75">F</span> is the shared action key on both keyboard layouts: revive a nearby teammate first, otherwise interact with a Buy Station.</>}</p>
                   <div className="mt-4 grid gap-x-5 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
                     {(isGamepadControlScheme(controlScheme) ? [
                       { label: 'Move / look', key: 'L / R STICK' },
@@ -2520,6 +2532,17 @@ export default function App() {
                       { label: 'Weapons', key: 'LB / RB / D-PAD' },
                       { label: 'Build / select type', key: 'VIEW / D-PAD ↑↓' },
                       { label: 'Revive / interact', key: 'Y' },
+                    ] : isMobileControlScheme(controlScheme) ? [
+                      { label: 'Move / look', key: 'STICK / SWIPE' },
+                      { label: 'Fire / special', key: 'FIRE / AIM' },
+                      { label: 'Sprint / slide', key: 'HOLD' },
+                      { label: 'Jump / jet', key: 'JUMP' },
+                      { label: 'Reload', key: 'RELOAD' },
+                      { label: 'Weapons', key: 'PREV / NEXT' },
+                      { label: 'Build / place', key: 'BUILD / PLACE' },
+                      { label: 'Build type', key: 'TYPE STRIP' },
+                      { label: 'Revive / interact', key: 'USE' },
+                      { label: 'Map / pack / ping', key: 'TOP BAR' },
                     ] : [
                       { label: 'Sprint', key: 'SHIFT' },
                       { label: 'Slide / crouch', key: getCoopSlideBinding(controlScheme).toUpperCase() },

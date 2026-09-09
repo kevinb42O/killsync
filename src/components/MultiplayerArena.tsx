@@ -44,6 +44,7 @@ import { getWorldDefinition, readCoopWorldProgress, unlockCoopWorld, writeCoopWo
 import { COOP_ADMIN_HELP, isCoopEnemyType, parseCoopAdminCommand, resolveCoopAdminTargets, resolveCoopAdminWorld, type CoopAdminCommandResult } from '../game/multiplayer/CoopAdminCommands';
 import { hasCoopOwnerCredential, signCoopAdminCommand, verifyCoopAdminRequest } from '../game/multiplayer/CoopOwnerIdentity';
 import { CoopTacticalMap as EnhancedCoopTacticalMap } from './CoopTacticalMap';
+import { CoopMobileControls, type MobileCoopAction } from './CoopMobileControls';
 
 const INPUT_INTERVAL_MS = COOP_STEP_MS;
 const SNAPSHOT_INTERVAL_MS = 50;
@@ -82,6 +83,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const presentationRef = useRef({ previous: snapshotRef.current as CoopSnapshot | null, current: snapshotRef.current as CoopSnapshot | null, receivedAt: performance.now(), durationMs: INPUT_INTERVAL_MS });
   const snapshotInterpolatorRef = useRef(new CoopSnapshotInterpolator());
   const inputRef = useRef<MultiplayerInputFrame>(createInput());
+  const mobileInputHandlerRef = useRef<((action: MobileCoopAction) => void) | null>(null);
   const networkTickRef = useRef(0);
   const adminOpenRef = useRef(false);
   const adminPausedRef = useRef(false);
@@ -168,6 +170,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     }, 260);
   }, []);
   const [mouseLocked, setMouseLocked] = useState(false);
+  const [isMobileTouchDevice, setIsMobileTouchDevice] = useState(false);
   const [matchSnapshot, setMatchSnapshot] = useState<CoopSnapshot | null>(snapshotRef.current);
   const [stationOpen, setStationOpen] = useState(false);
   const [stationCategory, setStationCategory] = useState<CoopShopCategoryId | null>(null);
@@ -197,6 +200,15 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const [deploymentStage, setDeploymentStage] = useState<DeploymentStage>('briefing');
   const isSpectator = launch.role === 'spectator';
   const reticleMode: CoopReticleMode = hud.isAiming ? 'ads' : 'hip';
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const media = window.matchMedia('(pointer: coarse) and (max-width: 1100px)');
+    const refresh = () => setIsMobileTouchDevice(media.matches && navigator.maxTouchPoints > 0);
+    refresh();
+    media.addEventListener?.('change', refresh);
+    return () => media.removeEventListener?.('change', refresh);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1127,6 +1139,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     const movementBindings = getMovementBindings(controlScheme);
     const slideBinding = getCoopSlideBinding(controlScheme);
     let firing = false;
+    const mobile = { moveX: 0, moveY: 0, fire: false, aim: false, jump: false, slide: false, sprint: false, interact: false };
     let sequence = inputRef.current.sequence;
     let fireActionId = inputRef.current.fireActionId || 0;
     let altFireActionId = inputRef.current.altFireActionId || 0;
@@ -1154,6 +1167,28 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       const selectedSlot = (inputRef.current.selectedSlot + direction + slotCount) % slotCount;
       inputRef.current = { ...inputRef.current, selectedSlot };
       setHud(current => ({ ...current, selectedSlot }));
+    };
+    const updateMobileInput = () => {
+      const movement = (mobile.moveY < -.22 ? 1 : 0)
+        | (mobile.moveY > .22 ? 2 : 0)
+        | (mobile.moveX < -.22 ? 4 : 0)
+        | (mobile.moveX > .22 ? 8 : 0);
+      const specialSelected = inputRef.current.selectedSlot === 3;
+      firing = mobile.fire && !buildModeRef.current;
+      inputRef.current = {
+        ...inputRef.current,
+        sequence: ++sequence,
+        clientTime: Date.now(),
+        movement,
+        aimAngle: quantizeAngle(renderer.getAimAngle()),
+        aimPitch: quantizePitch(renderer.getAimPitch()),
+        firing,
+        aiming: mobile.aim && !specialSelected,
+        sprinting: mobile.sprint,
+        sliding: mobile.slide && !buildModeRef.current,
+        reviving: mobile.interact,
+        jetHeld: mobile.jump,
+      };
     };
     const clearJumpInput = () => {
       if (!inputRef.current.jumpPressed && !inputRef.current.reloadPressed) return;
@@ -1323,6 +1358,77 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       if (foundry) { setFoundryMessage(null); setFoundryPanelOpen(true); }
       else setStationPanelOpen(open => !open);
     };
+
+    const handleMobileAction = (action: MobileCoopAction) => {
+      if (deploymentBlockedRef.current || isSpectator || adminOpenRef.current || adminPausedRef.current) return;
+      if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
+      if (action.type === 'move') {
+        mobile.moveX = action.x;
+        mobile.moveY = action.y;
+        updateMobileInput();
+        return;
+      }
+      if (action.type === 'look') {
+        renderer.adjustAim(action.deltaX * .008, action.deltaY * .006);
+        updateMobileInput();
+        return;
+      }
+      if (action.type === 'buildType') {
+        if (buildModeRef.current) selectBuildType(action.buildType);
+        return;
+      }
+      if (action.type === 'hold') {
+        const wasPressed = mobile[action.control];
+        mobile[action.control] = action.pressed;
+        if (action.control === 'fire' && action.pressed && !wasPressed) {
+          if (buildModeRef.current) placeStructure();
+          else {
+            fireActionId++;
+            const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
+            const weapon = local?.weaponStates[inputRef.current.selectedSlot];
+            if (weapon && local?.lifeState === 'alive' && weapon.state === 'ready' && weapon.magazineAmmo > 0 && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) renderer.predictLocalFire(weapon.weaponId, fireActionId);
+            inputRef.current = { ...inputRef.current, fireActionId };
+          }
+        }
+        if (action.control === 'aim' && action.pressed && !wasPressed && inputRef.current.selectedSlot === 3) {
+          inputRef.current = { ...inputRef.current, altFireActionId: ++altFireActionId, aiming: false, sequence: ++sequence, clientTime: Date.now() };
+        }
+        if (action.control === 'jump' && action.pressed && !wasPressed) inputRef.current = { ...inputRef.current, jumpPressed: true, jetHeld: true, sequence: ++sequence, clientTime: Date.now() };
+        if (action.control === 'interact' && action.pressed && !wasPressed) triggerContextualInteract();
+        updateMobileInput();
+        return;
+      }
+      switch (action.control) {
+        case 'reload':
+          inputRef.current = { ...inputRef.current, reloadPressed: true, sequence: ++sequence, clientTime: Date.now() };
+          break;
+        case 'previousWeapon': changeSelectedWeapon(-1); break;
+        case 'nextWeapon': changeSelectedWeapon(1); break;
+        case 'toggleBuild':
+          firing = false;
+          setBuildMode(!buildModeRef.current);
+          setBuildMessage(null);
+          break;
+        case 'placeBuild': if (buildModeRef.current) placeStructure(); break;
+        case 'buildRotateLeft': if (buildModeRef.current) buildRotationRef.current -= Math.PI / 12; break;
+        case 'buildRotateRight': if (buildModeRef.current) buildRotationRef.current += Math.PI / 12; break;
+        case 'buildActivate': if (buildModeRef.current) operateAimedStructure('activate'); break;
+        case 'buildRelocate': if (buildModeRef.current) operateAimedStructure('relocate'); break;
+        case 'buildDismantle': if (buildModeRef.current) dismantleAimedStructure(); break;
+        case 'ping': triggerPing(); break;
+        case 'backpack':
+          renderer.exitPointerLock(); setBuildMode(false); setBackpackMessage(null); setBackpackPanelOpen(true);
+          break;
+        case 'map':
+          renderer.exitPointerLock(); firing = false; setBuildMode(false); setTacticalMapPanelOpen(true);
+          break;
+        case 'chat':
+          renderer.exitPointerLock(); firing = false; setBuildMode(false); setChatPanelOpen(true);
+          break;
+      }
+      updateMobileInput();
+    };
+    mobileInputHandlerRef.current = handleMobileAction;
 
     const onKeyDown = (event: KeyboardEvent) => {
       const typingTarget = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
@@ -1650,6 +1756,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     };
     const clearControls = () => {
       keys.clear(); firing = false; updateInput();
+      mobile.moveX = 0; mobile.moveY = 0; mobile.fire = false; mobile.aim = false; mobile.jump = false; mobile.slide = false; mobile.sprint = false; mobile.interact = false;
       inputRef.current = { ...inputRef.current, aiming: false, jumpPressed: false, jetHeld: false, reloadPressed: false };
     };
     const onVisibilityChange = () => { if (document.hidden) clearControls(); };
@@ -1880,6 +1987,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('blur', clearControls);
       window.removeEventListener('contextmenu', onContextMenu);
+      mobileInputHandlerRef.current = null;
       document.removeEventListener('visibilitychange', onVisibilityChange);
       document.removeEventListener('pointerlockchange', syncPointerLock);
       soundManager.stopJetpack();
@@ -2239,7 +2347,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         insertionRemainingMs={run?.insertionRemainingMs}
         onDeploy={() => releaseDeployment(true)}
       />}
-      {!mouseLocked && !interactionBlocked && !isSpectator && (
+      {!mouseLocked && !interactionBlocked && !isSpectator && !isMobileTouchDevice && (
         <button
           type="button"
           className="absolute left-1/2 top-1/2 z-[105] -translate-x-1/2 -translate-y-1/2 border border-cyan-300/70 bg-black/85 px-6 py-4 text-center font-mono text-xs font-black uppercase tracking-[.2em] text-cyan-100 shadow-[0_0_36px_rgba(34,211,238,.3)] backdrop-blur-md hover:bg-cyan-950/90 focus:outline-none focus:ring-2 focus:ring-cyan-300"
@@ -2248,6 +2356,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           {tr('arena.resumeControl')}
         </button>
       )}
+      {isMobileTouchDevice && !isSpectator && !interactionBlocked && <CoopMobileControls
+        buildMode={buildMode}
+        buildType={buildType}
+        onAction={action => mobileInputHandlerRef.current?.(action)}
+      />}
       {!isSpectator && hud.lifeState === 'alive' && !backpackOpen && <div className="pointer-events-none absolute bottom-5 right-5 z-[54] border border-white/10 bg-black/55 px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white/55 backdrop-blur-sm"><kbd className="mr-1.5 text-cyan-200">G</kbd>{tr('backpack.open')}</div>}
       {nearbyManualDrop && !backpackOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[5.5rem] left-1/2 z-[86] -translate-x-1/2 border border-amber-300/45 bg-black/80 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,.18)]"><kbd className="mr-2 border border-amber-200/40 bg-amber-300/10 px-1.5 py-0.5">F</kbd>{tr(nearbyManualDrop.manualDropKind === 'cash' ? 'backpack.pickupCash' : 'backpack.pickupRevive', { amount: nearbyManualDrop.value })}</div>}
       {nearbyMissionPrompt && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[8.5rem] left-1/2 z-[86] -translate-x-1/2 border border-emerald-300/50 bg-black/85 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-emerald-100 shadow-[0_0_26px_rgba(45,212,191,.2)]"><kbd className="mr-2 border border-emerald-200/40 bg-emerald-300/10 px-1.5 py-0.5">F</kbd>{nearbyMissionPrompt}</div>}

@@ -3,7 +3,7 @@
  * character produced by the player's active keyboard layout stay aligned.
  * Arrow keys intentionally live outside a preset: they are always available.
  */
-export type ControlScheme = 'AZERTY' | 'QWERTY' | 'GAMEPAD';
+export type ControlScheme = 'AZERTY' | 'QWERTY' | 'GAMEPAD' | 'MOBILE';
 
 export type MovementDirection = 'up' | 'down' | 'left' | 'right';
 
@@ -34,6 +34,11 @@ export const CONTROL_SCHEME_DETAILS: Record<ControlScheme, {
     // profile from also reacting to a keyboard movement cluster.
     bindings: { up: '', down: '', left: '', right: '' },
   },
+  MOBILE: {
+    label: 'MOBILE',
+    description: 'Touch controls for direct co-op',
+    bindings: { up: '', down: '', left: '', right: '' },
+  },
 };
 
 const ARROW_BINDINGS: Record<MovementDirection, string> = {
@@ -44,7 +49,7 @@ const ARROW_BINDINGS: Record<MovementDirection, string> = {
 };
 
 export const getMovementBindings = (scheme: ControlScheme): MovementBindings => {
-  if (scheme === 'GAMEPAD') {
+  if (scheme === 'GAMEPAD' || scheme === 'MOBILE') {
     return { up: [], down: [], left: [], right: [] };
   }
   const preset = CONTROL_SCHEME_DETAILS[scheme].bindings;
@@ -61,6 +66,7 @@ export const getMovementBindings = (scheme: ControlScheme): MovementBindings => 
 export const getCoopSlideBinding = (scheme: ControlScheme) => scheme === 'AZERTY' ? 'w' : scheme === 'QWERTY' ? 'c' : '';
 
 export const isGamepadControlScheme = (scheme: ControlScheme) => scheme === 'GAMEPAD';
+export const isMobileControlScheme = (scheme: ControlScheme) => scheme === 'MOBILE';
 
 export const isMovementDirectionPressed = (
   keys: ReadonlySet<string>,
@@ -69,4 +75,4 @@ export const isMovementDirectionPressed = (
 ): boolean => getMovementBindings(scheme)[direction].some((key) => keys.has(key));
 
 export const parseControlScheme = (value: string | null): ControlScheme =>
-  value === 'QWERTY' || value === 'AZERTY' || value === 'GAMEPAD' ? value : DEFAULT_CONTROL_SCHEME;
+  value === 'QWERTY' || value === 'AZERTY' || value === 'GAMEPAD' || value === 'MOBILE' ? value : DEFAULT_CONTROL_SCHEME;
