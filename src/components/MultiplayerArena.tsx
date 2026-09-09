@@ -50,7 +50,7 @@ const INPUT_INTERVAL_MS = COOP_STEP_MS;
 const SNAPSHOT_INTERVAL_MS = 50;
 /** React HUD work does not need to run at the 20 Hz network snapshot rate. */
 const HUD_INTERVAL_MS = 100;
-const COOP_BUILD_TYPES: readonly CoopStructureType[] = ['barricade', 'arc_fence', 'recovery_relay', 'decoy_beacon', 'bridge_segment'];
+const COOP_BUILD_TYPES: readonly CoopStructureType[] = ['barricade', 'hardlight_bastion', 'arc_fence', 'recovery_relay', 'decoy_beacon', 'bridge_segment'];
 const WORLD_CONDITIONS = {
   neon_bastion: 'STABLE PLATFORM · SIGNAL STORM',
   cinderworks: 'BURNING PLATES · FURNACE RUPTURES',
@@ -2554,7 +2554,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           </div>
           {engineeringTarget && <div className="mt-2 flex items-center gap-3 border border-white/10 bg-white/[.035] px-2 py-1.5 font-mono text-[8px] uppercase tracking-wider text-white/65"><span style={{ color: engineeringTarget.ownerColor }}>{tr(`build.${engineeringTarget.type}.name` as CoopTextKey)}</span><span>{tr('build.integrity', { percent: Math.round(engineeringTarget.health / Math.max(1, engineeringTarget.maxHealth) * 100) })}</span><span>{tr('build.lifetime', { seconds: Math.ceil(Math.max(0, engineeringTarget.expiresAtMs - (matchSnapshot?.elapsedMs || 0)) / 1000) })}</span>{engineeringTarget.tacticalBonus && <span className="text-emerald-300">{tr('build.tacticalBonus')}</span>}{Boolean(engineeringTarget.linkedStructureIds?.length) && <span className="text-violet-300">{tr('build.linked', { count: engineeringTarget.linkedStructureIds?.length || 0 })}</span>}</div>}
           {!buildPaletteExpanded && <div className="mt-2 flex items-center justify-between border px-3 py-2" style={{ borderColor: `${COOP_STRUCTURE_DEFINITIONS[buildType].color}66`, backgroundColor: `${COOP_STRUCTURE_DEFINITIONS[buildType].color}16`, boxShadow: `inset 0 0 18px ${COOP_STRUCTURE_DEFINITIONS[buildType].color}12` }}><span className="text-[10px] font-black uppercase" style={{ color: COOP_STRUCTURE_DEFINITIONS[buildType].color }}>{tr(`build.${buildType}.name` as CoopTextKey)}</span><span className="font-mono text-[8px] uppercase text-white/45">{tr('build.holdPalette')}</span></div>}
-          {buildPaletteExpanded && <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {buildPaletteExpanded && <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {COOP_BUILD_TYPES.map((type, index) => {
               const definition = COOP_STRUCTURE_DEFINITIONS[type];
               const selected = type === buildType;

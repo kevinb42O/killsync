@@ -8,6 +8,7 @@ import {
   COOP_MAX_FABRICATOR_CHARGES,
   arcFenceShock,
   getBarricadeWallContact,
+  hardlightBastionSegmentHit,
   isStructurePlacementClear,
   resolveBarricadeCollision,
   structureContainsCircle,
@@ -56,6 +57,27 @@ describe('Coop Field Engineering', () => {
     expect(structureContainsCircle(fence, body.x, body.y, 14)).toBe(true);
     expect(resolveBarricadeCollision(body, 19, fence)).toBe(false);
     expect(body).toEqual({ x: fence.x, y: fence.y });
+  });
+
+  it('treats a Bastion as one sealed four-wall shell with a usable interior', () => {
+    const bastion = structure('hardlight_bastion');
+    const inside = { x: bastion.x, y: bastion.y };
+    const wall = { x: bastion.x, y: bastion.y - 133 };
+    expect(structureContainsCircle(bastion, inside.x, inside.y, 19)).toBe(false);
+    expect(resolveBarricadeCollision(inside, 19, bastion)).toBe(false);
+    expect(resolveBarricadeCollision(wall, 19, bastion)).toBe(true);
+    expect(hardlightBastionSegmentHit(bastion, bastion.x, bastion.y - 220, bastion.x, bastion.y)).toMatchObject({ normalX: 0, normalY: -1 });
+  });
+
+  it('builds a two-charge Bastion with its short emergency lifetime', () => {
+    const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#22d3ee' }], 0x51a7);
+    const pose = validPose(simulation, 'hardlight_bastion');
+    expect(simulation.buildStructure('host', 'hardlight_bastion', pose.x, pose.y, pose.angle, 1)).toBeUndefined();
+    const snapshot = simulation.createSnapshot();
+    const bastion = snapshot.structures?.[0];
+    expect(bastion).toMatchObject({ type: 'hardlight_bastion', health: 1_050, maxHealth: 1_050 });
+    expect(bastion!.expiresAtMs - bastion!.createdAtMs).toBe(14_000);
+    expect(snapshot.players[0].fabricatorCharges).toBe(0);
   });
 
   it('gives the arc fence a meaningful control profile with explicit resistances', () => {

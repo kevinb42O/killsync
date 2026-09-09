@@ -4,7 +4,7 @@ import { isOnCoopPlatform } from './playerMovement';
 import { COOP_MAX_PLAYERS } from './protocol';
 import type { CoopSnapshot } from './CoopSimulation';
 
-export type CoopStructureType = 'barricade' | 'arc_fence' | 'recovery_relay' | 'decoy_beacon' | 'bridge_segment';
+export type CoopStructureType = 'barricade' | 'hardlight_bastion' | 'arc_fence' | 'recovery_relay' | 'decoy_beacon' | 'bridge_segment';
 export type CoopStructureState = 'active' | 'damaged' | 'destroying';
 
 export interface CoopStructureDefinition {
@@ -18,6 +18,8 @@ export interface CoopStructureDefinition {
   radius: number;
   color: string;
   blocksMovement: boolean;
+  /** Short-lived emergency structures opt out of the normal two-minute timer. */
+  lifetimeMs?: number;
 }
 
 export const COOP_STARTING_FABRICATOR_CHARGES = 2;
@@ -36,6 +38,8 @@ export const COOP_STRUCTURE_SQUAD_RANGE = 900;
 export const COOP_STRUCTURE_DESTROY_MS = 500;
 export const COOP_STRUCTURE_ACTION_RANGE = 300;
 export const COOP_STRUCTURE_REPAIR_PER_SECOND = 55;
+export const COOP_HARDLIGHT_BASTION_HALF_EXTENT = 150;
+export const COOP_HARDLIGHT_BASTION_WALL_CENTER = COOP_HARDLIGHT_BASTION_HALF_EXTENT - 17;
 export const COOP_RECOVERY_RELAY_REVIVE_MULTIPLIER = 1.25;
 export const COOP_RECOVERY_RELAY_HEAL_PER_SECOND = 7.5;
 export const COOP_RECOVERY_RELAY_SURGE_HEAL = 28;
@@ -50,6 +54,11 @@ export const COOP_STRUCTURE_DEFINITIONS: Readonly<Record<CoopStructureType, Coop
     type: 'barricade', name: 'Hardlight Barricade',
     description: 'Jumpable cover that redirects the frontline and buys a few seconds.',
     chargeCost: 1, maxHealth: 520, width: 220, depth: 34, radius: 112, color: '#00dcff', blocksMovement: true,
+  },
+  hardlight_bastion: {
+    type: 'hardlight_bastion', name: 'Hardlight Bastion',
+    description: 'A four-wall emergency shelter. Jump in to regroup before its shared integrity fails.',
+    chargeCost: 2, maxHealth: 1_050, width: 300, depth: 300, radius: 212, color: '#38e8ff', blocksMovement: true, lifetimeMs: 14_000,
   },
   arc_fence: {
     type: 'arc_fence', name: 'Arc Fence',
@@ -146,7 +155,7 @@ export interface CoopBuildAnchor { x: number; y: number; radius?: number; }
 export interface CoopPlacementBody { x: number; y: number; radius: number; }
 
 export function isCoopStructureType(value: unknown): value is CoopStructureType {
-  return value === 'barricade' || value === 'arc_fence' || value === 'recovery_relay' || value === 'decoy_beacon' || value === 'bridge_segment';
+  return value === 'barricade' || value === 'hardlight_bastion' || value === 'arc_fence' || value === 'recovery_relay' || value === 'decoy_beacon' || value === 'bridge_segment';
 }
 
 export function isCoopStructureAction(value: unknown): value is CoopStructureAction {
@@ -167,12 +176,92 @@ export function structureContainsCircle(
 ) {
   const definition = COOP_STRUCTURE_DEFINITIONS[structure.type];
   if (structure.type === 'recovery_relay' || structure.type === 'decoy_beacon') return Math.hypot(x - structure.x, y - structure.y) <= definition.radius + radius + padding;
+  if (structure.type === 'hardlight_bastion') return bastionWallSegments(structure).some(wall => orientedRectContainsCircle(wall, x, y, radius, padding));
+  return orientedRectContainsCircle({ ...structure, width: definition.width, depth: definition.depth }, x, y, radius, padding);
+}
+
+type OrientedRect = { x: number; y: number; angle: number; width: number; depth: number };
+
+function orientedRectContainsCircle(
+  structure: OrientedRect,
+  x: number,
+  y: number,
+  radius: number,
+  padding = 0,
+) {
   const dx = x - structure.x, dy = y - structure.y;
   const cosine = Math.cos(structure.angle), sine = Math.sin(structure.angle);
   const localX = dx * cosine + dy * sine;
   const localY = -dx * sine + dy * cosine;
-  return Math.abs(localX) <= definition.width * .5 + radius + padding
-    && Math.abs(localY) <= definition.depth * .5 + radius + padding;
+  return Math.abs(localX) <= structure.width * .5 + radius + padding
+    && Math.abs(localY) <= structure.depth * .5 + radius + padding;
+}
+
+/** Four overlapping wall panels make one sealed, shared-integrity structure. */
+export function bastionWallSegments(structure: Pick<CoopStructureSnapshot, 'type' | 'x' | 'y' | 'angle'>): OrientedRect[] {
+  if (structure.type !== 'hardlight_bastion') return [];
+  const cosine = Math.cos(structure.angle), sine = Math.sin(structure.angle);
+  const at = (localX: number, localY: number, angle = structure.angle): OrientedRect => ({
+    x: structure.x + localX * cosine - localY * sine,
+    y: structure.y + localX * sine + localY * cosine,
+    angle,
+    width: COOP_STRUCTURE_DEFINITIONS.hardlight_bastion.width,
+    depth: COOP_STRUCTURE_DEFINITIONS.barricade.depth,
+  });
+  const edge = COOP_HARDLIGHT_BASTION_WALL_CENTER;
+  return [at(0, -edge), at(0, edge), at(-edge, 0, structure.angle + Math.PI * .5), at(edge, 0, structure.angle + Math.PI * .5)];
+}
+
+function blockingWallSegments(structure: Pick<CoopStructureSnapshot, 'type' | 'x' | 'y' | 'angle'>): OrientedRect[] {
+  if (structure.type === 'hardlight_bastion') return bastionWallSegments(structure);
+  if (structure.type !== 'barricade') return [];
+  const definition = COOP_STRUCTURE_DEFINITIONS.barricade;
+  return [{ ...structure, width: definition.width, depth: definition.depth }];
+}
+
+/** First panel hit by a horizontal trace. Used for Bastion-only attack and
+ * firearm obstruction; ordinary barricades retain their established behavior. */
+export function hardlightBastionSegmentHit(
+  structure: Pick<CoopStructureSnapshot, 'type' | 'x' | 'y' | 'angle'>,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+) {
+  if (structure.type !== 'hardlight_bastion') return undefined;
+  let nearest: { t: number; x: number; y: number; normalX: number; normalY: number } | undefined;
+  for (const wall of bastionWallSegments(structure)) {
+    const cosine = Math.cos(wall.angle), sine = Math.sin(wall.angle);
+    const local = (x: number, y: number) => ({ x: (x - wall.x) * cosine + (y - wall.y) * sine, y: -(x - wall.x) * sine + (y - wall.y) * cosine });
+    const from = local(fromX, fromY), to = local(toX, toY);
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const bounds = [{ from: from.x, delta: dx, min: -wall.width * .5, max: wall.width * .5, axis: 'x' as const }, { from: from.y, delta: dy, min: -wall.depth * .5, max: wall.depth * .5, axis: 'y' as const }];
+    let enter = 0, exit = 1, normalX = 0, normalY = 0;
+    let blocked = false;
+    for (const bound of bounds) {
+      if (Math.abs(bound.delta) < .000001) { if (bound.from < bound.min || bound.from > bound.max) { blocked = true; break; } continue; }
+      const a = (bound.min - bound.from) / bound.delta, b = (bound.max - bound.from) / bound.delta;
+      const near = Math.min(a, b), far = Math.max(a, b);
+      if (near > enter) {
+        enter = near;
+        const sign = a < b ? -1 : 1;
+        normalX = bound.axis === 'x' ? sign : 0;
+        normalY = bound.axis === 'y' ? sign : 0;
+      }
+      exit = Math.min(exit, far);
+      if (enter > exit) { blocked = true; break; }
+    }
+    if (blocked || enter < 0 || enter > 1 || (nearest && enter >= nearest.t)) continue;
+    const localX = from.x + dx * enter, localY = from.y + dy * enter;
+    nearest = {
+      t: enter,
+      x: wall.x + localX * cosine - localY * sine,
+      y: wall.y + localX * sine + localY * cosine,
+      normalX: normalX * cosine - normalY * sine,
+      normalY: normalX * sine + normalY * cosine,
+    };
+  }
+  return nearest;
 }
 
 export function resolveBarricadeCollision(
@@ -180,13 +269,21 @@ export function resolveBarricadeCollision(
   radius: number,
   structure: Pick<CoopStructureSnapshot, 'type' | 'x' | 'y' | 'angle'>,
 ) {
-  if (structure.type !== 'barricade') return false;
-  const definition = COOP_STRUCTURE_DEFINITIONS.barricade;
+  let collided = false;
+  for (const wall of blockingWallSegments(structure)) collided = resolveOrientedRectCollision(body, radius, wall) || collided;
+  return collided;
+}
+
+function resolveOrientedRectCollision(
+  body: { x: number; y: number },
+  radius: number,
+  structure: OrientedRect,
+) {
   const cosine = Math.cos(structure.angle), sine = Math.sin(structure.angle);
   const dx = body.x - structure.x, dy = body.y - structure.y;
   let localX = dx * cosine + dy * sine;
   let localY = -dx * sine + dy * cosine;
-  const halfWidth = definition.width * .5, halfDepth = definition.depth * .5;
+  const halfWidth = structure.width * .5, halfDepth = structure.depth * .5;
   const closestX = Math.max(-halfWidth, Math.min(halfWidth, localX));
   const closestY = Math.max(-halfDepth, Math.min(halfDepth, localY));
   const offsetX = localX - closestX, offsetY = localY - closestY;
@@ -214,13 +311,24 @@ export function getBarricadeWallContact(
   structure: Pick<CoopStructureSnapshot, 'type' | 'x' | 'y' | 'angle'>,
   tolerance = 3,
 ) {
-  if (structure.type !== 'barricade') return undefined;
-  const definition = COOP_STRUCTURE_DEFINITIONS.barricade;
+  for (const wall of blockingWallSegments(structure)) {
+    const contact = getOrientedRectWallContact(body, radius, wall, tolerance);
+    if (contact) return contact;
+  }
+  return undefined;
+}
+
+function getOrientedRectWallContact(
+  body: { x: number; y: number },
+  radius: number,
+  structure: OrientedRect,
+  tolerance: number,
+) {
   const cosine = Math.cos(structure.angle), sine = Math.sin(structure.angle);
   const dx = body.x - structure.x, dy = body.y - structure.y;
   const localX = dx * cosine + dy * sine;
   const localY = -dx * sine + dy * cosine;
-  const halfWidth = definition.width * .5, halfDepth = definition.depth * .5;
+  const halfWidth = structure.width * .5, halfDepth = structure.depth * .5;
   const closestX = Math.max(-halfWidth, Math.min(halfWidth, localX));
   const closestY = Math.max(-halfDepth, Math.min(halfDepth, localY));
   let normalX = localX - closestX, normalY = localY - closestY;
@@ -253,7 +361,9 @@ export function isStructurePlacementClear(
   const circular = type === 'recovery_relay' || type === 'decoy_beacon';
   const samples = circular
     ? [{ x, y }]
-    : [-.42, 0, .42].map(offset => ({ x: x + Math.cos(angle) * definition.width * offset, y: y + Math.sin(angle) * definition.width * offset }));
+    : type === 'hardlight_bastion'
+      ? bastionWallSegments({ type, x, y, angle }).flatMap(wall => [-.42, 0, .42].map(offset => ({ x: wall.x + Math.cos(wall.angle) * wall.width * offset, y: wall.y + Math.sin(wall.angle) * wall.width * offset })))
+      : [-.42, 0, .42].map(offset => ({ x: x + Math.cos(angle) * definition.width * offset, y: y + Math.sin(angle) * definition.width * offset }));
   if (samples.some(sample => !isWorldPositionClear(sample.x, sample.y, Math.max(24, definition.depth * .5), worldId))) return false;
   if (bodies.some(body => circular
     ? Math.hypot(body.x - x, body.y - y) <= structureRadius(type) + body.radius + 18
@@ -268,6 +378,10 @@ function physicalStructuresOverlap(left: Pick<CoopStructureSnapshot, 'type' | 'x
   if (leftCircular && rightCircular) return Math.hypot(left.x - right.x, left.y - right.y) < structureRadius(left.type) + structureRadius(right.type) + 24;
   if (!leftCircular && rightCircular) return structureContainsCircle(left, right.x, right.y, structureRadius(right.type), 16);
   if (leftCircular && !rightCircular) return structureContainsCircle(right, left.x, left.y, structureRadius(left.type), 16);
+  if (left.type === 'hardlight_bastion' || right.type === 'hardlight_bastion') {
+    return blockingWallSegments(left).some(wall => orientedRectContainsCircle(wall, right.x, right.y, structureRadius(right.type), 16))
+      || blockingWallSegments(right).some(wall => orientedRectContainsCircle(wall, left.x, left.y, structureRadius(left.type), 16));
+  }
   return structureContainsCircle(left, right.x, right.y, COOP_STRUCTURE_DEFINITIONS[right.type].depth * .5, 12)
     || structureContainsCircle(right, left.x, left.y, COOP_STRUCTURE_DEFINITIONS[left.type].depth * .5, 12);
 }

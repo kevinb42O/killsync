@@ -411,7 +411,7 @@ is the class identity and avoids adding six simultaneous control systems.
 ### Co-op Field Engineering
 
 Tap **B** to equip the last Field Fabricator blueprint; hold B to expose the
-four-blueprint palette. **1–4** or Shift+mouse-wheel selects a blueprint, the
+blueprint palette. **1–6** or Shift+mouse-wheel selects a blueprint, the
 mouse wheel rotates it, and Alt temporarily disables endpoint snapping. Left
 click deploys; right click or Escape returns to the firearm. Placement is
 allowed on any valid nearby surface. Objectives, stations, bosses, extraction,
@@ -422,6 +422,11 @@ protected terminals, overlap, personal charges, and squad caps.
 - **Hardlight Barricade (1 charge):** a jumpable, destructible obstacle. It
   redirects ordinary enemies; Phantoms phase through it, Goliaths break it
   quickly, and Titans crush it.
+- **Hardlight Bastion (2 charges):** a 14-second, four-wall emergency shelter
+  with one shared integrity bar. Operators can jump over a panel to enter or
+  leave it. It blocks ordinary hostile sightlines and firearm rounds, but not
+  Phantoms, gas, shockwaves, or boss hazards; tanks and Titans tear it down
+  quickly. A Bastion counts as one structure, never four separate barricades.
 - **Arc Fence (1 charge):** a non-blocking control line. Enemies inside move at
   38% speed and receive an archetype-scaled shock at most once per 1.1 seconds.
   Normal enemies are briefly stunned; elites and tanks resist most of the stun,

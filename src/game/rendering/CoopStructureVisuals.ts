@@ -128,6 +128,7 @@ function createStructureRig(type: CoopStructureType, ownerColor: string, preview
   const energy = material(energyColor, energyColor, 4.4, true, preview ? .56 : .92, THREE.AdditiveBlending);
   const ownerAccent = material(ownerColor, ownerColor, 3.2, true, preview ? .62 : 1);
   if (type === 'barricade') createBarricade(group, steel, edge, accent, energy);
+  else if (type === 'hardlight_bastion') createHardlightBastion(group, steel, edge, accent, energy);
   else if (type === 'arc_fence') createArcFence(group, steel, edge, accent, energy);
   else if (type === 'recovery_relay') createRecoveryRelay(group, steel, edge, accent, energy);
   else if (type === 'decoy_beacon') createDecoyBeacon(group, steel, edge, accent, energy);
@@ -178,6 +179,30 @@ function createBarricade(group: THREE.Group, steel: THREE.Material, edge: THREE.
   addBox(group, 196, 25, 2.5, 0, 31, -15, energy, 'energy');
   addBox(group, 170, 2, 4, 0, 42, -17, accent, 'scan');
   for (const x of [-66, 0, 66]) addBox(group, 34, 1.2, 4, x, 1.1, -39, accent, 'accent', 0, -.42, 0);
+}
+
+function createHardlightBastion(group: THREE.Group, steel: THREE.Material, edge: THREE.Material, accent: THREE.Material, energy: THREE.Material) {
+  // The panels overlap at each corner, matching the compound collision shell.
+  const wallOffset = 133;
+  for (const z of [-wallOffset, wallOffset]) {
+    addBox(group, 300, 8, 32, 0, 4, z, steel, 'base');
+    addBox(group, 300, 48, 22, 0, 28, z, steel, 'armor');
+    addBox(group, 286, 3, 26, 0, 53, z, edge, 'edge');
+    addBox(group, 278, 24, 2.5, 0, 32, z + (z < 0 ? 13 : -13), energy, 'bastion-field');
+    for (const x of [-112, -56, 0, 56, 112]) addBox(group, 6, 50, 34, x, 27, z, accent, 'brace');
+  }
+  for (const x of [-wallOffset, wallOffset]) {
+    addBox(group, 32, 8, 300, x, 4, 0, steel, 'base');
+    addBox(group, 22, 48, 300, x, 28, 0, steel, 'armor');
+    addBox(group, 26, 3, 286, x, 53, 0, edge, 'edge');
+    addBox(group, 2.5, 24, 278, x + (x < 0 ? 13 : -13), 32, 0, energy, 'bastion-field');
+    for (const z of [-112, -56, 0, 56, 112]) addBox(group, 34, 50, 6, x, 27, z, accent, 'brace');
+  }
+  for (const [x, z] of [[-133, -133], [-133, 133], [133, -133], [133, 133]]) {
+    addCylinder(group, 13, 18, 61, x, 31, z, edge, 'corner', 8);
+    addMesh(group, new THREE.OctahedronGeometry(9, 0), energy, x, 66, z, 'corner-core');
+  }
+  addMesh(group, new THREE.RingGeometry(112, 116, 4), accent, 0, 1.2, 0, 'bastion-ring').rotation.x = -Math.PI * .5;
 }
 
 function createArcFence(group: THREE.Group, steel: THREE.Material, edge: THREE.Material, accent: THREE.Material, energy: THREE.Material) {
@@ -264,6 +289,11 @@ function animateRig(rig: THREE.Group, type: CoopStructureType, elapsedMs: number
     if (type === 'barricade' && role === 'scan') {
       node.position.y = 21 + (elapsedMs * .035 % 25);
       nodeMaterial.opacity = (.35 + Math.sin(elapsedMs * .009) * .16) * damagedPulse;
+    }
+    if (type === 'hardlight_bastion') {
+      if (role === 'bastion-field') nodeMaterial.opacity = (.24 + health * .52 + Math.sin(elapsedMs * .009 + node.position.x + node.position.z) * .09 + pulse * .22) * damagedPulse;
+      else if (role === 'corner-core') { node.rotation.y = elapsedMs * .004; node.scale.setScalar(.9 + Math.sin(elapsedMs * .006 + node.position.x) * .1 + pulse * .25); }
+      else if (role === 'bastion-ring') { node.rotation.z = elapsedMs * .0008; nodeMaterial.opacity = (.18 + health * .18) * damagedPulse; }
     }
     if (type === 'arc_fence') {
       if (role === 'arc-strand' || role === 'spark') {

@@ -18,13 +18,14 @@ type Props = {
 
 const BUILD_LABELS: Record<CoopStructureType, string> = {
   barricade: 'WALL',
+  hardlight_bastion: 'BASTION',
   arc_fence: 'ARC',
   recovery_relay: 'HEAL',
   decoy_beacon: 'DECOY',
   bridge_segment: 'BRIDGE',
 };
 
-const BUILD_TYPES: readonly CoopStructureType[] = ['barricade', 'arc_fence', 'recovery_relay', 'decoy_beacon', 'bridge_segment'];
+const BUILD_TYPES: readonly CoopStructureType[] = ['barricade', 'hardlight_bastion', 'arc_fence', 'recovery_relay', 'decoy_beacon', 'bridge_segment'];
 // A touch that lasts this long without moving is intentional jump/jet input.
 // Keep it short enough to feel immediate without turning ordinary camera
 // swipes into jumps.

@@ -37,4 +37,15 @@ describe('co-op structure lighting', () => {
     });
     visuals.dispose();
   });
+
+  it('renders the four-panel Bastion as one shared structure rig', () => {
+    const scene = new THREE.Scene();
+    const visuals = new CoopStructureVisuals(scene);
+    visuals.update([{ ...damagedStructure, id: 8, type: 'hardlight_bastion', health: 1_050, maxHealth: 1_050, expiresAtMs: 14_000 }], 1_000);
+    const rig = scene.getObjectByName('coop-structure:8')!;
+    const fieldPanels: THREE.Mesh[] = [];
+    rig.traverse(node => { if (node instanceof THREE.Mesh && node.userData.visualRole === 'bastion-field') fieldPanels.push(node); });
+    expect(fieldPanels).toHaveLength(4);
+    visuals.dispose();
+  });
 });

@@ -1074,7 +1074,7 @@
      the movement stick or combat cluster at the bottom of the display. */
   .coop-touch-build { position: absolute; z-index: 4; left: 50%; top: max(58px, calc(env(safe-area-inset-top) + 52px)); bottom: auto; width: min(92vw, 560px); transform: translateX(-50%); display: grid; gap: 5px; pointer-events: auto; }
   .coop-touch-build__types, .coop-touch-build__actions { display: grid; gap: 4px; }
-  .coop-touch-build__types { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .coop-touch-build__types { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .coop-touch-build__types button { min-height: 34px; border: 1px solid rgba(103, 232, 249, .25); background: rgba(2, 6, 23, .82); color: rgba(207, 250, 254, .74); font: 900 8px/1 ui-monospace, monospace; letter-spacing: .04em; }
   .coop-touch-build__types button[data-selected="true"] { border-color: rgba(34, 211, 238, .85); background: rgba(8, 145, 178, .38); color: #ecfeff; }
   .coop-touch-build__actions { grid-template-columns: repeat(6, minmax(0, 1fr)); }

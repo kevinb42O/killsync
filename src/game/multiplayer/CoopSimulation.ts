@@ -67,6 +67,7 @@ import {
   isCoopStructureAction,
   isStructurePlacementClear,
   getBarricadeWallContact,
+  hardlightBastionSegmentHit,
   normalizeStructureAngle,
   resolveBarricadeCollision,
   structureContainsCircle,
@@ -973,7 +974,8 @@ export class CoopSimulation {
         || (enemy.type === 'phantom' && distance <= ENEMY_ATTACK_PROFILES.phantom!.maxRange)
         || (enemy.type === 'elite' && distance <= ENEMY_ATTACK_PROFILES.elite!.maxRange);
       if (needsAttackPath && this.elapsedMs >= (navigation.nextPathCheckAtMs || 0)) {
-        navigation.clearAttackPath = hasClearAttackPath(enemy, target, this.currentWorldId);
+        navigation.clearAttackPath = hasClearAttackPath(enemy, target, this.currentWorldId)
+          && (enemy.type === 'phantom' || !this.structures.some(structure => structure.state !== 'destroying' && hardlightBastionSegmentHit(structure, enemy.x, enemy.y, target.x, target.y)));
         // Stagger checks so a horde does not submit every world probe in one tick.
         navigation.nextPathCheckAtMs = this.elapsedMs + 180 + enemy.id % 5 * 17;
       }
@@ -1182,7 +1184,7 @@ export class CoopSimulation {
     const structure: CoopStructure = {
       id: this.nextEntityId++, type: requestedType, ownerId: player.id, ownerColor: player.color,
       x: Math.round(x), y: Math.round(y), angle, health: definition.maxHealth, maxHealth: definition.maxHealth,
-      state: 'active', createdAtMs: Math.round(this.elapsedMs), expiresAtMs: Math.round(this.elapsedMs + COOP_STRUCTURE_LIFETIME_MS + (tacticalBonus ? COOP_TACTICAL_STRUCTURE_BONUS_MS : 0)),
+      state: 'active', createdAtMs: Math.round(this.elapsedMs), expiresAtMs: Math.round(this.elapsedMs + (definition.lifetimeMs ?? COOP_STRUCTURE_LIFETIME_MS) + (definition.lifetimeMs ? 0 : tacticalBonus ? COOP_TACTICAL_STRUCTURE_BONUS_MS : 0)),
       contextKey: anchor && tacticalBonus ? this.anchorKey(anchor) : `field:${this.nextEntityId}`, tacticalBonus,
       nextSupportPulseAtMs: requestedType === 'recovery_relay' ? this.elapsedMs + 900 : undefined,
     };
@@ -2310,7 +2312,7 @@ export class CoopSimulation {
         this.shockEnemyFromStructure(structure, enemy);
         continue;
       }
-      if (structure.type === 'barricade' && enemy.type !== 'phantom' && resolveBarricadeCollision(enemy, enemy.radius, structure)) {
+      if ((structure.type === 'barricade' || structure.type === 'hardlight_bastion') && enemy.type !== 'phantom' && resolveBarricadeCollision(enemy, enemy.radius, structure)) {
         this.damageStructure(structure, structureDamagePerSecond(enemy.type) * deltaMs / 1000);
         const linkedFence = this.structures.find(candidate => candidate.type === 'arc_fence' && candidate.state !== 'destroying' && structure.linkedStructureIds?.includes(candidate.id));
         if (linkedFence) this.shockEnemyFromStructure(linkedFence, enemy, .7);
@@ -2807,10 +2809,24 @@ export class CoopSimulation {
     const hit = raycastWorldObstacles(fromX, fromY, fromZ, dx, dy, verticalDelta / distance, distance, this.currentWorldId);
     const groundT = verticalDelta < 0 && fromZ >= 0 && projectile.z <= 0 ? fromZ / -verticalDelta : Infinity;
     const groundDistance = groundT <= 1 ? distance * groundT : Infinity;
-    if (!hit && !Number.isFinite(groundDistance)) return false;
+    const bastionHit = this.structures
+      .filter(structure => structure.state !== 'destroying')
+      .map(structure => hardlightBastionSegmentHit(structure, fromX, fromY, projectile.x, projectile.y))
+      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+      .sort((left, right) => left.t - right.t)[0];
+    const worldDistance = hit?.distance ?? Infinity;
+    const bastionDistance = bastionHit ? distance * bastionHit.t : Infinity;
+    if (!hit && !Number.isFinite(groundDistance) && !bastionHit) return false;
 
     let normalX = 0, normalY = 0, normalZ = 1;
-    if (hit && hit.distance <= groundDistance) {
+    if (bastionHit && bastionDistance <= worldDistance && bastionDistance <= groundDistance) {
+      projectile.x = bastionHit.x;
+      projectile.y = bastionHit.y;
+      projectile.z = fromZ + verticalDelta * bastionHit.t;
+      normalX = bastionHit.normalX;
+      normalY = bastionHit.normalY;
+      normalZ = 0;
+    } else if (hit && hit.distance <= groundDistance) {
       projectile.x = hit.x;
       projectile.y = hit.y;
       projectile.z = hit.z;
