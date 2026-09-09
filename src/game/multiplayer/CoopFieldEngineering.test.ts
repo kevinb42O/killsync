@@ -80,6 +80,21 @@ describe('Coop Field Engineering', () => {
     expect(snapshot.players[0].fabricatorCharges).toBe(0);
   });
 
+  it('absorbs a ranged hazard that was already winding up before a Bastion deployed', () => {
+    const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#22d3ee' }], 0x51a7);
+    const player = (simulation as any).players.get('host');
+    const bastion = { ...structure('hardlight_bastion'), id: 90 };
+    player.x = bastion.x; player.y = bastion.y; player.health = player.maxHealth;
+    const enemy = { id: 91, x: bastion.x, y: bastion.y - 360, type: 'ranged', dying: false };
+    (simulation as any).structures = [bastion];
+    (simulation as any).enemies = [enemy];
+    (simulation as any).activeEnemyIds.add(enemy.id);
+    (simulation as any).hazards = [{ id: 92, enemyId: enemy.id, kind: 'artillery', x: player.x, y: player.y, radius: 60, damage: 30, startsAtMs: 0, resolvesAtMs: 0, color: '#f00', resolved: false }];
+    (simulation as any).updateHazards();
+    expect(player.health).toBe(player.maxHealth);
+    expect(bastion.health).toBeLessThan(bastion.maxHealth);
+  });
+
   it('gives the arc fence a meaningful control profile with explicit resistances', () => {
     expect(arcFenceShock('basic', 100)).toEqual({ damage: 28, stunMs: 460 });
     expect(arcFenceShock('fast', 100).stunMs).toBeGreaterThan(arcFenceShock('tank', 1_000).stunMs);

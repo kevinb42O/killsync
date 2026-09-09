@@ -2167,10 +2167,20 @@ export class CoopSimulation {
     for (const hazard of this.hazards) {
       if (hazard.resolved || this.elapsedMs < hazard.resolvesAtMs) continue;
       hazard.resolved = true;
+      // Ranged/elite attacks are represented as delayed target hazards rather
+      // than moving projectiles. Resolve their source-to-player trace here so
+      // a Bastion blocks shots that were already winding up when it deployed.
+      const source = hazard.enemyId === 0 ? undefined : this.enemies.find(enemy => enemy.id === hazard.enemyId && !enemy.dying);
+      const blockableShot = source?.type === 'ranged' || source?.type === 'elite';
+      const absorbedBy = new Set<CoopStructure>();
       for (const player of this.players.values()) {
         if (player.lifeState !== 'alive' || Math.hypot(player.x - hazard.x, player.y - hazard.y) > hazard.radius + PLAYER_RADIUS) continue;
         if (hazard.kind === 'shockwave' && player.z > 45) continue;
         if (!hasClearAttackPath(hazard, player, this.currentWorldId)) continue;
+        const bastion = blockableShot && source
+          ? this.structures.find(structure => structure.type === 'hardlight_bastion' && structure.state !== 'destroying' && hardlightBastionSegmentHit(structure, source.x, source.y, player.x, player.y))
+          : undefined;
+        if (bastion) { absorbedBy.add(bastion); continue; }
         if (hazard.kind === 'gravity') {
           const distance = Math.hypot(hazard.x - player.x, hazard.y - player.y) || 1;
           const position = { x: player.x + (hazard.x - player.x) / distance * 68, y: player.y + (hazard.y - player.y) / distance * 68 };
@@ -2178,7 +2188,9 @@ export class CoopSimulation {
           if (hazard.damage > 0) this.damagePlayer(player, hazard.damage, hazard.x, hazard.y);
         } else this.damagePlayer(player, hazard.damage, hazard.x, hazard.y);
       }
+      for (const bastion of absorbedBy) this.damageStructure(bastion, Math.max(30, hazard.damage * 1.75));
       for (const structure of this.structures) {
+        if (absorbedBy.has(structure)) continue;
         if (structure.state === 'destroying' || Math.hypot(structure.x - hazard.x, structure.y - hazard.y) > hazard.radius + 90) continue;
         const multiplier = hazard.kind === 'shockwave' ? 7 : hazard.kind === 'gravity' ? 2 : 3;
         this.damageStructure(structure, Math.max(30, hazard.damage * multiplier));
