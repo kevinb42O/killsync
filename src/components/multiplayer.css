@@ -1051,7 +1051,7 @@
   .coop-touch-stick::before, .coop-touch-stick::after { content: ''; position: absolute; background: rgba(165, 243, 252, .16); }
   .coop-touch-stick::before { top: 50%; left: 13%; right: 13%; height: 1px; }
   .coop-touch-stick::after { left: 50%; top: 13%; bottom: 13%; width: 1px; }
-  .coop-touch-stick i { position: absolute; left: 50%; top: 50%; width: 42%; height: 42%; transform: translate(-50%, -50%); border: 1px solid rgba(207, 250, 254, .48); border-radius: 50%; background: rgba(34, 211, 238, .10); }
+  .coop-touch-stick i { position: absolute; left: 50%; top: 50%; width: 42%; height: 42%; transform: translate(calc(-50% + var(--stick-x, 0px)), calc(-50% + var(--stick-y, 0px))); transition: transform .05s linear; border: 1px solid rgba(207, 250, 254, .48); border-radius: 50%; background: rgba(34, 211, 238, .10); }
   .coop-touch-stick b { position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%); color: rgba(207, 250, 254, .72); font: 900 8px/1 ui-monospace, monospace; letter-spacing: .18em; }
   .coop-touch-look { position: absolute; top: 23%; right: 0; width: 37%; height: 39%; pointer-events: auto; touch-action: none; }
   .coop-touch-look span { position: absolute; right: 16px; top: 50%; color: rgba(226, 232, 240, .22); font: 900 8px/1 ui-monospace, monospace; letter-spacing: .18em; transform: rotate(-90deg); }
@@ -1075,6 +1075,7 @@
   .coop-touch-build__actions { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .coop-touch-build__actions .coop-touch-button { width: 100%; min-height: 40px; border-radius: 7px; background: rgba(15, 23, 42, .90); }
   .coop-touch-build__actions .coop-touch-button--place { border-color: rgba(74, 222, 128, .78); background: rgba(6, 78, 59, .78); }
+  .coop-world-readout { left: auto !important; right: max(10px, env(safe-area-inset-right)) !important; top: max(8px, env(safe-area-inset-top)) !important; max-width: min(38vw, 178px); }
 }
 
 @media (pointer: coarse) and (max-width: 560px) {

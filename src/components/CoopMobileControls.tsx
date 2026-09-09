@@ -57,11 +57,19 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
     const element = joystickRef.current;
     if (!element || joystickPointerRef.current !== event.pointerId) return;
     const rect = element.getBoundingClientRect();
-    onAction({ type: 'move', x: clamp((event.clientX - (rect.left + rect.width / 2)) / (rect.width * .32)), y: clamp((event.clientY - (rect.top + rect.height / 2)) / (rect.height * .32)) });
+    const x = clamp((event.clientX - (rect.left + rect.width / 2)) / (rect.width * .32));
+    const y = clamp((event.clientY - (rect.top + rect.height / 2)) / (rect.height * .32));
+    // Native-looking thumb feedback makes the stick usable without looking at
+    // a player's thumb, while the movement value remains normalized.
+    element.style.setProperty('--stick-x', `${Math.round(x * rect.width * .22)}px`);
+    element.style.setProperty('--stick-y', `${Math.round(y * rect.height * .22)}px`);
+    onAction({ type: 'move', x, y });
   };
   const releaseJoystick = (event: PointerEvent<HTMLDivElement>) => {
     if (joystickPointerRef.current !== event.pointerId) return;
     joystickPointerRef.current = null;
+    joystickRef.current?.style.setProperty('--stick-x', '0px');
+    joystickRef.current?.style.setProperty('--stick-y', '0px');
     onAction({ type: 'move', x: 0, y: 0 });
   };
   const moveLook = (event: PointerEvent<HTMLDivElement>) => {

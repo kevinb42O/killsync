@@ -1362,6 +1362,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
     const handleMobileAction = (action: MobileCoopAction) => {
       if (deploymentBlockedRef.current || isSpectator || adminOpenRef.current || adminPausedRef.current) return;
       if (stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
+      // Mobile has no mouse-down gesture to prime Web Audio. Touch actions are
+      // trusted gestures too, so activate the audio context before firing or
+      // interacting to keep the first shot and UI cue audible on iOS/Android.
+      soundManager.activate();
       if (action.type === 'move') {
         mobile.moveX = action.x;
         mobile.moveY = action.y;
@@ -2331,7 +2335,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
       </section>}
       {adminPaused && !adminOpen && <div className="coop-admin-paused"><ShieldCheck size={16} /><b>OPERATION PAUSED BY OWNER</b>{ownerAvailable && <small>Press F1 to open Owner Control</small>}</div>}
       {matchSnapshot?.administration?.modified && <div className="coop-admin-modified">MODIFIED CO-OP RUN · CAREER REWARDS DISABLED</div>}
-      {deploymentStage === 'complete' && matchSnapshot?.world && <div className="pointer-events-none absolute left-5 top-5 z-50 border bg-black/65 px-3 py-2 font-mono uppercase backdrop-blur-sm" style={{ borderColor: `#${activeWorld.theme.accentColor.toString(16).padStart(6, '0')}88`, boxShadow: `0 0 24px #${activeWorld.theme.accentColor.toString(16).padStart(6, '0')}22` }}>
+      {deploymentStage === 'complete' && matchSnapshot?.world && <div className="coop-world-readout pointer-events-none absolute left-5 top-5 z-50 border bg-black/65 px-3 py-2 font-mono uppercase backdrop-blur-sm" style={{ borderColor: `#${activeWorld.theme.accentColor.toString(16).padStart(6, '0')}88`, boxShadow: `0 0 24px #${activeWorld.theme.accentColor.toString(16).padStart(6, '0')}22` }}>
         <div className="text-[8px] font-black tracking-[.24em] text-white/45">World {activeWorld.tier} · Threat ×{activeWorld.difficulty.threatMultiplier.toFixed(2)}</div>
         <div className="mt-0.5 text-[11px] font-black tracking-[.15em]" style={{ color: `#${activeWorld.theme.accentColor.toString(16).padStart(6, '0')}` }}>{activeWorld.name}</div>
         <div className="mt-1 text-[7px] font-bold tracking-[.12em] text-white/50">{WORLD_CONDITIONS[activeWorld.id]}</div>
@@ -2361,18 +2365,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         buildType={buildType}
         onAction={action => mobileInputHandlerRef.current?.(action)}
       />}
-      {!isSpectator && hud.lifeState === 'alive' && !backpackOpen && <div className="pointer-events-none absolute bottom-5 right-5 z-[54] border border-white/10 bg-black/55 px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white/55 backdrop-blur-sm"><kbd className="mr-1.5 text-cyan-200">G</kbd>{tr('backpack.open')}</div>}
-      {nearbyManualDrop && !backpackOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[5.5rem] left-1/2 z-[86] -translate-x-1/2 border border-amber-300/45 bg-black/80 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,.18)]"><kbd className="mr-2 border border-amber-200/40 bg-amber-300/10 px-1.5 py-0.5">F</kbd>{tr(nearbyManualDrop.manualDropKind === 'cash' ? 'backpack.pickupCash' : 'backpack.pickupRevive', { amount: nearbyManualDrop.value })}</div>}
-      {nearbyMissionPrompt && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[8.5rem] left-1/2 z-[86] -translate-x-1/2 border border-emerald-300/50 bg-black/85 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-emerald-100 shadow-[0_0_26px_rgba(45,212,191,.2)]"><kbd className="mr-2 border border-emerald-200/40 bg-emerald-300/10 px-1.5 py-0.5">F</kbd>{nearbyMissionPrompt}</div>}
+      {!isSpectator && hud.lifeState === 'alive' && !backpackOpen && !isMobileTouchDevice && <div className="pointer-events-none absolute bottom-5 right-5 z-[54] border border-white/10 bg-black/55 px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white/55 backdrop-blur-sm"><kbd className="mr-1.5 text-cyan-200">G</kbd>{tr('backpack.open')}</div>}
+      {nearbyManualDrop && !backpackOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[5.5rem] left-1/2 z-[86] -translate-x-1/2 border border-amber-300/45 bg-black/80 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,.18)]"><kbd className="mr-2 border border-amber-200/40 bg-amber-300/10 px-1.5 py-0.5">{isMobileTouchDevice ? 'USE' : 'F'}</kbd>{tr(nearbyManualDrop.manualDropKind === 'cash' ? 'backpack.pickupCash' : 'backpack.pickupRevive', { amount: nearbyManualDrop.value })}</div>}
+      {nearbyMissionPrompt && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[8.5rem] left-1/2 z-[86] -translate-x-1/2 border border-emerald-300/50 bg-black/85 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-emerald-100 shadow-[0_0_26px_rgba(45,212,191,.2)]"><kbd className="mr-2 border border-emerald-200/40 bg-emerald-300/10 px-1.5 py-0.5">{isMobileTouchDevice ? 'USE' : 'F'}</kbd>{nearbyMissionPrompt}</div>}
       {nearDemolitionPlant && demolitionMission && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className={`coop-demolition-interact pointer-events-none absolute ${activelyPlanting ? 'coop-demolition-interact--active' : ''}`}>
         <div className="coop-demolition-interact__eyebrow">SITE {demolitionSite} · EXPLOSIVE CHARGE</div>
         <div className="coop-demolition-interact__action">
-          <kbd>F</kbd>
-          <span>{activelyPlanting ? 'PLANTING CHARGE' : demolitionMission.progress > 0 ? 'PLANT INTERRUPTED · HOLD TO CONTINUE' : 'HOLD TO PLANT CHARGE'}</span>
+          <kbd>{isMobileTouchDevice ? 'USE' : 'F'}</kbd>
+          <span>{activelyPlanting ? 'PLANTING CHARGE' : demolitionMission.progress > 0 ? 'PLANT INTERRUPTED · HOLD TO CONTINUE' : `HOLD ${isMobileTouchDevice ? 'USE' : 'F'} TO PLANT CHARGE`}</span>
           <b>{Math.round(demolitionProgress)}%</b>
         </div>
         <div className="coop-demolition-interact__meter" role="progressbar" aria-label={`Plant charge at site ${demolitionSite}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(demolitionProgress)}><i style={{ width: `${demolitionProgress}%` }} /></div>
-        <small>{activelyPlanting ? 'KEEP F HELD · REMAIN INSIDE THE MARKED SITE' : demolitionMission.progress > 0 ? 'PROGRESS IS DECAYING' : 'STAND CLOSE TO THE DEVICE AND KEEP F HELD'}</small>
+        <small>{activelyPlanting ? `KEEP ${isMobileTouchDevice ? 'USE' : 'F'} HELD · REMAIN INSIDE THE MARKED SITE` : demolitionMission.progress > 0 ? 'PROGRESS IS DECAYING' : `STAND CLOSE TO THE DEVICE AND KEEP ${isMobileTouchDevice ? 'USE' : 'F'} HELD`}</small>
       </div>}
       {localSnapshot?.carryingHostage && <div className="pointer-events-none absolute left-1/2 top-[31%] z-[55] -translate-x-1/2 border border-amber-300/50 bg-black/80 px-4 py-2 text-center text-[10px] font-black uppercase tracking-[.18em] text-amber-100"><div>CARRYING HOSTAGE</div><small className="mt-1 block font-mono text-[8px] text-white/55">WEAPON / SPRINT / JET DISABLED · SPEED −18% · SQUAD PROTECTION REQUIRED</small></div>}
       {backpackOpen && localSnapshot && <CoopBackpackModal
