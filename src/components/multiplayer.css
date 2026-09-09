@@ -1078,6 +1078,19 @@
   .coop-touch-build__actions .coop-touch-button { width: 100%; min-height: 40px; border-radius: 7px; background: rgba(15, 23, 42, .90); }
   .coop-touch-build__actions .coop-touch-button--place { border-color: rgba(74, 222, 128, .78); background: rgba(6, 78, 59, .78); }
   .coop-world-readout { display: none; }
+  /* The desktop weapon card occupies the same lower-left real estate as the
+     touch stick. Keep the vital information, but move a compact readout just
+     above the stick so no HUD ever blocks a thumb control. */
+  .coop-weapons--touch { left: max(12px, env(safe-area-inset-left)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + clamp(106px, 25vw, 142px) + 10px); width: min(172px, calc(100vw - 32px)); padding: 6px 8px; border-left-width: 1px; background: linear-gradient(90deg, rgba(2, 9, 20, .86), rgba(2, 9, 20, .45)); }
+  .coop-weapons--touch .coop-weapons__class, .coop-weapons--touch .coop-weapons__artifact, .coop-weapons--touch .coop-weapons__slots { display: none; }
+  .coop-weapons--touch .coop-weapons__meter { grid-template-columns: 52px 1fr 22px; gap: 4px; margin: 3px 0; }
+  .coop-weapons--touch .coop-weapons__name { margin-top: 1px; font-size: 8px; }
+  .coop-weapons--touch .coop-weapons__ammo { margin-top: 3px; }
+  .coop-weapons--touch .coop-weapons__ammo b { font-size: 19px; }
+  .coop-weapons--touch .coop-weapons__reload { right: 8px; bottom: 6px; }
+  /* The touch build strip already contains selection, placement, rotation,
+     activation, movement and salvage. The desktop palette is redundant here. */
+  .coop-build-palette--touch { display: none; }
 }
 
 @media (pointer: coarse) and (max-width: 560px) {

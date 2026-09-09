@@ -2536,7 +2536,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           language={launch.language}
         />
       )}
-      {!isSpectator && hud.lifeState === 'alive' && !buildMode && activeWeapon && <div className="coop-weapons pointer-events-none absolute z-50">
+      {!isSpectator && hud.lifeState === 'alive' && !buildMode && activeWeapon && <div className={`coop-weapons pointer-events-none absolute z-50 ${isMobileTouchDevice ? 'coop-weapons--touch' : ''}`}>
         <div className="coop-weapons__class" style={{ color: classOperator.color }}><b>{classOperator.className}</b><span>{classOperator.role}</span></div>
         <div className="coop-weapons__meter"><span style={{ color: classOperator.color }}>{classOperator.resourceLabel}</span><i><em style={{ width: `${Math.max(0, Math.min(100, (localSnapshot?.artifactResource || 0) / classOperator.resourceMax * 100))}%`, backgroundColor: classOperator.color }} /></i><b>{Math.floor(localSnapshot?.artifactResource || 0)}/{classOperator.resourceMax}</b></div>
         <div className="coop-weapons__meter coop-weapons__meter--jet"><span>BURST PACK</span><i><em style={{ width: `${Math.max(0, Math.min(100, localSnapshot?.jetFuel ?? 100))}%` }} /></i><b>{Math.round(localSnapshot?.jetFuel ?? 100)}</b></div>
@@ -2547,7 +2547,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         {hud.isReloading && <div className="coop-weapons__reload">{tr('hud.reloading')}</div>}
       </div>}
       {!isSpectator && hud.lifeState === 'alive' && buildMode && (
-        <div className={`pointer-events-none absolute bottom-5 left-1/2 z-[70] -translate-x-1/2 border border-cyan-300/45 bg-[#050b13]/94 p-3 shadow-[0_0_32px_rgba(34,211,238,.2)] backdrop-blur-md ${buildPaletteExpanded ? 'w-[min(880px,calc(100vw-2rem))]' : 'w-[min(390px,calc(100vw-2rem))]'}`}>
+        <div className={`coop-build-palette pointer-events-none absolute bottom-5 left-1/2 z-[70] -translate-x-1/2 border border-cyan-300/45 bg-[#050b13]/94 p-3 shadow-[0_0_32px_rgba(34,211,238,.2)] backdrop-blur-md ${isMobileTouchDevice ? 'coop-build-palette--touch' : ''} ${buildPaletteExpanded ? 'w-[min(880px,calc(100vw-2rem))]' : 'w-[min(390px,calc(100vw-2rem))]'}`}>
           <div className="flex items-center justify-between gap-4 border-b border-cyan-100/15 pb-2">
             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.2em] text-cyan-100"><Hammer size={15} />{tr('build.fieldEngineering')}</div>
             <div className="text-right font-mono text-[10px] uppercase text-cyan-200"><div>{tr('build.charges', { count: hud.fabricatorCharges })}</div>{hud.fabricatorCharges < COOP_MAX_FABRICATOR_CHARGES && <small className="text-[8px] text-cyan-100/50">{tr('build.recharge', { seconds: Math.ceil(hud.fabricatorRechargeRemainingMs / 1000) })}</small>}</div>

@@ -24,6 +24,10 @@ const BUILD_LABELS: Record<CoopStructureType, string> = {
 };
 
 const BUILD_TYPES: readonly CoopStructureType[] = ['barricade', 'arc_fence', 'recovery_relay', 'decoy_beacon', 'bridge_segment'];
+// A touch that lasts this long without moving is intentional jump/jet input.
+// Keep it short enough to feel immediate without turning ordinary camera
+// swipes into jumps.
+const JUMP_HOLD_DELAY_MS = 55;
 
 function clamp(value: number) { return Math.max(-1, Math.min(1, value)); }
 
@@ -190,14 +194,14 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
           if (lookPointerRef.current !== pointerId || lookMovedRef.current) return;
           jumpHeldRef.current = true;
           onAction({ type: 'hold', control: 'jump', pressed: true });
-        }, 115);
+        }, JUMP_HOLD_DELAY_MS);
       }}
       onPointerMove={moveLook} onPointerUp={event => releaseLook(event, true)} onPointerCancel={event => releaseLook(event, false)} onLostPointerCapture={event => releaseLook(event, false)}>
     </div>
 
     <div className="coop-touch-combat">
       <HoldButton label="AIM" title="Hold to aim; drag to look" control="aim" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
-      <HoldButton label="FIRE" control="fire" onAction={onAction} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
+      <HoldButton label="FIRE" title="Hold to fire; drag to look" control="fire" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
       <HoldButton label="USE" control="interact" onAction={onAction} className="coop-touch-button--use"><ShieldPlus size={19} /></HoldButton>
       <TapButton label="PREV" title="Previous weapon" onAction={() => onAction({ type: 'tap', control: 'previousWeapon' })} className="coop-touch-button--previous"><ChevronLeft size={19} /></TapButton>
       <TapButton label="NEXT" title="Next weapon" onAction={() => onAction({ type: 'tap', control: 'nextWeapon' })} className="coop-touch-button--next"><ChevronRight size={19} /></TapButton>
