@@ -1,5 +1,5 @@
-import { useRef, type PointerEvent, type ReactNode } from 'react';
-import { Backpack, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Hammer, Map, MapPin, MessageSquare, RotateCcw, ShieldPlus, Wrench, X } from 'lucide-react';
+import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { Backpack, ChevronLeft, ChevronRight, Crosshair, Hammer, Map, MapPin, MessageSquare, MoreHorizontal, RotateCcw, ShieldPlus, Wrench, X } from 'lucide-react';
 import type { CoopStructureType } from '../game/multiplayer/CoopFieldEngineering';
 
 export type MobileCoopAction =
@@ -45,6 +45,45 @@ function HoldButton({ label, title, className = '', control, onAction, children 
   </button>;
 }
 
+/** One low-profile movement button covers three closely related actions:
+ * tap for jump, hold for sprint, double tap for an immediate slide. */
+function MovementGestureButton({ onAction }: { onAction: Props['onAction'] }) {
+  const holdTimerRef = useRef<number | null>(null);
+  const lastTapAtRef = useRef(0);
+  const sprintingRef = useRef(false);
+  const activePointerRef = useRef<number | null>(null);
+  const finish = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (activePointerRef.current !== event.pointerId) return;
+    activePointerRef.current = null;
+    if (holdTimerRef.current !== null) { window.clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    if (sprintingRef.current) {
+      sprintingRef.current = false;
+      onAction({ type: 'hold', control: 'sprint', pressed: false });
+      return;
+    }
+    const now = performance.now();
+    if (now - lastTapAtRef.current < 280) {
+      lastTapAtRef.current = 0;
+      onAction({ type: 'hold', control: 'slide', pressed: true });
+      window.setTimeout(() => onAction({ type: 'hold', control: 'slide', pressed: false }), 180);
+    } else {
+      lastTapAtRef.current = now;
+      onAction({ type: 'hold', control: 'jump', pressed: true });
+      onAction({ type: 'hold', control: 'jump', pressed: false });
+    }
+  };
+  return <button type="button" className="coop-touch-button coop-touch-button--motion" aria-label="Tap to jump, hold to sprint, double tap to slide"
+    onPointerDown={event => {
+      event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId);
+      activePointerRef.current = event.pointerId;
+      holdTimerRef.current = window.setTimeout(() => { sprintingRef.current = true; onAction({ type: 'hold', control: 'sprint', pressed: true }); }, 180);
+    }}
+    onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish}>
+    <span>MOTION</span><small>tap jump · hold run · 2× slide</small>
+  </button>;
+}
+
 /** Mobile-only co-op HUD. It emits high-level actions; MultiplayerArena keeps
  * authority, prediction, and all input sequencing in one place. */
 export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
@@ -52,6 +91,7 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
   const joystickPointerRef = useRef<number | null>(null);
   const lookPointerRef = useRef<number | null>(null);
   const lastLookRef = useRef<{ x: number; y: number } | null>(null);
+  const [utilityOpen, setUtilityOpen] = useState(false);
 
   const moveJoystick = (event: PointerEvent<HTMLDivElement>) => {
     const element = joystickRef.current;
@@ -86,11 +126,18 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
   };
 
   return <div className="coop-mobile-controls" aria-label="Mobile co-op controls">
-    <div className="coop-touch-utility coop-touch-utility--left">
-      <TapButton label="PACK" title="Open backpack" onAction={() => onAction({ type: 'tap', control: 'backpack' })}><Backpack size={16} /></TapButton>
-      <TapButton label="MAP" title="Open tactical map" onAction={() => onAction({ type: 'tap', control: 'map' })}><Map size={16} /></TapButton>
-      <TapButton label="PING" title="Ping current target" onAction={() => onAction({ type: 'tap', control: 'ping' })}><MapPin size={16} /></TapButton>
-      <TapButton label="CHAT" title="Open squad chat" onAction={() => onAction({ type: 'tap', control: 'chat' })}><MessageSquare size={16} /></TapButton>
+    <div className="coop-touch-utility">
+      <TapButton label="MENU" title="Open quick actions" onAction={() => setUtilityOpen(open => !open)} className={utilityOpen ? 'coop-touch-button--active' : ''}><MoreHorizontal size={21} /></TapButton>
+      {utilityOpen && <div className="coop-touch-utility__tray" aria-label="Quick actions">
+        <TapButton label="PACK" title="Open backpack" onAction={() => onAction({ type: 'tap', control: 'backpack' })}><Backpack size={16} /></TapButton>
+        <TapButton label="MAP" title="Open tactical map" onAction={() => onAction({ type: 'tap', control: 'map' })}><Map size={16} /></TapButton>
+        <TapButton label="PING" title="Ping current target" onAction={() => onAction({ type: 'tap', control: 'ping' })}><MapPin size={16} /></TapButton>
+        <TapButton label="CHAT" title="Open squad chat" onAction={() => onAction({ type: 'tap', control: 'chat' })}><MessageSquare size={16} /></TapButton>
+        <TapButton label="RELOAD" onAction={() => onAction({ type: 'tap', control: 'reload' })}><RotateCcw size={16} /></TapButton>
+        <TapButton label="PREV" title="Previous weapon" onAction={() => onAction({ type: 'tap', control: 'previousWeapon' })}><ChevronLeft size={19} /></TapButton>
+        <TapButton label="NEXT" title="Next weapon" onAction={() => onAction({ type: 'tap', control: 'nextWeapon' })}><ChevronRight size={19} /></TapButton>
+        <TapButton label="BUILD" onAction={() => onAction({ type: 'tap', control: 'toggleBuild' })} className={buildMode ? 'coop-touch-button--active' : ''}><Hammer size={17} /></TapButton>
+      </div>}
     </div>
 
     <div ref={joystickRef} className="coop-touch-stick" aria-label="Move joystick"
@@ -99,23 +146,16 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
       <i /><b>MOVE</b>
     </div>
 
-    <div className="coop-touch-look" aria-label="Look area"
+    <div className="coop-touch-look" aria-label="Swipe anywhere outside controls to look around"
       onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); lookPointerRef.current = event.pointerId; lastLookRef.current = { x: event.clientX, y: event.clientY }; }}
       onPointerMove={moveLook} onPointerUp={releaseLook} onPointerCancel={releaseLook} onLostPointerCapture={releaseLook}>
-      <span>LOOK</span>
     </div>
 
     <div className="coop-touch-combat">
       <HoldButton label="AIM" control="aim" onAction={onAction} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
-      <HoldButton label="SPRINT" control="sprint" onAction={onAction}><ChevronUp size={18} /></HoldButton>
-      <HoldButton label="SLIDE" control="slide" onAction={onAction}><ChevronDown size={18} /></HoldButton>
-      <HoldButton label="JUMP" control="jump" onAction={onAction} className="coop-touch-button--jump"><ChevronUp size={22} /></HoldButton>
       <HoldButton label="FIRE" control="fire" onAction={onAction} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
       <HoldButton label="USE" control="interact" onAction={onAction} className="coop-touch-button--use"><ShieldPlus size={19} /></HoldButton>
-      <TapButton label="RELOAD" onAction={() => onAction({ type: 'tap', control: 'reload' })}><RotateCcw size={16} /></TapButton>
-      <TapButton label="PREV" title="Previous weapon" onAction={() => onAction({ type: 'tap', control: 'previousWeapon' })}><ChevronLeft size={19} /></TapButton>
-      <TapButton label="NEXT" title="Next weapon" onAction={() => onAction({ type: 'tap', control: 'nextWeapon' })}><ChevronRight size={19} /></TapButton>
-      <TapButton label="BUILD" onAction={() => onAction({ type: 'tap', control: 'toggleBuild' })} className={buildMode ? 'coop-touch-button--active' : ''}><Hammer size={17} /></TapButton>
+      <MovementGestureButton onAction={onAction} />
     </div>
 
     {buildMode && <div className="coop-touch-build" aria-label="Build controls">
