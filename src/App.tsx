@@ -2536,7 +2536,7 @@ export default function App() {
                       { label: 'Move / look', key: 'STICK / SWIPE' },
                       { label: 'Fire / special', key: 'FIRE / AIM' },
                       { label: 'Sprint / slide', key: 'HOLD' },
-                      { label: 'Jump / jet', key: 'JUMP' },
+                      { label: 'Jump / jet', key: 'TAP SCREEN' },
                       { label: 'Reload', key: 'RELOAD' },
                       { label: 'Weapons', key: 'PREV / NEXT' },
                       { label: 'Build / place', key: 'BUILD / PLACE' },

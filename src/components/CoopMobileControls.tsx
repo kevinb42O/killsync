@@ -45,8 +45,9 @@ function HoldButton({ label, title, className = '', control, onAction, children 
   </button>;
 }
 
-/** One low-profile movement button covers three closely related actions:
- * tap for jump, hold for sprint, double tap for an immediate slide. */
+/** One low-profile movement button covers the two continuous movement actions:
+ * hold for sprint and double tap for an immediate slide. Jump is intentionally
+ * a tap anywhere in the free-look field, like modern touch shooters. */
 function MovementGestureButton({ onAction }: { onAction: Props['onAction'] }) {
   const holdTimerRef = useRef<number | null>(null);
   const lastTapAtRef = useRef(0);
@@ -67,20 +68,16 @@ function MovementGestureButton({ onAction }: { onAction: Props['onAction'] }) {
       lastTapAtRef.current = 0;
       onAction({ type: 'hold', control: 'slide', pressed: true });
       window.setTimeout(() => onAction({ type: 'hold', control: 'slide', pressed: false }), 180);
-    } else {
-      lastTapAtRef.current = now;
-      onAction({ type: 'hold', control: 'jump', pressed: true });
-      onAction({ type: 'hold', control: 'jump', pressed: false });
-    }
+    } else lastTapAtRef.current = now;
   };
-  return <button type="button" className="coop-touch-button coop-touch-button--motion" aria-label="Tap to jump, hold to sprint, double tap to slide"
+  return <button type="button" className="coop-touch-button coop-touch-button--motion" aria-label="Hold to sprint, double tap to slide"
     onPointerDown={event => {
       event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId);
       activePointerRef.current = event.pointerId;
       holdTimerRef.current = window.setTimeout(() => { sprintingRef.current = true; onAction({ type: 'hold', control: 'sprint', pressed: true }); }, 180);
     }}
     onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish}>
-    <span>MOTION</span><small>tap jump · hold run · 2× slide</small>
+    <span>MOTION</span><small>hold run · 2× slide</small>
   </button>;
 }
 
@@ -91,6 +88,8 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
   const joystickPointerRef = useRef<number | null>(null);
   const lookPointerRef = useRef<number | null>(null);
   const lastLookRef = useRef<{ x: number; y: number } | null>(null);
+  const lookStartRef = useRef<{ x: number; y: number } | null>(null);
+  const lookMovedRef = useRef(false);
   const [utilityOpen, setUtilityOpen] = useState(false);
 
   const moveJoystick = (event: PointerEvent<HTMLDivElement>) => {
@@ -117,12 +116,23 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
     const deltaX = event.clientX - lastLookRef.current.x;
     const deltaY = event.clientY - lastLookRef.current.y;
     lastLookRef.current = { x: event.clientX, y: event.clientY };
+    if (lookStartRef.current && Math.abs(event.clientX - lookStartRef.current.x) + Math.abs(event.clientY - lookStartRef.current.y) > 8) lookMovedRef.current = true;
     if (deltaX || deltaY) onAction({ type: 'look', deltaX, deltaY });
   };
-  const releaseLook = (event: PointerEvent<HTMLDivElement>) => {
+  const releaseLook = (event: PointerEvent<HTMLDivElement>, jumpOnTap: boolean) => {
     if (lookPointerRef.current !== event.pointerId) return;
+    const wasTap = !lookMovedRef.current;
     lookPointerRef.current = null;
     lastLookRef.current = null;
+    lookStartRef.current = null;
+    lookMovedRef.current = false;
+    // A motionless touch is a jump. A dragged touch is camera-only, preventing
+    // accidental jumps while aiming. Each pointer is independent, so this can
+    // happen while the other thumbs hold MOVE and FIRE.
+    if (jumpOnTap && wasTap) {
+      onAction({ type: 'hold', control: 'jump', pressed: true });
+      onAction({ type: 'hold', control: 'jump', pressed: false });
+    }
   };
 
   return <div className="coop-mobile-controls" aria-label="Mobile co-op controls">
@@ -147,8 +157,8 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
     </div>
 
     <div className="coop-touch-look" aria-label="Swipe anywhere outside controls to look around"
-      onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); lookPointerRef.current = event.pointerId; lastLookRef.current = { x: event.clientX, y: event.clientY }; }}
-      onPointerMove={moveLook} onPointerUp={releaseLook} onPointerCancel={releaseLook} onLostPointerCapture={releaseLook}>
+      onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); lookPointerRef.current = event.pointerId; lookMovedRef.current = false; lookStartRef.current = { x: event.clientX, y: event.clientY }; lastLookRef.current = { x: event.clientX, y: event.clientY }; }}
+      onPointerMove={moveLook} onPointerUp={event => releaseLook(event, true)} onPointerCancel={event => releaseLook(event, false)} onLostPointerCapture={event => releaseLook(event, false)}>
     </div>
 
     <div className="coop-touch-combat">
