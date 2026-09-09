@@ -22,6 +22,15 @@ export interface Renderer3DOptions {
   coopEnemyBatching?: boolean;
   /** The co-op environment is built only for this active world. */
   worldId?: WorldId;
+  /** Touch-only quality profile. Omit this to detect a phone/tablet safely. */
+  mobilePerformance?: boolean;
+}
+
+function shouldUseMobilePerformanceProfile() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return navigator.maxTouchPoints > 0
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(pointer: coarse) and (max-width: 1100px)').matches;
 }
 
 export interface RendererSuitPalette {
@@ -88,6 +97,9 @@ export class Renderer3D {
   private speedLineMaterial!: THREE.ShaderMaterial;
   private speedLineMesh!: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
   private speedLineIntensity = 0;
+  /** Kept wholly separate from desktop settings so touch hardware trades a
+   * little invisible rendering detail for materially steadier frame pacing. */
+  private readonly mobilePerformance: boolean;
 
   private readonly WORLD_FOV = 108;
   private readonly WORLD_DASH_FOV = 118;
@@ -281,7 +293,7 @@ export class Renderer3D {
   // A dense end-game combat field needs room for enemies. Recent impact
   // particles are favoured below, so a smaller hard cap reads better than a
   // wall of 1,200 additive sprites.
-  private readonly MAX_3D_PARTICLES = 720;
+  private readonly max3DParticles: number;
 
   // Shared reusable geometries and materials for maximum performance
   private gemGeometry = new THREE.OctahedronGeometry(6, 0);
@@ -389,6 +401,8 @@ export class Renderer3D {
   constructor(options: Renderer3DOptions = {}) {
     this.floatingPlatform = options.floatingPlatform ?? false;
     this.worldId = options.worldId || 'neon_bastion';
+    this.mobilePerformance = options.mobilePerformance ?? shouldUseMobilePerformanceProfile();
+    this.max3DParticles = this.mobilePerformance ? 260 : 720;
     // 1. Initialize Three.js Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0b1830);
@@ -408,20 +422,25 @@ export class Renderer3D {
     // 3. Initialize WebGL Renderer
     this.renderer = new THREE.WebGLRenderer({
       powerPreference: 'high-performance',
-      antialias: true,
+      antialias: !this.mobilePerformance,
       alpha: false
     });
     // A frame may contain world, viewmodel, and speed-line passes. Accumulate
     // renderer statistics across all of them and reset exactly once below.
     this.renderer.info.autoReset = false;
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // A 3× phone screen otherwise becomes a 4×-pixel desktop render target.
+    // 1.15 keeps the image crisp at normal playing distance while markedly
+    // reducing fragment work, bandwidth, and heat on mobile GPUs.
+    this.renderer.setPixelRatio(this.mobilePerformance
+      ? Math.min(window.devicePixelRatio || 1, 1.15)
+      : Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.4;
 
     // Screen-space sprint feedback is rendered in a final transparent pass so
     // the streaks remain in the player's FOV instead of existing in the world.
-    this.setupSpeedLines();
+    if (!this.mobilePerformance) this.setupSpeedLines();
 
     // 4. Setup Lighting
     this.setupLighting();
@@ -493,7 +512,7 @@ export class Renderer3D {
     this.camera.updateProjectionMatrix();
     this.viewmodelCamera.aspect = width / height;
     this.viewmodelCamera.updateProjectionMatrix();
-    this.speedLineMaterial.uniforms.aspect.value = width / Math.max(1, height);
+    if (!this.mobilePerformance) this.speedLineMaterial.uniforms.aspect.value = width / Math.max(1, height);
     this.renderer.setSize(width, height);
   };
 
@@ -1049,7 +1068,7 @@ export class Renderer3D {
     }
     this.scene.add(celestial);
 
-    const particleCount = 360;
+    const particleCount = this.mobilePerformance ? 130 : 360;
     const positions = new Float32Array(particleCount * 3);
     for (let index = 0; index < particleCount; index++) {
       // Deterministic pseudo-random field: repeatable screenshots and no saved
@@ -2189,10 +2208,10 @@ export class Renderer3D {
   }
 
   private setupParticleSystem() {
-    this.particlePositions = new Float32Array(this.MAX_3D_PARTICLES * 3);
-    this.particleColors = new Float32Array(this.MAX_3D_PARTICLES * 3);
-    this.particleSizes = new Float32Array(this.MAX_3D_PARTICLES);
-    this.particleAlphas = new Float32Array(this.MAX_3D_PARTICLES);
+    this.particlePositions = new Float32Array(this.max3DParticles * 3);
+    this.particleColors = new Float32Array(this.max3DParticles * 3);
+    this.particleSizes = new Float32Array(this.max3DParticles);
+    this.particleAlphas = new Float32Array(this.max3DParticles);
 
     this.particleGeo = new THREE.BufferGeometry();
     this.particleGeo.setAttribute('position', new THREE.BufferAttribute(this.particlePositions, 3));
@@ -2873,16 +2892,18 @@ export class Renderer3D {
 
     // Ease both edges of the effect so tapping sprint never produces a flash.
     // ADS suppresses the streaks to preserve a clean sight picture.
-    const speedLineTarget = viewMode === 'FIRST_PERSON' && this.presentationSprinting
-      ? 0.26 * (1 - this.adsProgress)
-      : 0;
-    this.speedLineIntensity = this.damp(this.speedLineIntensity, speedLineTarget, speedLineTarget > 0 ? 8 : 12, deltaTime);
-    this.speedLineMaterial.uniforms.time.value += Math.min(deltaTime, 50) / 1000;
-    this.speedLineMaterial.uniforms.intensity.value = this.speedLineIntensity;
-    if (this.speedLineIntensity > 0.002) {
-      this.renderer.autoClear = false;
-      this.renderer.render(this.speedLineScene, this.speedLineCamera);
-      this.renderer.autoClear = true;
+    if (!this.mobilePerformance) {
+      const speedLineTarget = viewMode === 'FIRST_PERSON' && this.presentationSprinting
+        ? 0.26 * (1 - this.adsProgress)
+        : 0;
+      this.speedLineIntensity = this.damp(this.speedLineIntensity, speedLineTarget, speedLineTarget > 0 ? 8 : 12, deltaTime);
+      this.speedLineMaterial.uniforms.time.value += Math.min(deltaTime, 50) / 1000;
+      this.speedLineMaterial.uniforms.intensity.value = this.speedLineIntensity;
+      if (this.speedLineIntensity > 0.002) {
+        this.renderer.autoClear = false;
+        this.renderer.render(this.speedLineScene, this.speedLineCamera);
+        this.renderer.autoClear = true;
+      }
     }
   }
 
@@ -5367,8 +5388,8 @@ export class Renderer3D {
     // Engine particles are append-only within their lifetime. In heavy combat,
     // retain the newest feedback (impacts, muzzle bursts) rather than the
     // oldest trail noise, which would otherwise fill the entire screen.
-    const firstParticle = Math.max(0, particles.length - this.MAX_3D_PARTICLES);
-    let count = Math.min(particles.length, this.MAX_3D_PARTICLES);
+    const firstParticle = Math.max(0, particles.length - this.max3DParticles);
+    let count = Math.min(particles.length, this.max3DParticles);
 
     for (let i = 0; i < count; i++) {
       const p = particles[firstParticle + i];
@@ -5383,13 +5404,13 @@ export class Renderer3D {
       this.particleColors[idx + 2] = c.b;
       // Screenspace caps prevent large upgraded explosions from becoming a
       // white flash while still letting their color and timing read clearly.
-      this.particleSizes[i] = Math.min(32, 6 + (p.size || 2) * 3.2);
+      this.particleSizes[i] = Math.min(this.mobilePerformance ? 24 : 32, 6 + (p.size || 2) * 3.2);
       const lifeAlpha = (p.life || 0) / Math.max(1, p.maxLife || 1);
       this.particleAlphas[i] = THREE.MathUtils.clamp(lifeAlpha * 0.82, 0, 0.82);
     }
 
     // Zero out unused slots
-    for (let i = count; i < this.MAX_3D_PARTICLES; i++) {
+    for (let i = count; i < this.max3DParticles; i++) {
       const idx = i * 3;
       this.particlePositions[idx + 1] = -9999;
       this.particleSizes[i] = 0;
@@ -5452,8 +5473,8 @@ export class Renderer3D {
     this.treasureMeshes.clear();
     this.shopMeshes.clear();
     this.exfillPortalMesh = null;
-    this.speedLineMesh.geometry.dispose();
-    this.speedLineMaterial.dispose();
+    this.speedLineMesh?.geometry.dispose();
+    this.speedLineMaterial?.dispose();
     this.unmount();
     this.renderer.dispose();
   }
