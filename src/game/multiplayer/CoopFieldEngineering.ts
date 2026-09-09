@@ -40,6 +40,8 @@ export const COOP_STRUCTURE_ACTION_RANGE = 300;
 export const COOP_STRUCTURE_REPAIR_PER_SECOND = 55;
 export const COOP_HARDLIGHT_BASTION_HALF_EXTENT = 150;
 export const COOP_HARDLIGHT_BASTION_WALL_CENTER = COOP_HARDLIGHT_BASTION_HALF_EXTENT - 17;
+/** Visual and collision top for jumpable hardlight panels. */
+export const COOP_HARDLIGHT_WALL_TOP = 54;
 export const COOP_RECOVERY_RELAY_REVIVE_MULTIPLIER = 1.25;
 export const COOP_RECOVERY_RELAY_HEAL_PER_SECOND = 7.5;
 export const COOP_RECOVERY_RELAY_SURGE_HEAL = 28;
@@ -316,6 +318,18 @@ export function getBarricadeWallContact(
     if (contact) return contact;
   }
   return undefined;
+}
+
+/** Returns a walkable top only for the physical hardlight panels, never the
+ * Bastion's empty interior. The movement system owns vertical landing. */
+export function getStructureWalkableTop(
+  structure: Pick<CoopStructureSnapshot, 'type' | 'x' | 'y' | 'angle'>,
+  x: number,
+  y: number,
+  radius: number,
+) {
+  if ((structure.type !== 'barricade' && structure.type !== 'hardlight_bastion') || !structureContainsCircle(structure, x, y, radius * .55, -2)) return undefined;
+  return COOP_HARDLIGHT_WALL_TOP;
 }
 
 function getOrientedRectWallContact(

@@ -25,6 +25,9 @@ export const COOP_CAMERA_OVERHEAD_SAFETY_MARGIN = 90;
 export type PlayerCollisionResolver = (position: { x: number; y: number }, radius: number) => boolean;
 export interface PlayerWallContact { normalX: number; normalY: number; }
 export type PlayerWallContactDetector = (position: { x: number; y: number }, radius: number) => PlayerWallContact | undefined;
+/** Optional elevated hardlight surface. It is deliberately separate from
+ * horizontal collision so walls can be jumped onto and walked across. */
+export type PlayerFloorResolver = (position: { x: number; y: number }, radius: number) => number | undefined;
 
 export interface PlayerMotionState {
   x: number;
@@ -66,13 +69,16 @@ export function advancePlayerMovement(
   deltaMs: number,
   resolveAdditionalCollisions?: PlayerCollisionResolver,
   getAdditionalWallContact?: PlayerWallContactDetector,
+  getAdditionalFloor?: PlayerFloorResolver,
   worldId: WorldId = 'neon_bastion',
 ) {
   const seconds = Math.max(0, Math.min(50, deltaMs)) / 1000;
+  const floorAtStart = getAdditionalFloor?.(player, COOP_PLAYER_RADIUS);
+  const elevatedGrounded = floorAtStart !== undefined && player.z >= floorAtStart - 1 && player.z <= floorAtStart + 1;
   if (input) {
     player.angle = input.aimAngle / 65535 * Math.PI * 2;
     player.sprinting = input.sprinting && !player.carryingHostage;
-    const grounded = player.z <= 0.001;
+    const grounded = player.z <= 0.001 || elevatedGrounded;
     const groundSurface = sampleWorldSurface(worldId, player.x, player.y);
     player.jetFuel = Math.max(0, Math.min(COOP_JET_FUEL_MAX, player.jetFuel ?? COOP_JET_FUEL_MAX));
     player.airborneMs = grounded ? 0 : (player.airborneMs || 0) + deltaMs;
@@ -146,10 +152,14 @@ export function advancePlayerMovement(
       if (player.jetFuel <= 0) player.jetActive = false;
     }
   }
+  const zBeforeGravity = player.z;
   player.verticalVelocity -= getWorldDefinition(worldId).movementGravity * seconds;
   player.z += player.verticalVelocity * seconds;
-  if (player.z <= 0) {
-    player.z = 0;
+  const floorAfterMovement = getAdditionalFloor?.(player, COOP_PLAYER_RADIUS);
+  const landedOnHardlight = floorAfterMovement !== undefined && player.verticalVelocity <= 0
+    && zBeforeGravity >= floorAfterMovement - .001 && player.z <= floorAfterMovement;
+  if (landedOnHardlight || player.z <= 0) {
+    player.z = landedOnHardlight ? floorAfterMovement! : 0;
     player.verticalVelocity = 0;
     player.airActionConsumedSinceGrounded = false;
     player.jetActive = false;

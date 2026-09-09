@@ -45,7 +45,7 @@ describe('co-op structure lighting', () => {
     const rig = scene.getObjectByName('coop-structure:8')!;
     const fieldPanels: THREE.Mesh[] = [];
     rig.traverse(node => { if (node instanceof THREE.Mesh && node.userData.visualRole === 'bastion-field') fieldPanels.push(node); });
-    expect(fieldPanels).toHaveLength(4);
+    expect(fieldPanels).toHaveLength(8);
     visuals.dispose();
   });
 });

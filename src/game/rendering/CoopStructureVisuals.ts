@@ -182,27 +182,43 @@ function createBarricade(group: THREE.Group, steel: THREE.Material, edge: THREE.
 }
 
 function createHardlightBastion(group: THREE.Group, steel: THREE.Material, edge: THREE.Material, accent: THREE.Material, energy: THREE.Material) {
-  // The panels overlap at each corner, matching the compound collision shell.
+  // Clear hardlight panes preserve an uninterrupted view from the protected
+  // interior. Opaque elements are intentionally limited to slim frames.
+  const pane = material('#0a2e40', '#25d7ff', 1.9, true, .18, THREE.AdditiveBlending);
+  const paneGlow = material('#7ceeff', '#38e8ff', 4.8, true, .72, THREE.AdditiveBlending);
   const wallOffset = 133;
   for (const z of [-wallOffset, wallOffset]) {
     addBox(group, 300, 8, 32, 0, 4, z, steel, 'base');
-    addBox(group, 300, 48, 22, 0, 28, z, steel, 'armor');
+    addBox(group, 286, 48, 3.2, 0, 29, z + (z < 0 ? 10 : -10), pane, 'bastion-pane');
     addBox(group, 286, 3, 26, 0, 53, z, edge, 'edge');
-    addBox(group, 278, 24, 2.5, 0, 32, z + (z < 0 ? 13 : -13), energy, 'bastion-field');
-    for (const x of [-112, -56, 0, 56, 112]) addBox(group, 6, 50, 34, x, 27, z, accent, 'brace');
+    addBox(group, 286, 2.1, 4, 0, 8, z + (z < 0 ? 12 : -12), paneGlow, 'bastion-field');
+    addBox(group, 286, 1.6, 4, 0, 34, z + (z < 0 ? 12 : -12), paneGlow, 'bastion-field');
+    for (const x of [-112, -56, 0, 56, 112]) {
+      addBox(group, 4.5, 48, 12, x, 28, z, accent, 'brace');
+      const chevron = addBox(group, 38, 2.2, 3, x, 26, z + (z < 0 ? 12 : -12), paneGlow, 'bastion-chevron');
+      chevron.rotation.z = x / 56 % 2 ? .42 : -.42;
+    }
   }
   for (const x of [-wallOffset, wallOffset]) {
     addBox(group, 32, 8, 300, x, 4, 0, steel, 'base');
-    addBox(group, 22, 48, 300, x, 28, 0, steel, 'armor');
+    addBox(group, 3.2, 48, 286, x + (x < 0 ? 10 : -10), 29, 0, pane, 'bastion-pane');
     addBox(group, 26, 3, 286, x, 53, 0, edge, 'edge');
-    addBox(group, 2.5, 24, 278, x + (x < 0 ? 13 : -13), 32, 0, energy, 'bastion-field');
-    for (const z of [-112, -56, 0, 56, 112]) addBox(group, 34, 50, 6, x, 27, z, accent, 'brace');
+    addBox(group, 4, 2.1, 286, x + (x < 0 ? 12 : -12), 8, 0, paneGlow, 'bastion-field');
+    addBox(group, 4, 1.6, 286, x + (x < 0 ? 12 : -12), 34, 0, paneGlow, 'bastion-field');
+    for (const z of [-112, -56, 0, 56, 112]) {
+      addBox(group, 12, 48, 4.5, x, 28, z, accent, 'brace');
+      const chevron = addBox(group, 3, 2.2, 38, x + (x < 0 ? 12 : -12), 26, z, paneGlow, 'bastion-chevron');
+      chevron.rotation.x = z / 56 % 2 ? -.42 : .42;
+    }
   }
   for (const [x, z] of [[-133, -133], [-133, 133], [133, -133], [133, 133]]) {
     addCylinder(group, 13, 18, 61, x, 31, z, edge, 'corner', 8);
     addMesh(group, new THREE.OctahedronGeometry(9, 0), energy, x, 66, z, 'corner-core');
   }
-  addMesh(group, new THREE.RingGeometry(112, 116, 4), accent, 0, 1.2, 0, 'bastion-ring').rotation.x = -Math.PI * .5;
+  const ring = addMesh(group, new THREE.RingGeometry(112, 116, 4), accent, 0, 1.2, 0, 'bastion-ring');
+  ring.rotation.x = -Math.PI * .5;
+  for (const [x, z] of [[0, -149], [149, 0], [0, 149], [-149, 0]]) addMesh(group, new THREE.OctahedronGeometry(6, 0), paneGlow, x, 74, z, 'beacon');
+  pane.dispose(); paneGlow.dispose();
 }
 
 function createArcFence(group: THREE.Group, steel: THREE.Material, edge: THREE.Material, accent: THREE.Material, energy: THREE.Material) {
@@ -291,9 +307,12 @@ function animateRig(rig: THREE.Group, type: CoopStructureType, elapsedMs: number
       nodeMaterial.opacity = (.35 + Math.sin(elapsedMs * .009) * .16) * damagedPulse;
     }
     if (type === 'hardlight_bastion') {
-      if (role === 'bastion-field') nodeMaterial.opacity = (.24 + health * .52 + Math.sin(elapsedMs * .009 + node.position.x + node.position.z) * .09 + pulse * .22) * damagedPulse;
+      if (role === 'bastion-pane') nodeMaterial.opacity = (.08 + health * .13 + Math.sin(elapsedMs * .003 + node.position.x + node.position.z) * .025) * damagedPulse;
+      else if (role === 'bastion-field') nodeMaterial.opacity = (.3 + health * .46 + Math.sin(elapsedMs * .009 + node.position.x + node.position.z) * .09 + pulse * .22) * damagedPulse;
+      else if (role === 'bastion-chevron') { node.position.y = 26 + Math.sin(elapsedMs * .006 + node.position.x + node.position.z) * 4; nodeMaterial.opacity = (.42 + health * .28) * damagedPulse; }
       else if (role === 'corner-core') { node.rotation.y = elapsedMs * .004; node.scale.setScalar(.9 + Math.sin(elapsedMs * .006 + node.position.x) * .1 + pulse * .25); }
       else if (role === 'bastion-ring') { node.rotation.z = elapsedMs * .0008; nodeMaterial.opacity = (.18 + health * .18) * damagedPulse; }
+      else if (role === 'beacon') { node.rotation.y = elapsedMs * .007; node.scale.setScalar(.85 + Math.sin(elapsedMs * .008 + node.position.x + node.position.z) * .16); }
     }
     if (type === 'arc_fence') {
       if (role === 'arc-strand' || role === 'spark') {

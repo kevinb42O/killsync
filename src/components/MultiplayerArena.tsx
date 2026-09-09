@@ -22,7 +22,7 @@ import { CoopShopMenu, resolveCoopShopKey, type CoopShopCategoryId } from './Coo
 import { CoopWeaponFoundryMenu } from './CoopWeaponFoundryMenu';
 import { COOP_FIREARM_IDS, type CoopFirearmId } from '../game/combat/coopFirearms';
 import type { CoopFoundryUpgradeResult } from '../game/multiplayer/CoopWeaponFoundry';
-import { COOP_MAX_FABRICATOR_CHARGES, COOP_RECOVERY_RELAY_HEAL_PER_SECOND, COOP_STRUCTURE_ACTION_RANGE, COOP_STRUCTURE_DEFINITIONS, isCoopStructureAction, isCoopStructureType, resolveBarricadeCollision, validateCoopBuildPreview, type CoopBuildResult, type CoopDismantleResult, type CoopStructureAction, type CoopStructureActionResult, type CoopStructureType } from '../game/multiplayer/CoopFieldEngineering';
+import { COOP_MAX_FABRICATOR_CHARGES, COOP_RECOVERY_RELAY_HEAL_PER_SECOND, COOP_STRUCTURE_ACTION_RANGE, COOP_STRUCTURE_DEFINITIONS, getBarricadeWallContact, getStructureWalkableTop, isCoopStructureAction, isCoopStructureType, resolveBarricadeCollision, validateCoopBuildPreview, type CoopBuildResult, type CoopDismantleResult, type CoopStructureAction, type CoopStructureActionResult, type CoopStructureType } from '../game/multiplayer/CoopFieldEngineering';
 import {
   COOP_IMPRINT_STATS,
   coopImprintRankCost,
@@ -1931,8 +1931,35 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         const local = snapshotRef.current.players.find(player => player.id === launch.localPlayerId);
         if (local?.lifeState === 'alive') {
           const motion = { ...local, verticalVelocity: 0, lastJumpSequence: -1, slideAngle: local.angle, ...local.motion };
-          advancePlayerMovement(motion, { ...inputRef.current, jumpPressed: false }, accumulator);
-          if (motion.z <= 34) for (const structure of frameSnapshot.structures || []) if (structure.state !== 'destroying') resolveBarricadeCollision(motion, COOP_PLAYER_RADIUS, structure);
+          advancePlayerMovement(
+            motion,
+            { ...inputRef.current, jumpPressed: false },
+            accumulator,
+            (position, radius) => {
+              if (motion.z > 34) return false;
+              let collided = false;
+              for (const structure of frameSnapshot.structures || []) if (structure.state !== 'destroying') collided = resolveBarricadeCollision(position, radius, structure) || collided;
+              return collided;
+            },
+            (position, radius) => {
+              if (motion.z > 34) return undefined;
+              for (const structure of frameSnapshot.structures || []) {
+                if (structure.state === 'destroying') continue;
+                const contact = getBarricadeWallContact(position, radius, structure);
+                if (contact) return contact;
+              }
+              return undefined;
+            },
+            (position, radius) => {
+              let floor: number | undefined;
+              for (const structure of frameSnapshot.structures || []) {
+                if (structure.state === 'destroying') continue;
+                const top = getStructureWalkableTop(structure, position.x, position.y, radius);
+                if (top !== undefined) floor = Math.max(floor ?? 0, top);
+              }
+              return floor;
+            },
+          );
           frameSnapshot = { ...frameSnapshot, players: frameSnapshot.players.map(player => player.id === local.id ? { ...player, x: motion.x, y: motion.y, z: motion.z } : player) };
         }
       }

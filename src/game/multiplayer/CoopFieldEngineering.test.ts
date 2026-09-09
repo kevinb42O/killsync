@@ -8,6 +8,7 @@ import {
   COOP_MAX_FABRICATOR_CHARGES,
   arcFenceShock,
   getBarricadeWallContact,
+  getStructureWalkableTop,
   hardlightBastionSegmentHit,
   isStructurePlacementClear,
   resolveBarricadeCollision,
@@ -65,6 +66,8 @@ describe('Coop Field Engineering', () => {
     const wall = { x: bastion.x, y: bastion.y - 133 };
     expect(structureContainsCircle(bastion, inside.x, inside.y, 19)).toBe(false);
     expect(resolveBarricadeCollision(inside, 19, bastion)).toBe(false);
+    expect(getStructureWalkableTop(bastion, inside.x, inside.y, 19)).toBeUndefined();
+    expect(getStructureWalkableTop(bastion, wall.x, wall.y, 19)).toBe(54);
     expect(resolveBarricadeCollision(wall, 19, bastion)).toBe(true);
     expect(hardlightBastionSegmentHit(bastion, bastion.x, bastion.y - 220, bastion.x, bastion.y)).toMatchObject({ normalX: 0, normalY: -1 });
   });

@@ -62,6 +62,18 @@ describe('co-op player movement', () => {
     expect(player.wallJumpDirectionY).toBeCloseTo(0);
   });
 
+  it('lands on a hardlight panel and can jump again from its top', () => {
+    const player = { ...motion(), x: 6_100, y: 6_000, z: 62, verticalVelocity: -220 };
+    const hardlightTop = () => 54;
+    advancePlayerMovement(player, input(1, false, { movement: 0 }), 50, undefined, undefined, hardlightTop);
+    expect(player.z).toBe(54);
+    expect(player.verticalVelocity).toBe(0);
+
+    advancePlayerMovement(player, input(2, true, { movement: 0 }), COOP_STEP_MS, undefined, undefined, hardlightTop);
+    expect(player.z).toBeGreaterThan(54);
+    expect(player.verticalVelocity).toBeGreaterThan(0);
+  });
+
   it('uses the single air action to ignite the Burst Pack immediately in the air', () => {
     const player = motion();
 

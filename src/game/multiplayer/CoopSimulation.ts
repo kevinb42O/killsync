@@ -67,6 +67,7 @@ import {
   isCoopStructureAction,
   isStructurePlacementClear,
   getBarricadeWallContact,
+  getStructureWalkableTop,
   hardlightBastionSegmentHit,
   normalizeStructureAngle,
   resolveBarricadeCollision,
@@ -881,6 +882,7 @@ export class CoopSimulation {
           dt,
           (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius),
           (position, radius) => this.getPlayerStructureWallContact(position, player.z, radius),
+          (position, radius) => this.getPlayerStructureFloor(position, radius),
           this.currentWorldId,
         );
         if (Math.hypot(player.x - player.lastArtifactX, player.y - player.lastArtifactY) >= 60) {
@@ -921,7 +923,7 @@ export class CoopSimulation {
         if (input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
       }
-      if (!input) advancePlayerMovement(player, undefined, dt, undefined, undefined, this.currentWorldId);
+      if (!input) advancePlayerMovement(player, undefined, dt, undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId);
     }
 
     if (bridgeCrossed) {
@@ -2309,6 +2311,16 @@ export class CoopSimulation {
       if (contact) return contact;
     }
     return undefined;
+  }
+
+  private getPlayerStructureFloor(position: { x: number; y: number }, radius: number) {
+    let floor: number | undefined;
+    for (const structure of this.structures) {
+      if (structure.state === 'destroying') continue;
+      const top = getStructureWalkableTop(structure, position.x, position.y, radius);
+      if (top !== undefined) floor = Math.max(floor ?? 0, top);
+    }
+    return floor;
   }
 
   private updateEnemyStructureInteractions(enemy: CoopEnemy, deltaMs: number) {

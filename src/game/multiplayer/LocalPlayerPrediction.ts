@@ -1,5 +1,5 @@
 import type { CoopPlayerSnapshot, CoopSnapshot } from './CoopSimulation';
-import { getBarricadeWallContact, resolveBarricadeCollision, type CoopStructureSnapshot } from './CoopFieldEngineering';
+import { getBarricadeWallContact, getStructureWalkableTop, resolveBarricadeCollision, type CoopStructureSnapshot } from './CoopFieldEngineering';
 import { advancePlayerMovement, COOP_STEP_MS, type PlayerMotionState } from './playerMovement';
 import type { MultiplayerInputFrame } from './protocol';
 import type { WorldId } from '../world/WorldDefinitions';
@@ -94,6 +94,15 @@ export class LocalPlayerPrediction {
           if (contact) return contact;
         }
         return undefined;
+      },
+      (position, radius) => {
+        let floor: number | undefined;
+        for (const structure of this.structures) {
+          if (structure.state === 'destroying') continue;
+          const top = getStructureWalkableTop(structure, position.x, position.y, radius);
+          if (top !== undefined) floor = Math.max(floor ?? 0, top);
+        }
+        return floor;
       },
       this.worldId,
     );
