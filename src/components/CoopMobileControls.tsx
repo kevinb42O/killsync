@@ -131,8 +131,6 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
         <TapButton label="PING" title="Ping current target" onAction={() => onAction({ type: 'tap', control: 'ping' })}><MapPin size={16} /></TapButton>
         <TapButton label="CHAT" title="Open squad chat" onAction={() => onAction({ type: 'tap', control: 'chat' })}><MessageSquare size={16} /></TapButton>
         <TapButton label="RELOAD" onAction={() => onAction({ type: 'tap', control: 'reload' })}><RotateCcw size={16} /></TapButton>
-        <TapButton label="PREV" title="Previous weapon" onAction={() => onAction({ type: 'tap', control: 'previousWeapon' })}><ChevronLeft size={19} /></TapButton>
-        <TapButton label="NEXT" title="Next weapon" onAction={() => onAction({ type: 'tap', control: 'nextWeapon' })}><ChevronRight size={19} /></TapButton>
         <TapButton label="BUILD" onAction={() => onAction({ type: 'tap', control: 'toggleBuild' })} className={buildMode ? 'coop-touch-button--active' : ''}><Hammer size={17} /></TapButton>
       </div>}
     </div>
@@ -155,7 +153,7 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
         moveJoystick(event);
       }}
       onPointerMove={moveJoystick} onPointerUp={releaseJoystick} onPointerCancel={releaseJoystick} onLostPointerCapture={releaseJoystick}>
-      <i /><b>MOVE · PULL TO SPRINT</b>
+      <i />
     </div>
 
     <div className="coop-touch-look" aria-label="Swipe to look. Tap to jump; hold after jumping to use the jetpack."
@@ -182,6 +180,8 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
       <HoldButton label="AIM" control="aim" onAction={onAction} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
       <HoldButton label="FIRE" control="fire" onAction={onAction} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
       <HoldButton label="USE" control="interact" onAction={onAction} className="coop-touch-button--use"><ShieldPlus size={19} /></HoldButton>
+      <TapButton label="PREV" title="Previous weapon" onAction={() => onAction({ type: 'tap', control: 'previousWeapon' })} className="coop-touch-button--previous"><ChevronLeft size={19} /></TapButton>
+      <TapButton label="NEXT" title="Next weapon" onAction={() => onAction({ type: 'tap', control: 'nextWeapon' })} className="coop-touch-button--next"><ChevronRight size={19} /></TapButton>
     </div>
 
     {buildMode && <div className="coop-touch-build" aria-label="Build controls">
