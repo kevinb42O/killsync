@@ -1502,7 +1502,7 @@ export default function App() {
   };
 
   return (
-    <div ref={appRef} className="relative w-full h-screen bg-[#0a0a0a] overflow-hidden text-white font-sans">
+    <div ref={appRef} className="app-shell relative w-full bg-[#0a0a0a] overflow-hidden text-white font-sans">
       {gameState === 'MENU' && <MenuEffects />}
       {/* 2D Canvas for Topdown Mode */}
       <canvas
@@ -1634,7 +1634,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center z-50"
+            className="main-menu-screen absolute inset-0 flex items-center justify-center z-50"
           >
             {/* Base overlay over canvas */}
             <div className="absolute inset-0 bg-black/95 backdrop-blur-md pointer-events-none z-0" />
@@ -1650,19 +1650,19 @@ export default function App() {
             <button
               onClick={toggleFullscreen}
               onMouseEnter={() => soundManager.playUIHover()}
-              className="absolute top-6 left-6 p-2.5 bg-white/[0.03] text-white/30 hover:text-white border border-white/[0.06] hover:border-white/20 hover:bg-white/[0.08] transition-all z-50 cursor-pointer"
+              className="main-menu-fullscreen absolute top-6 left-6 p-2.5 bg-white/[0.03] text-white/30 hover:text-white border border-white/[0.06] hover:border-white/20 hover:bg-white/[0.08] transition-all z-50 cursor-pointer"
               style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
               title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
             >
               {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
             </button>
 
-            <div className="absolute top-6 right-20 z-50 w-[320px] max-w-[calc(100vw-7rem)] p-3 bg-black/60 border border-cyan-500/20 rounded-xl backdrop-blur-sm">
+            <div className="main-menu-profile absolute top-6 right-20 z-50 w-[320px] max-w-[calc(100vw-7rem)] p-3 bg-black/60 border border-cyan-500/20 rounded-xl backdrop-blur-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-[10px] text-cyan-200/70 uppercase tracking-[0.2em] font-bold">Profile Level</div>
                 <div className="text-sm font-mono font-black text-cyan-300">Lv {displayAccountLevel} / {MAX_ACCOUNT_LEVEL}</div>
               </div>
-              <div className="h-2.5 bg-white/10 rounded-full overflow-hidden border border-white/10">
+              <div className="main-menu-profile-progress h-2.5 bg-white/10 rounded-full overflow-hidden border border-white/10">
                 <motion.div
                   className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-200"
                   animate={{
@@ -1671,7 +1671,7 @@ export default function App() {
                   transition={{ duration: 0.2 }}
                 />
               </div>
-              <div className="mt-2 flex items-center justify-between">
+              <div className="main-menu-profile-details mt-2 flex items-center justify-between">
                 <div className="text-[10px] text-white/40 font-mono">
                   {displayAccountLevel >= MAX_ACCOUNT_LEVEL
                     ? 'MAX LEVEL'
@@ -1686,14 +1686,14 @@ export default function App() {
             </div>
 
             {/* ═══════ MAIN MENU LAYOUT ═══════ */}
-            <div className="relative z-10 flex items-center justify-center gap-16 w-full max-w-5xl px-8">
+            <div className="main-menu-layout relative z-10 flex items-center justify-center gap-16 w-full max-w-5xl px-8">
               
               {/* ─── LEFT: Title + Buttons ─── */}
-              <div className="flex-1 max-w-md">
+              <div className="main-menu-primary flex-1 max-w-md">
                 {/* Title */}
                 <motion.div initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
                   <motion.h1 
-                    className="relative text-7xl font-black italic tracking-tighter mb-1 leading-none"
+                    className="main-menu-title relative text-7xl font-black italic tracking-tighter mb-1 leading-none"
                   >
                     <span
                       aria-hidden="true"
@@ -1716,7 +1716,7 @@ export default function App() {
                       SYNC
                     </span>
                   </motion.h1>
-                  <div className="flex items-center gap-3 mb-10">
+                  <div className="main-menu-subtitle flex items-center gap-3 mb-10">
                     <div className="h-px flex-1 bg-gradient-to-r from-red-500/60 via-cyan-400/35 to-transparent" />
                     <p className="text-white/35 text-[10px] uppercase tracking-[0.4em] font-mono">Co-op Survival Protocol</p>
                     <div className="h-px w-8 bg-white/10" />
@@ -1724,7 +1724,7 @@ export default function App() {
                 </motion.div>
 
                 {/* Menu Buttons */}
-                <div className="flex flex-col gap-2">
+                <div className="main-menu-actions flex flex-col gap-2">
                   {/* ▸ INITIALIZE RUN — Primary CTA */}
                   <motion.button
                     initial={{ x: -40, opacity: 0 }}
@@ -2157,7 +2157,7 @@ export default function App() {
               href="https://www.webaanzee.be" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="absolute bottom-6 right-6 flex items-center gap-1.5 group transition-opacity opacity-30 hover:opacity-100"
+              className="main-menu-credit absolute bottom-6 right-6 flex items-center gap-1.5 group transition-opacity opacity-30 hover:opacity-100"
               onMouseEnter={() => soundManager.playUIHover()}
             >
               <span className="text-[10px] font-mono tracking-widest text-white/50 group-hover:text-white transition-colors">

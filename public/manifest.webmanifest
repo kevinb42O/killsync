@@ -2,7 +2,10 @@
   "name": "KILLSYNC",
   "short_name": "KILLSYNC",
   "start_url": "/",
-  "display": "standalone",
+  "id": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
   "background_color": "#050505",
   "theme_color": "#050505",
   "icons": [
