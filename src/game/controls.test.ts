@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCoopSlideBinding, getMovementBindings, isMovementDirectionPressed, parseControlScheme } from './controls';
+import { getCoopSlideBinding, getMovementBindings, isMovementDirectionPressed, parseControlScheme, shouldUseMobileTouchControls } from './controls';
 
 describe('control presets', () => {
   it('maps AZERTY movement to ZQSD while keeping the arrow keys', () => {
@@ -38,6 +38,12 @@ describe('control presets', () => {
   it('persists the dedicated mobile profile without keyboard movement bindings', () => {
     expect(parseControlScheme('MOBILE')).toBe('MOBILE');
     expect(getMovementBindings('MOBILE')).toEqual({ up: [], down: [], left: [], right: [] });
+  });
+
+  it('shows the touch HUD only when a touch device explicitly selects the mobile profile', () => {
+    expect(shouldUseMobileTouchControls('MOBILE', true)).toBe(true);
+    expect(shouldUseMobileTouchControls('GAMEPAD', true)).toBe(false);
+    expect(shouldUseMobileTouchControls('MOBILE', false)).toBe(false);
   });
 
   it('keeps co-op slide off QWERTY forward movement', () => {

@@ -68,6 +68,14 @@ export const getCoopSlideBinding = (scheme: ControlScheme) => scheme === 'AZERTY
 export const isGamepadControlScheme = (scheme: ControlScheme) => scheme === 'GAMEPAD';
 export const isMobileControlScheme = (scheme: ControlScheme) => scheme === 'MOBILE';
 
+/**
+ * Touch hardware alone must not opt a player into the touch HUD: tablets and
+ * phones can use a connected controller too. Keep this decision beside the
+ * input-profile helpers so every arena surface follows the selected profile.
+ */
+export const shouldUseMobileTouchControls = (scheme: ControlScheme, isTouchDevice: boolean) =>
+  isTouchDevice && isMobileControlScheme(scheme);
+
 export const isMovementDirectionPressed = (
   keys: ReadonlySet<string>,
   scheme: ControlScheme,

@@ -9,7 +9,7 @@ import { soundManager } from '../game/SoundManager';
 import { MultiplayerLaunch } from './ManualMultiplayerSetup';
 import { COOP_GUEST_COLORS, CoopPing, CoopPingKind, MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION, type CoopAdminRequest, type CoopAdminResult } from '../game/multiplayer/protocol';
 import { COOP_OPERATOR_REDEPLOY_COST, COOP_SHOP_ITEMS, coopShopDisabledReason, type CoopPurchaseResult, type CoopRedeployResult, type CoopShopItemId } from '../game/multiplayer/CoopBuyStation';
-import { CONTROL_SCHEME_DETAILS, getCoopSlideBinding, getMovementBindings, isGamepadControlScheme, type ControlScheme } from '../game/controls';
+import { CONTROL_SCHEME_DETAILS, getCoopSlideBinding, getMovementBindings, isGamepadControlScheme, shouldUseMobileTouchControls, type ControlScheme } from '../game/controls';
 import { firstConnectedGamepad, GAMEPAD_BUTTON, gamepadLookAxes, gamepadMovementMask, isGamepadButtonDown, isGamepadTriggerDown } from '../game/gamepad';
 import { LocalPlayerPrediction } from '../game/multiplayer/LocalPlayerPrediction';
 import { advancePlayerMovement, COOP_PLAYER_RADIUS, COOP_STEP_MS } from '../game/multiplayer/playerMovement';
@@ -200,6 +200,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
   const [deploymentStage, setDeploymentStage] = useState<DeploymentStage>('briefing');
   const isSpectator = launch.role === 'spectator';
   const reticleMode: CoopReticleMode = hud.isAiming ? 'ads' : 'hip';
+  // A connected controller on a phone/tablet must not inherit the touch HUD
+  // merely because the device has a coarse pointer.
+  const showMobileTouchControls = shouldUseMobileTouchControls(controlScheme, isMobileTouchDevice);
+  const interactionControlLabel = isGamepadControlScheme(controlScheme) ? 'Y' : showMobileTouchControls ? 'USE' : 'F';
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -2388,23 +2392,23 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           {tr('arena.resumeControl')}
         </button>
       )}
-      {isMobileTouchDevice && !isSpectator && !interactionBlocked && <CoopMobileControls
+      {showMobileTouchControls && !isSpectator && !interactionBlocked && <CoopMobileControls
         buildMode={buildMode}
         buildType={buildType}
         onAction={action => mobileInputHandlerRef.current?.(action)}
       />}
       {!isSpectator && hud.lifeState === 'alive' && !backpackOpen && !isMobileTouchDevice && <div className="pointer-events-none absolute bottom-5 right-5 z-[54] border border-white/10 bg-black/55 px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white/55 backdrop-blur-sm"><kbd className="mr-1.5 text-cyan-200">G</kbd>{tr('backpack.open')}</div>}
-      {nearbyManualDrop && !backpackOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[5.5rem] left-1/2 z-[86] -translate-x-1/2 border border-amber-300/45 bg-black/80 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,.18)]"><kbd className="mr-2 border border-amber-200/40 bg-amber-300/10 px-1.5 py-0.5">{isMobileTouchDevice ? 'USE' : 'F'}</kbd>{tr(nearbyManualDrop.manualDropKind === 'cash' ? 'backpack.pickupCash' : 'backpack.pickupRevive', { amount: nearbyManualDrop.value })}</div>}
-      {nearbyMissionPrompt && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[8.5rem] left-1/2 z-[86] -translate-x-1/2 border border-emerald-300/50 bg-black/85 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-emerald-100 shadow-[0_0_26px_rgba(45,212,191,.2)]"><kbd className="mr-2 border border-emerald-200/40 bg-emerald-300/10 px-1.5 py-0.5">{isMobileTouchDevice ? 'USE' : 'F'}</kbd>{nearbyMissionPrompt}</div>}
+      {nearbyManualDrop && !backpackOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[5.5rem] left-1/2 z-[86] -translate-x-1/2 border border-amber-300/45 bg-black/80 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,.18)]"><kbd className="mr-2 border border-amber-200/40 bg-amber-300/10 px-1.5 py-0.5">{interactionControlLabel}</kbd>{tr(nearbyManualDrop.manualDropKind === 'cash' ? 'backpack.pickupCash' : 'backpack.pickupRevive', { amount: nearbyManualDrop.value })}</div>}
+      {nearbyMissionPrompt && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[8.5rem] left-1/2 z-[86] -translate-x-1/2 border border-emerald-300/50 bg-black/85 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-emerald-100 shadow-[0_0_26px_rgba(45,212,191,.2)]"><kbd className="mr-2 border border-emerald-200/40 bg-amber-300/10 px-1.5 py-0.5">{interactionControlLabel}</kbd>{nearbyMissionPrompt}</div>}
       {nearDemolitionPlant && demolitionMission && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className={`coop-demolition-interact pointer-events-none absolute ${activelyPlanting ? 'coop-demolition-interact--active' : ''}`}>
         <div className="coop-demolition-interact__eyebrow">SITE {demolitionSite} · EXPLOSIVE CHARGE</div>
         <div className="coop-demolition-interact__action">
-          <kbd>{isMobileTouchDevice ? 'USE' : 'F'}</kbd>
-          <span>{activelyPlanting ? 'PLANTING CHARGE' : demolitionMission.progress > 0 ? 'PLANT INTERRUPTED · HOLD TO CONTINUE' : `HOLD ${isMobileTouchDevice ? 'USE' : 'F'} TO PLANT CHARGE`}</span>
+          <kbd>{interactionControlLabel}</kbd>
+          <span>{activelyPlanting ? 'PLANTING CHARGE' : demolitionMission.progress > 0 ? 'PLANT INTERRUPTED · HOLD TO CONTINUE' : `HOLD ${interactionControlLabel} TO PLANT CHARGE`}</span>
           <b>{Math.round(demolitionProgress)}%</b>
         </div>
         <div className="coop-demolition-interact__meter" role="progressbar" aria-label={`Plant charge at site ${demolitionSite}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(demolitionProgress)}><i style={{ width: `${demolitionProgress}%` }} /></div>
-        <small>{activelyPlanting ? `KEEP ${isMobileTouchDevice ? 'USE' : 'F'} HELD · REMAIN INSIDE THE MARKED SITE` : demolitionMission.progress > 0 ? 'PROGRESS IS DECAYING' : `STAND CLOSE TO THE DEVICE AND KEEP ${isMobileTouchDevice ? 'USE' : 'F'} HELD`}</small>
+        <small>{activelyPlanting ? `KEEP ${interactionControlLabel} HELD · REMAIN INSIDE THE MARKED SITE` : demolitionMission.progress > 0 ? 'PROGRESS IS DECAYING' : `STAND CLOSE TO THE DEVICE AND KEEP ${interactionControlLabel} HELD`}</small>
       </div>}
       {localSnapshot?.carryingHostage && <div className="pointer-events-none absolute left-1/2 top-[31%] z-[55] -translate-x-1/2 border border-amber-300/50 bg-black/80 px-4 py-2 text-center text-[10px] font-black uppercase tracking-[.18em] text-amber-100"><div>CARRYING HOSTAGE</div><small className="mt-1 block font-mono text-[8px] text-white/55">WEAPON / SPRINT / JET DISABLED · SPEED −18% · SQUAD PROTECTION REQUIRED</small></div>}
       {backpackOpen && localSnapshot && <CoopBackpackModal
@@ -2563,7 +2567,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           language={launch.language}
         />
       )}
-      {!isSpectator && hud.lifeState === 'alive' && !buildMode && activeWeapon && <div className={`coop-weapons pointer-events-none absolute z-50 ${isMobileTouchDevice ? 'coop-weapons--touch' : ''}`}>
+      {!isSpectator && hud.lifeState === 'alive' && !buildMode && activeWeapon && <div className={`coop-weapons pointer-events-none absolute z-50 ${showMobileTouchControls ? 'coop-weapons--touch' : ''}`}>
         <div className="coop-weapons__class" style={{ color: classOperator.color }}><b>{classOperator.className}</b><span>{classOperator.role}</span></div>
         <div className="coop-weapons__meter"><span style={{ color: classOperator.color }}>{classOperator.resourceLabel}</span><i><em style={{ width: `${Math.max(0, Math.min(100, (localSnapshot?.artifactResource || 0) / classOperator.resourceMax * 100))}%`, backgroundColor: classOperator.color }} /></i><b>{Math.floor(localSnapshot?.artifactResource || 0)}/{classOperator.resourceMax}</b></div>
         <div className="coop-weapons__meter coop-weapons__meter--jet"><span>BURST PACK</span><i><em style={{ width: `${Math.max(0, Math.min(100, localSnapshot?.jetFuel ?? 100))}%` }} /></i><b>{Math.round(localSnapshot?.jetFuel ?? 100)}</b></div>
@@ -2574,7 +2578,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         {hud.isReloading && <div className="coop-weapons__reload">{tr('hud.reloading')}</div>}
       </div>}
       {!isSpectator && hud.lifeState === 'alive' && buildMode && (
-        <div className={`coop-build-palette pointer-events-none absolute bottom-5 left-1/2 z-[70] -translate-x-1/2 border border-cyan-300/45 bg-[#050b13]/94 p-3 shadow-[0_0_32px_rgba(34,211,238,.2)] backdrop-blur-md ${isMobileTouchDevice ? 'coop-build-palette--touch' : ''} ${buildPaletteExpanded ? 'w-[min(880px,calc(100vw-2rem))]' : 'w-[min(390px,calc(100vw-2rem))]'}`}>
+        <div className={`coop-build-palette pointer-events-none absolute bottom-5 left-1/2 z-[70] -translate-x-1/2 border border-cyan-300/45 bg-[#050b13]/94 p-3 shadow-[0_0_32px_rgba(34,211,238,.2)] backdrop-blur-md ${showMobileTouchControls ? 'coop-build-palette--touch' : ''} ${buildPaletteExpanded ? 'w-[min(880px,calc(100vw-2rem))]' : 'w-[min(390px,calc(100vw-2rem))]'}`}>
           <div className="flex items-center justify-between gap-4 border-b border-cyan-100/15 pb-2">
             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.2em] text-cyan-100"><Hammer size={15} />{tr('build.fieldEngineering')}</div>
             <div className="text-right font-mono text-[10px] uppercase text-cyan-200"><div>{tr('build.charges', { count: hud.fabricatorCharges })}</div>{hud.fabricatorCharges < COOP_MAX_FABRICATOR_CHARGES && <small className="text-[8px] text-cyan-100/50">{tr('build.recharge', { seconds: Math.ceil(hud.fabricatorRechargeRemainingMs / 1000) })}</small>}</div>
