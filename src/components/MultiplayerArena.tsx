@@ -7,7 +7,7 @@ import { CoopSnapshotInterpolator } from '../game/multiplayer/snapshotInterpolat
 import { CoopPerformanceMonitor } from '../game/multiplayer/CoopPerformanceMonitor';
 import { soundManager } from '../game/SoundManager';
 import { MultiplayerLaunch } from './ManualMultiplayerSetup';
-import { CoopPing, CoopPingKind, MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION, type CoopAdminRequest, type CoopAdminResult } from '../game/multiplayer/protocol';
+import { COOP_GUEST_COLORS, CoopPing, CoopPingKind, MultiplayerInputFrame, MultiplayerStateFrame, MULTIPLAYER_PROTOCOL_VERSION, type CoopAdminRequest, type CoopAdminResult } from '../game/multiplayer/protocol';
 import { COOP_OPERATOR_REDEPLOY_COST, COOP_SHOP_ITEMS, coopShopDisabledReason, type CoopPurchaseResult, type CoopRedeployResult, type CoopShopItemId } from '../game/multiplayer/CoopBuyStation';
 import { CONTROL_SCHEME_DETAILS, getCoopSlideBinding, getMovementBindings, isGamepadControlScheme, type ControlScheme } from '../game/controls';
 import { firstConnectedGamepad, GAMEPAD_BUTTON, gamepadLookAxes, gamepadMovementMask, isGamepadButtonDown, isGamepadTriggerDown } from '../game/gamepad';
@@ -3429,7 +3429,7 @@ function parseStructureActionResult(value: unknown): CoopStructureActionResult |
 }
 
 function nextGuestColor(index: number) {
-  return ['#f472b6', '#a78bfa', '#fbbf24'][index % 3];
+  return COOP_GUEST_COLORS[index % COOP_GUEST_COLORS.length];
 }
 
 function drawArena(canvas: HTMLCanvasElement | null, snapshot: CoopSnapshot | null, localPlayerId: string) {

@@ -44,6 +44,16 @@ describe('multiplayer input normalization', () => {
 });
 
 describe('gameplay transport', () => {
+  it('releases failed connection attempts from the host roster budget', () => {
+    const session = new ManualWebRTCSession({ role: 'host' });
+    session['peers'].set('connected', { peerId: 'connected', connection: { connectionState: 'connected' } } as never);
+    session['peers'].set('connecting', { peerId: 'connecting', connection: { connectionState: 'connecting' } } as never);
+    session['peers'].set('failed', { peerId: 'failed', connection: { connectionState: 'failed' } } as never);
+    session['peers'].set('closed', { peerId: 'closed', connection: { connectionState: 'closed' } } as never);
+
+    expect(session.occupiedPeerSlots).toBe(2);
+  });
+
   it('targets reliable owner replies and disconnects only the selected peer', () => {
     const session = new ManualWebRTCSession({ role: 'host' });
     const sendA = vi.fn(), sendB = vi.fn(), close = vi.fn();

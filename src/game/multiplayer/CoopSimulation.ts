@@ -1,4 +1,4 @@
-import { CoopPing, CoopPingKind, MultiplayerInputFrame } from './protocol';
+import { COOP_MAX_PLAYERS, CoopPing, CoopPingKind, MultiplayerInputFrame } from './protocol';
 export type { CoopPing, CoopPingKind } from './protocol';
 import { GAME_WIDTH } from '../../constants';
 import { COOP_FIREARM_BY_ID, COOP_FIREARM_DEFINITIONS, COOP_FIREARM_IDS, COOP_WEAPON_SLOTS as FIREARM_SLOTS, coopWeaponSlotsForSignature, createCoopWeaponRuntime, firearmDamage, firearmFireInterval, firearmSpread, type AmmoType, type CoopFirearmDefinition, type CoopFirearmId, type CoopWeaponRuntime } from '../combat/coopFirearms';
@@ -120,8 +120,10 @@ export const COOP_MAX_WORLD_ITEMS = 48;
 export const COOP_MAX_AMMO_CACHES = 32;
 /** A calm staging window before the normal encounter director starts. */
 export const COOP_SAFE_INSERTION_MS = COOP_INSERTION_DURATION_MS;
-export const COOP_MAX_ENEMIES = 90;
-export const COOP_MAX_ENCOUNTER_ENEMIES = 84;
+/** Eight-player encounters need more than the former four-player budget, while
+ * remaining bounded for a browser-hosted simulation. */
+export const COOP_MAX_ENEMIES = 120;
+export const COOP_MAX_ENCOUNTER_ENEMIES = 114;
 const WEAPON_MAX_LEVEL = 8;
 const SWITCH_MS = 280;
 const ARC_CHAIN_RADIUS = 360;
@@ -627,9 +629,9 @@ export class CoopSimulation {
   private worldElapsedMs() { return Math.max(0, this.elapsedMs - this.worldStartedAtMs); }
 
   addPlayer(player: CoopPlayerSeed): boolean {
-    if (this.matchState !== 'active' || this.players.has(player.id) || this.players.size >= 4) return false;
+    if (this.matchState !== 'active' || this.players.has(player.id) || this.players.size >= COOP_MAX_PLAYERS) return false;
     const index = this.players.size;
-    const angle = index * Math.PI / 2;
+    const angle = index / COOP_MAX_PLAYERS * Math.PI * 2;
     const skinId = normalizeCoopSkinId(player.skinId);
     const operatorId = normalizeCoopOperatorId(player.operatorId, skinId);
     const operator = getCoopOperator(operatorId);

@@ -295,6 +295,9 @@
   top: 132px;
   width: 208px;
   z-index: 60;
+  max-height: min(42vh, 308px);
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 .coop-squadmate { position: relative; display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 7px; margin-bottom: 7px; padding: 4px 8px 6px 5px; color: rgba(255, 255, 255, 0.85); background: linear-gradient(90deg, rgba(2, 9, 20, 0.88), rgba(2, 9, 20, 0.35)); backdrop-filter: blur(6px); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .coop-squadmate__signal { width: 5px; height: 5px; border-radius: 50%; box-shadow: 0 0 7px currentColor; }

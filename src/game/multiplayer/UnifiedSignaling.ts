@@ -1,3 +1,5 @@
+import { COOP_MAX_PLAYERS } from './protocol';
+
 /**
  * Unified real-time WebRTC signaling broker for KILLSYNC.
  * 
@@ -412,7 +414,7 @@ export class AutoHostedLobby {
   readonly id: string;
   readonly code: string;
   readonly hostName: string;
-  private maxPlayers = 4;
+  private maxPlayers = COOP_MAX_PLAYERS;
   private playerCount = 1;
   private state: 'waiting' | 'in_game' = 'waiting';
   private heartbeatTimer: number | NodeJS.Timeout = 0;

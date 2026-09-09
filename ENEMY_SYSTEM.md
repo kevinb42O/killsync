@@ -88,13 +88,13 @@ of overflowing the renderer or simulation.
 Co-op has finite rounds and a 20-second recovery window. Round population is:
 
 ```text
-min(64, 10 + round × 5 + additionalPlayers × 6)
+min(114, 10 + round × 5 + additionalPlayers × 6)
 ```
 
 The first packet introduces that round's new tier. Later packets come from
 authored `patrol`, `rush`, `fireteam`, `bulwark`, `crossfire`, `hunters`, and
 `command` compositions. Pack threat is checked against the current concurrency
-budget. Normal waves stop at 84 units, reserving six of the global 90-enemy
+budget. Normal waves stop at 114 units, reserving six of the global 120-enemy
 limit for a boss and its guards. Contract enemies and bosses consume that
 global cap but have separate threat accounting, so they cannot deadlock a
 finite round.
@@ -102,8 +102,8 @@ finite round.
 Contract boss base health is 4,800 / 9,500 / 34,000 for the Neural Overlord,
 Void Architect, and Singularity. Party scaling is `1 + additionalPlayers ×
 0.70`; total health increases but health per operator decreases. The Elite Hunt
-target uses the same principle at `1 + additionalPlayers × 0.75`, avoiding a
-four-player curve that increases per-player workload.
+target uses the same principle at `1 + additionalPlayers × 0.75`, avoiding an
+eight-player curve that increases per-player workload.
 
 Spawn topology uses collision-clear nodes 720–1,300 units from the assigned
 squad cluster, rejects near-field nodes inside a player's view cone, requires a

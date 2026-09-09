@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildEncounterClusters, COOP_INTERMISSION_MS, encounterDamageMultiplier, encounterHealthMultiplier, EncounterDirector, enemyThreat, type EncounterPlayer } from './EncounterDirector';
 import { SpawnTopology } from './SpawnTopology';
 import { isWorldPositionClear } from '../world/WorldLayout';
+import { COOP_MAX_PLAYERS } from './protocol';
 
 const players = (x: number, y: number): EncounterPlayer[] => [{ id: 'host', x, y, angle: 0, health: 100 }];
 
@@ -77,6 +78,14 @@ describe('EncounterDirector', () => {
     expect(encounterDamageMultiplier(20)).toBeLessThanOrEqual(1.45);
   });
 
+  it('raises the finite round budget for a full eight-operative squad', () => {
+    const director = new EncounterDirector(0x1234);
+    const roster = Array.from({ length: COOP_MAX_PLAYERS }, (_, index) => ({ id: `player-${index}`, x: 6000 + index * 20, y: 6000, angle: 0, health: 100 }));
+
+    director.schedule(0, [], roster, 114);
+    expect(director.snapshot(0).roundTotal).toBe(10 + 5 + (COOP_MAX_PLAYERS - 1) * 6);
+  });
+
   it('sustains ten finite rounds without roster overflow or premature archetypes', () => {
     const director = new EncounterDirector(0xc0ffee);
     let time = 0;
@@ -107,7 +116,7 @@ describe('EncounterDirector', () => {
       time += COOP_INTERMISSION_MS;
     }
     expect(totals).toEqual([...totals].sort((left, right) => left - right));
-    expect(totals.at(-1)).toBeLessThanOrEqual(64);
+    expect(totals.at(-1)).toBeLessThanOrEqual(114);
   });
 
   it('builds stable shared and split encounter clusters', () => {

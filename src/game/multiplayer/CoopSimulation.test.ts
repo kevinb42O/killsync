@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CoopSimulation, COOP_MAX_ENCOUNTER_ENEMIES, COOP_MAX_ENEMIES, COOP_MAX_SHOT_COMPENSATION_MS, COOP_MAX_WORLD_GEMS, COOP_MAX_WORLD_ITEMS, COOP_REVIVE_DURATION_MS, COOP_SAFE_INSERTION_MS, COOP_STALE_INPUT_MS, COOP_WEAPON_SLOTS, COOP_WORLD_SIZE, quantizeAngle, quantizePitch } from './CoopSimulation';
 import { getWorldObstacles } from '../world/WorldLayout';
-import { MULTIPLAYER_PROTOCOL_VERSION } from './protocol';
+import { COOP_MAX_PLAYERS, MULTIPLAYER_PROTOCOL_VERSION } from './protocol';
 import { COOP_FIREARM_BY_ID } from '../combat/coopFirearms';
 import { COOP_OPERATOR_REDEPLOY_COST } from './CoopBuyStation';
 
@@ -20,6 +20,16 @@ function captureOpeningStation(simulation: CoopSimulation) {
 }
 
 describe('CoopSimulation firearm authority', () => {
+  it('admits an eight-operative roster, distributes insertion positions, and rejects a ninth player', () => {
+    const roster = Array.from({ length: COOP_MAX_PLAYERS }, (_, index) => ({ id: `player-${index}`, label: `Player ${index}`, color: '#22d3ee' }));
+    const simulation = new CoopSimulation(roster, 0x8badf00d);
+    const players = simulation.createSnapshot().players;
+
+    expect(players).toHaveLength(COOP_MAX_PLAYERS);
+    expect(new Set(players.map(player => `${player.x}:${player.y}`)).size).toBe(COOP_MAX_PLAYERS);
+    expect(simulation.addPlayer({ id: 'player-8', label: 'Player 8', color: '#f472b6' })).toBe(false);
+  });
+
   it('applies validated Operator Imprint health, movement, power, and handling on the host', () => {
     const base = sim();
     const enhanced = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', imprint: {

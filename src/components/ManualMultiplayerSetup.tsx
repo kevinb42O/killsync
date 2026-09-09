@@ -25,7 +25,7 @@ import {
   globalLobbyDiscovery,
   listPublicLobbies,
 } from '../game/multiplayer/LobbySignaling';
-import { MultiplayerPeerInfo, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
+import { COOP_GUEST_COLORS, COOP_MAX_PLAYERS, MultiplayerPeerInfo, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
 import { CoopPlayerSeed } from '../game/multiplayer/CoopSimulation';
 import { generateRoomCode, normalizeRoomCode } from '../game/multiplayer/UnifiedSignaling';
 import { coopText, localizeCoopSignalingMessage, readCoopLanguage, writeCoopLanguage, type CoopLanguage, type CoopTextKey } from '../game/multiplayer/i18n';
@@ -257,7 +257,11 @@ export function ManualMultiplayerSetup({
       onEvent: (peerId, event) => {
         if (event.event === 'ready' && role === 'host') {
           const player = parsePlayer(event.payload);
-          if (!player || peerPlayerIdsRef.current[peerId] || player.id === localPlayerRef.current.id || guestPlayersRef.current.some(guest => guest.id === player.id) || guestPlayersRef.current.length >= 3) return;
+          if (!player || peerPlayerIdsRef.current[peerId] || player.id === localPlayerRef.current.id || guestPlayersRef.current.some(guest => guest.id === player.id)) return;
+          if (guestPlayersRef.current.length >= COOP_MAX_PLAYERS - 1) {
+            session.disconnectPeer(peerId);
+            return;
+          }
           peerPlayerIdsRef.current[peerId] = player.id;
           const next = guestPlayersRef.current.some(item => item.id === player.id)
             ? guestPlayersRef.current
@@ -391,7 +395,7 @@ export function ManualMultiplayerSetup({
       id: targetCode,
       code: targetCode,
       hostName: targetCode,
-      maxPlayers: 4,
+      maxPlayers: COOP_MAX_PLAYERS,
       playerCount: 1,
       state: 'waiting',
     });
@@ -448,7 +452,14 @@ export function ManualMultiplayerSetup({
     setError(null);
     setStatus(tr('status.generatingOffer'));
     try {
-      const session = await createSession('host');
+      const session = mode === 'direct_host' && sessionRef.current
+        ? sessionRef.current
+        : await createSession('host');
+      if (session.occupiedPeerSlots >= COOP_MAX_PLAYERS - 1) {
+        setError(tr('error.squadFull'));
+        setStatus('');
+        return;
+      }
       setOfferCode(await session.createOffer());
       setAnswerCode('');
       setMode('direct_host');
@@ -488,6 +499,7 @@ export function ManualMultiplayerSetup({
     setError(null);
     try {
       await session.acceptAnswer(answerCode);
+      setAnswerCode('');
       setStatus(tr('status.directConnected'));
     } catch {
       setError(tr('error.invalidAnswer'));
@@ -797,7 +809,7 @@ export function ManualMultiplayerSetup({
                 <div className="mb-3 flex items-center justify-between">
                   <div className="text-xs font-black uppercase tracking-[0.16em] text-white flex items-center gap-2">
                     <Users size={14} className="text-cyan-300" />
-                    {tr('setup.squadOperatives', { current: guestPlayers.length + 1, max: 4 })}
+                    {tr('setup.squadOperatives', { current: guestPlayers.length + 1, max: COOP_MAX_PLAYERS })}
                   </div>
                 </div>
 
@@ -822,7 +834,7 @@ export function ManualMultiplayerSetup({
                   </div>
 
                   {/* Guest Slots */}
-                  {[0, 1, 2].map(slotIdx => {
+                  {Array.from({ length: COOP_MAX_PLAYERS - 1 }, (_, slotIdx) => slotIdx).map(slotIdx => {
                     const guest = guestPlayers[slotIdx];
                     return (
                       <div
@@ -912,7 +924,7 @@ export function ManualMultiplayerSetup({
               {rosterPlayers.length > 0 && (
                 <div>
                   <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/60">
-                    {tr('setup.squadOperatives', { current: rosterPlayers.length, max: 4 })}
+                    {tr('setup.squadOperatives', { current: rosterPlayers.length, max: COOP_MAX_PLAYERS })}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {rosterPlayers.map((p, idx) => (
@@ -967,6 +979,9 @@ export function ManualMultiplayerSetup({
               />
               <button onClick={() => void acceptDirectAnswer()} className="border border-emerald-400 bg-emerald-500/20 px-4 py-2 text-xs font-black text-emerald-100">
                 {tr('setup.connectFriend')}
+              </button>
+              <button onClick={() => void createDirectOffer()} className="ml-2 border border-cyan-400 bg-cyan-500/15 px-4 py-2 text-xs font-black text-cyan-100">
+                {tr('setup.nextInvite')}
               </button>
               <button onClick={launchHost} className="ml-2 border border-emerald-400 bg-emerald-500/30 px-4 py-2 text-xs font-black text-emerald-100">
                 {tr('setup.startMatch')}
@@ -1043,7 +1058,7 @@ function parsePlayer(value: unknown): CoopPlayerSeed | null {
 }
 
 function parsePlayers(value: unknown, minimumPlayers: number = 2): CoopPlayerSeed[] | null {
-  if (!Array.isArray(value) || value.length < minimumPlayers || value.length > 4) return null;
+  if (!Array.isArray(value) || value.length < minimumPlayers || value.length > COOP_MAX_PLAYERS) return null;
   const players = value.map(parsePlayer);
   return players.every((player): player is CoopPlayerSeed => player !== null) ? players : null;
 }
@@ -1062,7 +1077,7 @@ function parseStartPayload(value: unknown, minimumPlayers: number) {
 }
 
 function guestColor(index: number) {
-  return ['#f472b6', '#a78bfa', '#fbbf24'][index % 3];
+  return COOP_GUEST_COLORS[index % COOP_GUEST_COLORS.length];
 }
 
 function normalizeNickname(value: string) {

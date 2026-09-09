@@ -226,7 +226,7 @@ public-lobby path can receive short-lived TURN REST credentials from the
 signaling service. Gameplay remains peer-to-peer and host-authoritative.
 
 **Current playable scope:** a host can launch a direct co-op arena alone or
-with friends. A dedicated Web Worker pulse drives the host's fixed 30 Hz
+with up to seven friends. A dedicated Web Worker pulse drives the host's fixed 30 Hz
 simulation independently from rendering; guests send input at 30 Hz and the
 host broadcasts per-peer snapshots at 20 Hz. The arena has
 host-authoritative squad movement, manual mouse-aimed fire with five firearms,
@@ -493,7 +493,7 @@ order issues that can make pitched shots appear parallel to the ground.
 
 The host's in-arena **Live squad lobby** remains open while playing. It can
 make a fresh offer code for a friend at any time; after their answer is pasted,
-the new guest joins the already-running squad, up to the four-player cap.
+the new guest joins the already-running squad, up to the eight-player cap.
 
 ### Co-op Firearm Audio
 

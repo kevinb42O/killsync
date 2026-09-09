@@ -7,6 +7,7 @@ import { findClearRunPosition } from './runPlacement';
 import type { RunPlacementExclusion } from './runPlacement';
 import type { CoopTextKey } from './i18n';
 import type { WorldId } from '../world/WorldDefinitions';
+import { COOP_MAX_PLAYERS } from './protocol';
 
 export type CoopRunPhase = 'insertion' | 'contract' | 'mini_boss' | 'checkpoint' | 'final_boss' | 'exfil' | 'success' | 'failed';
 export type CoopObjectiveKind = 'uplink' | 'elite_hunt';
@@ -78,15 +79,15 @@ export const COOP_CHECKPOINT_DECISION_MS = 20_000;
 export const COOP_CHECKPOINT_HOLD_MS = 5_000;
 
 /** Total boss durability grows, while durability per operator falls modestly.
- * This rewards adding teammates without making a four-player focus-fire squad
+ * This rewards adding teammates without making a full focus-fire squad
  * erase a contract boss at solo speed. */
 export function coopBossHealth(kind: CoopBossKind, playerCount: number) {
-  const members = Math.max(1, Math.min(4, Math.trunc(playerCount)));
+  const members = Math.max(1, Math.min(COOP_MAX_PLAYERS, Math.trunc(playerCount)));
   return Math.round(COOP_BOSS_BASE_HEALTH[kind] * (1 + (members - 1) * .70));
 }
 
 export function coopObjectiveEliteHealth(baseHealth: number, playerCount: number) {
-  const members = Math.max(1, Math.min(4, Math.trunc(playerCount)));
+  const members = Math.max(1, Math.min(COOP_MAX_PLAYERS, Math.trunc(playerCount)));
   return Math.round(baseHealth * (1 + (members - 1) * .75));
 }
 

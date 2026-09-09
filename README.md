@@ -6,7 +6,7 @@
 
 **Current game version:** v0.1.0
 
-**Multiplayer protocol:** 29 (both players must run the same version)
+**Multiplayer protocol:** 30 (all players must run the same version)
 
 This contains everything you need to run your app locally.
 
@@ -35,8 +35,8 @@ not browse, create, or join a lobby and does not perform WebRTC signaling. The
 **Start match solo** after creating its connection offer.
 
 See [MULTIPLAYER_AUDIT.md](MULTIPLAYER_AUDIT.md) for the audit, implemented fixes,
-verification results, and prioritized follow-up work. Multiplayer protocol 29
-requires both peers to reload after updating.
+verification results, and prioritized follow-up work. Multiplayer protocol 30
+requires every squad member to reload after updating.
 
 The **Co-op squads** menu lists live public lobbies and connects players with a
 single click. The lobby service only carries room metadata and short-lived

@@ -5,6 +5,7 @@ import {
   LobbyDiscovery,
   PublicLobbyInfo,
 } from './UnifiedSignaling';
+import { COOP_MAX_PLAYERS } from './protocol';
 
 describe('UnifiedSignaling', () => {
   it('generates valid tactical room codes', () => {
@@ -28,7 +29,7 @@ describe('UnifiedSignaling', () => {
       id: 'room-1',
       code: 'VIPER-01',
       hostName: 'KEVIN',
-      maxPlayers: 4,
+      maxPlayers: COOP_MAX_PLAYERS,
       playerCount: 1,
       state: 'waiting',
       updatedAt: Date.now(),
@@ -37,7 +38,7 @@ describe('UnifiedSignaling', () => {
       id: 'room-2',
       code: 'TITAN-99',
       hostName: 'SARAH',
-      maxPlayers: 4,
+      maxPlayers: COOP_MAX_PLAYERS,
       playerCount: 2,
       state: 'waiting',
       updatedAt: Date.now() - 1000,

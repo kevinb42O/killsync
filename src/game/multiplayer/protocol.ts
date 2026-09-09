@@ -6,8 +6,16 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v29 adds host-resolved tactical-map mission pings. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 29;
+/** v30 expands the authoritative squad roster from four operatives to eight. */
+export const MULTIPLAYER_PROTOCOL_VERSION = 30;
+
+/** The host is authoritative and holds one WebRTC connection for each guest.
+ * Keep this deliberately modest until the transport is moved off peer hosting. */
+export const COOP_MAX_PLAYERS = 8;
+
+/** Stable, high-contrast guest identities for roster cards, world markers,
+ * and late joins. The host always keeps the cyan identity. */
+export const COOP_GUEST_COLORS = ['#f472b6', '#a78bfa', '#fbbf24', '#34d399', '#fb7185', '#60a5fa', '#fb923c'] as const;
 
 export type MultiplayerRole = 'host' | 'guest';
 

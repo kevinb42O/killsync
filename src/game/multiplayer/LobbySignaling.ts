@@ -1,4 +1,5 @@
 import { DEFAULT_PUBLIC_STUN_SERVERS, ManualWebRTCSession } from './ManualWebRTCSession';
+import { COOP_MAX_PLAYERS } from './protocol';
 import {
   AutoHostedLobby,
   AutoLobbyJoin,
@@ -149,7 +150,7 @@ export class HostedLobby {
       try {
         const response = await request<{ room: PublicLobby; hostToken: string }>('/rooms', {
           method: 'POST',
-          body: JSON.stringify({ id: roomId, hostName, maxPlayers: 4, code }),
+          body: JSON.stringify({ id: roomId, hostName, maxPlayers: COOP_MAX_PLAYERS, code }),
         });
         localToken = response.hostToken;
       } catch {
@@ -161,7 +162,7 @@ export class HostedLobby {
       id: roomId,
       code,
       hostName,
-      maxPlayers: 4,
+      maxPlayers: COOP_MAX_PLAYERS,
       playerCount: 1,
       state: 'waiting',
     };
@@ -180,6 +181,7 @@ export class HostedLobby {
       async (requestId, guestName) => {
         const existing = this.offers.get(requestId);
         if (existing) return existing;
+        if (session.occupiedPeerSlots >= COOP_MAX_PLAYERS - 1) throw new Error('This squad is full.');
         const offer = await session.createOffer();
         this.offers.set(requestId, offer);
         return offer;
@@ -215,6 +217,11 @@ export class HostedLobby {
             this.offers.delete(join.requestId);
             this.statusListener?.(`${join.guestName} joined squad.`);
           } else if (!join.offer && !this.busy.has(join.requestId)) {
+            if (session.occupiedPeerSlots >= COOP_MAX_PLAYERS - 1) {
+              this.busy.add(join.requestId);
+              this.statusListener?.('This squad is full.');
+              continue;
+            }
             this.busy.add(join.requestId);
             this.statusListener?.(`${join.guestName} joining…`);
             try {

@@ -85,6 +85,12 @@ export class ManualWebRTCSession {
     return [...this.peers.values()].filter(peer => peer.connection.connectionState === 'connected').length;
   }
 
+  /** Connected and in-flight peers reserve a roster slot; failed/closed
+   * negotiations do not prevent the host from inviting a replacement. */
+  get occupiedPeerSlots(): number {
+    return [...this.peers.values()].filter(peer => peer.connection.connectionState !== 'failed' && peer.connection.connectionState !== 'closed').length;
+  }
+
   /** Session id controlled by the authoritative host. Owner-signed commands
    * bind to this value so they cannot be replayed into another match. */
   get authoritySessionId(): string {

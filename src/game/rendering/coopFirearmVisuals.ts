@@ -34,7 +34,7 @@ const flashTexture = (() => {
 
 /** Low-poly, code-native firearms. Geometries are shared, and each rig owns
  * only a handful of materials: visually rich enough for FPS scale, very cheap
- * under four-player load. */
+ * under eight-player load. */
 export class CoopFirearmVisualRig {
   readonly group = new THREE.Group();
   private readonly parts = new Map<CoopFirearmId, VisualParts>();

@@ -188,7 +188,7 @@ export class EncounterDirector {
 
   private beginRound(elapsedMs: number, playerCount: number) {
     this.phase = 'combat';
-    this.roundTotal = Math.min(72, Math.round((10 + this.round * 5 + Math.max(0, playerCount - 1) * 6) * Math.max(1, this.threatMultiplier)));
+    this.roundTotal = Math.min(114, Math.round((10 + this.round * 5 + Math.max(0, playerCount - 1) * 6) * Math.max(1, this.threatMultiplier)));
     this.spawnedThisRound = 0;
     this.spawnedThreat = 0;
     this.roundThreatBudget = round2(this.roundTotal * (1 + (this.tier - 1) * .16));

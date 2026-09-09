@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
+import { COOP_MAX_PLAYERS } from '../src/game/multiplayer/protocol';
 
 const ROOM_TTL_MS = 45_000;
 const JOIN_TTL_MS = 45_000;
@@ -72,7 +73,7 @@ export function createMultiplayerRouter() {
     purgeExpired();
     if (rooms.size >= MAX_ROOMS) return response.status(503).json({ error: 'Lobby service is full. Try again shortly.' });
     const hostName = cleanName(request.body?.hostName) || 'OPERATIVE';
-    const maxPlayers = Math.max(2, Math.min(4, Number(request.body?.maxPlayers) || 4));
+    const maxPlayers = Math.max(2, Math.min(COOP_MAX_PLAYERS, Number(request.body?.maxPlayers) || COOP_MAX_PLAYERS));
     const code = cleanCode(request.body?.code);
     const id = cleanId(request.body?.id) || (code ? `room-${code.toLowerCase()}` : shortId('room'));
     const room: Room = {
