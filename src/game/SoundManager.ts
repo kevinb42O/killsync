@@ -508,6 +508,17 @@ export class SoundManager {
     setTimeout(() => this.playTone(520, 'sawtooth', 0.35, 0.14, 0, 0.01), 260);
   }
 
+  /** Low vacuum swell and a sharp spatial snap for gravity-hazard impact. */
+  playGravityPull() {
+    this.ensureRunning();
+    this.playTone(72, 'sine', .42, .14, 190, .025);
+    this.playTone(260, 'triangle', .32, .055, -180, .015);
+    setTimeout(() => {
+      this.playTone(108, 'sine', .16, .16, -88, .004);
+      this.playNoise(.09, .07, 1_100);
+    }, 240);
+  }
+
   /**
    * Crisp, athletic tactical suit jump with mechanical boot takeoff snap
    * and ascending aerodynamic air swoosh.

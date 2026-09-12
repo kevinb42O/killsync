@@ -271,6 +271,32 @@ describe('CoopSimulation field missions', () => {
     expect(guard).toMatchObject({ missionAnchorX: (simulation as any).gasZone.x, missionAnchorY: (simulation as any).gasZone.y });
   });
 
+  it('never lets Toxic Hunt defenders attack an operator outside the gas', () => {
+    const simulation = squad();
+    const internals = simulation as any;
+    const gas = internals.gasZone;
+    const host = internals.players.get('host');
+    const guest = internals.players.get('guest');
+    const guard = internals.enemies.find((enemy: any) => internals.gasEnclave.guardIds.includes(enemy.id) && enemy.type === 'ranged');
+    // Keep the guard well inside the enclave but put both operators just
+    // outside the cloud, inside its normal artillery range.
+    guard.x = gas.x + gas.radius * .7; guard.y = gas.y;
+    host.x = gas.x + gas.radius + 24; host.y = gas.y;
+    guest.x = host.x + 40; guest.y = host.y;
+    guard.nextAttackAtMs = 0;
+    simulation.setInput('host', input());
+    simulation.setInput('guest', input());
+    simulation.tick(50);
+    expect(internals.hazards.some((hazard: any) => hazard.enemyId === guard.id)).toBe(false);
+
+    // Also reject an attack that was queued before the operator escaped.
+    internals.activeEnemyIds.add(guard.id);
+    internals.hazards = [{ id: 99_001, enemyId: guard.id, kind: 'artillery', x: host.x, y: host.y, radius: 100, damage: 50, startsAtMs: 0, resolvesAtMs: 0, color: '#f0f', resolved: false }];
+    const health = host.health;
+    internals.updateHazards();
+    expect(host.health).toBe(health);
+  });
+
   it('makes the hostage carrier slower, non-sprinting, unable to jet, and unable to fire', () => {
     const simulation = squad();
     const mission = acceptMission(simulation, 'hostage_recovery');

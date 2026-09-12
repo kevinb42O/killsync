@@ -964,6 +964,21 @@ export class CoopSimulation {
       const holdingMissionPosition = Boolean(missionAnchor && (!nearestIntruder || Math.hypot(nearestIntruder.x - missionAnchor.x, nearestIntruder.y - missionAnchor.y) > 700));
       const target = holdingMissionPosition ? missionAnchor : this.resolveEnemyTarget(enemy);
       if (!target) continue;
+      const gasBoundEnemy = this.isGasEnclaveEnemy(enemy);
+      // Toxic Hunt enemies defend the gas enclave. A player who has left the
+      // cloud cannot be pursued or attacked by its defenders.
+      if (gasBoundEnemy && !this.gasZone.isInsideGas(target.x, target.y)) {
+        enemy.attackWindupUntilMs = undefined;
+        this.cancelEnemyHazards(enemy.id);
+        const anchor = { x: enemy.missionAnchorX ?? this.gasZone.x, y: enemy.missionAnchorY ?? this.gasZone.y };
+        const homeDistance = Math.hypot(anchor.x - enemy.x, anchor.y - enemy.y);
+        if (homeDistance > enemy.radius + 22) {
+          const neighbors = this.enemySpatialIndex.query(enemy.x, enemy.y, enemy.radius + MAX_ENEMY_RADIUS + 48, this.nearbyEnemies);
+          moveTacticalEnemy(enemy, anchor, neighbors, this.elapsedMs, dt, false, this.currentWorldId);
+        }
+        this.runDirector.trackEliteTarget(enemy.id, enemy.x, enemy.y);
+        continue;
+      }
       const targetStructure = 'type' in target && isCoopStructureType(target.type) ? target as CoopStructure : undefined;
       const distance = Math.hypot(target.x - enemy.x, target.y - enemy.y);
       enemy.facingAngle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
@@ -1670,6 +1685,15 @@ export class CoopSimulation {
     }
   }
 
+  private isGasEnclaveEnemy(enemy: CoopEnemy) {
+    const enclave = this.gasEnclave;
+    return Boolean(enclave && (enemy.id === enclave.commanderId || enclave.guardIds.includes(enemy.id)));
+  }
+
+  private cancelEnemyHazards(enemyId: number) {
+    this.hazards = this.hazards.filter(hazard => hazard.enemyId !== enemyId);
+  }
+
   private updateFieldMission(deltaMs: number) {
     const mission = this.fieldMissionDirector.current;
     if (!mission) return;
@@ -2173,10 +2197,14 @@ export class CoopSimulation {
       // than moving projectiles. Resolve their source-to-player trace here so
       // a Bastion blocks shots that were already winding up when it deployed.
       const source = hazard.enemyId === 0 ? undefined : this.enemies.find(enemy => enemy.id === hazard.enemyId && !enemy.dying);
+      const gasBoundSource = Boolean(source && this.isGasEnclaveEnemy(source));
       const blockableShot = source?.type === 'ranged' || source?.type === 'elite';
       const absorbedBy = new Set<CoopStructure>();
       for (const player of this.players.values()) {
         if (player.lifeState !== 'alive' || Math.hypot(player.x - hazard.x, player.y - hazard.y) > hazard.radius + PLAYER_RADIUS) continue;
+        // A gas enclave attack is cancelled for an operator who escapes the
+        // cloud during its warning window.
+        if (gasBoundSource && !this.gasZone.isInsideGas(player.x, player.y, PLAYER_RADIUS)) continue;
         if (hazard.kind === 'shockwave' && player.z > 45) continue;
         if (!hasClearAttackPath(hazard, player, this.currentWorldId)) continue;
         const bastion = blockableShot && source
@@ -2194,6 +2222,7 @@ export class CoopSimulation {
       for (const structure of this.structures) {
         if (absorbedBy.has(structure)) continue;
         if (structure.state === 'destroying' || Math.hypot(structure.x - hazard.x, structure.y - hazard.y) > hazard.radius + 90) continue;
+        if (gasBoundSource && !this.gasZone.isInsideGas(structure.x, structure.y)) continue;
         const multiplier = hazard.kind === 'shockwave' ? 7 : hazard.kind === 'gravity' ? 2 : 3;
         this.damageStructure(structure, Math.max(30, hazard.damage * multiplier));
       }

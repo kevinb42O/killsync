@@ -31,6 +31,7 @@ import type { WorldId } from '../world/WorldDefinitions';
 type PresentationParticle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; z?: number; vz?: number; gravity?: number };
 type TransientArc = { group: THREE.Group; life: number; maxLife: number };
 type TransientBlast = { group: THREE.Group; life: number; maxLife: number };
+type GravityHazardVisual = { group: THREE.Group; resolved: boolean };
 type FallingPresentation = { startedAtMs: number; x: number; y: number; angle: number };
 type PassiveMeshData = {
   rank: number;
@@ -91,6 +92,7 @@ export class MultiplayerRendererBridge {
   private readonly projectileMuzzlePresentation = new ProjectileMuzzlePresentation();
   private readonly transientArcs: TransientArc[] = [];
   private readonly transientBlasts: TransientBlast[] = [];
+  private readonly gravityHazards = new Map<number, GravityHazardVisual>();
   private readonly lightningPool: THREE.Group[] = [];
   private readonly lightningPoints = Array.from({ length: 35 }, () => new THREE.Vector3());
   private readonly lightningPointViews = Array.from({ length: 36 }, (_, count) => this.lightningPoints.slice(0, count));
@@ -393,6 +395,7 @@ export class MultiplayerRendererBridge {
       this.seenCombatEventIds.clear(); this.combatParticles.length = 0; this.presentationShake = 0;
       for (const blast of this.transientBlasts) this.disposeTransientGroup(blast.group);
       this.transientBlasts.length = 0;
+      this.clearGravityHazards();
       this.projectileImpactVisuals.clear();
       this.fallingPresentations.clear();
       this.projectileMuzzlePresentation.clear();
@@ -588,6 +591,7 @@ export class MultiplayerRendererBridge {
       } : null;
     }
     this.renderState.gasZone = snapshot.gasZone;
+    this.syncGravityHazards(snapshot, local);
 
     // Ambient floating toxic chemical spores when local player is within the gas
     if (snapshot.gasZone && Math.hypot(local.x - snapshot.gasZone.x, local.y - snapshot.gasZone.y) <= snapshot.gasZone.radius) {
@@ -693,6 +697,7 @@ export class MultiplayerRendererBridge {
     this.transientArcs.length = 0;
     for (const blast of this.transientBlasts) this.disposeTransientGroup(blast.group);
     this.transientBlasts.length = 0;
+    this.clearGravityHazards();
     for (const lightning of this.lightningPool) this.disposeLightning(lightning);
     this.lightningPool.length = 0;
     this.renderer.destroy();
@@ -1141,6 +1146,106 @@ export class MultiplayerRendererBridge {
         break;
     }
     if (event.playerId === localPlayerId && (event.chainIndex === undefined || event.chainIndex === 0)) soundManager.playArtifactCast(event.weaponId || '');
+  }
+
+  /** Turns a gravity hazard from an unexplained position correction into a
+   * readable, diegetic pull: a full-size danger field, inbound vectors, a
+   * tightening event horizon, then a bright collapse at the exact pull tick. */
+  private syncGravityHazards(snapshot: CoopSnapshot, local: CoopSnapshot['players'][number]) {
+    const activeIds = new Set<number>();
+    for (const hazard of snapshot.hazards || []) {
+      if (hazard.kind !== 'gravity') continue;
+      activeIds.add(hazard.id);
+      let visual = this.gravityHazards.get(hazard.id);
+      if (!visual) {
+        visual = { group: this.createGravityHazardVisual(hazard.color), resolved: false };
+        this.gravityHazards.set(hazard.id, visual);
+        this.renderer.scene.add(visual.group);
+      }
+      const group = visual.group;
+      group.position.set(hazard.x, 2, hazard.y);
+      const progress = THREE.MathUtils.clamp((snapshot.elapsedMs - hazard.startsAtMs) / Math.max(1, hazard.resolvesAtMs - hazard.startsAtMs), 0, 1);
+      const pulse = 1 + Math.sin(snapshot.elapsedMs * .018) * .055;
+      const outer = group.getObjectByName('gravity-outer') as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+      const field = group.getObjectByName('gravity-field') as THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>;
+      const inner = group.getObjectByName('gravity-inner') as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+      const core = group.getObjectByName('gravity-core') as THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+      const halo = group.getObjectByName('gravity-halo') as THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+      const light = group.getObjectByName('gravity-light') as THREE.PointLight;
+      outer.scale.setScalar(hazard.radius * pulse);
+      field.scale.setScalar(hazard.radius);
+      const innerRadius = Math.max(24, hazard.radius * (.92 - progress * .76));
+      inner.scale.setScalar(innerRadius);
+      halo.scale.setScalar(Math.max(10, innerRadius * .22));
+      halo.rotation.y = snapshot.elapsedMs * .008;
+      core.scale.setScalar(Math.max(7, innerRadius * .13) * (1 + Math.sin(snapshot.elapsedMs * .03) * .16));
+      const intensity = .42 + progress * .52;
+      outer.material.opacity = intensity;
+      field.material.opacity = .035 + progress * .09;
+      inner.material.opacity = .42 + progress * .42;
+      core.material.opacity = .52 + progress * .38;
+      halo.material.opacity = .20 + progress * .56;
+      light.intensity = 2 + progress * 9;
+      for (let index = 0; index < 10; index++) {
+        const arrow = group.getObjectByName(`gravity-vector-${index}`) as THREE.ArrowHelper;
+        const angle = index / 10 * Math.PI * 2 + snapshot.elapsedMs * .00075;
+        const vectorRadius = Math.max(32, hazard.radius * (.90 - progress * .65));
+        arrow.position.set(Math.cos(angle) * vectorRadius, 7 + Math.sin(snapshot.elapsedMs * .012 + index) * 2, Math.sin(angle) * vectorRadius);
+        arrow.setDirection(new THREE.Vector3(-Math.cos(angle), 0, -Math.sin(angle)));
+        arrow.setLength(Math.max(20, hazard.radius * .13), 13, 7);
+      }
+      const localInside = local.lifeState === 'alive' && Math.hypot(local.x - hazard.x, local.y - hazard.y) <= hazard.radius + 20;
+      if (localInside && progress < 1) this.presentationShake = Math.max(this.presentationShake, .35 + progress * 1.35);
+      if (progress >= 1 && !visual.resolved) {
+        visual.resolved = true;
+        outer.material.opacity = 1;
+        inner.material.opacity = 1;
+        core.scale.multiplyScalar(2.6);
+        light.intensity = 22;
+        if (localInside) {
+          this.presentationShake = Math.max(this.presentationShake, 8);
+          soundManager.playGravityPull();
+        }
+        this.spawnBurst(hazard.x, hazard.y, hazard.color, 34, 720, 7.5);
+      }
+    }
+    for (const [id, visual] of this.gravityHazards) {
+      if (activeIds.has(id)) continue;
+      this.renderer.scene.remove(visual.group);
+      disposeGroup(visual.group);
+      this.gravityHazards.delete(id);
+    }
+  }
+
+  private createGravityHazardVisual(color: string) {
+    const group = new THREE.Group();
+    const material = (opacity: number) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, toneMapped: false });
+    const field = new THREE.Mesh(new THREE.CircleGeometry(1, 64), material(.035));
+    field.name = 'gravity-field'; field.rotation.x = -Math.PI / 2; field.renderOrder = 28; group.add(field);
+    const outer = new THREE.Mesh(new THREE.RingGeometry(.965, 1, 72), material(.42));
+    outer.name = 'gravity-outer'; outer.rotation.x = -Math.PI / 2; outer.renderOrder = 31; group.add(outer);
+    const inner = new THREE.Mesh(new THREE.RingGeometry(.72, 1, 56), material(.48));
+    inner.name = 'gravity-inner'; inner.rotation.x = -Math.PI / 2; inner.position.y = 1.2; inner.renderOrder = 32; group.add(inner);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), material(.62));
+    core.name = 'gravity-core'; core.position.y = 8; core.renderOrder = 34; group.add(core);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(1.6, .16, 8, 28), material(.32));
+    halo.name = 'gravity-halo'; halo.rotation.x = Math.PI / 2; halo.position.y = 11; halo.renderOrder = 35; group.add(halo);
+    for (let index = 0; index < 10; index++) {
+      const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(), 28, color, 13, 7);
+      arrow.name = `gravity-vector-${index}`;
+      group.add(arrow);
+    }
+    const light = new THREE.PointLight(color, 3, 440, 2);
+    light.name = 'gravity-light'; light.position.y = 34; group.add(light);
+    return group;
+  }
+
+  private clearGravityHazards() {
+    for (const visual of this.gravityHazards.values()) {
+      this.renderer.scene.remove(visual.group);
+      disposeGroup(visual.group);
+    }
+    this.gravityHazards.clear();
   }
 
   private spawnBurst(x: number, y: number, color: string, count: number, life: number, size: number) {

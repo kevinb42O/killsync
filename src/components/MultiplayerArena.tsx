@@ -2216,6 +2216,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const gasMaskHp = localSnapshot?.gasMaskHp || 0;
   const gasMaskMaxHp = localSnapshot?.gasMaskMaxHp || 150;
   const filterPercentage = Math.max(0, Math.min(100, Math.round((gasMaskHp / Math.max(1, gasMaskMaxHp)) * 100)));
+  const gravityHazard = localSnapshot && matchSnapshot?.hazards?.find(hazard => hazard.kind === 'gravity'
+    && Math.hypot(localSnapshot.x - hazard.x, localSnapshot.y - hazard.y) <= hazard.radius + 20);
+  const gravityPullProgress = gravityHazard
+    ? Math.max(0, Math.min(1, (matchSnapshot!.elapsedMs - gravityHazard.startsAtMs) / Math.max(1, gravityHazard.resolvesAtMs - gravityHazard.startsAtMs)))
+    : 0;
+  const gravityPullRemaining = gravityHazard
+    ? Math.max(0, (gravityHazard.resolvesAtMs - matchSnapshot!.elapsedMs) / 1000)
+    : 0;
   const hasGasMask = gasMaskHp > 0;
   const activeRecoveryRelay = !isSpectator && localSnapshot?.lifeState === 'alive'
     ? matchSnapshot?.structures?.find(structure => structure.type === 'recovery_relay'
@@ -2461,6 +2469,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         </div>
         <div className="coop-demolition-interact__meter" role="progressbar" aria-label={`Plant charge at site ${demolitionSite}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(demolitionProgress)}><i style={{ width: `${demolitionProgress}%` }} /></div>
         <small>{activelyPlanting ? `KEEP ${interactionControlLabel} HELD · REMAIN INSIDE THE MARKED SITE` : demolitionMission.progress > 0 ? 'PROGRESS IS DECAYING' : `STAND CLOSE TO THE DEVICE AND KEEP ${interactionControlLabel} HELD`}</small>
+      </div>}
+      {gravityHazard && !isSpectator && <div className="pointer-events-none absolute left-1/2 top-[22%] z-[70] w-64 -translate-x-1/2 border border-fuchsia-300/80 bg-fuchsia-950/45 px-3 py-2 text-center font-mono uppercase shadow-[0_0_34px_rgba(216,180,254,.5)] backdrop-blur-sm">
+        <div className="animate-pulse text-[11px] font-black tracking-[.26em] text-fuchsia-100">Gravity lock</div>
+        <div className="mt-1 h-1 overflow-hidden bg-fuchsia-100/15"><i className="block h-full bg-fuchsia-200 shadow-[0_0_10px_#f0abfc]" style={{ width: `${Math.max(4, gravityPullProgress * 100)}%` }} /></div>
+        <div className="mt-1 text-[8px] font-bold tracking-[.18em] text-fuchsia-200/90">Pull in {gravityPullRemaining.toFixed(1)}s · move clear</div>
       </div>}
       {localSnapshot?.carryingHostage && <div className="pointer-events-none absolute left-1/2 top-[31%] z-[55] -translate-x-1/2 border border-amber-300/50 bg-black/80 px-4 py-2 text-center text-[10px] font-black uppercase tracking-[.18em] text-amber-100"><div>CARRYING HOSTAGE</div><small className="mt-1 block font-mono text-[8px] text-white/55">WEAPON / SPRINT / JET DISABLED · SPEED −18% · SQUAD PROTECTION REQUIRED</small></div>}
       {backpackOpen && localSnapshot && <CoopBackpackModal
