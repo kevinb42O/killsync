@@ -41,4 +41,18 @@ describe('per-peer snapshot interest', () => {
     expect(createInterestSnapshot(snapshot).enemies.map(candidate => candidate.id)).toEqual([1, 2]);
     expect(createInterestSnapshot(snapshot, 'alpha').enemies.map(candidate => candidate.id)).toEqual([1]);
   });
+
+  it('never lets a horde event burst grow a presentation snapshot without bound', () => {
+    const simulation = new CoopSimulation([{ id: 'host', label: 'Host', color: '#fff' }]);
+    const snapshot = simulation.createSnapshot();
+    const local = snapshot.players[0];
+    snapshot.combatEvents = Array.from({ length: 240 }, (_, index) => ({
+      id: index + 1, tick: 1, atMs: index, kind: index % 2 ? 'enemy_killed' as const : 'mission_stage' as const,
+      x: local.x, y: local.y, playerId: 'host', enemyId: index, weaponId: 'plasma_gun', amount: 1,
+    }));
+
+    const view = createInterestSnapshot(snapshot, 'host');
+    expect(view.combatEvents.length).toBeLessThanOrEqual(48);
+    expect(view.combatEvents.at(-1)?.id).toBe(239);
+  });
 });

@@ -9,11 +9,14 @@ export const MAX_VISIBLE_GEMS = 96;
 // coalesce repeated sparks/sounds into short perceptual windows.
 const TRANSIENT_EVENT_WINDOW_MS: Partial<Record<CoopSnapshot['combatEvents'][number]['kind'], number>> = {
   enemy_hit: 100,
+  enemy_killed: 100,
   damage_number: 125,
   drop_spawned: 250,
   projectile_impact: 100,
   weapon_fired: 125,
   reload_shell_loaded: 150,
+  passive_triggered: 150,
+  fence_triggered: 100,
   mask_damaged: 250,
   gas_damaged: 250,
   structure_damaged: 120,
@@ -84,9 +87,15 @@ function coalesceCombatEvents(events: CoopSnapshot['combatEvents']): CoopSnapsho
     const key = `${event.kind}:${event.playerId || ''}:${event.weaponId || ''}:${event.structureId || ''}:${Math.floor(event.atMs / windowMs)}`;
     if (!transient.has(key)) transient.set(key, event);
   }
-  // Critical UI/gameplay transitions are never dropped. The ceiling applies
-  // only to the optional particles and sounds, even under pathological load.
-  const visualBudget = Math.max(0, MAX_COMBAT_EVENTS_PER_SNAPSHOT - critical.length);
-  const visuals = [...transient.values()].slice(-visualBudget);
-  return [...critical, ...visuals].sort((left, right) => left.id - right.id);
+  // Event records are presentation-only; the authoritative player, enemy,
+  // mission and loot state lives elsewhere in the snapshot. A hard cap is
+  // therefore safer than allowing a kill/mission burst to monopolize the host
+  // main thread or create a multi-megabyte snapshot. Keep newest notices,
+  // which are the only ones a player can still act on.
+  const retainedCritical = critical.slice(-MAX_COMBAT_EVENTS_PER_SNAPSHOT);
+  const visualBudget = Math.max(0, MAX_COMBAT_EVENTS_PER_SNAPSHOT - retainedCritical.length);
+  // `slice(-0)` is `slice(0)` in JavaScript—never use it here, or a full
+  // critical budget accidentally re-enables every transient event.
+  const visuals = visualBudget === 0 ? [] : [...transient.values()].slice(-visualBudget);
+  return [...retainedCritical, ...visuals].sort((left, right) => left.id - right.id);
 }
