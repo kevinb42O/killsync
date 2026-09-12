@@ -12,6 +12,14 @@ describe('CoopSkinSelector', () => {
     expect(markup).toContain('Winterglass Projector');
     expect(markup).toContain('aria-pressed="true"');
     expect(markup).not.toContain('disabled=""');
+    expect(markup).not.toContain('title="Overload:');
+    expect(markup).not.toContain('title="Redline:');
+    expect(markup).toContain('src="/phantom.png"');
+    expect(markup).toContain('src="/reaper.png"');
+    expect(markup).toContain('src="/wraith.png"');
+    expect(markup).toContain('src="/nexus.png"');
+    expect(markup).toContain('src="/spectre.png"');
+    expect(markup).toContain('src="/titan.png"');
   });
 
   it('localizes the selector framing in Russian', () => {

@@ -50,6 +50,19 @@ export function shouldRenderPlayerRig(playerId: string, localPlayerId: string, s
   return playerId !== localPlayerId || spectating || falling;
 }
 
+/** A launch is only a local first-person cue. Keep its sequence guard here so
+ * snapshot interpolation cannot replay it every render frame. */
+export function shouldPresentGroundJump(
+  isSpectating: boolean,
+  isFalling: boolean,
+  verticalOffset: number,
+  jumpSequence: number,
+  lastPresentedJumpSequence: number,
+) {
+  return !isSpectating && !isFalling && verticalOffset > .08
+    && jumpSequence >= 0 && jumpSequence !== lastPresentedJumpSequence;
+}
+
 /**
  * Presents the network snapshot through the established production Renderer3D.
  * This deliberately does not own a second 3D world, weapon model, camera, or
@@ -98,12 +111,15 @@ export class MultiplayerRendererBridge {
   private lastLocalZ = 0;
   private localWasAirborne = false;
   private localAirborneTimeMs = 0;
+  private lastPresentedJumpSequence = -1;
   private lastPresentedWallJumpSequence = -1;
   private lastPresentedDoubleJumpSequence = -1;
   private wallJumpRoll = 0;
   private wallJumpPitch = 0;
   private wallJumpRollTarget = 0;
   private wallJumpPitchTarget = 0;
+  private lastPresentedLocalX: number | undefined;
+  private lastPresentedLocalY: number | undefined;
   private readonly fallingPresentations = new Map<string, FallingPresentation>();
 
   constructor(worldId: WorldId = 'neon_bastion') {
@@ -358,6 +374,7 @@ export class MultiplayerRendererBridge {
   predictLocalFire(weaponId: CoopFirearmId, actionId: number) {
     this.predictedFireActions.add(actionId);
     if (this.predictedFireActions.size > 32) this.predictedFireActions.delete(this.predictedFireActions.values().next().value!);
+    this.renderer.notifyFired();
     soundManager.playGunfire(weaponId);
     if (weaponId === 'plasma_gun') this.renderer.triggerMuzzleFlash(COOP_WEAPON_DETAILS[weaponId].color);
     else this.localFirearm.fire(weaponId);
@@ -379,9 +396,12 @@ export class MultiplayerRendererBridge {
       this.projectileImpactVisuals.clear();
       this.fallingPresentations.clear();
       this.projectileMuzzlePresentation.clear();
+      this.lastPresentedJumpSequence = -1;
       this.lastPresentedWallJumpSequence = -1;
       this.lastPresentedDoubleJumpSequence = -1;
       this.wallJumpRoll = this.wallJumpPitch = this.wallJumpRollTarget = this.wallJumpPitchTarget = 0;
+      this.lastPresentedLocalX = undefined;
+      this.lastPresentedLocalY = undefined;
     }
     this.visualElapsedMs = snapshot.tick !== this.lastSnapshotTick ? snapshot.elapsedMs : Math.min(snapshot.elapsedMs + 100, this.visualElapsedMs + deltaMs);
     this.lastSnapshotTick = snapshot.tick;
@@ -411,16 +431,55 @@ export class MultiplayerRendererBridge {
     const weaponState = local.weaponStates[local.selectedSlot];
     const selectedWeaponId = weaponState?.weaponId || 'plasma_gun';
     const player = this.renderState.player as Player;
-    player.position.x = localFall?.x ?? local.x; player.position.y = localFall?.y ?? local.y;
+    const targetX = localFall?.x ?? local.x;
+    const targetY = localFall?.y ?? local.y;
     const presentedAngle = localFall?.angle ?? local.angle;
-    player.velocity.x = Math.cos(presentedAngle) * 0.01; player.velocity.y = Math.sin(presentedAngle) * 0.01;
+    const dtSeconds = Math.max(0.001, deltaMs / 1000);
+    if (this.lastPresentedLocalX !== undefined && this.lastPresentedLocalY !== undefined) {
+      const vx = (targetX - this.lastPresentedLocalX) / dtSeconds;
+      const vy = (targetY - this.lastPresentedLocalY) / dtSeconds;
+      const speed = Math.hypot(vx, vy);
+      if (speed < 1200) {
+        player.velocity.x = vx;
+        player.velocity.y = vy;
+      } else {
+        player.velocity.x = 0;
+        player.velocity.y = 0;
+      }
+    } else {
+      player.velocity.x = Math.cos(presentedAngle) * 0.01;
+      player.velocity.y = Math.sin(presentedAngle) * 0.01;
+    }
+    this.lastPresentedLocalX = targetX;
+    this.lastPresentedLocalY = targetY;
+    player.position.x = targetX;
+    player.position.y = targetY;
     player.health = local.health; player.maxHealth = local.maxHealth;
     player.level = local.level; player.experience = local.experience; player.experienceToNextLevel = local.experienceToNextLevel;
     player.coins = local.coins; player.pendingDataCores = local.pendingDataCores;
     const fallingZ = localFall ? this.fallHeight(localFall) : undefined;
     this.renderer.presentationVerticalOffset = fallingZ ?? local.z;
     const currentZ = fallingZ ?? local.z;
+    const jumpSequence = local.motion?.lastJumpSequence ?? -1;
     const wallJumpSequence = local.motion?.lastWallJumpSequence ?? -1;
+    const doubleJumpSequence = local.motion?.lastDoubleJumpSequence ?? -1;
+    // Ground launches use their own replicated sequence. Previously the
+    // presentation bridge consumed only wall- and double-jump sequences, so
+    // a normal Space jump had no explicit take-off cue (audio or camera/weapon
+    // impulse) while the landing path still fired correctly.
+    const isSpecialJump = jumpSequence === wallJumpSequence || jumpSequence === doubleJumpSequence;
+    if (!isSpecialJump && shouldPresentGroundJump(
+      isSpectating,
+      isFallingLocal,
+      currentZ,
+      jumpSequence,
+      this.lastPresentedJumpSequence,
+    )) {
+      soundManager.playJump();
+      this.presentationShake = Math.max(this.presentationShake, .65);
+      this.renderer.notifyJump(1.0);
+    }
+    if (!isSpectating) this.lastPresentedJumpSequence = jumpSequence;
     if (!isSpectating && !isFallingLocal && currentZ > .08 && wallJumpSequence >= 0 && wallJumpSequence !== this.lastPresentedWallJumpSequence) {
       const lean = wallJumpCameraLean(
         local.motion?.wallJumpDirectionX || 0,
@@ -431,11 +490,11 @@ export class MultiplayerRendererBridge {
       this.wallJumpPitchTarget = lean.pitch;
       this.presentationShake = Math.max(this.presentationShake, 1.2);
       soundManager.playWallJump(lean.roll / WALL_JUMP_MAX_CAMERA_ROLL);
+      this.renderer.notifyJump(1.2);
     }
     // A spectated teammate's sequence must not replace the controlled
     // player's sequence or replay an old lean when first person resumes.
     if (!isSpectating) this.lastPresentedWallJumpSequence = wallJumpSequence;
-    const doubleJumpSequence = local.motion?.lastDoubleJumpSequence ?? -1;
     if (!isSpectating && !isFallingLocal && currentZ > .08 && doubleJumpSequence >= 0 && doubleJumpSequence !== this.lastPresentedDoubleJumpSequence) {
       // Visible third-person operator rigs intensify their existing dual
       // flames. Keep the local cue in audio and camera feedback: a world-space
@@ -443,6 +502,7 @@ export class MultiplayerRendererBridge {
       // which put it near the floor beneath the first-person camera.
       soundManager.playDoubleJump();
       this.presentationShake = Math.max(this.presentationShake, .9);
+      this.renderer.notifyJump(1.1);
     }
     if (!isSpectating) this.lastPresentedDoubleJumpSequence = doubleJumpSequence;
     const leanBlend = 1 - Math.exp(-32 * Math.max(0, deltaMs) / 1000);
@@ -460,6 +520,9 @@ export class MultiplayerRendererBridge {
     } else {
       if (this.localWasAirborne && this.localAirborneTimeMs >= 60) {
         soundManager.playLanding();
+        const fallRate = Math.max(0, (this.lastLocalZ - currentZ) / Math.max(0.001, deltaMs / 1000));
+        const impactScale = Math.min(1.8, Math.max(0.7, fallRate > 20 ? fallRate / 240 : 1.0));
+        this.renderer.notifyLand(impactScale);
       }
       this.localWasAirborne = false;
       this.localAirborneTimeMs = 0;
@@ -475,6 +538,7 @@ export class MultiplayerRendererBridge {
     this.renderer.presentationScoped = false;
     this.renderer.weaponRoot.visible = selectedWeaponId === 'plasma_gun' && !local.carryingHostage;
     this.localFirearm.group.visible = !local.carryingHostage;
+    this.renderer.presentationReloading = weaponState?.state === 'reloading';
     this.renderer.presentationHandgunReloadProgress = selectedWeaponId === 'plasma_gun' && weaponState?.state === 'reloading'
       && weaponState.reloadStartedAtMs !== undefined && weaponState.reloadEndsAtMs !== undefined
       ? THREE.MathUtils.clamp((snapshot.elapsedMs - weaponState.reloadStartedAtMs) / Math.max(1, weaponState.reloadEndsAtMs - weaponState.reloadStartedAtMs), 0, 1)

@@ -13,6 +13,7 @@ import { ENEMY_ATTACK_PROFILES } from './combat/enemyDomain';
 import { COOP_FIRST_PERSON_EYE_HEIGHT } from './multiplayer/playerMovement';
 import { createFloatingPlatformShell } from './rendering/floatingPlatformShell';
 import { getWorldDefinition, sampleWorldSurface, type WorldId, type WorldSurfaceKind } from './world/WorldDefinitions';
+import { FirstPersonCameraKinetics } from './rendering/FirstPersonCameraKinetics';
 
 export interface Renderer3DOptions {
   /** Co-op takes place on a finite floating megastructure. Its edge is open
@@ -24,6 +25,8 @@ export interface Renderer3DOptions {
   worldId?: WorldId;
   /** Touch-only quality profile. Omit this to detect a phone/tablet safely. */
   mobilePerformance?: boolean;
+  /** Master intensity multiplier for first-person walking/running camera kinetics. */
+  cameraBobIntensity?: number;
 }
 
 function shouldUseMobilePerformanceProfile() {
@@ -129,6 +132,8 @@ export class Renderer3D {
   presentationCameraPitchOffset: number = 0;
   /** Co-op sniper scope. World FOV and look speed remain purely presentation. */
   presentationScoped: boolean = false;
+  /** Whether the local player's weapon is actively reloading. */
+  presentationReloading: boolean = false;
   /** 0–1 host-derived reload progress for the visible legacy plasma handgun. */
   presentationHandgunReloadProgress: number = 0;
   /**
@@ -227,6 +232,7 @@ export class Renderer3D {
   heatVentIntensity: number = 0;
   walkBobTimer: number = 0;
   idleBreathTimer: number = 0;
+  firstPersonKinetics: FirstPersonCameraKinetics;
   
   // Third-person character model
   thirdPersonPlayerGroup!: THREE.Group;
@@ -403,6 +409,9 @@ export class Renderer3D {
     this.worldId = options.worldId || 'neon_bastion';
     this.mobilePerformance = options.mobilePerformance ?? shouldUseMobilePerformanceProfile();
     this.max3DParticles = this.mobilePerformance ? 260 : 720;
+    this.firstPersonKinetics = new FirstPersonCameraKinetics({
+      intensity: options.cameraBobIntensity,
+    });
     // 1. Initialize Three.js Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0b1830);
@@ -2339,7 +2348,20 @@ export class Renderer3D {
     }
   }
 
+  notifyFired() {
+    this.firstPersonKinetics.notifyFired();
+  }
+
+  notifyJump(strength: number = 1.0) {
+    this.firstPersonKinetics.notifyJump(strength);
+  }
+
+  notifyLand(impactVelocity: number = 1.0) {
+    this.firstPersonKinetics.notifyLand(impactVelocity);
+  }
+
   triggerMuzzleFlash(color: string = '#00f0ff') {
+    this.notifyFired();
     this.muzzleFlashTimer = 48;
     this.recoilOffset = Math.min(0.72, this.recoilOffset + (this.isAimingDownSights ? 0.18 : 0.34));
     this.recoilRotOffset = Math.min(0.15, this.recoilRotOffset + (this.isAimingDownSights ? 0.025 : 0.06));
@@ -2498,11 +2520,26 @@ export class Renderer3D {
     const isMoving = Math.abs(player.velocity.x) > 0.1 || Math.abs(player.velocity.y) > 0.1;
     if (isMoving) this.walkBobTimer += deltaTime * 0.012;
 
+    const kinetics = this.firstPersonKinetics.update({
+      deltaTime,
+      yaw: this.yaw,
+      pitch: this.pitch,
+      playerVelocity: player.velocity,
+      isSprinting: this.presentationSprinting,
+      isMoving,
+      isAiming: this.isAimingDownSights,
+      adsProgress: this.adsProgress,
+      isShooting: this.isShooting || this.muzzleFlashTimer > 0,
+      isReloading: this.presentationReloading || this.presentationHandgunReloadProgress > 0.01,
+      isDashing: engine.isDashing,
+      isSliding: this.presentationSliding,
+      isAirborne: this.presentationVerticalOffset > 0.08,
+      verticalOffset: this.presentationVerticalOffset,
+      mouseDeltaX: this.lastMouseDeltaX,
+      mouseDeltaY: this.lastMouseDeltaY,
+    });
+
     const adsDamp = 1 - this.adsProgress * 0.88;
-    const breathX = Math.sin(this.idleBreathTimer) * 0.14 * adsDamp;
-    const breathY = Math.cos(this.idleBreathTimer * 2) * 0.08 * adsDamp;
-    const bobY = (isMoving ? Math.sin(this.walkBobTimer) * 0.55 : breathY) * adsDamp;
-    const bobX = (isMoving ? Math.cos(this.walkBobTimer * 0.5) * 0.3 : breathX) * adsDamp;
 
     const baseFov = engine.isDashing ? this.WORLD_DASH_FOV : (this.presentationSprinting ? this.WORLD_FOV + 7 : this.WORLD_FOV);
     const adsWorldFov = this.presentationScoped ? 28 : this.ADS_FOV;
@@ -2519,15 +2556,15 @@ export class Renderer3D {
     const shakeX = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
     const shakeY = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
     this.camera.position.set(
-      player.position.x + bobX * 0.2 + shakeX,
-      COOP_FIRST_PERSON_EYE_HEIGHT + this.presentationVerticalOffset - (this.presentationSliding ? 9 : 0) + bobY * 0.2 + shakeY,
-      player.position.y
+      player.position.x + kinetics.cameraTranslation.x + shakeX,
+      COOP_FIRST_PERSON_EYE_HEIGHT + this.presentationVerticalOffset - (this.presentationSliding ? 9 : 0) + kinetics.cameraTranslation.y + shakeY,
+      player.position.y + kinetics.cameraTranslation.z
     );
     this.camera.rotation.order = 'YXZ';
     this.camera.rotation.set(
-      THREE.MathUtils.clamp(this.pitch + this.presentationCameraPitchOffset, -1.45, 1.45),
-      this.yaw,
-      this.presentationCameraRoll,
+      THREE.MathUtils.clamp(this.pitch + this.presentationCameraPitchOffset + kinetics.cameraRotation.pitch, -1.45, 1.45),
+      this.yaw + kinetics.cameraRotation.yaw,
+      this.presentationCameraRoll + kinetics.cameraRotation.roll,
     );
 
     // The viewmodel camera follows the world camera pose but owns its projection.
@@ -2572,9 +2609,9 @@ export class Renderer3D {
     }
 
     const dashPullback = engine.isDashing ? 0.65 : 0;
-    const hipX = 1.85 + bobX * 0.16 + this.swayX * adsDamp;
-    const hipY = -2.08 + bobY * 0.2 + this.swayY * adsDamp - dashPullback * 0.22;
-    const hipZ = -6.05 + this.recoilOffset * 0.55 + dashPullback * 0.5;
+    const hipX = 1.85 + kinetics.viewmodelTranslation.x + this.swayX * adsDamp;
+    const hipY = -2.08 + kinetics.viewmodelTranslation.y + this.swayY * adsDamp - dashPullback * 0.22;
+    const hipZ = -6.05 + kinetics.viewmodelTranslation.z + this.recoilOffset * 0.55 + dashPullback * 0.5;
 
     // Optic center is local Y=1.48, so -1.48 aligns it to camera center.
     const adsX = this.swayX * 0.035;
@@ -2586,9 +2623,9 @@ export class Renderer3D {
       THREE.MathUtils.lerp(hipZ, adsZ, this.adsProgress)
     );
 
-    const hipRotX = bobY * 0.025 - this.recoilRotOffset * 0.6 + this.swayY * 0.24 + dashPullback * 0.1;
-    const hipRotY = bobX * 0.025 + this.swayX * 0.24 - 0.035;
-    const hipRotZ = this.swayTilt - dashPullback * 0.07;
+    const hipRotX = kinetics.viewmodelRotation.pitch - this.recoilRotOffset * 0.6 + this.swayY * 0.24 + dashPullback * 0.1;
+    const hipRotY = kinetics.viewmodelRotation.yaw + this.swayX * 0.24 - 0.035;
+    const hipRotZ = this.swayTilt + kinetics.viewmodelRotation.roll - dashPullback * 0.07;
     this.fpsWeaponGroup.rotation.set(
       THREE.MathUtils.lerp(hipRotX, -this.recoilRotOffset * 0.2, this.adsProgress),
       THREE.MathUtils.lerp(hipRotY, this.swayX * 0.03, this.adsProgress),
@@ -2893,7 +2930,11 @@ export class Renderer3D {
     // Ease both edges of the effect so tapping sprint never produces a flash.
     // ADS suppresses the streaks to preserve a clean sight picture.
     if (!this.mobilePerformance) {
-      const speedLineTarget = viewMode === 'FIRST_PERSON' && this.presentationSprinting
+      // Sprint intent remains true while Shift is held, including at rest.
+      // Speed lines are motion feedback, so require a meaningful presented
+      // velocity as well; otherwise standing still with Shift produced them.
+      const isActuallyMoving = Math.hypot(player.velocity.x, player.velocity.y) > 30;
+      const speedLineTarget = viewMode === 'FIRST_PERSON' && this.presentationSprinting && isActuallyMoving
         ? 0.26 * (1 - this.adsProgress)
         : 0;
       this.speedLineIntensity = this.damp(this.speedLineIntensity, speedLineTarget, speedLineTarget > 0 ? 8 : 12, deltaTime);

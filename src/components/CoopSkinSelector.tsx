@@ -1,9 +1,12 @@
-import type { CSSProperties } from 'react';
-import { Check, Crown } from 'lucide-react';
+import { useState, type CSSProperties, type MouseEvent } from 'react';
+import { Check, Crown, Crosshair, Zap } from 'lucide-react';
 import { COOP_SKINS, type CoopSkinId } from '../game/multiplayer/CoopSkins';
 import { COOP_OPERATOR_BY_ID } from '../game/multiplayer/CoopOperators';
 import { COOP_FIREARM_BY_ID } from '../game/combat/coopFirearms';
 import { coopOperatorClassKey, coopOperatorRoleKey, coopText, coopWeaponNameKey, type CoopLanguage } from '../game/multiplayer/i18n';
+import { soundManager } from '../game/SoundManager';
+
+type SkinTooltip = { skinId: CoopSkinId; x: number; y: number };
 
 export function CoopSkinSelector({ value, language, disabled = false, onChange }: {
   value: CoopSkinId;
@@ -12,52 +15,166 @@ export function CoopSkinSelector({ value, language, disabled = false, onChange }
   onChange: (skinId: CoopSkinId) => void;
 }) {
   const tr = (key: Parameters<typeof coopText>[1]) => coopText(language, key);
+  const [tooltip, setTooltip] = useState<SkinTooltip | null>(null);
+
+  const positionTooltip = (skinId: CoopSkinId, pointer: { clientX: number; clientY: number }) => {
+    const gutter = 16;
+    const tooltipWidth = 280;
+    const tooltipHeight = 112;
+    setTooltip({
+      skinId,
+      x: Math.max(gutter, Math.min(pointer.clientX + gutter, window.innerWidth - tooltipWidth - gutter)),
+      y: Math.max(gutter, Math.min(pointer.clientY + gutter, window.innerHeight - tooltipHeight - gutter)),
+    });
+  };
+
+  const showKeyboardTooltip = (skinId: CoopSkinId, target: HTMLButtonElement) => {
+    const bounds = target.getBoundingClientRect();
+    positionTooltip(skinId, { clientX: bounds.right, clientY: bounds.top + bounds.height / 2 });
+  };
+
+  const handleSelect = (skinId: CoopSkinId) => {
+    soundManager.playUIClick();
+    onChange(skinId);
+  };
+
+  const handleHover = (skinId: CoopSkinId, event: MouseEvent<HTMLButtonElement>) => {
+    soundManager.playUIHover();
+    positionTooltip(skinId, event);
+  };
+
+  const tooltipOperator = tooltip ? COOP_OPERATOR_BY_ID[tooltip.skinId] : null;
+
   return (
-    <section aria-labelledby="coop-skin-heading" className="mb-6 border border-cyan-400/20 bg-black/20 p-3.5">
-      <div className="mb-3 flex items-end justify-between gap-3">
+    <section aria-labelledby="coop-skin-heading" className="coop-class-deck">
+      <div className="coop-class-deck__header">
         <div>
-          <h3 id="coop-skin-heading" className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">{tr('skin.heading')}</h3>
-          <p className="mt-1 text-[10px] text-white/45">{tr('skin.help')}</p>
+          <div className="coop-section-kicker">Loadout // 01</div>
+          <h3 id="coop-skin-heading" className="coop-class-deck__title">{tr('skin.heading')}</h3>
+          <p className="coop-class-deck__help">{tr('skin.help')}</p>
         </div>
-        <span className="text-[8px] font-black uppercase tracking-widest text-emerald-300">{tr('skin.allUnlocked')}</span>
+        <span className="coop-class-deck__availability"><i />{tr('skin.allUnlocked')}</span>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {COOP_SKINS.map(skin => {
+
+      <div className="coop-class-deck__grid">
+        {COOP_SKINS.map((skin, idx) => {
           const selected = skin.id === value;
           const operator = COOP_OPERATOR_BY_ID[skin.id];
           const signature = COOP_FIREARM_BY_ID[operator.signatureWeaponId];
+
           return (
             <button
               key={skin.id}
               type="button"
               aria-pressed={selected}
+              aria-describedby={tooltip?.skinId === skin.id ? 'coop-skin-tooltip' : undefined}
               disabled={disabled}
-              onClick={() => onChange(skin.id)}
-              title={`${operator.passiveName}: ${operator.passiveDescription}`}
-              className={`group relative min-h-32 overflow-hidden border p-2 text-left transition ${selected ? 'border-cyan-200 bg-cyan-400/15 shadow-[0_0_18px_rgba(34,211,238,.22)]' : 'border-white/10 bg-white/[0.025] hover:-translate-y-0.5 hover:border-white/35'} disabled:cursor-not-allowed disabled:opacity-50`}
-              style={{ '--skin-armor': skin.palette.armor, '--skin-glow': skin.palette.glow, '--skin-suit': skin.palette.undersuit, '--skin-trim': skin.palette.trim } as CSSProperties}
+              onClick={() => handleSelect(skin.id)}
+              onMouseEnter={event => handleHover(skin.id, event)}
+              onMouseMove={event => positionTooltip(skin.id, event)}
+              onMouseLeave={() => setTooltip(null)}
+              onFocus={event => { soundManager.playUIHover(); showKeyboardTooltip(skin.id, event.currentTarget); }}
+              onBlur={() => setTooltip(null)}
+              className={`coop-class-card ${selected ? 'is-selected' : ''} ${skin.tier === 'premium' ? 'is-premium' : ''}`}
+              style={{
+                '--skin-armor': skin.palette.armor,
+                '--skin-glow': skin.palette.glow,
+                '--skin-suit': skin.palette.undersuit,
+                '--skin-trim': skin.palette.trim,
+                '--operator-color': operator.color,
+              } as CSSProperties}
             >
-              {skin.tier === 'premium' && <span className="absolute right-1.5 top-1.5 z-10 flex items-center gap-0.5 bg-amber-300 px-1 py-0.5 text-[6px] font-black uppercase tracking-wider text-black"><Crown size={7} /> {tr('skin.premium')}</span>}
-              {selected && <span className="absolute left-1.5 top-1.5 z-10 grid h-4 w-4 place-items-center rounded-full bg-cyan-200 text-black"><Check size={10} strokeWidth={4} /></span>}
-              <div className={`coop-skin-preview ${skin.tier === 'premium' ? 'coop-skin-preview--premium' : ''}`} aria-hidden="true">
-                <span className="coop-skin-preview__head"><i /><i /></span>
-                <span className="coop-skin-preview__body" />
+              {/* Top Meta Line */}
+              <div className="coop-class-card__topline">
+                <span className="coop-class-card__class-tag">Class // {String(idx + 1).padStart(2, '0')}</span>
+                {skin.tier === 'premium' && (
+                  <span className="coop-class-card__elite">
+                    <Crown size={9} /> {tr('skin.premium')}
+                  </span>
+                )}
               </div>
-              <div className="mt-1 truncate text-[8px] font-black uppercase tracking-wide" style={{ color: operator.color }}>{tr(coopOperatorClassKey(operator.id))}</div>
-              <div className="mt-1 truncate text-[6px] font-bold uppercase tracking-wide text-white">{tr(coopWeaponNameKey(signature.id))}</div>
-              <div className="mt-0.5 line-clamp-2 text-[6px] leading-tight text-white/45">{tr(coopOperatorRoleKey(operator.id))}</div>
-              <div className="mt-1 flex gap-1" aria-hidden="true">
-                {[skin.palette.undersuit, skin.palette.armor, skin.palette.trim, skin.palette.glow].map(color => <span key={color} className="h-1 flex-1" style={{ background: color }} />)}
+
+              {/* Equipped Status Badge */}
+              {selected && (
+                <div className="coop-class-card__selected">
+                  <Check size={12} strokeWidth={3.5} /> Equipped
+                </div>
+              )}
+
+              {/* Holographic Projection Chamber */}
+              <div className="coop-class-card__hologram">
+                <div className="coop-class-card__hologram-halo" aria-hidden="true" />
+                <div className={`coop-skin-preview ${skin.tier === 'premium' ? 'coop-skin-preview--premium' : ''}`} aria-hidden="true">
+                  <img className="coop-skin-preview__portrait" src={skin.portraitSrc} alt="" />
+                  <div className="coop-skin-preview__scanlines" />
+                  <div className="coop-skin-preview__tint" />
+                </div>
+                <div className="coop-class-card__hologram-base" aria-hidden="true" />
+              </div>
+
+              {/* Operative Details */}
+              <div className="coop-class-card__details">
+                <div className="coop-class-card__name-row">
+                  <span className="coop-class-card__name">{tr(coopOperatorClassKey(operator.id))}</span>
+                  <span className="coop-class-card__chassis">{skin.name}</span>
+                </div>
+
+                <div className="coop-class-card__role">{tr(coopOperatorRoleKey(operator.id))}</div>
+
+                {/* Signature Weapon Loadout Chip */}
+                <div className="coop-class-card__weapon-chip">
+                  <Crosshair size={11} className="coop-class-card__weapon-icon" />
+                  <span className="coop-class-card__weapon-name">{tr(coopWeaponNameKey(signature.id))}</span>
+                  <span className="coop-class-card__weapon-type">{signature.shortName}</span>
+                </div>
+
+                {/* Passive Protocol Pill */}
+                <div className="coop-class-card__passive-chip">
+                  <Zap size={10} className="text-amber-300" />
+                  <span className="coop-class-card__passive-name">{operator.passiveName}</span>
+                  <span className="coop-class-card__resource-tag">{operator.resourceLabel}</span>
+                </div>
+              </div>
+
+              {/* Armor & Glow Telemetry Swatches */}
+              <div className="coop-class-card__swatches" aria-hidden="true">
+                {[skin.palette.undersuit, skin.palette.armor, skin.palette.trim, skin.palette.glow].map(color => (
+                  <span key={color} style={{ background: color }} />
+                ))}
               </div>
             </button>
           );
         })}
       </div>
+
+      {/* Floating Tactical Telemetry Tooltip */}
+      {tooltip && tooltipOperator && (
+        <div
+          id="coop-skin-tooltip"
+          role="tooltip"
+          className="coop-skin-tooltip"
+          style={{ left: tooltip.x, top: tooltip.y, '--tooltip-accent': tooltipOperator.color } as CSSProperties}
+        >
+          <div className="coop-skin-tooltip__eyebrow">
+            Tactical Protocol // {tooltipOperator.className}
+          </div>
+          <div className="coop-skin-tooltip__title">{tooltipOperator.passiveName}</div>
+          <p>{tooltipOperator.passiveDescription}</p>
+          <div className="coop-skin-tooltip__spender">
+            <b>{tooltipOperator.spenderName}:</b> {tooltipOperator.spenderDescription}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
 
 export function CoopSkinBadge({ skinId }: { skinId?: CoopSkinId }) {
   const skin = COOP_SKINS.find(candidate => candidate.id === skinId) || COOP_SKINS[0];
-  return <span className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider" style={{ color: skin.palette.glow }}><i className="h-1.5 w-1.5 rounded-full" style={{ background: skin.palette.armor, boxShadow: `0 0 7px ${skin.palette.glow}` }} />{skin.name}</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider" style={{ color: skin.palette.glow }}>
+      <i className="h-1.5 w-1.5 rounded-full" style={{ background: skin.palette.armor, boxShadow: `0 0 7px ${skin.palette.glow}` }} />
+      {skin.name}
+    </span>
+  );
 }

@@ -20,6 +20,7 @@ import { CoopCombatReticle, type CoopReticleMode } from './CoopCombatReticle';
 import { OffscreenThreatIndicators, type HudThreat } from './OffscreenThreatIndicators';
 import { CoopShopMenu, resolveCoopShopKey, type CoopShopCategoryId } from './CoopShopMenu';
 import { CoopWeaponFoundryMenu } from './CoopWeaponFoundryMenu';
+import { CinematicVignetteOverlay, type CinematicProfile } from './CinematicVignetteOverlay';
 import { COOP_FIREARM_IDS, type CoopFirearmId } from '../game/combat/coopFirearms';
 import type { CoopFoundryUpgradeResult } from '../game/multiplayer/CoopWeaponFoundry';
 import { COOP_MAX_FABRICATOR_CHARGES, COOP_RECOVERY_RELAY_HEAL_PER_SECOND, COOP_STRUCTURE_ACTION_RANGE, COOP_STRUCTURE_DEFINITIONS, getBarricadeWallContact, getStructureWalkableTop, isCoopStructureAction, isCoopStructureType, resolveBarricadeCollision, validateCoopBuildPreview, type CoopBuildResult, type CoopDismantleResult, type CoopStructureAction, type CoopStructureActionResult, type CoopStructureType } from '../game/multiplayer/CoopFieldEngineering';
@@ -72,7 +73,8 @@ export function deploymentSectorNumber(players: readonly Pick<CoopPlayerSeed, 'i
  * from the legacy GameEngine while the latter is converted from a one-player
  * browser simulation into a shared squad simulation.
  */
-export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: MultiplayerLaunch; controlScheme: ControlScheme; onExit: () => void }) {
+export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfile }: { launch: MultiplayerLaunch; controlScheme: ControlScheme; onExit: () => void; cinematicProfile?: CinematicProfile }) {
+  const resolvedProfile: CinematicProfile = cinematicProfile || (typeof localStorage !== 'undefined' && localStorage.getItem('cinematicEffects') as CinematicProfile) || 'full';
   const tr = (key: CoopTextKey, params?: Record<string, string | number>) => coopText(launch.language, key, params);
   const sceneRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<MultiplayerRendererBridge | null>(null);
@@ -2567,7 +2569,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
           language={launch.language}
         />
       )}
-      {!isSpectator && hud.lifeState === 'alive' && !buildMode && activeWeapon && <div className={`coop-weapons pointer-events-none absolute z-50 ${showMobileTouchControls ? 'coop-weapons--touch' : ''}`}>
+      {!isSpectator && hud.lifeState === 'alive' && !buildMode && activeWeapon && <div className={`coop-weapons pointer-events-none absolute z-50 ${showMobileTouchControls ? 'coop-weapons--touch' : isMobileTouchDevice ? 'coop-weapons--compact' : ''}`}>
         <div className="coop-weapons__class" style={{ color: classOperator.color }}><b>{classOperator.className}</b><span>{classOperator.role}</span></div>
         <div className="coop-weapons__meter"><span style={{ color: classOperator.color }}>{classOperator.resourceLabel}</span><i><em style={{ width: `${Math.max(0, Math.min(100, (localSnapshot?.artifactResource || 0) / classOperator.resourceMax * 100))}%`, backgroundColor: classOperator.color }} /></i><b>{Math.floor(localSnapshot?.artifactResource || 0)}/{classOperator.resourceMax}</b></div>
         <div className="coop-weapons__meter coop-weapons__meter--jet"><span>BURST PACK</span><i><em style={{ width: `${Math.max(0, Math.min(100, localSnapshot?.jetFuel ?? 100))}%` }} /></i><b>{Math.round(localSnapshot?.jetFuel ?? 100)}</b></div>
@@ -2628,11 +2630,26 @@ export function MultiplayerArena({ launch, controlScheme, onExit }: { launch: Mu
         <p className="mt-3 text-[10px] text-white/50">{tr('foundry.interact')}</p>
       </div>}
       {foundryOpen && nearbyFoundry && <CoopWeaponFoundryMenu player={localSnapshot} message={foundryMessage} tr={tr} onForge={weaponId => { soundManager.playUIClick(); forgeWeapon(nearbyFoundry.id, weaponId); }} onClose={closeFoundryAndResume} />}
-      {/* Downed Edge Danger Vignette */}
-      {!isSpectator && hud.lifeState === 'downed' && (
-        <div
-          className="pointer-events-none absolute inset-0 z-20 bg-[radial-gradient(ellipse_at_center,transparent_52%,rgba(245,158,11,0.12)_78%,rgba(220,38,38,0.32)_100%)] animate-pulse"
-          style={{ animationDuration: '3s' }}
+      {/* Cinematic Vignette & Tactical Edge Post-Processing */}
+      {!fallCinematicActive && hud.matchState === 'active' && (
+        <CinematicVignetteOverlay
+          healthRatio={hud.maxHealth > 0 ? hud.health / hud.maxHealth : 1}
+          lastHitTime={damageFlashKey ?? 0}
+          isDowned={hud.lifeState === 'downed'}
+          // The simulation records held sprint independently of movement so
+          // it can preserve intent across packets. Screen-space speed lines,
+          // however, are a movement cue and must stay off while Shift alone
+          // is held at rest.
+          isSprinting={Boolean(localSnapshot?.sprinting) && inputRef.current.movement !== 0}
+          // Coop snapshots expose the authoritative ADS flag as isAiming.
+          // The former aimingDownSights lookup was undefined, leaving the ADS
+          // aperture and its release transition permanently inactive.
+          isAimingDownSights={Boolean(localSnapshot?.isAiming)}
+          adsProgress={localSnapshot?.isAiming ? 1 : 0}
+          isInGas={Boolean(isLocalInGas)}
+          isSpectating={Boolean(isSpectator)}
+          chromaticIntensity={damageFlashKey === null ? 0 : 14}
+          profile={resolvedProfile}
         />
       )}
       {/* Eliminated Edge Vignette */}

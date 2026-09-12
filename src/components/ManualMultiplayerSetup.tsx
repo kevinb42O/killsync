@@ -4,9 +4,12 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Compass,
   Copy,
   Crown,
+  Edit3,
   Globe,
+  Layers,
   Link2,
   Radio,
   RefreshCw,
@@ -16,6 +19,7 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
+import { soundManager } from '../game/SoundManager';
 import { ManualWebRTCSession } from '../game/multiplayer/ManualWebRTCSession';
 import {
   HostedLobby,
@@ -28,12 +32,13 @@ import {
 import { COOP_GUEST_COLORS, COOP_MAX_PLAYERS, MultiplayerPeerInfo, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
 import { CoopPlayerSeed } from '../game/multiplayer/CoopSimulation';
 import { generateRoomCode, normalizeRoomCode } from '../game/multiplayer/UnifiedSignaling';
-import { coopText, localizeCoopSignalingMessage, readCoopLanguage, writeCoopLanguage, type CoopLanguage, type CoopTextKey } from '../game/multiplayer/i18n';
+import { coopOperatorClassKey, coopOperatorRoleKey, coopText, coopWeaponNameKey, localizeCoopSignalingMessage, readCoopLanguage, writeCoopLanguage, type CoopLanguage, type CoopTextKey } from '../game/multiplayer/i18n';
 import { getCoopOperatorImprint, normalizeCoopImprintLoadout, purchaseCoopImprintRank, readCoopImprintProfile, selectedCoopOperatorId, writeCoopImprintProfile, type CoopImprintStatId } from '../game/multiplayer/CoopImprint';
 import { CoopImprintSummary } from './CoopImprintSummary';
-import { normalizeCoopSkinId, readCoopSkinId, writeCoopSkinId, type CoopSkinId } from '../game/multiplayer/CoopSkins';
+import { COOP_SKINS, normalizeCoopSkinId, readCoopSkinId, writeCoopSkinId, type CoopSkinId } from '../game/multiplayer/CoopSkins';
 import { CoopSkinBadge, CoopSkinSelector } from './CoopSkinSelector';
-import { normalizeCoopOperatorId } from '../game/multiplayer/CoopOperators';
+import { COOP_OPERATOR_BY_ID, normalizeCoopOperatorId } from '../game/multiplayer/CoopOperators';
+import { COOP_FIREARM_BY_ID } from '../game/combat/coopFirearms';
 import { normalizeWorldId, readCoopWorldProgress, type WorldId } from '../game/world/WorldDefinitions';
 import { CoopWorldSelector } from './CoopWorldSelector';
 
@@ -120,9 +125,13 @@ export function ManualMultiplayerSetup({
   const [language, setLanguage] = useState<CoopLanguage>(readCoopLanguage);
   const [operatorId] = useState(selectedCoopOperatorId);
   const [selectedSkinId, setSelectedSkinId] = useState(() => normalizeCoopSkinId(localPlayerRef.current.skinId));
+  const [activeTab, setActiveTab] = useState<'loadout' | 'matchmaking' | 'all'>('all');
   const [imprintProfile, setImprintProfile] = useState(readCoopImprintProfile);
   const [worldProgress] = useState(readCoopWorldProgress);
   const [selectedWorldId, setSelectedWorldId] = useState<WorldId>(() => readCoopWorldProgress().unlockedWorldIds.at(-1) || 'neon_bastion');
+  const activeSkin = COOP_SKINS.find(s => s.id === selectedSkinId) || COOP_SKINS[0];
+  const activeOperator = COOP_OPERATOR_BY_ID[activeSkin.id];
+  const activeSignature = COOP_FIREARM_BY_ID[activeOperator.signatureWeaponId];
   const operatorImprint = getCoopOperatorImprint(imprintProfile, operatorId);
   const tr = (key: CoopTextKey, params?: Record<string, string | number>) => coopText(language, key, params);
   const selectLanguage = (next: CoopLanguage) => {
@@ -515,48 +524,101 @@ export function ManualMultiplayerSetup({
   };
 
   return (
-    <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/85 p-3 backdrop-blur-xl md:p-6">
-      <section className="relative flex max-h-[94dvh] w-full max-w-4xl flex-col border border-cyan-400/40 bg-[#060a12]/95 shadow-[0_0_80px_rgba(0,240,255,0.22)]">
-        {/* Neon scanline accent bar */}
-        <div className="h-1 w-full bg-gradient-to-r from-cyan-500 via-emerald-400 to-fuchsia-500" />
+    <div className="coop-setup-screen absolute inset-0 z-[110] flex items-center justify-center p-3 md:p-6">
+      <div className="coop-setup-screen__city" aria-hidden="true" />
+      <div className="coop-setup-screen__grid" aria-hidden="true" />
+      <section className="coop-setup-shell relative flex max-h-[94dvh] w-full max-w-6xl flex-col">
+        <div className="coop-setup-shell__signal" aria-hidden="true" />
 
         {/* Tactical Header */}
-        <header className="flex items-center justify-between border-b border-cyan-400/20 bg-cyan-950/20 px-6 py-4">
+        <header className="coop-setup-header">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center border border-cyan-400/50 bg-cyan-500/10 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+            <div className="coop-setup-header__emblem">
               <Radio size={20} className="animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-[0.2em] text-white">KILLSYNC CO-OP</h2>
-                <span className="flex items-center gap-1 rounded border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <div className="coop-setup-header__titleline">
+                <h2 className="flex items-center gap-1.5">
+                  <span className="coop-setup-title-kill">KILL</span>
+                  <span className="coop-setup-title-sync">SYNC</span>
+                  <span className="text-white/40 text-[11px] font-black tracking-[0.25em] font-mono">// CO-OP</span>
+                </h2>
+                <span className="coop-setup-header__live"><i />
                   {tr('setup.liveMatchmaking')}
                 </span>
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/60">
+              <p className="coop-setup-header__subtitle">
                 {tr('setup.subtitle')}
               </p>
             </div>
           </div>
           <button
-            onClick={close}
+            onClick={() => {
+              soundManager.playUIClick();
+              close();
+            }}
+            onMouseEnter={() => soundManager.playUIHover()}
             aria-label={tr('setup.close')}
-            className="rounded p-2 text-white/40 transition hover:bg-white/10 hover:text-white"
+            className="coop-setup-close"
           >
             <X size={20} />
           </button>
         </header>
 
+        {/* Command Navigation Tabs */}
+        {mode === 'choose' && (
+          <nav className="coop-setup-nav" aria-label="Multiplayer setup navigation">
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playUIClick();
+                setActiveTab('all');
+              }}
+              onMouseEnter={() => soundManager.playUIHover()}
+              className={`coop-setup-tab ${activeTab === 'all' ? 'is-active' : ''}`}
+            >
+              <Layers size={12} />
+              {tr('setup.tabAll')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playUIClick();
+                setActiveTab('loadout');
+              }}
+              onMouseEnter={() => soundManager.playUIHover()}
+              className={`coop-setup-tab ${activeTab === 'loadout' ? 'is-active' : ''}`}
+            >
+              <Users size={12} />
+              {tr('setup.tabLoadout')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playUIClick();
+                setActiveTab('matchmaking');
+              }}
+              onMouseEnter={() => soundManager.playUIHover()}
+              className={`coop-setup-tab ${activeTab === 'matchmaking' ? 'is-active' : ''}`}
+            >
+              <Radio size={12} />
+              {tr('setup.tabMatchmaking')}
+              {lobbies.length > 0 && (
+                <span className="coop-setup-tab__badge">{lobbies.length}</span>
+              )}
+            </button>
+          </nav>
+        )}
+
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-5 md:p-7">
-          <div className="mb-4 flex justify-end">
-            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-white/55">
+        <div className="coop-setup-content flex-1 overflow-y-auto">
+          <div className="coop-setup-utility">
+            <label className="coop-setup-language">
               <Globe size={13} className="text-cyan-300" /> {tr('language.label')}
               <select
                 value={language}
                 onChange={event => selectLanguage(event.target.value as CoopLanguage)}
-                className="border border-cyan-400/35 bg-[#07111b] px-2 py-1 text-[10px] font-black text-cyan-100 outline-none"
+                className="coop-setup-language__select"
               >
                 <option value="en">{tr('language.en')}</option>
                 <option value="ru">{tr('language.ru')}</option>
@@ -564,200 +626,307 @@ export function ManualMultiplayerSetup({
             </label>
           </div>
 
-          {/* OPERATIVE CALLSIGN BAR */}
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border border-cyan-400/20 bg-cyan-500/[0.03] p-3.5">
-            <div className="flex flex-1 items-center gap-3 min-w-[240px]">
-              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300 whitespace-nowrap">
-                {tr('setup.callsign')}
-              </div>
-              <input
-                value={nickname}
-                onChange={e => { setNickname(e.target.value); setError(null); }}
-                onBlur={() => setNickname(normalizeNickname(nickname))}
-                maxLength={16}
-                placeholder={tr('setup.callsignPlaceholder')}
-                className="w-full border-b border-cyan-400/30 bg-transparent pb-1 font-mono text-sm font-black uppercase tracking-wider text-cyan-100 placeholder:text-white/20 focus:border-cyan-300 focus:outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                disabled={loading || !nicknameValid}
-                onClick={launchSolo}
-                className="flex items-center gap-1.5 border border-emerald-400/40 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-200 transition hover:bg-emerald-500/25 disabled:opacity-40"
-              >
-                <ChevronRight size={13} /> {tr('setup.soloPractice')}
-              </button>
-            </div>
-          </div>
-
-          <CoopSkinSelector value={selectedSkinId} language={language} disabled={loading} onChange={selectSkin} />
-
-          <CoopImprintSummary
-            imprint={operatorImprint}
-            language={language}
-            locked={mode !== 'choose' || loading}
-            onUpgrade={allocateImprintRank}
-          />
-
           {/* MAIN VIEW: CHOOSE / LOBBY BROWSER */}
           {mode === 'choose' && (
             <div className="space-y-6">
-              <CoopWorldSelector
-                unlockedWorldIds={worldProgress.unlockedWorldIds}
-                selectedWorldId={selectedWorldId}
-                onChange={setSelectedWorldId}
-                disabled={loading}
-                description="Discover worlds in order. Redeploy directly to any world your squad leader has unlocked."
-              />
-
-              {/* PRIMARY ACTION BAR */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <button
-                  disabled={loading || !nicknameValid}
-                  onClick={() => void hostSquad()}
-                  className="group relative flex items-center justify-between overflow-hidden border border-cyan-400/60 bg-gradient-to-r from-cyan-500/20 to-cyan-500/5 p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-[0_0_30px_rgba(0,240,255,0.25)] disabled:opacity-45"
-                >
-                  <div>
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-200">
-                      <Server size={15} /> {tr('setup.hostPublic')}
+              {/* TAB 1: OPERATIVE LOADOUT & LEVEL ROUTE */}
+              {(activeTab === 'loadout' || activeTab === 'all') && (
+                <div className="space-y-5">
+                  {/* OPERATIVE CALLSIGN BAR */}
+                  <div className="coop-identity-panel">
+                    <div className="flex flex-1 items-center gap-3 min-w-[240px]">
+                      <div className="coop-identity-panel__label">
+                        {tr('setup.callsign')}
+                      </div>
+                      <input
+                        value={nickname}
+                        onChange={e => { setNickname(e.target.value); setError(null); }}
+                        onBlur={() => setNickname(normalizeNickname(nickname))}
+                        maxLength={16}
+                        placeholder={tr('setup.callsignPlaceholder')}
+                        className="coop-identity-panel__input"
+                      />
                     </div>
-                    <div className="mt-1 text-[11px] text-white/60">
-                      {tr('setup.hostPublicHelp')}
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={loading || !nicknameValid}
+                        onClick={() => {
+                          soundManager.playUIClick();
+                          launchSolo();
+                        }}
+                        onMouseEnter={() => soundManager.playUIHover()}
+                        className="coop-identity-panel__solo"
+                      >
+                        <ChevronRight size={13} /> {tr('setup.soloPractice')}
+                      </button>
                     </div>
                   </div>
-                  <ChevronRight size={18} className="text-cyan-300 transition group-hover:translate-x-1" />
-                </button>
 
-                {/* JOIN BY CODE INPUT */}
-                <div className="flex items-center gap-2 border border-fuchsia-400/40 bg-fuchsia-500/[0.05] p-2 sm:p-3">
-                  <input
-                    value={codeInputValue}
-                    onChange={e => { setCodeInputValue(e.target.value.toUpperCase()); setError(null); }}
-                    placeholder={tr('setup.codePlaceholder')}
-                    maxLength={16}
-                    className="w-full bg-transparent px-2 font-mono text-xs font-black uppercase tracking-wider text-fuchsia-100 placeholder:text-white/25 focus:outline-none"
+                  <CoopSkinSelector value={selectedSkinId} language={language} disabled={loading} onChange={selectSkin} />
+
+                  <CoopWorldSelector
+                    unlockedWorldIds={worldProgress.unlockedWorldIds}
+                    selectedWorldId={selectedWorldId}
+                    onChange={setSelectedWorldId}
+                    disabled={loading}
+                    description="Discover worlds in order. Redeploy directly to any world your squad leader has unlocked."
                   />
-                  <button
-                    disabled={loading || !nicknameValid || !codeInputValue.trim()}
-                    onClick={() => void joinByCode()}
-                    className="shrink-0 border border-fuchsia-400/60 bg-fuchsia-500/20 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-fuchsia-200 transition hover:bg-fuchsia-500/35 disabled:opacity-40"
-                  >
-                    {tr('setup.join')}
-                  </button>
-                </div>
-              </div>
 
-              {/* LIVE SQUAD LOBBIES LIST */}
-              <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white">
-                    <Globe size={14} className="text-cyan-400" />
-                    {tr('setup.liveSquads')}
-                    <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[9px] font-black text-emerald-300">
-                      {tr('setup.detected', { count: lobbies.length })}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => void refreshLobbies()}
-                    className="flex items-center gap-1.5 border border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-200 transition hover:border-cyan-400/50 hover:text-white"
-                  >
-                    <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> {tr('setup.refresh')}
-                  </button>
-                </div>
+                  <CoopImprintSummary
+                    imprint={operatorImprint}
+                    language={language}
+                    locked={loading}
+                    onUpgrade={allocateImprintRank}
+                  />
 
-                {lobbies.length === 0 ? (
-                  <div className="border border-dashed border-cyan-400/20 bg-cyan-950/[0.07] px-6 py-10 text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-500/5 text-cyan-300">
-                      <Radio size={24} className="opacity-60" />
+                  {activeTab === 'loadout' && (
+                    <div className="flex items-center justify-between pt-2 border-t border-cyan-400/20">
+                      <div className="text-[11px] text-white/50 font-mono">
+                        // OPERATIVE & SECTOR TELEMETRY VERIFIED & READY FOR UPLINK
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundManager.playUIClick();
+                          setActiveTab('matchmaking');
+                        }}
+                        onMouseEnter={() => soundManager.playUIHover()}
+                        className="coop-tab-advance-btn"
+                      >
+                        <span>{tr('setup.proceedMatchmaking')}</span>
+                        <ChevronRight size={15} />
+                      </button>
                     </div>
-                    <div className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-white/80">
-                      {tr('setup.noSquads')}
-                    </div>
-                    <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-white/45">
-                      {tr('setup.noSquadsHelp')}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid gap-2.5 sm:grid-cols-2">
-                    {lobbies.map((room, idx) => {
-                      const isFull = room.playerCount >= room.maxPlayers;
-                      const inGame = room.state === 'in_game';
-                      return (
-                        <div
-                          key={room.id}
-                          className="group relative flex items-center justify-between border border-cyan-400/20 bg-[#090f1a] p-3.5 transition duration-200 hover:border-cyan-400/60 hover:bg-cyan-500/[0.07]"
-                        >
-                          <div className="min-w-0 flex-1 pr-3">
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: SQUAD MATCHMAKING & UPLINK */}
+              {(activeTab === 'matchmaking' || activeTab === 'all') && (
+                <div className="space-y-6">
+                  {activeTab === 'matchmaking' && (
+                    <>
+                      <div className="coop-active-op-bar">
+                        <div className="coop-active-op-bar__identity">
+                          <div className="coop-active-op-bar__avatar" style={{ border: `1.5px solid ${activeSkin.palette.glow}` }}>
+                            <img src={activeSkin.portraitSrc} alt="" />
+                          </div>
+                          <div className="coop-active-op-bar__meta">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-[9px] font-bold text-cyan-400/80">
-                                #{room.code || room.id.slice(0, 8)}
-                              </span>
-                              <span className={`rounded px-1.5 py-0.2 text-[8px] font-black uppercase tracking-wider ${inGame ? 'bg-fuchsia-500/20 text-fuchsia-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
-                                {tr(inGame ? 'setup.inCombat' : 'setup.openLobby')}
+                              <span className="coop-active-op-bar__callsign">{nickname || tr('setup.callsignPlaceholder')}</span>
+                              <span className="rounded bg-cyan-400/15 px-1.5 py-0.5 text-[8px] font-black text-cyan-300 uppercase">
+                                {tr(coopOperatorClassKey(activeOperator.id))}
                               </span>
                             </div>
-                            <div className="mt-1 truncate text-sm font-black uppercase tracking-wider text-white">
-                              {tr('setup.hostSquad', { name: room.hostName })}
-                            </div>
-                            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-white/50">
-                              <Users size={11} />
-                              <span className="font-mono font-bold text-white/80">{tr('setup.operativesCount', { current: room.playerCount, max: room.maxPlayers })}</span>
+                            <div className="coop-active-op-bar__role">
+                              {tr(coopOperatorRoleKey(activeOperator.id))} · {tr(coopWeaponNameKey(activeSignature.id))}
                             </div>
                           </div>
-
-                          <button
-                            disabled={loading || !nicknameValid || (isFull && !inGame)}
-                            onClick={() => void joinSquad(room)}
-                            className={`flex shrink-0 items-center gap-1.5 border px-3.5 py-2 text-[10px] font-black uppercase tracking-wider transition ${
-                              inGame
-                                ? 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-200 hover:bg-fuchsia-500/30'
-                                : isFull
-                                ? 'border-white/10 bg-white/5 text-white/30 cursor-not-allowed'
-                                : 'border-cyan-400/50 bg-cyan-500/20 text-cyan-100 hover:bg-cyan-500/35 hover:shadow-[0_0_15px_rgba(0,240,255,0.3)]'
-                            }`}
-                          >
-                            {tr(inGame ? 'setup.spectate' : isFull ? 'setup.full' : 'setup.join')}
-                            <ChevronRight size={13} />
-                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundManager.playUIClick();
+                            setActiveTab('loadout');
+                          }}
+                          onMouseEnter={() => soundManager.playUIHover()}
+                          className="coop-active-op-bar__edit"
+                        >
+                          <Edit3 size={12} />
+                          <span>{tr('setup.changeLoadout')}</span>
+                        </button>
+                      </div>
 
-              {/* COLLAPSED MANUAL CODE FALLBACK (FOR OFFLINE / AIRGAPPED TESTING ONLY) */}
-              <div className="pt-2">
-                <button
-                  onClick={() => setShowDirectFallback(!showDirectFallback)}
-                  className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-white/35 transition hover:text-cyan-300"
-                >
-                  {showDirectFallback ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  {tr('setup.advanced')}
-                </button>
+                      <CoopWorldSelector
+                        unlockedWorldIds={worldProgress.unlockedWorldIds}
+                        selectedWorldId={selectedWorldId}
+                        onChange={setSelectedWorldId}
+                        disabled={loading}
+                        description="Discover worlds in order. Redeploy directly to any world your squad leader has unlocked."
+                      />
+                    </>
+                  )}
 
-                {showDirectFallback && (
-                  <div className="mt-3 border border-white/10 bg-white/[0.02] p-4 text-xs text-white/60">
-                    <p className="mb-3 text-[11px] leading-relaxed">
-                      {tr('setup.manualHelp')}
-                    </p>
-                    <div className="flex gap-2">
+                  {/* PRIMARY ACTION BAR */}
+                  <div className="coop-connection-grid">
+                    <button
+                      disabled={loading || !nicknameValid}
+                      onClick={() => {
+                        soundManager.playUIClick();
+                        void hostSquad();
+                      }}
+                      onMouseEnter={() => soundManager.playUIHover()}
+                      className="coop-connection-action"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-200">
+                          <Server size={15} /> {tr('setup.hostPublic')}
+                        </div>
+                        <div className="mt-1 text-[11px] text-white/60">
+                          {tr('setup.hostPublicHelp')}
+                        </div>
+                      </div>
+                      <ChevronRight size={18} className="text-cyan-300 transition group-hover:translate-x-1" />
+                    </button>
+
+                    {/* JOIN BY CODE INPUT */}
+                    <div className="coop-join-console">
+                      <input
+                        value={codeInputValue}
+                        onChange={e => { setCodeInputValue(e.target.value.toUpperCase()); setError(null); }}
+                        placeholder={tr('setup.codePlaceholder')}
+                        maxLength={16}
+                        className="coop-join-console__input"
+                      />
                       <button
-                        onClick={() => void createDirectOffer()}
-                        className="border border-white/20 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-white/10"
+                        disabled={loading || !nicknameValid || !codeInputValue.trim()}
+                        onClick={() => {
+                          soundManager.playUIClick();
+                          void joinByCode();
+                        }}
+                        onMouseEnter={() => soundManager.playUIHover()}
+                        className="coop-join-console__button"
                       >
-                        {tr('setup.hostManual')}
-                      </button>
-                      <button
-                        onClick={() => { setOfferCode(''); setAnswerCode(''); setMode('direct_guest'); }}
-                        className="border border-white/20 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-white/10"
-                      >
-                        {tr('setup.joinManual')}
+                        {tr('setup.join')}
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  {/* LIVE SQUAD LOBBIES LIST */}
+                  <div className="coop-lobby-browser">
+                    <div className="coop-lobby-browser__header">
+                      <div className="coop-lobby-browser__title">
+                        <Globe size={14} className="text-cyan-400" />
+                        {tr('setup.liveSquads')}
+                        <span className="coop-lobby-browser__count">
+                          {tr('setup.detected', { count: lobbies.length })}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          soundManager.playUIClick();
+                          void refreshLobbies();
+                        }}
+                        onMouseEnter={() => soundManager.playUIHover()}
+                        className="coop-lobby-browser__refresh"
+                      >
+                        <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> {tr('setup.refresh')}
+                      </button>
+                    </div>
+
+                    {lobbies.length === 0 ? (
+                      <div className="coop-lobby-browser__empty">
+                        <div className="coop-lobby-browser__empty-icon">
+                          <Radio size={24} className="opacity-60" />
+                        </div>
+                        <div className="coop-lobby-browser__empty-title">
+                          {tr('setup.noSquads')}
+                        </div>
+                        <p className="coop-lobby-browser__empty-copy">
+                          {tr('setup.noSquadsHelp')}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-2.5 sm:grid-cols-2">
+                        {lobbies.map((room) => {
+                          const isFull = room.playerCount >= room.maxPlayers;
+                          const inGame = room.state === 'in_game';
+                          return (
+                            <div
+                              key={room.id}
+                              className="group relative flex items-center justify-between border border-cyan-400/20 bg-[#090f1a] p-3.5 transition duration-200 hover:border-cyan-400/60 hover:bg-cyan-500/[0.07]"
+                            >
+                              <div className="min-w-0 flex-1 pr-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-[9px] font-bold text-cyan-400/80">
+                                    #{room.code || room.id.slice(0, 8)}
+                                  </span>
+                                  <span className={`rounded px-1.5 py-0.2 text-[8px] font-black uppercase tracking-wider ${inGame ? 'bg-fuchsia-500/20 text-fuchsia-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                                    {tr(inGame ? 'setup.inCombat' : 'setup.openLobby')}
+                                  </span>
+                                </div>
+                                <div className="mt-1 truncate text-sm font-black uppercase tracking-wider text-white">
+                                  {tr('setup.hostSquad', { name: room.hostName })}
+                                </div>
+                                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-white/50">
+                                  <Users size={11} />
+                                  <span className="font-mono font-bold text-white/80">{tr('setup.operativesCount', { current: room.playerCount, max: room.maxPlayers })}</span>
+                                </div>
+                              </div>
+
+                              <button
+                                disabled={loading || !nicknameValid || (isFull && !inGame)}
+                                onClick={() => {
+                                  soundManager.playUIClick();
+                                  void joinSquad(room);
+                                }}
+                                onMouseEnter={() => soundManager.playUIHover()}
+                                className={`flex shrink-0 items-center gap-1.5 border px-3.5 py-2 text-[10px] font-black uppercase tracking-wider transition ${
+                                  inGame
+                                    ? 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-200 hover:bg-fuchsia-500/30'
+                                    : isFull
+                                    ? 'border-white/10 bg-white/5 text-white/30 cursor-not-allowed'
+                                    : 'border-cyan-400/50 bg-cyan-500/20 text-cyan-100 hover:bg-cyan-500/35 hover:shadow-[0_0_15px_rgba(0,240,255,0.3)]'
+                                }`}
+                              >
+                                {tr(inGame ? 'setup.spectate' : isFull ? 'setup.full' : 'setup.join')}
+                                <ChevronRight size={13} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* COLLAPSED MANUAL CODE FALLBACK */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        soundManager.playUIClick();
+                        setShowDirectFallback(!showDirectFallback);
+                      }}
+                      onMouseEnter={() => soundManager.playUIHover()}
+                      className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-white/35 transition hover:text-cyan-300"
+                    >
+                      {showDirectFallback ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      {tr('setup.advanced')}
+                    </button>
+
+                    {showDirectFallback && (
+                      <div className="mt-3 border border-white/10 bg-white/[0.02] p-4 text-xs text-white/60">
+                        <p className="mb-3 text-[11px] leading-relaxed">
+                          {tr('setup.manualHelp')}
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              soundManager.playUIClick();
+                              void createDirectOffer();
+                            }}
+                            onMouseEnter={() => soundManager.playUIHover()}
+                            className="border border-white/20 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-white/10"
+                          >
+                            {tr('setup.hostManual')}
+                          </button>
+                          <button
+                            onClick={() => {
+                              soundManager.playUIClick();
+                              setOfferCode('');
+                              setAnswerCode('');
+                              setMode('direct_guest');
+                            }}
+                            onMouseEnter={() => soundManager.playUIHover()}
+                            className="border border-white/20 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-white/10"
+                          >
+                            {tr('setup.joinManual')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -771,7 +940,7 @@ export function ManualMultiplayerSetup({
                 description="Squad leader may choose any unlocked world until deployment."
               />
               {/* CODE & SHARE HERO CARD */}
-              <div className="border border-cyan-400/40 bg-gradient-to-br from-cyan-950/40 to-black/60 p-5 shadow-[0_0_30px_rgba(0,240,255,0.15)]">
+              <div className="border border-cyan-400/40 bg-gradient-to-br from-cyan-950/40 to-black/60 p-5 shadow-[0_0_30px_rgba(0,240,255,0.15)]" style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}>
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">
@@ -782,8 +951,12 @@ export function ManualMultiplayerSetup({
                         #{currentRoomCode}
                       </span>
                       <button
-                        onClick={() => void copyRoomCode()}
-                        className="flex items-center gap-1 border border-cyan-400/40 bg-cyan-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200 hover:bg-cyan-500/30"
+                        onClick={() => {
+                          soundManager.playUIClick();
+                          void copyRoomCode();
+                        }}
+                        onMouseEnter={() => soundManager.playUIHover()}
+                        className="flex items-center gap-1 border border-cyan-400/40 bg-cyan-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200 hover:bg-cyan-500/30 transition"
                       >
                         {copiedCode ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}
                         {tr(copiedCode ? 'setup.copied' : 'setup.copyCode')}
@@ -792,8 +965,13 @@ export function ManualMultiplayerSetup({
                   </div>
 
                   <button
-                    onClick={() => void copyInviteLink()}
+                    onClick={() => {
+                      soundManager.playUIClick();
+                      void copyInviteLink();
+                    }}
+                    onMouseEnter={() => soundManager.playUIHover()}
                     className="flex items-center gap-2 border border-emerald-400/50 bg-emerald-500/20 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-emerald-200 transition hover:bg-emerald-500/35 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                    style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
                   >
                     {copiedLink ? <Check size={15} className="text-emerald-300" /> : <Link2 size={15} />}
                     {tr(copiedLink ? 'setup.inviteCopied' : 'setup.copyInvite')}
@@ -815,62 +993,74 @@ export function ManualMultiplayerSetup({
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   {/* Host Slot */}
-                  <div className="flex items-center gap-3 border border-cyan-400/40 bg-cyan-500/10 p-3.5">
-                    <div className="flex h-10 w-10 items-center justify-center border border-cyan-300 bg-cyan-400/20 text-cyan-200">
-                      <Crown size={18} className="text-amber-300" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate font-black uppercase tracking-wider text-white">
-                          {localPlayerRef.current.label}
-                        </span>
-                        <span className="rounded bg-amber-400/20 px-1.5 py-0.2 text-[8px] font-black text-amber-300 uppercase">
-                          {tr('setup.host')}
-                        </span>
+                  {(() => {
+                    const hostSkin = COOP_SKINS.find(s => s.id === localPlayerRef.current.skinId) || COOP_SKINS[0];
+                    return (
+                      <div className="coop-roster-slot is-host">
+                        <div className="coop-roster-avatar" style={{ border: `1.5px solid ${hostSkin.palette.glow}`, background: `radial-gradient(circle, ${hostSkin.palette.armor}40, #040812)` }}>
+                          <img src={hostSkin.portraitSrc} alt="" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-black uppercase tracking-wider text-white">
+                              {localPlayerRef.current.label}
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-[8px] font-black text-amber-300 uppercase">
+                              <Crown size={9} /> {tr('setup.host')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-1">
+                              <i className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+                              {tr('setup.readyDeploy')}
+                            </span>
+                            <span className="text-white/20">·</span>
+                            <CoopSkinBadge skinId={localPlayerRef.current.skinId} />
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-[10px] font-bold text-emerald-300">{tr('setup.readyDeploy')}</div>
-                      <CoopSkinBadge skinId={localPlayerRef.current.skinId} />
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Guest Slots */}
                   {Array.from({ length: COOP_MAX_PLAYERS - 1 }, (_, slotIdx) => slotIdx).map(slotIdx => {
                     const guest = guestPlayers[slotIdx];
-                    return (
-                      <div
-                        key={slotIdx}
-                        className={`flex items-center gap-3 border p-3.5 transition ${
-                          guest
-                            ? 'border-emerald-400/40 bg-emerald-500/10'
-                            : 'border-white/10 bg-white/[0.02]'
-                        }`}
-                      >
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center border text-xs font-black uppercase ${
-                            guest
-                              ? 'border-emerald-300 bg-emerald-400/20 text-emerald-200'
-                              : 'border-white/15 bg-white/[0.03] text-white/20'
-                          }`}
-                        >
-                          {guest ? guest.label.slice(0, 2) : <Users size={15} />}
+                    const guestSkin = guest ? COOP_SKINS.find(s => s.id === guest.skinId) || COOP_SKINS[0] : null;
+
+                    return guest ? (
+                      <div key={slotIdx} className="coop-roster-slot is-guest-connected">
+                        <div className="coop-roster-avatar" style={{ border: `1.5px solid ${guestSkin?.palette.glow || '#4ade80'}`, background: `radial-gradient(circle, ${guestSkin?.palette.armor || '#10b981'}40, #040812)` }}>
+                          <img src={guestSkin?.portraitSrc || '/phantom.png'} alt="" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          {guest ? (
-                            <>
-                              <div className="truncate font-black uppercase tracking-wider text-white">
-                                {guest.label}
-                              </div>
-                              <div className="text-[10px] font-bold text-emerald-300">{tr('setup.connectedSynced')}</div>
-                              <CoopSkinBadge skinId={guest.skinId} />
-                            </>
-                          ) : (
-                            <>
-                              <div className="text-xs font-black uppercase tracking-wider text-white/30">
-                                {tr('setup.openSlot', { slot: slotIdx + 2 })}
-                              </div>
-                              <div className="text-[10px] text-white/25">{tr('setup.waitingFriend')}</div>
-                            </>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-black uppercase tracking-wider text-white">
+                              {guest.label}
+                            </span>
+                            <span className="rounded bg-emerald-400/20 px-1.5 py-0.5 text-[8px] font-black text-emerald-300 uppercase">
+                              {tr('setup.connectedSynced')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-1">
+                              <i className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+                              {tr('setup.ready')}
+                            </span>
+                            <span className="text-white/20">·</span>
+                            <CoopSkinBadge skinId={guest.skinId} />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={slotIdx} className="coop-roster-slot is-empty">
+                        <div className="coop-roster-avatar__empty">
+                          <Radio size={16} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] font-black uppercase tracking-wider text-white/40">
+                            {tr('setup.openSlot', { slot: slotIdx + 2 })}
+                          </div>
+                          <div className="text-[9px] text-white/25 mt-0.5 font-mono">{tr('setup.waitingFriend')}</div>
                         </div>
                       </div>
                     );
@@ -882,21 +1072,29 @@ export function ManualMultiplayerSetup({
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
                 <button
                   onClick={() => {
+                    soundManager.playUIClick();
                     hostedLobbyRef.current?.close();
                     sessionRef.current?.close();
                     setMode('choose');
                     setStatus('');
                   }}
+                  onMouseEnter={() => soundManager.playUIHover()}
                   className="border border-red-400/30 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-red-300 transition hover:bg-red-500/10"
+                  style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
                 >
                   {tr('setup.disband')}
                 </button>
 
                 <button
-                  onClick={launchHost}
-                  className="flex items-center gap-2 border border-emerald-300 bg-emerald-400/25 px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.3)] transition hover:bg-emerald-400/40 hover:scale-[1.02]"
+                  onClick={() => {
+                    soundManager.playUIClick();
+                    launchHost();
+                  }}
+                  onMouseEnter={() => soundManager.playUIHover()}
+                  className="coop-deploy-btn"
                 >
-                  <Shield size={16} /> {tr('setup.deploy', { count: guestPlayers.length + 1, players: tr(guestPlayers.length === 0 ? 'setup.player.one' : 'setup.player.many') })}
+                  <Shield size={18} />
+                  <span>{tr('setup.deploy', { count: guestPlayers.length + 1, players: tr(guestPlayers.length === 0 ? 'setup.player.one' : 'setup.player.many') })}</span>
                 </button>
               </div>
             </div>
@@ -905,7 +1103,7 @@ export function ManualMultiplayerSetup({
           {/* GUEST VIEW: CONNECTING & WAITING */}
           {mode === 'guest' && (
             <div className="space-y-6 py-4">
-              <div className="border border-fuchsia-400/30 bg-fuchsia-950/20 p-6 text-center">
+              <div className="border border-fuchsia-400/30 bg-fuchsia-950/20 p-6 text-center" style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}>
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-300 shadow-[0_0_20px_rgba(217,70,239,0.3)]">
                   <Wifi size={24} className="animate-pulse" />
                 </div>
@@ -927,14 +1125,33 @@ export function ManualMultiplayerSetup({
                     {tr('setup.squadOperatives', { current: rosterPlayers.length, max: COOP_MAX_PLAYERS })}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {rosterPlayers.map((p, idx) => (
-                      <div key={p.id} className="flex items-center justify-between gap-3 border border-white/10 bg-white/[0.03] p-2.5 text-xs">
-                        <span className="font-black uppercase text-white">
-                          {p.label} {idx === 0 ? `(${tr('setup.leader')})` : ''}
-                        </span>
-                        <span className="flex shrink-0 flex-col items-end gap-1"><span className="text-[10px] font-bold text-emerald-300">{tr('setup.ready')}</span><CoopSkinBadge skinId={p.skinId} /></span>
-                      </div>
-                    ))}
+                    {rosterPlayers.map((p, idx) => {
+                      const pSkin = COOP_SKINS.find(s => s.id === p.skinId) || COOP_SKINS[0];
+                      return (
+                        <div key={p.id} className="coop-roster-slot is-guest-connected">
+                          <div className="coop-roster-avatar" style={{ border: `1.5px solid ${pSkin.palette.glow}`, background: `radial-gradient(circle, ${pSkin.palette.armor}40, #040812)` }}>
+                            <img src={pSkin.portraitSrc} alt="" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-black uppercase text-white truncate">
+                                {p.label}
+                              </span>
+                              {idx === 0 && (
+                                <span className="inline-flex items-center gap-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-[8px] font-black text-amber-300 uppercase">
+                                  <Crown size={9} /> {tr('setup.leader')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[9px] font-bold text-emerald-300">{tr('setup.ready')}</span>
+                              <span className="text-white/20">·</span>
+                              <CoopSkinBadge skinId={p.skinId} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -942,12 +1159,15 @@ export function ManualMultiplayerSetup({
               <div className="text-center">
                 <button
                   onClick={() => {
+                    soundManager.playUIClick();
                     joinRef.current?.close();
                     sessionRef.current?.close();
                     setMode('choose');
                     setStatus('');
                   }}
-                  className="border border-white/20 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white/70 hover:bg-white/10 hover:text-white"
+                  onMouseEnter={() => soundManager.playUIHover()}
+                  className="border border-white/20 px-5 py-2.5 text-[10px] font-black uppercase tracking-wider text-white/70 hover:bg-white/10 hover:text-white transition"
+                  style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
                 >
                   {tr('setup.leave')}
                 </button>

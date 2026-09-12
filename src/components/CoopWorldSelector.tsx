@@ -1,4 +1,7 @@
+import type { CSSProperties } from 'react';
+import { Lock, Compass, ShieldAlert, Sparkles } from 'lucide-react';
 import { getWorldDefinition, WORLD_IDS, type WorldId } from '../game/world/WorldDefinitions';
+import { soundManager } from '../game/SoundManager';
 
 export function CoopWorldSelector({
   unlockedWorldIds,
@@ -13,23 +16,32 @@ export function CoopWorldSelector({
   disabled?: boolean;
   description?: string;
 }) {
+  const handleSelect = (worldId: WorldId) => {
+    soundManager.playUIClick();
+    onChange(worldId);
+  };
+
   return (
-    <div>
-      <div className="mb-3 flex items-end justify-between gap-3">
+    <section className="coop-world-selector" aria-labelledby="coop-world-heading">
+      <div className="coop-world-selector__header">
         <div>
-          <div className="text-xs font-black uppercase tracking-[0.18em] text-white">Deployment world</div>
-          <div className="mt-1 text-[10px] uppercase tracking-wider text-white/45">{description}</div>
+          <div className="coop-section-kicker">Level Selection // Sector Route</div>
+          <h3 id="coop-world-heading" className="coop-world-selector__title">
+            Deployment world <span className="coop-world-selector__level-tag">// LEVEL SELECT</span>
+          </h3>
+          <div className="coop-world-selector__description">{description}</div>
         </div>
-        <div className="shrink-0 font-mono text-[9px] font-black text-cyan-300">
-          {unlockedWorldIds.length}/{WORLD_IDS.length} LINKED
+        <div className="coop-world-selector__linked">
+          <b>{unlockedWorldIds.length}/{WORLD_IDS.length}</b> Linked
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="coop-world-selector__grid">
         {WORLD_IDS.map(worldId => {
           const world = getWorldDefinition(worldId);
           const unlocked = unlockedWorldIds.includes(worldId);
           const selected = selectedWorldId === worldId;
+
           return (
             <button
               key={worldId}
@@ -37,25 +49,33 @@ export function CoopWorldSelector({
               disabled={disabled || !unlocked}
               aria-label={`${unlocked ? 'Select' : 'Locked'} World ${world.tier}: ${world.name}`}
               aria-pressed={selected}
-              onClick={() => onChange(worldId)}
-              style={{ borderColor: selected ? `#${world.theme.accentColor.toString(16).padStart(6, '0')}` : undefined }}
-              className={`min-h-28 border bg-black/35 p-3 text-left transition ${selected ? 'bg-cyan-500/[.07] shadow-[0_0_22px_rgba(34,211,238,.18)]' : 'border-white/10 hover:border-white/30'} disabled:cursor-not-allowed disabled:opacity-35`}
+              onClick={() => handleSelect(worldId)}
+              onMouseEnter={() => unlocked && !disabled && soundManager.playUIHover()}
+              style={{ '--world-accent': `#${world.theme.accentColor.toString(16).padStart(6, '0')}` } as CSSProperties}
+              className={`coop-world-card ${selected ? 'is-selected' : ''} ${!unlocked ? 'is-locked' : ''}`}
             >
-              <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-white/45">
-                <span>World {world.tier}</span>
-                <span className={selected ? 'text-cyan-200' : undefined}>
+              <div className="coop-world-card__topline">
+                <span className="flex items-center gap-1.5 font-mono">
+                  {!unlocked && <Lock size={10} className="text-white/40" />}
+                  Level {world.tier}
+                </span>
+                <span className={selected ? 'text-cyan-200 font-black' : undefined}>
                   {selected ? 'SELECTED' : unlocked ? 'AVAILABLE' : 'LOCKED'}
                 </span>
               </div>
-              <div className="mt-2 text-[11px] font-black tracking-[.12em] text-white">{world.name}</div>
-              <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/50">{world.subtitle}</div>
-              <div className="mt-2 font-mono text-[8px] text-white/35">
-                THREAT ×{world.difficulty.threatMultiplier.toFixed(2)} · LOOT ×{world.difficulty.rewardMultiplier.toFixed(2)}
+
+              <div className="coop-world-card__name">{world.name}</div>
+              <div className="coop-world-card__subtitle">{world.subtitle}</div>
+
+              <div className="coop-world-card__stats">
+                <span>THREAT ×{world.difficulty.threatMultiplier.toFixed(2)}</span>
+                <span className="coop-world-card__stats-divider">·</span>
+                <span>LOOT ×{world.difficulty.rewardMultiplier.toFixed(2)}</span>
               </div>
             </button>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

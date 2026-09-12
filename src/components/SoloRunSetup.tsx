@@ -122,12 +122,6 @@ export function SoloRunSetup({
 
           <CoopSkinSelector value={selectedSkinId} language={language} onChange={selectSkin} />
 
-          <CoopImprintSummary
-            imprint={operatorImprint}
-            language={language}
-            onUpgrade={allocateImprintRank}
-          />
-
           <div className="mt-6">
             <CoopWorldSelector
               unlockedWorldIds={worldProgress.unlockedWorldIds}
@@ -135,6 +129,12 @@ export function SoloRunSetup({
               onChange={setSelectedWorldId}
             />
           </div>
+
+          <CoopImprintSummary
+            imprint={operatorImprint}
+            language={language}
+            onUpgrade={allocateImprintRank}
+          />
 
           <div className="mt-6 flex justify-end border-t border-white/10 pt-5">
             <button

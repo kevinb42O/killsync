@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Skull, Coins, Flame, AlertTriangle, Shield, HeartPulse, Bomb, Navigation, Crosshair, Compass, MousePointer } from 'lucide-react';
 import { GameEngine } from '../game/Engine';
 import { WEAPON_DEFINITIONS } from '../constants';
+import { CinematicVignetteOverlay, CinematicProfile } from './CinematicVignetteOverlay';
 
-export function GameHUD({ engine }: { engine: GameEngine | null }) {
+export function GameHUD({ engine, cinematicProfile = 'full' }: { engine: GameEngine | null; cinematicProfile?: CinematicProfile }) {
   const [hudData, setHudData] = useState<any>(null);
 
   useEffect(() => {
@@ -44,6 +45,9 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
             isPointerLocked: engine.renderer3D?.isPointerLocked || false,
             isAimingDownSights: engine.renderer3D?.isAimingDownSights || false,
             adsProgress: engine.renderer3D?.adsProgress || 0,
+            isSprinting: Boolean(engine.renderer3D?.presentationSprinting || engine.isDashing),
+            lastHitTime: engine.player.lastHitTime || 0,
+            chromaticAberration: engine.chromaticAberration || 0,
             cameraYaw: engine.renderer3D?.yaw || 0,
             threats: engine.enemies.slice(0, 45).map(e => {
               const dx = e.position.x - engine.player.position.x;
@@ -178,7 +182,19 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
   const hoverSlots = [...weaponHoverSlots, ...upgradeHoverSlots];
 
   return (
-    <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between z-40">
+    <>
+      <CinematicVignetteOverlay
+        healthRatio={hudData.maxHealth > 0 ? hudData.health / hudData.maxHealth : 1}
+        lastHitTime={hudData.lastHitTime}
+        isOverdrive={hudData.isOverdrive}
+        isSprinting={hudData.isSprinting}
+        isAimingDownSights={hudData.isAimingDownSights}
+        adsProgress={hudData.adsProgress}
+        isNightmare={hudData.nightmareMode}
+        chromaticIntensity={hudData.chromaticAberration}
+        profile={cinematicProfile}
+      />
+      <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between z-40">
       <div className="w-full max-w-2xl mx-auto">
         <div className="flex justify-between items-end mb-2">
           <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">WAVE {hudData.currentWave}</span>
@@ -785,5 +801,6 @@ export function GameHUD({ engine }: { engine: GameEngine | null }) {
         </div>
       )}
     </div>
+    </>
   );
 }

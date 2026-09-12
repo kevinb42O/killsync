@@ -1715,10 +1715,15 @@ export class GameEngine {
     const momentumBoost = this.dashMomentumTimer > 0
       ? 1 + this.getPermanentUpgradeLevel('perm_dash_momentum') * 0.06
       : 1;
+    const isSprinting = this.keys.has('shift') && (this.viewMode === 'FIRST_PERSON' || this.viewMode === 'THIRD_PERSON') && isMoving;
+    if (this.renderer3D) {
+      this.renderer3D.presentationSprinting = isSprinting;
+    }
+    const sprintSpeedBoost = isSprinting ? 1.35 : 1.0;
     if (isMoving) {
       const mag = Math.sqrt(move.x * move.x + move.y * move.y);
-      const targetVx = (move.x / mag) * this.player.speed * momentumBoost;
-      const targetVy = (move.y / mag) * this.player.speed * momentumBoost;
+      const targetVx = (move.x / mag) * this.player.speed * momentumBoost * sprintSpeedBoost;
+      const targetVy = (move.y / mag) * this.player.speed * momentumBoost * sprintSpeedBoost;
       this.player.velocity.x += (targetVx - this.player.velocity.x) * smoothing;
       this.player.velocity.y += (targetVy - this.player.velocity.y) * smoothing;
       // Update target rotation for smooth turning
