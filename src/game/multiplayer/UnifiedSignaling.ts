@@ -29,6 +29,7 @@ const TOPIC_LOBBY_LIST = 'killsync/v1/lobbies';
 const ROOM_TOPIC_PREFIX = 'killsync/v1/rooms/';
 const LOBBY_EXPIRE_MS = 9_000;
 const HEARTBEAT_INTERVAL_MS = 2_500;
+const MAX_QUEUED_SIGNAL_MESSAGES = 256;
 
 function encodeRemainingLength(len: number): number[] {
   const bytes: number[] = [];
@@ -71,6 +72,12 @@ export class MqttWsSignalingClient {
     this.connecting = true;
 
     return new Promise((resolve) => {
+      let settled = false;
+      const settle = (connected: boolean) => {
+        if (settled) return;
+        settled = true;
+        resolve(connected);
+      };
       const url = this.brokerUrls[this.brokerIndex % this.brokerUrls.length];
       
       const globalWithWs = typeof globalThis !== 'undefined' ? (globalThis as Record<string, any>) : null;
@@ -80,7 +87,7 @@ export class MqttWsSignalingClient {
 
       if (!WSClass) {
         this.connecting = false;
-        resolve(false);
+        settle(false);
         return;
       }
 
@@ -90,10 +97,10 @@ export class MqttWsSignalingClient {
         this.ws = ws;
 
         const timeout = setTimeout(() => {
-          if (this.connecting) {
+          if (this.connecting && this.ws === ws) {
             ws.close();
             this.tryNextBroker();
-            resolve(false);
+            settle(false);
           }
         }, 5_000);
 
@@ -121,7 +128,7 @@ export class MqttWsSignalingClient {
             this.startPing();
             this.resubscribeAll();
             this.flushQueue();
-            resolve(true);
+            settle(true);
           } else if (packetType === 3) { // PUBLISH
             this.handlePublishPacket(buffer);
           }
@@ -133,16 +140,21 @@ export class MqttWsSignalingClient {
 
         ws.onclose = () => {
           clearTimeout(timeout);
+          const failedBeforeConnect = !this.connected && this.ws === ws;
           this.connected = false;
           this.connecting = false;
           this.stopPing();
+          // Previously this path left `connect()` pending until its timeout
+          // when a broker rejected/closes before CONNACK. A lobby could then
+          // wait needlessly even though the failover was already scheduled.
+          if (failedBeforeConnect) settle(false);
           if (!this.closed) {
             this.scheduleReconnect();
           }
         };
       } catch {
         this.connecting = false;
-        resolve(false);
+        settle(false);
       }
     });
   }
@@ -237,7 +249,7 @@ export class MqttWsSignalingClient {
 
   publish(topic: string, message: string): void {
     if (!this.connected || !this.ws || this.ws.readyState !== 1) {
-      this.messageQueue.push({ topic, payload: message });
+      this.enqueueMessage({ topic, payload: message });
       if (!this.connecting && !this.closed) void this.connect();
       return;
     }
@@ -250,7 +262,7 @@ export class MqttWsSignalingClient {
     try {
       this.ws.send(packet);
     } catch {
-      this.messageQueue.push({ topic, payload: message });
+      this.enqueueMessage({ topic, payload: message });
     }
   }
 
@@ -279,6 +291,17 @@ export class MqttWsSignalingClient {
       const item = this.messageQueue.shift();
       if (item) this.publish(item.topic, item.payload);
     }
+  }
+
+  private enqueueMessage(message: { topic: string; payload: string }) {
+    // Presence heartbeats are replaceable; keeping their latest version is
+    // more useful than retaining stale traffic through a long offline spell.
+    if (message.topic === TOPIC_LOBBY_LIST) {
+      const index = this.messageQueue.findIndex(item => item.topic === message.topic);
+      if (index >= 0) this.messageQueue.splice(index, 1);
+    }
+    if (this.messageQueue.length >= MAX_QUEUED_SIGNAL_MESSAGES) this.messageQueue.shift();
+    this.messageQueue.push(message);
   }
 
   close() {

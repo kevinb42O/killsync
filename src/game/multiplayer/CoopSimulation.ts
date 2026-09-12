@@ -122,7 +122,7 @@ export const COOP_MAX_WORLD_ITEMS = 48;
 export const COOP_MAX_AMMO_CACHES = 32;
 /** A calm staging window before the normal encounter director starts. */
 export const COOP_SAFE_INSERTION_MS = COOP_INSERTION_DURATION_MS;
-/** Eight-player encounters need more than the former four-player budget, while
+/** Co-op encounters need more than the former four-player budget, while
  * remaining bounded for a browser-hosted simulation. */
 export const COOP_MAX_ENEMIES = 120;
 export const COOP_MAX_ENCOUNTER_ENEMIES = 114;

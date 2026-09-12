@@ -6,16 +6,19 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v30 expands the authoritative squad roster from four operatives to eight. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 30;
+/** v31 adds compact keyframe/delta world replication. Incrementing this makes
+ * a stale tab fail the handshake cleanly instead of silently misreading the
+ * new state payload. */
+export const MULTIPLAYER_PROTOCOL_VERSION = 31;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
- * Keep this deliberately modest until the transport is moved off peer hosting. */
-export const COOP_MAX_PLAYERS = 8;
+ * Five total players keeps a phone host within a realistic CPU/uplink budget
+ * until replication is moved to a dedicated relay or game server. */
+export const COOP_MAX_PLAYERS = 5;
 
 /** Stable, high-contrast guest identities for roster cards, world markers,
  * and late joins. The host always keeps the cyan identity. */
-export const COOP_GUEST_COLORS = ['#f472b6', '#a78bfa', '#fbbf24', '#34d399', '#fb7185', '#60a5fa', '#fb923c'] as const;
+export const COOP_GUEST_COLORS = ['#f472b6', '#a78bfa', '#fbbf24', '#34d399'] as const;
 
 export type MultiplayerRole = 'host' | 'guest';
 

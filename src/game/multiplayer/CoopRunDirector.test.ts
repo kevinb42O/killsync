@@ -14,8 +14,8 @@ describe('CoopRunDirector', () => {
     }
     expect(coopObjectiveEliteHealth(500, 1)).toBe(500);
     expect(coopObjectiveEliteHealth(500, 4)).toBe(1625);
-    expect(coopObjectiveEliteHealth(500, COOP_MAX_PLAYERS)).toBe(3125);
-    expect(coopObjectiveEliteHealth(500, COOP_MAX_PLAYERS + 1)).toBe(3125);
+    expect(coopObjectiveEliteHealth(500, COOP_MAX_PLAYERS)).toBe(2000);
+    expect(coopObjectiveEliteHealth(500, COOP_MAX_PLAYERS + 1)).toBe(2000);
   });
   it('places objectives and mini-bosses in clear space near the squad, including map edges', () => {
     for (const centre of [{ x: 6000, y: 6000 }, { x: 20, y: 20 }, { x: GAME_WIDTH - 20, y: GAME_WIDTH - 20 }]) {

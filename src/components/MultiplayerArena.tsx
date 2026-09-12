@@ -15,6 +15,7 @@ import { LocalPlayerPrediction } from '../game/multiplayer/LocalPlayerPrediction
 import { advancePlayerMovement, COOP_PLAYER_RADIUS, COOP_STEP_MS } from '../game/multiplayer/playerMovement';
 import { HostSimulationClock } from '../game/multiplayer/HostSimulationClock';
 import { createInterestSnapshot } from '../game/multiplayer/snapshotInterest';
+import { compactSnapshotWirePayload, SnapshotDecoder, SnapshotReplicator } from '../game/multiplayer/snapshotReplication';
 import { coopGasStateKey, coopImprintStatDescriptionKey, coopImprintStatEffectKey, coopImprintStatNameKey, coopItemNameKey, coopPickupNameKey, coopRunPhaseKey, coopText, coopWeaponNameKey, coopWeaponShortNameKey, isCoopTextKey, localizeCoopSignalingMessage, type CoopLanguage, type CoopTextKey } from '../game/multiplayer/i18n';
 import { CoopCombatReticle, type CoopReticleMode } from './CoopCombatReticle';
 import { OffscreenThreatIndicators, type HudThreat } from './OffscreenThreatIndicators';
@@ -49,6 +50,21 @@ import { CoopMobileControls, type MobileCoopAction } from './CoopMobileControls'
 
 const INPUT_INTERVAL_MS = COOP_STEP_MS;
 const SNAPSHOT_INTERVAL_MS = 50;
+
+/** Snapshot cadence is a bandwidth budget, not a simulation rate. Inputs and
+ * host authority remain at 20 Hz; interpolation hides the lower snapshot
+ * cadence when one uplink must serve a larger squad. */
+function snapshotIntervalForHost(peerCount: number): number {
+  let interval = peerCount >= 6 ? 100 : peerCount >= 4 ? 84 : peerCount >= 2 ? 67 : SNAPSHOT_INTERVAL_MS;
+  if (typeof navigator === 'undefined') return interval;
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  // Respect the browser's explicit data-saver request. On a phone, 10 Hz is
+  // plenty for the interpolated visual stream and halves mesh uplink use.
+  if (connection?.saveData || connection?.effectiveType === '2g' || connection?.effectiveType === '3g') interval = Math.max(interval, 150);
+  else if (mobile) interval = Math.max(interval, 100);
+  return interval;
+}
 /** React HUD work does not need to run at the 20 Hz network snapshot rate. */
 const HUD_INTERVAL_MS = 100;
 const COOP_BUILD_TYPES: readonly CoopStructureType[] = ['barricade', 'hardlight_bastion', 'arc_fence', 'recovery_relay', 'decoy_beacon', 'bridge_segment'];
@@ -689,6 +705,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   useEffect(() => {
     const session = launch.session;
     const prediction = new LocalPlayerPrediction(launch.localPlayerId);
+    // Each guest has an independent AOI and therefore an independent state
+    // baseline. Deltas reference only a keyframe, never another delta.
+    const snapshotReplicator = new SnapshotReplicator();
+    const snapshotDecoder = new SnapshotDecoder();
     // React development mode intentionally mounts, cleans up, then remounts
     // effects once. Defer irreversible peer teardown so the remount can cancel
     // it; a real arena exit has no following mount and closes the session.
@@ -859,7 +879,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (restarted) { displayedCombatEventsRef.current.clear(); snapshotInterpolatorRef.current.reset(); }
       timeline.current = snapshot;
       timeline.receivedAt = now;
-      timeline.durationMs = Math.max(20, Math.min(100, elapsedSinceLastSnapshot || INPUT_INTERVAL_MS));
+      // Data Saver intentionally lowers snapshot delivery to 150 ms. Keep the
+      // presentation blend window in step with that cadence rather than
+      // reaching the current position early and visibly holding it.
+      timeline.durationMs = Math.max(20, Math.min(175, elapsedSinceLastSnapshot || INPUT_INTERVAL_MS));
       snapshotRef.current = snapshot;
       if (launch.role === 'guest') {
         prediction.reconcile(snapshot);
@@ -878,6 +901,21 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     session.setHandlers({
       onPeerChange: (peers) => {
         if (launch.role === 'host') {
+          const activePeerIds = new Set(peers.map(peer => peer.peerId));
+          // `ManualWebRTCSession` removes a failed/expired peer before it
+          // notifies. Reconcile the authority roster against the surviving
+          // transport peers so a dead connection cannot leave an invulnerable
+          // ghost player in the simulation forever.
+          for (const [peerId, playerId] of Object.entries(launch.peerPlayerIds)) {
+            if (activePeerIds.has(peerId)) continue;
+            if (simulationRef.current?.removePlayer(playerId)) {
+              delete launch.peerPlayerIds[peerId];
+              const snapshot = simulationRef.current.createSnapshot();
+              publishSnapshot(snapshot, performance.now());
+              setHud(current => ({ ...current, players: snapshot.players.length }));
+              setConnectionMessage(tr('connection.playerDisconnected'));
+            }
+          }
           for (const peer of peers) {
             if (peer.state !== 'failed' && peer.state !== 'closed') continue;
             const playerId = launch.peerPlayerIds[peer.peerId];
@@ -905,10 +943,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       },
       onState: (frame) => {
         if (launch.role === 'host') return;
-        const snapshot = parseSnapshot(frame.payload);
-        if (!snapshot) return;
+        const snapshot = snapshotDecoder.decode(frame.payload, frame.tick);
+        // Do not advance transport ordering for a delta whose keyframe has not
+        // arrived yet. The unordered state channel may deliver that keyframe
+        // next, followed by a later delta referencing the same base.
+        if (!snapshot) return false;
         publishSnapshot(snapshot, performance.now());
         syncHud(snapshot);
+        return true;
       },
       onEvent: (peerId, event) => {
         if (event.event === 'admin_request') {
@@ -1877,14 +1919,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const simulation = simulationRef.current!;
       if (adminPausedRef.current) {
         stateAccumulator += INPUT_INTERVAL_MS;
-        if (stateAccumulator >= SNAPSHOT_INTERVAL_MS) {
-          stateAccumulator %= SNAPSHOT_INTERVAL_MS;
+        const snapshotInterval = snapshotIntervalForHost(session.connectedPeerCount);
+        if (stateAccumulator >= snapshotInterval) {
+          stateAccumulator %= snapshotInterval;
           const baseSnapshot = simulation.createSnapshot();
           const snapshot: CoopSnapshot = { ...baseSnapshot, administration: { ...baseSnapshot.administration, modified: Boolean(baseSnapshot.administration?.modified), paused: true } };
           publishSnapshot(snapshot, now);
           session.broadcastState(
             { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Date.now(), payload: snapshot },
-            peerId => createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]),
+            peerId => {
+              const interest = createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]);
+              return compactSnapshotWirePayload(snapshotReplicator.payloadFor(peerId, interest, networkTickRef.current));
+            },
           );
           syncHud(snapshot);
         }
@@ -1901,10 +1947,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       publishSnapshot(snapshot, now);
       accumulator = 0;
       stateAccumulator += INPUT_INTERVAL_MS;
-      if (stateAccumulator >= SNAPSHOT_INTERVAL_MS) {
-        stateAccumulator %= SNAPSHOT_INTERVAL_MS;
+      const snapshotInterval = snapshotIntervalForHost(session.connectedPeerCount);
+      if (stateAccumulator >= snapshotInterval) {
+        stateAccumulator %= snapshotInterval;
         const state: MultiplayerStateFrame = { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Date.now(), payload: snapshot };
-        session.broadcastState(state, peerId => createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]));
+        session.broadcastState(state, peerId => {
+          const interest = createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]);
+          return compactSnapshotWirePayload(snapshotReplicator.payloadFor(peerId, interest, state.tick));
+        });
         syncHud(snapshot);
       }
     }) : undefined;

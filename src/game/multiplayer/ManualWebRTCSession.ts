@@ -14,6 +14,9 @@ import { encodeSnapshotPackets, MAX_SNAPSHOT_BYTES, SnapshotAssembler } from './
 
 const MAX_SIGNAL_BYTES = 48_000;
 const ICE_GATHER_TIMEOUT_MS = 7_000;
+const MAX_STATE_QUEUE_BYTES = 128_000;
+const STATE_SEND_HIGH_WATER_BYTES = 64_000;
+const MAX_RELIABLE_QUEUE_BYTES = 256_000;
 
 export const DEFAULT_PUBLIC_STUN_SERVERS: RTCIceServer[] = [
   {
@@ -36,7 +39,9 @@ type ManagedPeer = {
   reliableChannel?: RTCDataChannel;
   estimatedOneWayMs: number;
   latencySampledAt: number;
+  disconnectTimer?: number | NodeJS.Timeout;
 };
+const DISCONNECTED_PEER_GRACE_MS = 12_000;
 
 export interface ManualWebRTCSessionOptions {
   role: MultiplayerRole;
@@ -44,7 +49,10 @@ export interface ManualWebRTCSessionOptions {
   iceServers?: RTCIceServer[];
   onPeerChange?: (peers: MultiplayerPeerInfo[]) => void;
   onInput?: (peerId: string, frame: MultiplayerInputFrame, estimatedOneWayMs: number) => void;
-  onState?: (frame: MultiplayerStateFrame) => void;
+  /** Return false when an unordered delta cannot yet be reconstructed. The
+   * adapter then leaves its transport watermark unchanged so its keyframe can
+   * still be accepted if it arrives immediately afterwards. */
+  onState?: (frame: MultiplayerStateFrame) => boolean | void;
   onEvent?: (peerId: string, event: MultiplayerReliableEvent) => void;
   onError?: (message: string) => void;
 }
@@ -179,9 +187,15 @@ export class ManualWebRTCSession {
   broadcastState(frame: MultiplayerStateFrame, payloadForPeer?: (peerId: string) => unknown) {
     if (this.peers.size === 0) return;
     for (const peer of this.peers.values()) {
-      if (peer.stateChannel?.readyState !== 'open' || peer.stateChannel.bufferedAmount > 64_000) continue;
+      if (peer.stateChannel?.readyState !== 'open') continue;
       const peerFrame = payloadForPeer ? { ...frame, payload: payloadForPeer(peer.peerId) } : frame;
       const packets = encodeSnapshotPackets(JSON.stringify(peerFrame), frame.tick);
+      const packetBytes = packets.reduce((total, packet) => total + packet.byteLength, 0);
+      // State is replaceable. Never let one slow receiver retain more than a
+      // small, bounded history of world snapshots. Checking the total before
+      // the first fragment closes the old gap where a 50+ KB snapshot could be
+      // appended to an already-near-full queue.
+      if (!packets.length || peer.stateChannel.bufferedAmount + packetBytes > MAX_STATE_QUEUE_BYTES) continue;
       for (const packet of packets) if (!this.send(peer.stateChannel, packet, false)) break;
     }
   }
@@ -206,31 +220,37 @@ export class ManualWebRTCSession {
   disconnectPeer(peerId: string): boolean {
     const peer = this.peers.get(peerId);
     if (!peer) return false;
+    clearTimeout(peer.disconnectTimer as number);
+    // Remove before closing: `close()` can synchronously emit another state
+    // transition, which must not recursively try to remove the same peer.
+    this.peers.delete(peerId);
+    this.snapshotAssemblers.delete(peerId);
     peer.inputChannel?.close();
     peer.stateChannel?.close();
     peer.reliableChannel?.close();
     peer.connection.close();
-    this.peers.delete(peerId);
-    this.snapshotAssemblers.delete(peerId);
     this.notifyPeers();
     return true;
   }
 
   close() {
-    for (const peer of this.peers.values()) {
+    const peers = [...this.peers.values()];
+    this.peers.clear();
+    this.snapshotAssemblers.clear();
+    for (const peer of peers) {
+      clearTimeout(peer.disconnectTimer as number);
       peer.inputChannel?.close();
       peer.stateChannel?.close();
       peer.reliableChannel?.close();
       peer.connection.close();
     }
-    this.peers.clear();
-    this.snapshotAssemblers.clear();
     this.notifyPeers();
   }
 
   private createPeer(peerId: string): ManagedPeer {
     const existing = this.peers.get(peerId);
     if (existing) {
+      clearTimeout(existing.disconnectTimer as number);
       existing.connection.close();
       this.peers.delete(peerId);
     }
@@ -240,9 +260,25 @@ export class ManualWebRTCSession {
     this.peers.set(peerId, peer);
     connection.onconnectionstatechange = () => {
       this.notifyPeers();
-      if (connection.connectionState === 'disconnected') this.onError?.(`Connection to ${peerId} was interrupted; attempting to reconnect.`);
-      if (connection.connectionState === 'failed') this.onError?.(`Connection to ${peerId} could not be restored.`);
-      if (connection.connectionState === 'closed') this.onError?.(`Connection to ${peerId} closed.`);
+      if (connection.connectionState === 'connected') {
+        clearTimeout(peer.disconnectTimer as number);
+      } else if (connection.connectionState === 'disconnected') {
+        this.onError?.(`Connection to ${peerId} was interrupted; attempting to reconnect.`);
+        clearTimeout(peer.disconnectTimer as number);
+        // Browsers may briefly enter `disconnected` during a route change.
+        // Do not evict immediately, but never leave a dead peer occupying a
+        // roster slot or receiving snapshot work forever.
+        peer.disconnectTimer = setTimeout(() => {
+          if (this.peers.get(peerId) === peer && connection.connectionState === 'disconnected') {
+            this.onError?.(`Connection to ${peerId} did not recover and was removed from the squad.`);
+            this.disconnectPeer(peerId);
+          }
+        }, DISCONNECTED_PEER_GRACE_MS);
+      } else if (connection.connectionState === 'failed' || connection.connectionState === 'closed') {
+        clearTimeout(peer.disconnectTimer as number);
+        this.onError?.(connection.connectionState === 'failed' ? `Connection to ${peerId} could not be restored.` : `Connection to ${peerId} closed.`);
+        if (this.peers.get(peerId) === peer) this.disconnectPeer(peerId);
+      }
     };
     connection.oniceconnectionstatechange = () => {
       if (connection.iceConnectionState === 'failed') {
@@ -295,8 +331,8 @@ export class ManualWebRTCSession {
         this.onInput?.(peerId, clampInputFrame(message), peer?.estimatedOneWayMs || 0);
       } else if (kind === 'state' && message.type === 'state') {
         if (!Number.isSafeInteger(message.tick) || message.tick <= this.latestStateTick) return;
-        this.latestStateTick = message.tick;
-        this.onState?.(message);
+        const accepted = this.onState?.(message);
+        if (accepted !== false) this.latestStateTick = message.tick;
       } else if (kind === 'reliable' && message.type === 'event') {
         this.onEvent?.(peerId, message);
       }
@@ -320,7 +356,7 @@ export class ManualWebRTCSession {
 
   private send(channel: RTCDataChannel | undefined, message: string | ArrayBuffer, checkBackpressure = true): boolean {
     if (channel?.readyState !== 'open') return false;
-    if (checkBackpressure && channel.label !== 'reliable' && channel.bufferedAmount > 64_000) return false;
+    if (checkBackpressure && channel.bufferedAmount > (channel.label === 'reliable' ? MAX_RELIABLE_QUEUE_BYTES : STATE_SEND_HIGH_WATER_BYTES)) return false;
     try {
       if (typeof message === 'string') channel.send(message);
       else channel.send(message);

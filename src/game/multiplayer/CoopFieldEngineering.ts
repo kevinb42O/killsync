@@ -27,7 +27,7 @@ export const COOP_MAX_FABRICATOR_CHARGES = 4;
 export const COOP_FABRICATOR_RECHARGE_MS = 40_000;
 export const COOP_ELITE_SCRAP_ACCELERATION_MS = 14_000;
 export const COOP_MAX_STRUCTURES_PER_PLAYER = 2;
-/** Preserve two concurrent structures per operator at a full eight-player roster. */
+/** Preserve two concurrent structures per operator at the full co-op roster. */
 export const COOP_MAX_SQUAD_STRUCTURES = COOP_MAX_PLAYERS * COOP_MAX_STRUCTURES_PER_PLAYER;
 export const COOP_BUILD_RANGE = 430;
 export const COOP_BUILD_ZONE_RADIUS = 700;

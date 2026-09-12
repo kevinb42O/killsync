@@ -76,6 +76,9 @@ export function createMultiplayerRouter() {
     const maxPlayers = Math.max(2, Math.min(COOP_MAX_PLAYERS, Number(request.body?.maxPlayers) || COOP_MAX_PLAYERS));
     const code = cleanCode(request.body?.code);
     const id = cleanId(request.body?.id) || (code ? `room-${code.toLowerCase()}` : shortId('room'));
+    // A second host must never silently replace a live lobby just because a
+    // memorable room code (or caller-provided id) collides with it.
+    if (rooms.has(id)) return response.status(409).json({ error: 'That lobby code is already active. Choose another code.' });
     const room: Room = {
       id, code: code || id, hostToken: token(), hostName, maxPlayers, playerCount: 1,
       state: 'waiting', updatedAt: Date.now(), joins: new Map(),

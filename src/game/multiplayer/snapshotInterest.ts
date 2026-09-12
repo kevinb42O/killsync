@@ -2,6 +2,23 @@ import type { CoopSnapshot } from './CoopSimulation';
 
 export const SNAPSHOT_INTEREST_RADIUS = 2_600;
 export const MAX_VISIBLE_GEMS = 96;
+// Combat events are presentation cues, not gameplay state.  A horde can emit
+// hundreds of hit, number and loot-pop events per second; forwarding every
+// one over a phone-hosted mesh makes cosmetic feedback more expensive than
+// the actual simulation.  Keep meaningful state transitions in full and
+// coalesce repeated sparks/sounds into short perceptual windows.
+const TRANSIENT_EVENT_WINDOW_MS: Partial<Record<CoopSnapshot['combatEvents'][number]['kind'], number>> = {
+  enemy_hit: 100,
+  damage_number: 125,
+  drop_spawned: 250,
+  projectile_impact: 100,
+  weapon_fired: 125,
+  reload_shell_loaded: 150,
+  mask_damaged: 250,
+  gas_damaged: 250,
+  structure_damaged: 120,
+};
+const MAX_COMBAT_EVENTS_PER_SNAPSHOT = 48;
 
 const q = (value: number, precision = 1) => Math.round(value * precision) / precision;
 
@@ -29,6 +46,7 @@ export function createInterestSnapshot(snapshot: CoopSnapshot, playerId?: string
   const objectiveEnemyId = snapshot.run.objective?.kind === 'elite_hunt' ? snapshot.run.objective.targetEnemyId : undefined;
   const boss = snapshot.run.boss;
   const quantizePosition = <T extends { x: number; y: number }>(entity: T): T => ({ ...entity, x: q(entity.x), y: q(entity.y) });
+  const isRelevantEvent = (event: CoopSnapshot['combatEvents'][number]) => event.kind === 'station_online' || event.kind === 'foundry_online' || event.kind === 'arc_beam' || event.kind === 'arc_chain' || event.kind === 'artifact_cast' || interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId;
 
   return {
     ...snapshot,
@@ -45,8 +63,30 @@ export function createInterestSnapshot(snapshot: CoopSnapshot, playerId?: string
     items: snapshot.items.filter(interested).map(entity => quantizePosition(entity)),
     ammoCaches: snapshot.ammoCaches.filter(interested).map(entity => quantizePosition(entity)),
     hazards: (snapshot.hazards || []).filter(interested).map(hazard => ({ ...quantizePosition(hazard), radius: q(hazard.radius) })),
-    combatEvents: snapshot.combatEvents.filter(event => event.kind === 'station_online' || event.kind === 'foundry_online' || event.kind === 'arc_beam' || event.kind === 'arc_chain' || event.kind === 'artifact_cast' || interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId),
+    combatEvents: coalesceCombatEvents(snapshot.combatEvents.filter(isRelevantEvent)),
     pings: snapshot.pings?.map(ping => quantizePosition(ping)),
     structures: snapshot.structures?.filter(interested).map(structure => ({ ...quantizePosition(structure), angle: q(structure.angle, 1_000), health: q(structure.health, 10) })),
   };
+}
+
+function coalesceCombatEvents(events: CoopSnapshot['combatEvents']): CoopSnapshot['combatEvents'] {
+  const critical: CoopSnapshot['combatEvents'] = [];
+  const transient = new Map<string, CoopSnapshot['combatEvents'][number]>();
+  for (const event of events) {
+    const windowMs = TRANSIENT_EVENT_WINDOW_MS[event.kind];
+    // Keep all non-transient gameplay/UI milestones. For transient effects,
+    // retain the first event in a visual window: that makes its id stable as
+    // later hits arrive, so a delta does not resend a new particle every tick.
+    if (windowMs === undefined) {
+      critical.push(event);
+      continue;
+    }
+    const key = `${event.kind}:${event.playerId || ''}:${event.weaponId || ''}:${event.structureId || ''}:${Math.floor(event.atMs / windowMs)}`;
+    if (!transient.has(key)) transient.set(key, event);
+  }
+  // Critical UI/gameplay transitions are never dropped. The ceiling applies
+  // only to the optional particles and sounds, even under pathological load.
+  const visualBudget = Math.max(0, MAX_COMBAT_EVENTS_PER_SNAPSHOT - critical.length);
+  const visuals = [...transient.values()].slice(-visualBudget);
+  return [...critical, ...visuals].sort((left, right) => left.id - right.id);
 }
