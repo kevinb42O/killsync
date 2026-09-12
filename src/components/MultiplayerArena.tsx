@@ -15,7 +15,6 @@ import { LocalPlayerPrediction } from '../game/multiplayer/LocalPlayerPrediction
 import { advancePlayerMovement, COOP_PLAYER_RADIUS, COOP_STEP_MS } from '../game/multiplayer/playerMovement';
 import { HostSimulationClock } from '../game/multiplayer/HostSimulationClock';
 import { createInterestSnapshot } from '../game/multiplayer/snapshotInterest';
-import { compactSnapshotWirePayload, SnapshotDecoder, SnapshotReplicator } from '../game/multiplayer/snapshotReplication';
 import { coopGasStateKey, coopImprintStatDescriptionKey, coopImprintStatEffectKey, coopImprintStatNameKey, coopItemNameKey, coopPickupNameKey, coopRunPhaseKey, coopText, coopWeaponNameKey, coopWeaponShortNameKey, isCoopTextKey, localizeCoopSignalingMessage, type CoopLanguage, type CoopTextKey } from '../game/multiplayer/i18n';
 import { CoopCombatReticle, type CoopReticleMode } from './CoopCombatReticle';
 import { OffscreenThreatIndicators, type HudThreat } from './OffscreenThreatIndicators';
@@ -705,10 +704,6 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   useEffect(() => {
     const session = launch.session;
     const prediction = new LocalPlayerPrediction(launch.localPlayerId);
-    // Each guest has an independent AOI and therefore an independent state
-    // baseline. Deltas reference only a keyframe, never another delta.
-    const snapshotReplicator = new SnapshotReplicator();
-    const snapshotDecoder = new SnapshotDecoder();
     // React development mode intentionally mounts, cleans up, then remounts
     // effects once. Defer irreversible peer teardown so the remount can cancel
     // it; a real arena exit has no following mount and closes the session.
@@ -943,10 +938,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       },
       onState: (frame) => {
         if (launch.role === 'host') return;
-        const snapshot = snapshotDecoder.decode(frame.payload, frame.tick);
-        // Do not advance transport ordering for a delta whose keyframe has not
-        // arrived yet. The unordered state channel may deliver that keyframe
-        // next, followed by a later delta referencing the same base.
+        const snapshot = parseSnapshot(frame.payload);
+        // Keep the transport watermark unchanged for an invalid or incomplete
+        // state frame so the next complete authoritative snapshot can recover.
         if (!snapshot) return false;
         publishSnapshot(snapshot, performance.now());
         syncHud(snapshot);
@@ -1928,8 +1922,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           session.broadcastState(
             { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Date.now(), payload: snapshot },
             peerId => {
-              const interest = createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]);
-              return compactSnapshotWirePayload(snapshotReplicator.payloadFor(peerId, interest, networkTickRef.current));
+              return createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]);
             },
           );
           syncHud(snapshot);
@@ -1952,8 +1945,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         stateAccumulator %= snapshotInterval;
         const state: MultiplayerStateFrame = { type: 'state', version: MULTIPLAYER_PROTOCOL_VERSION, tick: ++networkTickRef.current, sentAt: Date.now(), payload: snapshot };
         session.broadcastState(state, peerId => {
-          const interest = createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]);
-          return compactSnapshotWirePayload(snapshotReplicator.payloadFor(peerId, interest, state.tick));
+          return createInterestSnapshot(snapshot, launch.peerPlayerIds[peerId]);
         });
         syncHud(snapshot);
       }
