@@ -2273,8 +2273,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   })[0];
   const localInsideCapture = Boolean(currentCaptureStation && localSnapshot
     && Math.hypot(currentCaptureStation.x - localSnapshot.x, currentCaptureStation.y - localSnapshot.y) <= currentCaptureStation.captureRadius + 31);
-  const revivingTarget = !isSpectator && localSnapshot?.lifeState === 'alive'
-    ? matchSnapshot?.players.find(player => player.lifeState === 'downed' && player.reviverId === launch.localPlayerId)
+  // The HUD is updated from each authoritative host tick, while matchSnapshot
+  // intentionally has a lower React cadence. Source the active revive target
+  // from the HUD roster so the helper's progress card never disappears during
+  // a state-frame/interpolation handoff.
+  const revivingTarget = !isSpectator && hud.lifeState === 'alive'
+    ? hud.squad.find(player => player.lifeState === 'downed' && player.reviverId === launch.localPlayerId)
     : undefined;
   const run = matchSnapshot?.run;
   const activeWorld = getWorldDefinition(matchSnapshot?.world?.id || launch.worldId);

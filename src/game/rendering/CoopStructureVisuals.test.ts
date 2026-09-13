@@ -19,17 +19,15 @@ const damagedStructure: CoopStructureSnapshot = {
 };
 
 describe('co-op structure lighting', () => {
-  it('keeps damaged world lights stable and tone maps emissive materials', () => {
+  it('uses tone-mapped emissive materials without expanding the point-light budget', () => {
     const scene = new THREE.Scene();
     const visuals = new CoopStructureVisuals(scene);
     visuals.update([damagedStructure], 1_000);
     const rig = scene.getObjectByName('coop-structure:7')!;
-    const light = rig.children.find(node => node instanceof THREE.PointLight) as THREE.PointLight;
-    const firstIntensity = light.intensity;
 
     visuals.update([damagedStructure], 1_500);
 
-    expect(light.intensity).toBeCloseTo(firstIntensity);
+    expect(rig.children.some(node => node instanceof THREE.PointLight)).toBe(false);
     rig.traverse(node => {
       if (!(node instanceof THREE.Mesh)) return;
       const materials = Array.isArray(node.material) ? node.material : [node.material];

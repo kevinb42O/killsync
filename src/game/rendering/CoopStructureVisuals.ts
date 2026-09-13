@@ -137,10 +137,12 @@ function createStructureRig(type: CoopStructureType, ownerColor: string, preview
   const healthFill = addBox(group, 62, 3, 4, 0, 105, -.5, ownerAccent, 'health-fill');
   healthTrack.visible = !preview && type !== 'bridge_segment';
   healthFill.visible = !preview && type !== 'bridge_segment';
-  const light = new THREE.PointLight(energyColor, preview ? 0 : 3.6, type === 'recovery_relay' ? 340 : type === 'bridge_segment' ? 430 : 240, 1.65);
-  light.position.set(0, type === 'recovery_relay' ? 60 : type === 'arc_fence' ? 42 : 35, 0);
-  light.userData.visualRole = 'structure-light';
-  group.add(light);
+  // Do not attach a real PointLight to each deployable. Point-light counts
+  // change the scene shader variant; adding a build during a busy host match
+  // could therefore trigger expensive GPU program recompilation (and has
+  // caused browser-level GPU failures on lower-end devices). The emissive
+  // material treatment above gives each structure its local glow without
+  // changing the renderer's hardware-light budget.
   for (const mat of [steel, edge, accent, energy, ownerAccent]) mat.dispose();
   return group;
 }
