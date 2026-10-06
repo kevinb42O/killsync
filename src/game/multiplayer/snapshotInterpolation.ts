@@ -1,3 +1,5 @@
+import { friendsVehicleFloor, pointOnGangway, trainGangways, vehicleLocal, type FriendsSnapshot, type FriendsVehicle } from './FriendsExpedition';
+import type { CoopGrenadeSnapshot } from '../combat/coopGrenades';
 import { CoopEnemySnapshot, CoopPlayerSnapshot, CoopProjectileSnapshot, CoopSnapshot } from './CoopSimulation';
 
 /**
@@ -30,7 +32,10 @@ export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSna
     y: lerp(previous.gasZone.y, current.gasZone.y, progress),
     radius: lerp(previous.gasZone.radius, current.gasZone.radius, progress),
   } : current.gasZone;
-  return { ...current, players, enemies, projectiles, gasZone };
+  const grenades = current.grenades && interpolateEntities(previous.grenades || [], current.grenades, progress, (old, next) => ({ ...next, x: lerp(old.x, next.x, progress), y: lerp(old.y, next.y, progress), z: lerp(old.z, next.z, progress) }));
+  const friends = interpolateFriends(previous.friends, current.friends, progress);
+  if (friends && previous.friends && current.friends) interpolatePassengers(previous, current, friends, players, progress);
+  return { ...current, players, enemies, projectiles, gasZone, grenades, friends };
 }
 
 /**
@@ -41,6 +46,9 @@ export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSna
 export class CoopSnapshotInterpolator {
   private readonly players = new Map<string, CoopPlayerSnapshot>();
   private readonly enemies = new Map<number, CoopEnemySnapshot>();
+  private readonly grenades = new Map<number, CoopGrenadeSnapshot>();
+  private readonly grenadeFrame: CoopGrenadeSnapshot[] = [];
+  private readonly activeGrenadeIds = new Set<number>();
   private readonly projectiles = new Map<number, CoopProjectileSnapshot>();
   private readonly activePlayerIds = new Set<string>();
   private readonly activeEnemyIds = new Set<number>();
@@ -63,6 +71,7 @@ export class CoopSnapshotInterpolator {
     this.frame.players = this.playerFrame;
     this.frame.enemies = this.enemyFrame;
     this.frame.projectiles = this.projectileFrame;
+    if (current.grenades) { this.syncGrenades(previous.grenades || [], current.grenades, progress); this.frame.grenades = this.grenadeFrame; }
     if (current.gasZone && previous.gasZone) {
       assignExact(this.gasFrame, current.gasZone);
       this.gasFrame.x = lerp(previous.gasZone.x, current.gasZone.x, progress);
@@ -70,13 +79,29 @@ export class CoopSnapshotInterpolator {
       this.gasFrame.radius = lerp(previous.gasZone.radius, current.gasZone.radius, progress);
       this.frame.gasZone = this.gasFrame;
     }
+    this.frame.friends = interpolateFriends(previous.friends, current.friends, progress);
+    if (this.frame.friends && previous.friends && current.friends) interpolatePassengers(previous, current, this.frame.friends, this.playerFrame, progress);
     return this.frame;
   }
 
   reset() {
-    this.players.clear(); this.enemies.clear(); this.projectiles.clear();
+    this.players.clear(); this.enemies.clear(); this.projectiles.clear(); this.grenades.clear(); this.grenadeFrame.length = 0;
     this.playerFrame.length = 0; this.enemyFrame.length = 0; this.projectileFrame.length = 0;
     this.frame = {} as CoopSnapshot;
+  }
+
+  private syncGrenades(previous: CoopGrenadeSnapshot[], current: CoopGrenadeSnapshot[], progress: number) {
+    const previousById = indexEntities(previous);
+    this.grenadeFrame.length = 0; this.activeGrenadeIds.clear();
+    for (const next of current) {
+      this.activeGrenadeIds.add(next.id);
+      let target = this.grenades.get(next.id);
+      if (!target) { target = { ...next }; this.grenades.set(next.id, target); } else assignExact(target, next);
+      const old = previousById.get(next.id);
+      if (old) { target.x = lerp(old.x, next.x, progress); target.y = lerp(old.y, next.y, progress); target.z = lerp(old.z, next.z, progress); }
+      this.grenadeFrame.push(target);
+    }
+    for (const id of this.grenades.keys()) if (!this.activeGrenadeIds.has(id)) this.grenades.delete(id);
   }
 
   private syncPlayers(previous: CoopPlayerSnapshot[], current: CoopPlayerSnapshot[], progress: number) {
@@ -165,3 +190,28 @@ function lerpAngle(start: number, end: number, amount: number) {
 }
 
 export type InterpolatedEntity = CoopPlayerSnapshot | CoopEnemySnapshot | CoopProjectileSnapshot;
+
+function interpolateFriends(previous: FriendsSnapshot | undefined, current: FriendsSnapshot | undefined, alpha: number): FriendsSnapshot | undefined {
+  if (!current || !previous) return current;
+  return { ...current, vehicles: interpolateEntities(previous.vehicles, current.vehicles, alpha, (old, next) => ({ ...next,
+    x: lerp(old.x, next.x, alpha), y: lerp(old.y, next.y, alpha), z: lerp(old.z, next.z, alpha), angle: lerpAngle(old.angle, next.angle, alpha),
+  })) };
+}
+function passengerAnchor(vehicles: FriendsVehicle[], player: CoopPlayerSnapshot) {
+  const vehicle = vehicles.find(v => { const floor = friendsVehicleFloor([v], player.x, player.y, player.z); return floor !== undefined && Math.abs(player.z - floor) < 2; });
+  return vehicle || trainGangways(vehicles).find(link => Math.abs(player.z - link.z) < 2 && pointOnGangway(link, player.x, player.y))?.from;
+}
+function interpolatePassengers(previous: CoopSnapshot, current: CoopSnapshot, friends: FriendsSnapshot, players: CoopPlayerSnapshot[], alpha: number) {
+  const oldPlayers = indexEntities(previous.players);
+  for (const target of players) {
+    const old = oldPlayers.get(target.id), next = current.players.find(p => p.id === target.id);
+    if (!old || !next) continue;
+    if (Math.hypot(next.x - old.x, next.y - old.y, next.z - old.z) > 900) { target.x = next.x; target.y = next.y; target.z = next.z; continue; }
+    const before = passengerAnchor(previous.friends!.vehicles, old), after = passengerAnchor(current.friends!.vehicles, next);
+    if (!before || !after || before.id !== after.id) continue;
+    const frame = friends.vehicles.find(v => v.id === after.id)!;
+    const a = vehicleLocal(before, old.x, old.y), b = vehicleLocal(after, next.x, next.y), x = lerp(a.x, b.x, alpha), y = lerp(a.y, b.y, alpha);
+    target.x = frame.x + x * Math.cos(frame.angle) - y * Math.sin(frame.angle); target.y = frame.y + x * Math.sin(frame.angle) + y * Math.cos(frame.angle);
+    target.z = frame.z + lerp(old.z - before.z, next.z - after.z, alpha);
+  }
+}

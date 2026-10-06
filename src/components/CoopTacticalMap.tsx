@@ -1,3 +1,4 @@
+import { FriendsMap } from './FriendsMap';
 import { useMemo, useState } from 'react';
 import { Map as MapIcon, Navigation, Radio, X } from 'lucide-react';
 import type { CoopSnapshot } from '../game/multiplayer/CoopSimulation';
@@ -63,6 +64,7 @@ export function CoopTacticalMap({ snapshot, localPlayer, onPingMission, onClose 
     onPingMission(site.id);
   };
 
+  if (snapshot.friends) return <FriendsMap snapshot={snapshot} localPlayer={localPlayer} onClose={onClose} />;
   return <div role="dialog" aria-modal="true" aria-label="Tactical map" className="absolute inset-0 z-[110] flex bg-[#01050a]/97 p-2 backdrop-blur-xl sm:p-4" onMouseDown={event => event.stopPropagation()}>
     <section className="mx-auto flex h-full w-full max-w-[1600px] gap-3 overflow-hidden border border-cyan-300/35 bg-[#050d16] p-3 shadow-[0_0_90px_rgba(34,211,238,.18)] sm:p-4">
       <div className="flex min-w-0 flex-1 flex-col">
@@ -100,6 +102,14 @@ export function CoopTacticalMap({ snapshot, localPlayer, onPingMission, onClose 
             })}</g>
             {snapshot.gasZone?.targetX !== undefined && snapshot.gasZone.targetY !== undefined && <line x1={snapshot.gasZone.x} y1={snapshot.gasZone.y} x2={snapshot.gasZone.targetX} y2={snapshot.gasZone.targetY} stroke="#86efac" strokeWidth="42" strokeDasharray="110 75" markerEnd="url(#gas-heading)" opacity=".9" />}
             {snapshot.gasZone && <g><circle cx={snapshot.gasZone.x} cy={snapshot.gasZone.y} r={snapshot.gasZone.radius} fill="#22c55e" fillOpacity=".10" stroke="#86efac" strokeOpacity=".8" strokeWidth="34" /><circle cx={snapshot.gasZone.x} cy={snapshot.gasZone.y} r={snapshot.gasZone.radius - 70} fill="none" stroke="#4ade80" strokeOpacity=".2" strokeWidth="18" strokeDasharray="70 55" /></g>}
+            {snapshot.realityBreach?.phase === 'linking' && <g data-map-layer="reality-breach">
+              {snapshot.realityBreach.anchors.map(anchor => <g key={anchor.id}>
+                <line x1={anchor.x} y1={anchor.y} x2={snapshot.realityBreach!.x} y2={snapshot.realityBreach!.y} stroke={anchor.occupantId ? '#afffc9' : '#ffb86b'} strokeWidth="22" strokeDasharray="40 24" />
+                <circle cx={anchor.x} cy={anchor.y} r="130" fill={anchor.occupantId ? '#afffc9' : '#ffb86b'} fillOpacity=".2" stroke={anchor.occupantId ? '#afffc9' : '#ffb86b'} strokeWidth="22" />
+                <text x={anchor.x} y={anchor.y - 180} textAnchor="middle" fill="#ffdfb8" fontSize="95">ANCHOR {anchor.id}</text>
+              </g>)}
+              <circle cx={snapshot.realityBreach.x} cy={snapshot.realityBreach.y} r="180" fill="#02060a" stroke="#ffb86b" strokeWidth="34" />
+            </g>}
             <polygon points={facingCone} fill={localPlayer.color} fillOpacity=".20" stroke={localPlayer.color} strokeOpacity=".5" strokeWidth="18" />
             {livingPlayers.map(player => {
               const own = player.id === localPlayer.id;

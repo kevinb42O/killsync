@@ -33,13 +33,13 @@ export class CoopStationDirector {
   private readonly sites: StationSite[];
   private readonly vacantForMs = new Map<number, number>();
 
-  constructor(seed: number, insertion: Point, gasCentre: Point, worldId: WorldId = 'neon_bastion') {
-    this.sites = generateCoopStationSites(seed, insertion, gasCentre, worldId).map((position, index) => ({
+  constructor(seed: number, insertion: Point, gasCentre: Point, worldId: WorldId = 'neon_bastion', expeditionSites?: readonly Point[]) {
+    this.sites = (expeditionSites || generateCoopStationSites(seed, insertion, gasCentre, worldId)).map((position, index) => ({
       id: index + 1,
       ...position,
       radius: COOP_STATION_SHOP_RADIUS,
       captureRadius: COOP_STATION_CAPTURE_RADIUS,
-      state: 'locked',
+      state: expeditionSites ? 'active' : 'locked',
       captureProgressMs: 0,
       captureRequiredMs: COOP_STATION_CAPTURE_MS,
       contested: false,

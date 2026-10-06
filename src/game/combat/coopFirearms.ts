@@ -1,8 +1,10 @@
+import { COOP_SPELL_SLOTS, COOP_SPELLS } from './coopSpells';
 /**
  * Authoritative co-op firearm rules. This module deliberately has no renderer
  * or transport dependencies, so balance can be tested without a browser.
  */
 export type CoopFirearmId = 'plasma_gun' | 'assault_rifle' | 'combat_shotgun' | 'arc_launcher' | 'smg'
+  | 'ember_bolt' | 'soul_nova' | 'rift_meteor' | 'astral_lance'
   | 'goreline_repeater' | 'riftspike_array' | 'dawnwall_cannon' | 'winterglass_projector' | 'cinderhex_engine';
 export type AmmoType = 'pistol' | 'rifle' | 'shell' | 'prototype_cell' | 'smg';
 export type FireMode = 'semi' | 'auto';
@@ -47,7 +49,7 @@ export const COOP_FIREARM_DEFINITIONS: readonly CoopFirearmDefinition[] = Object
   firearm({ id: 'riftspike_array', name: 'Riftspike Array', shortName: 'RIFTSPIKE', slot: 3, ammoType: 'prototype_cell', fireMode: 'semi', magazineSize: 12, startingReserve: 60, maxReserve: 120, baseDamage: 24, fireIntervalMs: 250, reloadStyle: 'magazine', reloadDurationMs: 1700, projectileVelocity: 1900, projectileRadius: 3.5, penetration: 1, adsProfile: 'none', hipSpreadRadians: .012, adsSpreadRadians: .004, recoil: { kick: .44, recoveryMs: 100 }, visual: { model: 'riftspike_array', muzzleColor: '#c084fc' } }),
   firearm({ id: 'dawnwall_cannon', name: 'Dawnwall Cannon', shortName: 'DAWNWALL', slot: 3, ammoType: 'prototype_cell', fireMode: 'auto', magazineSize: 18, startingReserve: 72, maxReserve: 144, baseDamage: 16, fireIntervalMs: 180, reloadStyle: 'magazine', reloadDurationMs: 2000, projectileVelocity: 1450, projectileRadius: 5, penetration: 1, adsProfile: 'none', hipSpreadRadians: .028, adsSpreadRadians: .009, recoil: { kick: .68, recoveryMs: 150 }, visual: { model: 'dawnwall_cannon', muzzleColor: '#fbbf24' } }),
   firearm({ id: 'winterglass_projector', name: 'Winterglass Projector', shortName: 'WINTERGLASS', slot: 3, ammoType: 'prototype_cell', fireMode: 'auto', magazineSize: 40, startingReserve: 160, maxReserve: 280, baseDamage: 4, fireIntervalMs: 100, reloadStyle: 'magazine', reloadDurationMs: 2200, projectileVelocity: 900, projectileRadius: 7, penetration: 999, adsProfile: 'none', hipSpreadRadians: .17, adsSpreadRadians: .17, recoil: { kick: .18, recoveryMs: 70 }, visual: { model: 'winterglass_projector', muzzleColor: '#7dd3fc' } }),
-  firearm({ id: 'cinderhex_engine', name: 'Cinderhex Engine', shortName: 'CINDERHEX', slot: 3, ammoType: 'prototype_cell', fireMode: 'auto', magazineSize: 24, startingReserve: 96, maxReserve: 192, baseDamage: 12, fireIntervalMs: 200, reloadStyle: 'magazine', reloadDurationMs: 2000, projectileVelocity: 1250, projectileRadius: 5, penetration: 1, adsProfile: 'none', hipSpreadRadians: .03, adsSpreadRadians: .012, recoil: { kick: .48, recoveryMs: 115 }, visual: { model: 'cinderhex_engine', muzzleColor: '#fb923c' } }),
+  ...COOP_SPELL_SLOTS.map((id, slot) => firearm({ id, name: COOP_SPELLS[id].name, shortName: COOP_SPELLS[id].shortName, slot: slot as 0 | 1 | 2 | 3 | 4, ammoType: 'prototype_cell', fireMode: 'auto', magazineSize: 0, startingReserve: 0, maxReserve: 0, baseDamage: id === 'ember_bolt' ? 48 : id === 'cinderhex_engine' ? 30 : 100, fireIntervalMs: COOP_SPELLS[id].cooldownMs, reloadStyle: 'magazine', projectileVelocity: 1050, projectileRadius: 9, penetration: 1, adsProfile: 'none', hipSpreadRadians: 0, adsSpreadRadians: 0, recoil: { kick: 0, recoveryMs: 220 }, visual: { model: 'casting_hand', muzzleColor: COOP_SPELLS[id].color } })),
 ]);
 
 export const COOP_FIREARM_BY_ID: Readonly<Record<CoopFirearmId, CoopFirearmDefinition>> = Object.freeze(
@@ -57,6 +59,7 @@ export const COOP_WEAPON_SLOTS = ['plasma_gun', 'assault_rifle', 'combat_shotgun
 export const COOP_FIREARM_IDS = COOP_FIREARM_DEFINITIONS.map(definition => definition.id) as readonly CoopFirearmId[];
 
 export function coopWeaponSlotsForSignature(signatureWeaponId: CoopFirearmId): readonly CoopFirearmId[] {
+  if (signatureWeaponId === 'cinderhex_engine') return COOP_SPELL_SLOTS;
   return ['plasma_gun', 'assault_rifle', 'combat_shotgun', signatureWeaponId, 'smg'];
 }
 

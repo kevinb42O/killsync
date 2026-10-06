@@ -1,3 +1,12 @@
+import { FriendsFrontierVisuals } from '../rendering/FriendsFrontierVisuals';
+import type { FrontierTool } from './FriendsFrontier';
+import { FriendsBuildVisuals } from '../rendering/FriendsBuildVisuals';
+import { getFriendsBuildPose, raycastFriendsBuild, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildPose } from './FriendsBuilding';
+import { FriendsVehicleVisuals } from '../rendering/FriendsWorldVisuals';
+import { carryOnVehicle, friendsVehicleFloor, type FriendsVehicle } from './FriendsExpedition';
+import { isCoopSpell } from '../combat/coopSpells';
+import { CoopArcanaVisuals } from '../rendering/CoopArcanaVisuals';
+import { RealityBreachVisuals } from '../rendering/RealityBreachVisuals';
 import * as THREE from 'three';
 import { WEAPON_DEFINITIONS } from '../../constants';
 import { Enemy, ExperienceGem, Player, Projectile, Weapon, WorldItem } from '../../types';
@@ -6,7 +15,7 @@ import { Renderer3D } from '../Renderer3D';
 import { soundManager } from '../SoundManager';
 import { COOP_BRIDGE_SEGMENT_LENGTH, COOP_ENEMY_DEATH_PRESENTATION_MS, COOP_WEAPON_DETAILS, CoopCombatEvent, CoopSnapshot } from './CoopSimulation';
 import { CoopFirearmVisualRig } from '../rendering/coopFirearmVisuals';
-import type { CoopFirearmId } from '../combat/coopFirearms';
+import { COOP_FIREARM_BY_ID, type CoopFirearmId } from '../combat/coopFirearms';
 import { COOP_PASSIVE_BY_ID, passiveRadius, type CoopPassiveModuleId } from './CoopPassiveModules';
 import { COOP_UPLINK_RADIUS } from './CoopRunDirector';
 import { CoopTacticalVisuals } from '../rendering/CoopTacticalVisuals';
@@ -74,11 +83,20 @@ export class MultiplayerRendererBridge {
   private readonly renderer: Renderer3D;
   private worldId: WorldId;
   private readonly tacticalVisuals: CoopTacticalVisuals;
+  private readonly friendsVehicleVisuals: FriendsVehicleVisuals;
+  private readonly frontierVisuals?: FriendsFrontierVisuals;
+  private lastFrontierHit = '';
+  private friendsTool: FrontierTool = 1;
+  private friendsToolFiring = false;
+  private readonly friendsBuildVisuals: FriendsBuildVisuals;
+  private readonly realityBreachVisuals: RealityBreachVisuals;
   private readonly structureVisuals: CoopStructureVisuals;
   private readonly projectileImpactVisuals: ProjectileImpactVisuals;
   private readonly remotePlayers = new Map<string, CoopOperatorRig>();
   private readonly passiveMeshes = new Map<string, THREE.Group>();
+  private readonly arcanaVisuals = new CoopArcanaVisuals();
   private readonly localFirearm = new CoopFirearmVisualRig(true);
+  private renderedLocalPlayerId = '';
   private readonly trailSystem: OperatorTrailSystem;
   private readonly seenCombatEventIds = new Map<number, number>();
   private readonly combatParticles: PresentationParticle[] = [];
@@ -122,6 +140,7 @@ export class MultiplayerRendererBridge {
   private wallJumpPitchTarget = 0;
   private lastPresentedLocalX: number | undefined;
   private lastPresentedLocalY: number | undefined;
+  private lastPresentedVehicle?: FriendsVehicle;
   private readonly fallingPresentations = new Map<string, FallingPresentation>();
 
   constructor(worldId: WorldId = 'neon_bastion') {
@@ -131,7 +150,11 @@ export class MultiplayerRendererBridge {
       worldId,
       coopEnemyBatching: !(import.meta.env.DEV && new URLSearchParams(window.location.search).get('coopBatch') === '0'),
     });
+    this.friendsVehicleVisuals = new FriendsVehicleVisuals(this.renderer.scene);
+    if (worldId === 'friends_frontier') this.frontierVisuals = new FriendsFrontierVisuals(this.renderer.scene, this.renderer.viewmodelScene, this.renderer.renderer, this.renderer.camera);
+    this.friendsBuildVisuals = new FriendsBuildVisuals(this.renderer.scene);
     this.tacticalVisuals = new CoopTacticalVisuals(this.renderer.scene);
+    this.realityBreachVisuals = new RealityBreachVisuals(this.renderer.scene);
     this.structureVisuals = new CoopStructureVisuals(this.renderer.scene);
     this.projectileImpactVisuals = new ProjectileImpactVisuals(this.renderer.scene);
     this.renderState = {
@@ -145,6 +168,7 @@ export class MultiplayerRendererBridge {
     // The existing authored sidearm is the handgun. Alternative firearms are
     // mounted beside that exact rig and swap in only when selected.
     this.renderer.fpsWeaponGroup.add(this.localFirearm.group);
+    this.renderer.scene.add(this.arcanaVisuals.group);
     this.trailSystem = new OperatorTrailSystem(this.renderer.scene);
   }
 
@@ -209,6 +233,20 @@ export class MultiplayerRendererBridge {
     return offscreen;
   }
   getPerformanceStats() { return this.renderer.getPerformanceStats(); }
+  private creativeRay() {
+    this.renderer.camera.updateMatrixWorld(true);
+    const direction = this.renderer.camera.getWorldDirection(new THREE.Vector3());
+    const origin = this.renderer.camera.getWorldPosition(new THREE.Vector3());
+    return { x: origin.x, y: origin.z, z: origin.y, dx: direction.x, dy: direction.z, dz: direction.y };
+  }
+  getFriendsBuildPose(snapshot: CoopSnapshot | null, shape: FriendsBuildShape, rotationOffset = 0) {
+    return getFriendsBuildPose(snapshot?.friends?.building?.pieces || [], this.creativeRay(), shape, rotationOffset / (Math.PI / 2), snapshot?.friends?.frontier ? this.frontierVisuals?.terrain : undefined);
+  }
+  getFriendsTerrain() { return this.frontierVisuals?.terrain; }
+  setFriendsTool(tool: FrontierTool, firing: boolean) { this.friendsTool = tool; this.friendsToolFiring = firing; }
+  getFriendsBuildTarget(snapshot: CoopSnapshot | null) { return raycastFriendsBuild(snapshot?.friends?.building?.pieces || [], this.creativeRay()); }
+  setFriendsBuildPreview(shape?: FriendsBuildShape, pose?: FriendsBuildPose, valid = true, finish: FriendsBuildFinish = 'stone') { this.friendsBuildVisuals.preview(shape, pose, valid, finish); }
+
   getBuildPose(snapshot: CoopSnapshot | null, localPlayerId: string, type: CoopStructureType, rotationOffset = 0, snapping = true) {
     const local = snapshot?.players.find(player => player.id === localPlayerId);
     if (!local) return undefined;
@@ -371,24 +409,34 @@ export class MultiplayerRendererBridge {
     return { x: pingX, y: pingY, z: 0, kind: 'location', labelKey: 'ping.waypoint' };
   }
 
-  /**
-   * deduplicated later; damage and ammo never leave the host simulation. */
+  private launchLocalSpell(weaponId: import('../combat/coopSpells').CoopSpellId, actionId: number) {
+    if (!this.renderedLocalPlayerId) return;
+    const position = this.renderer.projectViewmodelPointToWorld(this.localFirearm.getMuzzlePoint());
+    const aimPoint = this.renderer.getFireSolution(this.renderEnemies).aimPoint3D;
+    this.arcanaVisuals.predictSpell(this.renderedLocalPlayerId, weaponId, actionId, { position, initialScale: .06 }, aimPoint, weaponId === 'astral_lance' ? 3600 : COOP_FIREARM_BY_ID[weaponId].projectileVelocity);
+  }
+
+  /** Predicted presentation is deduplicated later; damage stays on the host. */
   predictLocalFire(weaponId: CoopFirearmId, actionId: number) {
+    if (this.worldId === 'friends_frontier' && this.friendsTool) return;
     this.predictedFireActions.add(actionId);
     if (this.predictedFireActions.size > 32) this.predictedFireActions.delete(this.predictedFireActions.values().next().value!);
+    if (isCoopSpell(weaponId)) { this.launchLocalSpell(weaponId, actionId); this.localFirearm.fire(weaponId); soundManager.playSpell(weaponId); return; }
     this.renderer.notifyFired();
     soundManager.playGunfire(weaponId);
     if (weaponId === 'plasma_gun') this.renderer.triggerMuzzleFlash(COOP_WEAPON_DETAILS[weaponId].color);
     else this.localFirearm.fire(weaponId);
   }
 
-  render(snapshot: CoopSnapshot | null, localPlayerId: string, deltaMs: number, spectatorTargetId?: string | null, forceFirstPerson: boolean = false) {
+  render(snapshot: CoopSnapshot | null, localPlayerId: string, deltaMs: number, spectatorTargetId?: string | null, forceFirstPerson: boolean = false, creativeBuilding: boolean = false) {
     if (!snapshot) return;
+    this.renderedLocalPlayerId = localPlayerId;
     if (snapshot.world?.id && snapshot.world.id !== this.worldId) {
       this.worldId = snapshot.world.id;
       this.renderer.setCoopWorld(this.worldId);
       this.structureVisuals.update([], snapshot.elapsedMs);
       this.projectileImpactVisuals.clear();
+      this.arcanaVisuals.clear();
     }
     const snapshotChanged = snapshot.tick !== this.lastSnapshotTick;
     if (snapshot.tick < this.lastSnapshotTick) {
@@ -397,6 +445,7 @@ export class MultiplayerRendererBridge {
       this.transientBlasts.length = 0;
       this.clearGravityHazards();
       this.projectileImpactVisuals.clear();
+      this.arcanaVisuals.clear();
       this.fallingPresentations.clear();
       this.projectileMuzzlePresentation.clear();
       this.lastPresentedJumpSequence = -1;
@@ -438,9 +487,13 @@ export class MultiplayerRendererBridge {
     const targetY = localFall?.y ?? local.y;
     const presentedAngle = localFall?.angle ?? local.angle;
     const dtSeconds = Math.max(0.001, deltaMs / 1000);
+    const standingVehicle = snapshot.friends?.vehicles.find(v => { const floor = friendsVehicleFloor([v], targetX, targetY, local.z); return floor !== undefined && Math.abs(local.z - floor) < 2; });
+    this.renderer.presentationGrounded = Boolean(snapshot.friends && (standingVehicle || local.motion?.verticalVelocity === 0));
     if (this.lastPresentedLocalX !== undefined && this.lastPresentedLocalY !== undefined) {
-      const vx = (targetX - this.lastPresentedLocalX) / dtSeconds;
-      const vy = (targetY - this.lastPresentedLocalY) / dtSeconds;
+      const reference = { x: this.lastPresentedLocalX, y: this.lastPresentedLocalY, z: this.lastLocalZ };
+      if (standingVehicle && this.lastPresentedVehicle?.id === standingVehicle.id) carryOnVehicle(reference, this.lastPresentedVehicle, standingVehicle);
+      const vx = (targetX - reference.x) / dtSeconds;
+      const vy = (targetY - reference.y) / dtSeconds;
       const speed = Math.hypot(vx, vy);
       if (speed < 1200) {
         player.velocity.x = vx;
@@ -453,8 +506,15 @@ export class MultiplayerRendererBridge {
       player.velocity.x = Math.cos(presentedAngle) * 0.01;
       player.velocity.y = Math.sin(presentedAngle) * 0.01;
     }
+    // Reconciliation offsets are visual corrections, not footsteps or body
+    // inertia. Drive the local rig from the shared controller's real velocity.
+    if (snapshot.friends && !isSpectating && !isFallingLocal && local.motion?.velocityX !== undefined && local.motion.velocityY !== undefined) {
+      player.velocity.x = local.motion.velocityX;
+      player.velocity.y = local.motion.velocityY;
+    }
     this.lastPresentedLocalX = targetX;
     this.lastPresentedLocalY = targetY;
+    this.lastPresentedVehicle = standingVehicle;
     player.position.x = targetX;
     player.position.y = targetY;
     player.health = local.health; player.maxHealth = local.maxHealth;
@@ -517,7 +577,8 @@ export class MultiplayerRendererBridge {
     if (isSpectating || isFallingLocal) this.wallJumpRoll = this.wallJumpPitch = 0;
     this.renderer.presentationCameraRoll = this.wallJumpRoll;
     this.renderer.presentationCameraPitchOffset = this.wallJumpPitch;
-    if (currentZ > 0.08) {
+    const groundedInValley = snapshot.friends && (standingVehicle || (local.motion?.verticalVelocity === 0 && currentZ > 0));
+    if (currentZ > 0.08 && !groundedInValley) {
       this.localAirborneTimeMs += deltaMs;
       this.localWasAirborne = true;
     } else {
@@ -539,8 +600,9 @@ export class MultiplayerRendererBridge {
     // replicated aim state through the renderer's existing ADS camera rig.
     this.renderer.isAimingDownSights = local.isAiming;
     this.renderer.presentationScoped = false;
-    this.renderer.weaponRoot.visible = selectedWeaponId === 'plasma_gun' && !local.carryingHostage;
-    this.localFirearm.group.visible = !local.carryingHostage;
+    this.renderer.rightArmRoot.visible = !creativeBuilding && !isCoopSpell(selectedWeaponId);
+    this.renderer.weaponRoot.visible = selectedWeaponId === 'plasma_gun' && !local.carryingHostage && !creativeBuilding;
+    this.localFirearm.group.visible = !local.carryingHostage && !creativeBuilding;
     this.renderer.presentationReloading = weaponState?.state === 'reloading';
     this.renderer.presentationHandgunReloadProgress = selectedWeaponId === 'plasma_gun' && weaponState?.state === 'reloading'
       && weaponState.reloadStartedAtMs !== undefined && weaponState.reloadEndsAtMs !== undefined
@@ -561,9 +623,11 @@ export class MultiplayerRendererBridge {
     // rich CoopOperatorRig (rendered by syncRemotePlayers) takes its place.
     // We also drive renderer.yaw from the network angle so the camera faces
     // the direction the spectated player is actually moving/looking.
-    const useThirdPerson = isSpectating || isFallingLocal;
+    const pilotedVehicle = snapshot.friends?.vehicles.find(v => v.kind === 'aircraft' && v.pilotId === localPlayerId);
+    this.renderer.presentationVehicle = !isSpectating && !isFallingLocal ? pilotedVehicle : undefined;
+    const useThirdPerson = isSpectating || isFallingLocal || Boolean(pilotedVehicle);
     this.renderer.presentationSpectating = useThirdPerson;
-    if (useThirdPerson) {
+    if (useThirdPerson && !pilotedVehicle) {
       this.renderer.yaw = Math.atan2(-Math.cos(presentedAngle), -Math.sin(presentedAngle));
     }
     this.renderState.viewMode = useThirdPerson ? 'THIRD_PERSON' : 'FIRST_PERSON';
@@ -581,7 +645,7 @@ export class MultiplayerRendererBridge {
       // The production Buy Station model does not exist until authoritative
       // capture completes. In that snapshot the capture prop is removed and
       // this shop appears at the exact same coordinates.
-      this.renderState.shops = snapshot.buyStations.filter(station => station.state === 'active').map(station => ({ id: `coop-station-${station.id}`, position: { x: station.x, y: station.y }, radius: station.radius }));
+      this.renderState.shops = snapshot.friends ? [] : snapshot.buyStations.filter(station => station.state === 'active').map(station => ({ id: `coop-station-${station.id}`, position: { x: station.x, y: station.y }, radius: station.radius }));
       const privateExfil = snapshot.privateExfil?.state === 'active' ? snapshot.privateExfil : undefined;
       const visibleExfil = privateExfil || snapshot.run.exfil;
       this.renderState.exfillPortal = visibleExfil ? {
@@ -623,9 +687,17 @@ export class MultiplayerRendererBridge {
     // Always pass the true localPlayerId so every teammate (including the
     // spectated player) gets their rich CoopOperatorRig rendered. The caller
     // no longer uses the old thirdPersonPlayerGroup for spectating.
-    this.syncRemotePlayers(snapshot, localPlayerId, isSpectating);
+    this.syncRemotePlayers(snapshot, localPlayerId, isSpectating || Boolean(pilotedVehicle));
     this.structureVisuals.update(snapshot.structures || [], snapshot.elapsedMs);
+    this.friendsVehicleVisuals.update(snapshot.friends, snapshot.elapsedMs);
+    this.friendsBuildVisuals.update(snapshot.friends?.building);
+    this.frontierVisuals?.update(snapshot.friends?.frontier, local.x, local.y, snapshot.elapsedMs, pilotedVehicle || isSpectating ? 0 : this.friendsTool, this.friendsToolFiring);
+    const harvest = snapshot.friends?.frontier?.damage, harvestStamp = harvest && `${harvest.id}:${harvest.value}:${harvest.until}`;
+    if (harvest?.by === localPlayerId && harvest.kind && (harvest.until || 0) > snapshot.elapsedMs && harvestStamp !== this.lastFrontierHit) { soundManager.playFrontierHit(harvest.kind); this.lastFrontierHit = harvestStamp!; }
+    this.renderer.frontierToolActive = Boolean(snapshot.friends?.frontier && this.friendsTool);
     this.tacticalVisuals.update(snapshot, this.visualElapsedMs);
+    this.realityBreachVisuals.update(snapshot.realityBreach, snapshot.elapsedMs, this.renderer.camera);
+    this.renderer.setRealityBreach(snapshot.realityBreach, snapshot.elapsedMs);
     // Never render a ground trail for the operator whose camera we currently
     // own. Those rings are useful for teammates, but become a translucent
     // near-camera floor layer during jumps and spectator transitions.
@@ -653,6 +725,15 @@ export class MultiplayerRendererBridge {
 
     const engine = this.renderState as unknown as GameEngine;
     this.renderer.prepareFrame(engine, deltaMs);
+    // Arcana has its own meshes, so it must sample the posed hand after camera
+    // preparation instead of bypassing muzzle alignment via raw snapshots.
+    this.arcanaVisuals.update(snapshot, deltaMs, projectile => {
+      if (projectile.ownerId === localPlayerId && !useThirdPerson) {
+        return { position: this.renderer.projectViewmodelPointToWorld(this.localFirearm.getMuzzlePoint()), initialScale: .06 };
+      }
+      const remote = this.remotePlayers.get(projectile.ownerId);
+      return remote ? { position: remote.firearm.getMuzzlePoint().getWorldPosition(new THREE.Vector3()), initialScale: .4 } : undefined;
+    });
     if (!useThirdPerson && this.newlyObservedProjectileIds.size > 0) {
       const muzzle = selectedWeaponId === 'plasma_gun'
         ? this.renderer.projectViewmodelPointToWorld(this.renderer.weaponMuzzlePoint)
@@ -682,7 +763,12 @@ export class MultiplayerRendererBridge {
     this.exitPointerLock();
     this.renderer.renderer.domElement.removeEventListener('pointerdown', this.handleCanvasPointerDown);
     this.localFirearm.dispose();
+    this.arcanaVisuals.dispose();
+    this.friendsVehicleVisuals.dispose();
+    this.friendsBuildVisuals.dispose();
+    this.frontierVisuals?.dispose();
     this.tacticalVisuals.dispose();
+    this.realityBreachVisuals.dispose();
     this.structureVisuals.dispose();
     this.projectileImpactVisuals.dispose();
     this.trailSystem.dispose();
@@ -751,7 +837,7 @@ export class MultiplayerRendererBridge {
     this.newlyObservedProjectileIds.clear();
     this.renderProjectiles.length = 0;
     for (const source of snapshot.projectiles) {
-      if (source.weaponId === 'arc_launcher') continue;
+      if (source.weaponId === 'arc_launcher' || isCoopSpell(source.weaponId)) continue;
       active.add(source.id);
       let projectile = this.renderProjectileById.get(source.id);
       if (!projectile) {
@@ -1002,6 +1088,7 @@ export class MultiplayerRendererBridge {
     } else if (event.kind === 'damage_number' && event.playerId === localPlayerId && event.enemyId !== undefined && event.amount) {
       this.renderer.showEnemyDamageNumber(`coop-enemy-${event.enemyId}`, event.amount, event.color || '#ffffff');
     } else if (event.kind === 'enemy_hit') {
+      if (event.weaponId && isCoopSpell(event.weaponId)) this.arcanaVisuals.impact({ ...event, amount: event.weaponId === 'astral_lance' ? 65 : 45, color: COOP_WEAPON_DETAILS[event.weaponId].color, z: 24 });
       const signatureHit = event.weaponId === 'arc_launcher' ? '#93c5fd'
         : event.weaponId === 'goreline_repeater' ? '#fb7185'
           : event.weaponId === 'riftspike_array' ? '#c084fc'
@@ -1016,6 +1103,7 @@ export class MultiplayerRendererBridge {
         this.lastHitSoundAt = now;
       }
     } else if (event.kind === 'projectile_impact') {
+      if (event.weaponId && isCoopSpell(event.weaponId)) this.arcanaVisuals.impact(event);
       this.projectileImpactVisuals.spawn(
         event.x, event.y, event.z ?? 0,
         event.normalX || 0, event.normalY || 0, event.normalZ ?? 1,
@@ -1083,6 +1171,18 @@ export class MultiplayerRendererBridge {
       this.spawnBurst(event.targetX, event.targetY, event.color || '#22f59a', 7, 420, 3.5);
     } else if (event.kind === 'fabricator_charged' && event.playerId === localPlayerId) {
       soundManager.playCollect();
+    } else if (event.kind === 'grenade_detonated' || event.kind === 'spell_impact') {
+      this.arcanaVisuals.impact(event);
+      this.presentationShake = Math.max(this.presentationShake, event.kind === 'grenade_detonated' || event.weaponId === 'rift_meteor' ? 5 : 2);
+      if (event.kind === 'grenade_detonated') soundManager.playExplosion(); else soundManager.playSpell(event.weaponId || 'soul_nova', true);
+    } else if (event.kind === 'grenade_thrown' && event.playerId === localPlayerId) {
+      this.localFirearm.throwGrenade();
+      soundManager.playGrenadeThrow();
+    } else if (event.kind === 'spell_cast' && event.weaponId && isCoopSpell(event.weaponId)) {
+      if (event.playerId === localPlayerId) {
+        const predicted = event.actionId !== undefined && this.predictedFireActions.delete(event.actionId);
+        if (!predicted) { this.launchLocalSpell(event.weaponId, event.id); this.localFirearm.fire(event.weaponId); soundManager.playSpell(event.weaponId); }
+      } else this.remotePlayers.get(event.playerId || '')?.firearm.fire(event.weaponId);
     } else if (event.kind === 'weapon_fired') {
       if (event.weaponId) {
         if (event.playerId === localPlayerId) {
@@ -1374,7 +1474,10 @@ export class MultiplayerRendererBridge {
       if (fall) {
         const progress = Math.min(1, (performance.now() - fall.startedAtMs) / FALL_PRESENTATION_MS);
         updateCoopOperatorRig(remote, { ...player, x: fall.x, y: fall.y, z: this.fallHeight(fall), angle: fall.angle }, snapshot.elapsedMs, 16.666, progress);
-      } else updateCoopOperatorRig(remote, player, snapshot.elapsedMs, 16.666);
+      } else {
+        const floor = snapshot.friends && friendsVehicleFloor(snapshot.friends.vehicles, player.x, player.y, player.z);
+        updateCoopOperatorRig(remote, player, snapshot.elapsedMs, 16.666, undefined, floor !== undefined && Math.abs(player.z - floor) < 2);
+      }
     }
     for (const [id, remote] of this.remotePlayers) {
       if (active.has(id)) continue;

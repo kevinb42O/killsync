@@ -89,9 +89,9 @@ describe('CoopSimulation firearm authority', () => {
     ['solar_guard', 'dawnwall_cannon', 'conviction', 5],
     ['black_ice', 'winterglass_projector', 'rime', 5],
     ['royal_inferno', 'cinderhex_engine', 'soul_fragments', 5],
-  ] as const)('binds %s to its artifact and resource without changing the four shared firearms', (operatorId, signature, resource, maximum) => {
+  ] as const)('binds %s to its class loadout and resource', (operatorId, signature, resource, maximum) => {
     const player = new CoopSimulation([{ id: 'host', label: 'Host', color: '#0ff', operatorId }]).createSnapshot().players[0];
-    expect(player.weaponStates.map(weapon => weapon.weaponId)).toEqual(['plasma_gun', 'assault_rifle', 'combat_shotgun', signature, 'smg']);
+    expect(player.weaponStates.map(weapon => weapon.weaponId)).toEqual(operatorId === 'royal_inferno' ? ['ember_bolt', 'soul_nova', 'rift_meteor', signature, 'astral_lance'] : ['plasma_gun', 'assault_rifle', 'combat_shotgun', signature, 'smg']);
     expect(player).toMatchObject({ operatorId, artifactResource: 0, artifactResourceKind: resource, artifactResourceMax: maximum, jetFuel: 100, jetActive: false });
   });
 

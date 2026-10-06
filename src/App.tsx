@@ -1,3 +1,5 @@
+import type { CoopGameMode } from './game/multiplayer/CoopGameMode';
+import { BreachTransmission } from './components/BreachTransmission';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2, Radio, Gamepad2, Smartphone } from 'lucide-react';
@@ -98,6 +100,7 @@ export default function App() {
   });
   const [viewMode, setViewMode] = useState<ViewMode>('TOPDOWN_2D');
   const [pointerLockActive, setPointerLockActive] = useState(false);
+  const [multiplayerGameMode, setMultiplayerGameMode] = useState<CoopGameMode>(() => new URLSearchParams(window.location.search).get('mode') === 'friends' ? 'friends' : 'survival');
   const [multiplayerLaunch, setMultiplayerLaunch] = useState<MultiplayerLaunch | null>(null);
 
   const [levelUpOptions, setLevelUpOptions] = useState<any[]>([]);
@@ -1556,7 +1559,7 @@ export default function App() {
       {/* HUD */}
       {gameState === 'PLAYING' && <GameHUD engine={engineRef.current} cinematicProfile={cinematicEffects} />}
       {gameState === 'SOLO_SETUP' && <SoloRunSetup onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
-      {gameState === 'MULTIPLAYER_SETUP' && <ManualMultiplayerSetup initialRoomCode={initialRoomQuery.current} onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
+      {gameState === 'MULTIPLAYER_SETUP' && <ManualMultiplayerSetup initialGameMode={multiplayerGameMode} initialRoomCode={initialRoomQuery.current} onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
       {gameState === 'MULTIPLAYER_PLAYING' && multiplayerLaunch && <MultiplayerArena launch={multiplayerLaunch} controlScheme={controlScheme} cinematicProfile={cinematicEffects} onExit={() => { setMultiplayerLaunch(null); setGameState('MENU'); }} />}
 
       <AnimatePresence>
@@ -1657,7 +1660,7 @@ export default function App() {
             <div className="absolute inset-0 bg-black/95 backdrop-blur-md pointer-events-none z-0" />
             {/* Cyberpunk background image */}
             <div 
-              className="absolute inset-0 bg-cover bg-center pointer-events-none opacity-40 mix-blend-screen z-0"
+              className="absolute inset-0 bg-cover bg-center pointer-events-none opacity-20 mix-blend-screen z-0"
               style={{ backgroundImage: `url('/neon_cityscape_bg.png')` }}
             />
             {/* Subtle radial gradient */}
@@ -1733,15 +1736,48 @@ export default function App() {
                       SYNC
                     </span>
                   </motion.h1>
-                  <div className="main-menu-subtitle flex items-center gap-3 mb-10">
+                  <div className="main-menu-subtitle flex items-center gap-3 mb-5">
                     <div className="h-px flex-1 bg-gradient-to-r from-red-500/60 via-cyan-400/35 to-transparent" />
-                    <p className="text-white/35 text-[10px] uppercase tracking-[0.4em] font-mono">Co-op Survival Protocol</p>
+                    <p className="text-white/35 text-[10px] uppercase tracking-[0.4em] font-mono">Reality Breach / Co-op Survival</p>
                     <div className="h-px w-8 bg-white/10" />
                   </div>
                 </motion.div>
 
+                <p className="breach-menu-intro">Survive a world you can rewrite.<span>Link your squad. Weaponize the breach.</span></p>
+
                 {/* Menu Buttons */}
                 <div className="main-menu-actions flex flex-col gap-2">
+                  {/* ▸ PUBLIC CO-OP — server browser and automatic signaling */}
+                  <motion.button
+                    initial={{ x: -40, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.14, type: 'spring', damping: 20 }}
+                    onClick={(e) => {
+                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
+                      soundManager.playUIClick();
+                      setMultiplayerGameMode('survival');
+                      setGameState('MULTIPLAYER_SETUP');
+                    }}
+                    onMouseEnter={() => soundManager.playUIHover()}
+                    className="group relative flex h-14 cursor-pointer overflow-hidden"
+                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
+                  >
+                    <div className="absolute inset-0 bg-[#ffb86b] transition-all duration-300 group-hover:bg-[#ffe5c5]" />
+                    <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-black/20" />
+                    <div className="relative z-10 flex w-full items-center px-6">
+                      <div className="mr-4 flex h-8 w-8 items-center justify-center bg-black/10 text-black transition-colors group-hover:bg-black/20">
+                        <Radio size={15} />
+                      </div>
+                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-black">Enter the Breach</span>
+                      <ChevronRight size={16} className="ml-auto text-black/50 transition-all group-hover:translate-x-1 group-hover:text-black" />
+                    </div>
+                  </motion.button>
+
+                  <motion.button initial={{ x: -40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: .18 }}
+                    onClick={() => { soundManager.playUIClick(); setMultiplayerGameMode('friends'); setGameState('MULTIPLAYER_SETUP'); }}
+                    onMouseEnter={() => soundManager.playUIHover()} className="friends-menu-entry">
+                    <span className="friends-menu-entry__icon">↗</span><span><strong>Friends mode</strong><small>Sunline Frontier · mine, build, fly & explore together</small></span><ChevronRight size={16} />
+                  </motion.button>
                   {/* ▸ INITIALIZE RUN — Primary CTA */}
                   <motion.button
                     initial={{ x: -40, opacity: 0 }}
@@ -1757,44 +1793,19 @@ export default function App() {
                     style={{ clipPath: 'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 0px))' }}
                   >
                     {/* Bg fill */}
-                    <div className="absolute inset-0 bg-cyan-500 transition-all duration-300 group-hover:bg-white" />
+                    <div className="absolute inset-0 border border-cyan-300/25 bg-[#0e1b27] transition-all duration-300 group-hover:bg-[#172d3e]" />
                     {/* Scanline on hover */}
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)' }} />
                     {/* Content */}
                     <div className="relative z-10 flex items-center w-full px-6">
                       <div className="w-8 h-8 rounded-sm bg-black/20 flex items-center justify-center mr-4 group-hover:bg-black/10 transition-colors">
-                        <Play size={16} fill="currentColor" className="text-black ml-0.5" />
+                        <Play size={16} fill="currentColor" className="text-cyan-100 ml-0.5" />
                       </div>
-                      <span className="text-black font-black text-sm uppercase tracking-[0.15em]">Initialize Run</span>
-                      <ChevronRight size={18} className="text-black/40 ml-auto group-hover:translate-x-1 transition-transform" />
+                      <span className="text-cyan-100 font-black text-sm uppercase tracking-[0.15em]">Solo Recon</span>
+                      <ChevronRight size={18} className="text-cyan-100/40 ml-auto group-hover:translate-x-1 transition-transform" />
                     </div>
                     {/* Bottom accent line */}
                     <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full bg-black/20 transition-all duration-500" />
-                  </motion.button>
-
-                  {/* ▸ PUBLIC CO-OP — server browser and automatic signaling */}
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.14, type: 'spring', damping: 20 }}
-                    onClick={(e) => {
-                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
-                      soundManager.playUIClick();
-                      setGameState('MULTIPLAYER_SETUP');
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex h-12 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    <div className="absolute inset-0 border border-fuchsia-400/25 bg-fuchsia-500/[0.07] transition-all duration-300 group-hover:border-fuchsia-300/55 group-hover:bg-fuchsia-500/[0.14]" />
-                    <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-fuchsia-400/55" />
-                    <div className="relative z-10 flex w-full items-center px-6">
-                      <div className="mr-4 flex h-8 w-8 items-center justify-center bg-fuchsia-400/10 text-fuchsia-200 transition-colors group-hover:bg-fuchsia-400/20">
-                        <Radio size={15} />
-                      </div>
-                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-fuchsia-100">Multiplayer</span>
-                      <ChevronRight size={16} className="ml-auto text-fuchsia-200/40 transition-all group-hover:translate-x-1 group-hover:text-fuchsia-100" />
-                    </div>
                   </motion.button>
 
                   {/* ▸ OPERATOR SELECT */}
@@ -2068,105 +2079,7 @@ export default function App() {
                 </motion.div>
               </div>
 
-              {/* ─── RIGHT: Operator Hologram Preview ─── */}
-              {(() => {
-                const op = OPERATOR_DEFINITIONS.find(o => o.id === selectedOperator);
-                if (!op) return null;
-                const weaponDef = WEAPON_DEFINITIONS.find(w => w.id === op.startingWeaponId);
-                const bonusEntries = Object.entries(op.statBonuses).filter(([_, v]) => v !== 0);
-                return (
-                  <motion.div
-                    initial={{ opacity: 0, x: 30, scale: 0.95 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    transition={{ delay: 0.3, duration: 0.6, type: 'spring', damping: 25 }}
-                    className="hidden lg:flex flex-col items-center w-64 relative"
-                  >
-                    {/* Connecting line from buttons to hologram */}
-                    <div className="absolute left-0 top-1/2 -translate-x-full w-16 flex items-center">
-                      <motion.div
-                        initial={{ scaleX: 0 }}
-                        animate={{ scaleX: 1 }}
-                        transition={{ delay: 0.5, duration: 0.4 }}
-                        className="h-px w-full origin-right"
-                        style={{ background: `linear-gradient(90deg, transparent, ${op.color}40)` }}
-                      />
-                    </div>
-
-                    {/* Hologram container */}
-                    <div className="relative">
-                      {/* Outer glow ring */}
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-                        className="absolute -inset-4 rounded-full opacity-20"
-                        style={{ border: `1px dashed ${op.color}40` }}
-                      />
-                      {/* Main avatar circle */}
-                      <div
-                        className="w-32 h-32 rounded-full relative overflow-hidden bg-black/40"
-                        style={{
-                          boxShadow: `0 0 40px ${op.colorGlow}, 0 0 80px ${op.colorGlow}, inset 0 0 20px ${op.colorDark}`
-                        }}
-                      >
-                        <img src={`/${op.id}.png`} alt={op.name} className="w-full h-full object-cover relative z-10" />
-                        {/* Scanline overlay */}
-                        <div className="absolute inset-0 z-20 pointer-events-none opacity-[0.2]" style={{ background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)' }} />
-                        {/* Holographic tint */}
-                        <motion.div 
-                          className="absolute inset-0 mix-blend-screen z-30 pointer-events-none"
-                          style={{ backgroundColor: `${op.color}20` }}
-                          animate={{ opacity: [0.6, 1, 0.6] }}
-                          transition={{ duration: 3, repeat: Infinity }}
-                        />
-                      </div>
-                      {/* Base glow */}
-                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-24 h-1 rounded-full" style={{ background: op.color, boxShadow: `0 0 20px ${op.color}60`, opacity: 0.5 }} />
-                    </div>
-
-                    {/* Operator name */}
-                    <div className="mt-5 text-center">
-                      <div className="text-[9px] text-white/20 uppercase tracking-[0.4em] font-mono mb-1">Active Operator</div>
-                      <div className="text-lg font-black uppercase tracking-wider" style={{ color: op.color }}>{op.name}</div>
-                    </div>
-
-                    {/* Weapon loadout */}
-                    <div className="mt-3 w-full px-2">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-sm" style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)' }}>
-                        <Crosshair size={11} style={{ color: op.color }} />
-                        <span className="text-[10px] text-white/50 font-medium">{weaponDef?.name || 'Unknown'}</span>
-                        <span className="text-[8px] text-white/20 ml-auto uppercase font-mono">{weaponDef?.type}</span>
-                      </div>
-                    </div>
-
-                    {/* Stat bonuses */}
-                    {bonusEntries.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1 justify-center px-2">
-                        {bonusEntries.map(([stat, value]) => (
-                          <span
-                            key={stat}
-                            className="text-[9px] px-1.5 py-0.5 font-mono font-bold uppercase"
-                            style={{
-                              color: (value as number) > 0 ? '#4ade80' : '#f87171',
-                              background: (value as number) > 0 ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)'
-                            }}
-                          >
-                            {(value as number) > 0 ? '+' : ''}{Math.round((value as number) * 100)}% {stat.replace('_', ' ')}
-                          </span>
-                        ))}
-                        {op.baseHealth !== 100 && (
-                          <span className="text-[9px] px-1.5 py-0.5 font-mono font-bold uppercase" style={{ color: op.baseHealth > 100 ? '#4ade80' : '#f87171', background: op.baseHealth > 100 ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)' }}>
-                            {op.baseHealth} hp
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Decorative corner markers */}
-                    <div className="absolute top-0 right-0 w-6 h-6 border-t border-r opacity-10" style={{ borderColor: op.color }} />
-                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b border-l opacity-10" style={{ borderColor: op.color }} />
-                  </motion.div>
-                );
-              })()}
+              <BreachTransmission />
             </div>
 
             {/* Credit */}

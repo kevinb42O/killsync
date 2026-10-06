@@ -88,7 +88,7 @@ export class CoopTacticalVisuals {
       (signal.material as THREE.MeshBasicMaterial).color.set(color);
     }
     const foundry = snapshot.weaponFoundry;
-    if (foundry && foundry.state !== 'locked') {
+    if (!snapshot.friends && foundry && foundry.state !== 'locked') {
       const key = `weapon-foundry-${foundry.id}`;
       active.add(key);
       const zone = this.getFoundryZone(key);

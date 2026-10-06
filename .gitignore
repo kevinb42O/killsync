@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local frames extracted from user-supplied debugging recordings
+artifacts/terrain-recording/

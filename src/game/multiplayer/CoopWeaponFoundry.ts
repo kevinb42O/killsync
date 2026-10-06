@@ -52,6 +52,8 @@ export class CoopWeaponFoundry {
 
   constructor(readonly id: number, readonly x: number, readonly y: number) {}
 
+  openForExpedition() { this.state = 'active'; this.progressMs = COOP_FOUNDRY_CAPTURE_MS; }
+
   unlock() { if (this.state === 'locked') this.state = 'available'; }
 
   update(deltaMs: number, players: readonly Actor[], enemies: readonly Actor[]) {

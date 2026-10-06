@@ -1,3 +1,4 @@
+import { isCoopSpell, COOP_SPELLS } from '../game/combat/coopSpells';
 import { Coins, Hammer, X } from 'lucide-react';
 import { COOP_FIREARM_BY_ID, type CoopFirearmId } from '../game/combat/coopFirearms';
 import { coopFoundryUpgradeCost, COOP_FOUNDRY_MAX_WEAPON_LEVEL } from '../game/multiplayer/CoopWeaponFoundry';
@@ -24,7 +25,7 @@ export function CoopWeaponFoundryMenu({ player, message, tr, onForge, onClose }:
           const cost = maxed ? 0 : coopFoundryUpgradeCost(runtime.level);
           const disabled = maxed || player.coins < cost;
           return <button key={weaponId} disabled={disabled} onClick={() => onForge(weaponId)} className="flex items-center justify-between border border-amber-300/25 bg-amber-400/[.06] px-4 py-3 text-left transition enabled:hover:border-amber-200/60 enabled:hover:bg-amber-400/[.13] disabled:opacity-45">
-            <span><b className="block text-xs uppercase tracking-wider text-white">{tr(coopWeaponNameKey(weaponId))}</b><small className="font-mono text-amber-100/60">{tr('hud.weaponLevel', { level: runtime.level })} · {tr(coopAmmoTypeKey(COOP_FIREARM_BY_ID[weaponId].ammoType))}</small></span>
+            <span><b className="block text-xs uppercase tracking-wider text-white">{tr(coopWeaponNameKey(weaponId))}</b><small className="font-mono text-amber-100/60">{tr('hud.weaponLevel', { level: runtime.level })} · {isCoopSpell(weaponId) ? `${COOP_SPELLS[weaponId].cost} ${tr('hud.mana')} · ${COOP_SPELLS[weaponId].cooldownMs / 1000}s` : tr(coopAmmoTypeKey(COOP_FIREARM_BY_ID[weaponId].ammoType))}</small></span>
             <span className="text-right text-[10px] font-black uppercase text-amber-200">{maxed ? tr('foundry.maxLevel') : <>{tr('foundry.nextLevel', { level: runtime.level + 1 })}<small className="mt-1 block font-mono text-white/65">{tr('unit.credits', { value: cost })}</small></>}</span>
           </button>;
         })}

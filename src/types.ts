@@ -71,7 +71,7 @@ export interface Enemy extends Entity {
   presentationDeathProgress?: number;
   presentationAttackCharge?: number;
   /** Co-op world faction skin; gameplay still uses the compact shared role. */
-  presentationWorldId?: 'neon_bastion' | 'cinderworks' | 'white_silence' | 'null_garden';
+  presentationWorldId?: 'neon_bastion' | 'cinderworks' | 'white_silence' | 'null_garden' | 'friends_frontier';
   presentationArchetypeName?: string;
   /** Solo-mode authored attack state. Co-op carries equivalent state in its
    * authoritative snapshot rather than trusting renderer-local timers. */

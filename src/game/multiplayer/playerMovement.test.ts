@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FRIENDS_LAKE_LEVEL } from '../world/FriendsTerrain';
 import { getBarricadeWallContact, resolveBarricadeCollision, type CoopStructureSnapshot } from './CoopFieldEngineering';
 import {
   advancePlayerMovement,
@@ -38,6 +39,15 @@ const resolveStructureContact = (position: { x: number; y: number }, radius: num
   getBarricadeWallContact(position, radius, barricade);
 
 describe('co-op player movement', () => {
+  it('walks at normal speed through the former lake and on a raised boardwalk',()=>{
+    const water={...motion(),x:7440,y:6520,z:0,verticalVelocity:0};
+    const boardwalk={...water,z:FRIENDS_LAKE_LEVEL+8};
+    advancePlayerMovement(water,input(1,false),50,undefined,undefined,()=>FRIENDS_LAKE_LEVEL-64,'friends_frontier');
+    advancePlayerMovement(boardwalk,input(1,false),50,undefined,undefined,()=>FRIENDS_LAKE_LEVEL+8,'friends_frontier');
+    expect(water.x-7440).toBeCloseTo(15);
+    expect(boardwalk.x-7440).toBeCloseTo(15);
+    expect(boardwalk.z).toBe(FRIENDS_LAKE_LEVEL+8);
+  });
   it('slows a hostage carrier by 18 percent and prevents sprinting', () => {
     const normal = { ...motion(), x: 6_100, y: 6_000, z: 0, verticalVelocity: 0 };
     const carrier = { ...normal, carryingHostage: true };

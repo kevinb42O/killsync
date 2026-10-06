@@ -49,7 +49,7 @@ export function createInterestSnapshot(snapshot: CoopSnapshot, playerId?: string
   const objectiveEnemyId = snapshot.run.objective?.kind === 'elite_hunt' ? snapshot.run.objective.targetEnemyId : undefined;
   const boss = snapshot.run.boss;
   const quantizePosition = <T extends { x: number; y: number }>(entity: T): T => ({ ...entity, x: q(entity.x), y: q(entity.y) });
-  const isRelevantEvent = (event: CoopSnapshot['combatEvents'][number]) => event.kind === 'station_online' || event.kind === 'foundry_online' || event.kind === 'arc_beam' || event.kind === 'arc_chain' || event.kind === 'artifact_cast' || interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId;
+  const isRelevantEvent = (event: CoopSnapshot['combatEvents'][number]) => event.kind.startsWith('breach_') || event.kind === 'station_online' || event.kind === 'foundry_online' || event.kind === 'arc_beam' || event.kind === 'arc_chain' || event.kind === 'artifact_cast' || interested(event) || event.playerId === playerId || event.killedByPlayerId === playerId;
 
   return {
     ...snapshot,
@@ -57,6 +57,8 @@ export function createInterestSnapshot(snapshot: CoopSnapshot, playerId?: string
     enemies: snapshot.enemies
       .filter(enemy => interested(enemy) || enemy.id === objectiveEnemyId || Boolean(boss && Math.hypot(enemy.x - boss.x, enemy.y - boss.y) <= enemy.radius + 8))
       .map(enemy => ({ ...quantizePosition(enemy), health: q(enemy.health, 10), facingAngle: enemy.facingAngle === undefined ? undefined : q(enemy.facingAngle, 1_000) })),
+    grenades: snapshot.grenades?.filter(interested).map(quantizePosition),
+    spellZones: snapshot.spellZones?.filter(interested).map(quantizePosition),
     projectiles: snapshot.projectiles.filter(projectile => interested(projectile)).map(projectile => ({ ...quantizePosition(projectile), z: q(projectile.z), angle: q(projectile.angle, 1_000), pitch: q(projectile.pitch, 1_000), lifeMs: Math.round(projectile.lifeMs) })),
     gems: snapshot.gems
       .filter(interested)

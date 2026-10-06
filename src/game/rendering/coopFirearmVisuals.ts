@@ -1,9 +1,11 @@
+import { COOP_SPELLS, isCoopSpell } from '../combat/coopSpells';
+import { buildCastingHand } from './SpellcastingHand';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COOP_FIREARM_BY_ID, type CoopFirearmId, type CoopWeaponRuntime } from '../combat/coopFirearms';
 
 type SuitMaterials = { forearm: THREE.MeshStandardMaterial; armor: THREE.MeshStandardMaterial; hand: THREE.MeshStandardMaterial; glow: THREE.MeshBasicMaterial };
-type VisualParts = { root: THREE.Group; bolt?: THREE.Object3D; magazine?: THREE.Object3D; pump?: THREE.Object3D; magazineHome?: THREE.Vector3; magazineRotationHome?: THREE.Euler; pumpHome?: THREE.Vector3; boltHome?: THREE.Vector3; muzzle: THREE.Object3D; flash: THREE.Sprite; flashMaterial: THREE.SpriteMaterial; accent: THREE.MeshBasicMaterial; suit?: SuitMaterials };
+type VisualParts = { root: THREE.Group; bolt?: THREE.Object3D; magazine?: THREE.Object3D; pump?: THREE.Object3D; magazineHome?: THREE.Vector3; magazineRotationHome?: THREE.Euler; pumpHome?: THREE.Vector3; boltHome?: THREE.Vector3; muzzle: THREE.Object3D; flash: THREE.Sprite; flashMaterial: THREE.SpriteMaterial; accent: THREE.MeshBasicMaterial; suit?: SuitMaterials; updateCasting?: (elapsedMs: number, cast: number, throwPose: number) => void; disposeCasting?: () => void };
 
 const bodyGeometry = new THREE.BoxGeometry(1, 1, 1);
 const roundedBodyGeometry = new RoundedBoxGeometry(1, 1, 1, 2, .08);
@@ -13,6 +15,10 @@ const detailedTubeGeometry = new THREE.CylinderGeometry(.16, .16, 1, 12);
 const WEAPON_PALETTES: Record<CoopFirearmId, { dark: number; panel: number; steel: number; trim: number; rubber: number }> = {
   // These values deliberately preserve the existing modular handgun. The
   // first-person handgun remains the separately authored Renderer3D model.
+  ember_bolt: { dark: 0x21102a, panel: 0x542968, steel: 0xc5a779, trim: 0xffab5b, rubber: 0x12091c },
+  soul_nova: { dark: 0x21102a, panel: 0x542968, steel: 0xc5a779, trim: 0xb9a3ff, rubber: 0x12091c },
+  rift_meteor: { dark: 0x21102a, panel: 0x542968, steel: 0xc5a779, trim: 0xff735f, rubber: 0x12091c },
+  astral_lance: { dark: 0x21102a, panel: 0x542968, steel: 0xc5a779, trim: 0x81f6ff, rubber: 0x12091c },
   plasma_gun: { dark: 0x111c2c, panel: 0x38516d, steel: 0x8aa4bb, trim: 0x67e8f9, rubber: 0x0b111c },
   assault_rifle: { dark: 0x0b1b19, panel: 0x245044, steel: 0x8fbeb0, trim: 0x34d399, rubber: 0x07110f },
   combat_shotgun: { dark: 0x21130c, panel: 0x61321b, steel: 0xd0a064, trim: 0xfb923c, rubber: 0x140b07 },
@@ -39,20 +45,21 @@ export class CoopFirearmVisualRig {
   readonly group = new THREE.Group();
   private readonly parts = new Map<CoopFirearmId, VisualParts>();
   private current: CoopFirearmId = 'plasma_gun';
-  private recoil = 0; private flashLife = 0;
+  private recoil = 0; private flashLife = 0; private throwLife = 0; private castLife = 0;
 
   constructor(private readonly firstPerson: boolean) {
     this.group.name = firstPerson ? 'Coop Firearm Viewmodel Rig' : 'Coop Firearm Remote Rig';
-    (Object.keys(COOP_FIREARM_BY_ID) as CoopFirearmId[]).forEach(id => {
-      const parts = buildFirearm(id, firstPerson); parts.root.visible = id === this.current && !(firstPerson && id === 'plasma_gun'); this.parts.set(id, parts); this.group.add(parts.root);
-    });
+    // Build only models that this operator actually equips. A full squad no
+    // longer allocates every firearm and all five casting hands at spawn.
+    const initial = buildFirearm(this.current, firstPerson);
+    initial.root.visible = !firstPerson; this.parts.set(this.current, initial); this.group.add(initial.root);
     // fpsWeaponGroup already owns the camera-relative -Z placement. Adding a
     // second offset here made long guns look toy-sized in the wide-FOV pass.
     if (firstPerson) { this.group.position.set(0, 0, 0); this.group.scale.setScalar(1.30); }
     else { this.group.position.set(.1, 27, 20); this.group.scale.setScalar(1.15); }
   }
 
-  dispose() { this.group.removeFromParent(); for (const parts of this.parts.values()) { parts.flashMaterial.dispose(); parts.accent.dispose(); } }
+  dispose() { this.group.removeFromParent(); for (const parts of this.parts.values()) { if (parts.disposeCasting) { parts.disposeCasting(); continue; } parts.flashMaterial.dispose(); parts.accent.dispose(); for (const material of parts.root.userData.firearmResources?.materials || []) material.dispose(); for (const geometry of parts.root.userData.firearmResources?.geometries || []) geometry.dispose(); } }
   /** Copies the existing right-arm palette instead of inventing a second suit. */
   matchSuitPalette(dark: THREE.Color, secondary: THREE.Color, primary: THREE.Color) {
     for (const parts of this.parts.values()) {
@@ -63,10 +70,19 @@ export class CoopFirearmVisualRig {
       suit.glow.color.copy(primary);
     }
   }
-  fire(id: CoopFirearmId) { if (id !== this.current) return; const definition = COOP_FIREARM_BY_ID[id]; this.recoil = Math.max(this.recoil, definition.recoil.kick); this.flashLife = 1; }
+  fire(id: CoopFirearmId) { if (id !== this.current) return; const definition = COOP_FIREARM_BY_ID[id]; this.recoil = Math.max(this.recoil, definition.recoil.kick); this.flashLife = 1; if (isCoopSpell(id)) this.castLife = 1; }
+  throwGrenade() { this.throwLife = 1; }
   getMuzzlePoint() { return this.parts.get(this.current)!.muzzle; }
-  setWeapon(id: CoopFirearmId) { if (id === this.current) return; this.parts.get(this.current)!.root.visible = false; this.current = id; this.parts.get(id)!.root.visible = !(this.firstPerson && id === 'plasma_gun'); this.recoil = .4; }
+  setWeapon(id: CoopFirearmId) {
+    if (id === this.current) return;
+    this.parts.get(this.current)!.root.visible = false; this.current = id;
+    let parts = this.parts.get(id);
+    if (!parts) { parts = buildFirearm(id, this.firstPerson); this.parts.set(id, parts); this.group.add(parts.root); }
+    parts.root.visible = !(this.firstPerson && id === 'plasma_gun'); this.recoil = .4; this.castLife = 0;
+  }
   update(state: CoopWeaponRuntime, elapsedMs: number, deltaMs: number, aiming: boolean) {
+    this.throwLife = Math.max(0, this.throwLife - deltaMs / 550);
+    this.castLife = Math.max(0, this.castLife - deltaMs / 300);
     this.setWeapon(state.weaponId); const parts = this.parts.get(this.current)!; const definition = COOP_FIREARM_BY_ID[this.current];
     this.recoil *= Math.exp(-deltaMs / definition.recoil.recoveryMs); this.flashLife = Math.max(0, this.flashLife - deltaMs / 52);
     const isReloading = state.state === 'reloading';
@@ -75,13 +91,23 @@ export class CoopFirearmVisualRig {
         ? THREE.MathUtils.clamp((elapsedMs - (state.reloadEndsAtMs - definition.shellInsertMs!)) / definition.shellInsertMs!, 0, 1)
         : THREE.MathUtils.clamp((elapsedMs - state.reloadStartedAtMs) / Math.max(1, state.reloadEndsAtMs - state.reloadStartedAtMs), 0, 1)
       : 0;
+    if (isCoopSpell(this.current)) {
+      parts.root.position.x = this.firstPerson ? .75 : 0;
+      // Wrist recoil deforms the sleeve; the shoulder stays behind the camera.
+      parts.root.position.y = 0; parts.root.position.z = 0;
+      parts.root.rotation.set(this.firstPerson ? 0 : -.28, 0, 0);
+      parts.updateCasting?.(elapsedMs, this.castLife * this.castLife, Math.sin(this.throwLife * Math.PI));
+      return;
+    }
     // Reloading deliberately drops the rifle into frame and rolls it toward
     // the support hand. This makes the movement read as an actual reload even
     // in peripheral vision, rather than just a UI timer changing.
     const reloadPose = isReloading ? 1 : 0;
+    const throwPose = Math.sin(this.throwLife * Math.PI);
     const reloadSway = isReloading ? Math.sin(elapsedMs * .018) * .035 : 0;
     parts.root.position.z = (this.firstPerson ? this.recoil * .42 : this.recoil * .06) + reloadPose * (this.firstPerson ? .62 : .12);
-    parts.root.rotation.x = (this.firstPerson ? -this.recoil * .17 : -this.recoil * .06) + reloadPose * (this.firstPerson ? .48 : .12);
+    parts.root.position.y = -throwPose * .7;
+    parts.root.rotation.x = throwPose * .9 + (this.firstPerson ? -this.recoil * .17 : -this.recoil * .06) + reloadPose * (this.firstPerson ? .48 : .12);
     parts.root.rotation.z = reloadPose * (this.firstPerson ? -.20 : -.05) + reloadSway;
     parts.flash.visible = this.flashLife > .01; parts.flash.material.opacity = this.flashLife; parts.flash.scale.setScalar((this.firstPerson ? 1.65 : .65) * (1 + this.flashLife));
     const glow = .48 + Math.sin(elapsedMs * .009) * .16; parts.accent.opacity = glow;
@@ -117,12 +143,12 @@ export class CoopFirearmVisualRig {
 export function createRemoteFirearm(id: CoopFirearmId) { const rig = new CoopFirearmVisualRig(false); rig.setWeapon(id); return rig; }
 
 function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
+  if (isCoopSpell(id)) return buildCastingHand(COOP_SPELLS[id].color, firstPerson);
   const definition = COOP_FIREARM_BY_ID[id], root = new THREE.Group(), palette = WEAPON_PALETTES[id], isHandgun = id === 'plasma_gun';
   const archetype = id === 'goreline_repeater' ? 'assault_rifle'
     : id === 'riftspike_array' || id === 'dawnwall_cannon' ? 'arc_launcher'
       : id === 'winterglass_projector' ? 'smg'
-        : id === 'cinderhex_engine' ? 'combat_shotgun'
-          : id;
+        : id;
   const dark = new THREE.MeshStandardMaterial({ color: palette.dark, emissive: isHandgun ? 0x07101d : palette.dark, emissiveIntensity: isHandgun ? .65 : .28, metalness: .92, roughness: isHandgun ? .19 : .24 });
   const panel = new THREE.MeshStandardMaterial({ color: palette.panel, emissive: isHandgun ? 0x0b1829 : palette.dark, emissiveIntensity: isHandgun ? .75 : .34, metalness: .8, roughness: isHandgun ? .24 : .28 });
   const steel = new THREE.MeshStandardMaterial({ color: palette.steel, emissive: isHandgun ? 0x182b3d : palette.dark, emissiveIntensity: isHandgun ? .45 : .16, metalness: .96, roughness: isHandgun ? .12 : .18 });
@@ -309,13 +335,16 @@ function buildFirearm(id: CoopFirearmId, firstPerson: boolean): VisualParts {
     }
     for (const x of [-.32, .32]) addTube(.20, 2.65, [x, .02, -5.15], accentMetal);
   }
-  if (id === 'cinderhex_engine') {
-    const furnace = addTube(.68, 1.85, [0, .05, -2.80], glass); furnace.scale.x *= 1.15; furnace.scale.z *= 1.15;
-    for (let fin = 0; fin < 5; fin++) addBox([1.65, .13, .18], [0, -.10, -4.25 - fin * .58], fin % 2 ? accentMetal : steel);
-    for (const x of [-.73, .73]) addTube(.14, 3.10, [x, -.34, -4.65], accent);
-  }
   const muzzleData = mountMuzzle(archetype === 'arc_launcher' ? -7.82 : archetype === 'combat_shotgun' ? -8.85 : archetype === 'assault_rifle' ? -7.90 : archetype === 'smg' ? -6.18 : -6.15);
   root.traverse(node => { if (node instanceof THREE.Mesh) { node.castShadow = false; node.receiveShadow = false; } });
+  const resources = { materials: new Set<THREE.Material>(), geometries: new Set<THREE.BufferGeometry>() };
+  root.traverse(object => {
+    if (object instanceof THREE.Mesh || object instanceof THREE.Sprite) {
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) resources.materials.add(material);
+      if (object instanceof THREE.Mesh && !([bodyGeometry, roundedBodyGeometry, tubeGeometry, detailedTubeGeometry] as THREE.BufferGeometry[]).includes(object.geometry)) resources.geometries.add(object.geometry);
+    }
+  });
+  root.userData.firearmResources = resources;
   return { root, bolt, magazine, pump, magazineHome: magazine?.position.clone(), magazineRotationHome: magazine?.rotation.clone(), pumpHome: pump?.position.clone(), boltHome: bolt?.position.clone(), muzzle: muzzleData.muzzle, flash: muzzleData.flash, flashMaterial: muzzleData.flashMaterial, accent, suit };
 }
 

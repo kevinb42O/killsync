@@ -15,7 +15,7 @@ export type SnapshotWirePayload =
     entities?: Partial<Record<EntityArrayKey, EntityArrayPatch>>;
   };
 
-type EntityArrayKey = 'players' | 'enemies' | 'projectiles' | 'gems' | 'items' | 'ammoCaches' | 'combatEvents' | 'hazards' | 'pings' | 'structures' | 'artifactEffects';
+type EntityArrayKey = 'players' | 'enemies' | 'projectiles' | 'gems' | 'items' | 'ammoCaches' | 'combatEvents' | 'hazards' | 'pings' | 'structures' | 'artifactEffects' | 'grenades' | 'spellZones';
 type IdentifiedEntity = { id: string | number; [key: string]: unknown };
 
 export type JsonPatch = {
@@ -36,6 +36,7 @@ export type JsonPatch = {
  * untouched, and unknown future keys still pass through safely.
  */
 const COMPACT_KEYS: Readonly<Record<string, string>> = {
+  frontier: 'ff', terrain: 'ft', edits: 'fe', harvested: 'fh', planted: 'fp', packs: 'fk', cargo: 'fg', feedback: 'fb', contracts: 'fn', chopped: 'fx', mined: 'fy', built: 'fz', upgrades: 'fu', shape: 'shp', finish: 'fin', author: 'aut', rotation: 'rot', revision: 'rev', pieces: 'pcs', guestsCanBuild: 'gcb',
   format: 'f', snapshot: 's', baseTransportTick: 'bt', globals: 'g', entities: 'es', value: 'v', object: 'o', array: 'ar', remove: 'rm', upsert: 'u', set: 'st', patch: 'pt',
   tick: 't', elapsedMs: 'em', kills: 'k', world: 'w', bridge: 'b', players: 'pl', enemies: 'en', projectiles: 'pr', gems: 'gm', items: 'it', ammoCaches: 'ac', combatEvents: 'ce', hazards: 'hz', pings: 'pg', structures: 'sr', artifactEffects: 'ae',
   id: 'i', x: 'x', y: 'y', z: 'z', angle: 'a', health: 'h', maxHealth: 'mh', type: 'ty', color: 'c', radius: 'r', damage: 'd', speed: 'sp', experienceValue: 'xp', hitFlashMs: 'hf', hitFlashUntilMs: 'hu', slowMultiplier: 'sm', isHolder: 'ih', dying: 'dy', deathRemainingMs: 'dm', targetPlayerId: 'tp', spawnPacketId: 'si', facingAngle: 'fa', attackWindupUntilMs: 'aw', chillStacks: 'cs', chillRemainingMs: 'cr', cinderhexStacks: 'xs', cinderhexRemainingMs: 'xr', missionId: 'mi', missionRole: 'mr', worldId: 'wi', archetypeName: 'an',
@@ -75,7 +76,7 @@ type EntityArrayPatch = { upsert?: EntityPatch[]; remove?: Array<string | number
 
 const ENTITY_ARRAYS: readonly EntityArrayKey[] = [
   'players', 'enemies', 'projectiles', 'gems', 'items', 'ammoCaches',
-  'combatEvents', 'hazards', 'pings', 'structures', 'artifactEffects',
+  'combatEvents', 'hazards', 'pings', 'structures', 'artifactEffects', 'grenades', 'spellZones',
 ];
 const ENTITY_ARRAY_SET = new Set<string>(ENTITY_ARRAYS);
 const KEYFRAME_INTERVAL = 20;

@@ -6,10 +6,10 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v31 adds compact keyframe/delta world replication. Incrementing this makes
+/** v41 opens spawn-area excavation and removes the former lake slowdown, alongside cave exploration and free construction testing. Incrementing this makes
  * a stale tab fail the handshake cleanly instead of silently misreading the
  * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 31;
+export const MULTIPLAYER_PROTOCOL_VERSION = 41;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
@@ -31,6 +31,7 @@ export interface MultiplayerInputFrame {
   aimAngle: number;
   /** Quantized camera pitch. Zero is the lowest valid look angle. */
   aimPitch: number;
+  friendsTool?: 0 | 1 | 2 | 3 | 4;
   selectedSlot: number;
   firing: boolean;
   /** Monotonic trigger-pull id. Repeated input frames make semi-auto fire
@@ -39,6 +40,8 @@ export interface MultiplayerInputFrame {
   /** Monotonic right-click artifact-spender request. Ordinary guns still use
    * `aiming`; only the selected signature weapon consumes this action. */
   altFireActionId?: number;
+  /** Monotonic throw intent; the host consumes an edge once, even when denied. */
+  grenadeActionId?: number;
   /** Edge-triggered reload request, consumed by the authoritative host. */
   reloadPressed?: boolean;
   /** Held right-mouse aim state; spread is validated by the host. */
@@ -114,7 +117,7 @@ export interface CoopAdminNotice {
   modified?: boolean;
 }
 
-type MultiplayerReliableEventName = 'ready' | 'spectate' | 'roster' | 'start' | 'skin_update' | 'cast' | 'revive' | 'station_purchase' | 'station_purchase_result' | 'operator_redeploy' | 'operator_redeploy_result' | 'foundry_upgrade' | 'foundry_upgrade_result' | 'build_structure' | 'build_structure_result' | 'dismantle_structure' | 'dismantle_structure_result' | 'structure_action' | 'structure_action_result' | 'inventory_drop' | 'imprint_update' | 'leave' | 'error' | 'ping' | 'chat' | 'admin_request' | 'admin_result' | 'admin_notice';
+type MultiplayerReliableEventName = 'ready' | 'spectate' | 'roster' | 'start' | 'skin_update' | 'cast' | 'revive' | 'station_purchase' | 'station_purchase_result' | 'operator_redeploy' | 'operator_redeploy_result' | 'foundry_upgrade' | 'foundry_upgrade_result' | 'friends_action' | 'friends_action_result' | 'friends_build' | 'friends_build_result' | 'build_structure' | 'build_structure_result' | 'dismantle_structure' | 'dismantle_structure_result' | 'structure_action' | 'structure_action_result' | 'inventory_drop' | 'imprint_update' | 'leave' | 'error' | 'ping' | 'chat' | 'admin_request' | 'admin_result' | 'admin_notice';
 
 interface MultiplayerReliableEventBase {
   type: 'event';
@@ -196,6 +199,7 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   movement: boundedInteger(frame.movement, 15),
   aimAngle: boundedInteger(frame.aimAngle, 65535),
   aimPitch: boundedInteger(frame.aimPitch, 65535),
+  friendsTool: boundedInteger(frame.friendsTool, 4) as 0 | 1 | 2 | 3 | 4,
   // The simulation clamps this against the real live weapon catalogue. Keep
   // the transport future-proof without letting malformed packets grow unbound.
   selectedSlot: boundedInteger(frame.selectedSlot, 31),
@@ -204,6 +208,7 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   firing: Boolean(frame.firing),
   fireActionId: boundedInteger(frame.fireActionId, Number.MAX_SAFE_INTEGER),
   altFireActionId: boundedInteger(frame.altFireActionId, Number.MAX_SAFE_INTEGER),
+  grenadeActionId: boundedInteger(frame.grenadeActionId, Number.MAX_SAFE_INTEGER),
   reloadPressed: Boolean(frame.reloadPressed),
   aiming: Boolean(frame.aiming),
   sprinting: Boolean(frame.sprinting),

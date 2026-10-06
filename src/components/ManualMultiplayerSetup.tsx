@@ -1,3 +1,4 @@
+import { normalizeCoopGameMode, type CoopGameMode } from '../game/multiplayer/CoopGameMode';
 import { useEffect, useRef, useState } from 'react';
 import {
   Check,
@@ -57,16 +58,19 @@ export interface MultiplayerLaunch {
   language: CoopLanguage;
   /** Host-selected deployment. Guests receive this in the reliable start event. */
   worldId: WorldId;
+  gameMode?: CoopGameMode;
 }
 
 export function createSoloMultiplayerLaunch({
   player = createLocalPlayerSeed(),
   language = readCoopLanguage(),
   worldId = readCoopWorldProgress().unlockedWorldIds.at(-1) || 'neon_bastion',
+  gameMode = 'survival',
 }: {
   player?: CoopPlayerSeed;
   language?: CoopLanguage;
   worldId?: WorldId;
+  gameMode?: CoopGameMode;
 } = {}): MultiplayerLaunch {
   const soloPlayer = {
     ...player,
@@ -84,16 +88,19 @@ export function createSoloMultiplayerLaunch({
     peerPlayerIds: {},
     soloTest: true,
     language,
-    worldId,
+    gameMode,
+    worldId: gameMode === 'friends' ? 'friends_frontier' : worldId,
   };
 }
 
 export function ManualMultiplayerSetup({
   initialRoomCode,
+  initialGameMode = 'survival',
   onClose,
   onLaunch,
 }: {
   initialRoomCode?: string;
+  initialGameMode?: CoopGameMode;
   onClose: () => void;
   onLaunch: (launch: MultiplayerLaunch) => void;
 }) {
@@ -109,6 +116,7 @@ export function ManualMultiplayerSetup({
   const spectatingRef = useRef(false);
 
   const [mode, setMode] = useState<SetupMode>('choose');
+  const [gameMode, setGameMode] = useState<CoopGameMode>(initialGameMode);
   const [lobbies, setLobbies] = useState<PublicLobby[]>([]);
   const [peers, setPeers] = useState<MultiplayerPeerInfo[]>([]);
   const [guestPlayers, setGuestPlayers] = useState<CoopPlayerSeed[]>([]);
@@ -129,6 +137,7 @@ export function ManualMultiplayerSetup({
   const [imprintProfile, setImprintProfile] = useState(readCoopImprintProfile);
   const [worldProgress] = useState(readCoopWorldProgress);
   const [selectedWorldId, setSelectedWorldId] = useState<WorldId>(() => readCoopWorldProgress().unlockedWorldIds.at(-1) || 'neon_bastion');
+  const launchWorldId: WorldId = gameMode === 'friends' ? 'friends_frontier' : selectedWorldId;
   const activeSkin = COOP_SKINS.find(s => s.id === selectedSkinId) || COOP_SKINS[0];
   const activeOperator = COOP_OPERATOR_BY_ID[activeSkin.id];
   const activeSignature = COOP_FIREARM_BY_ID[activeOperator.signatureWeaponId];
@@ -300,7 +309,7 @@ export function ManualMultiplayerSetup({
           const players = start?.players;
           if (!players || (!spectatingRef.current && !players.some(player => player.id === localPlayerRef.current.id))) return;
           handedOffRef.current = true;
-          onLaunch({ role: spectatingRef.current ? 'spectator' : 'guest', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: {}, lobbyJoin: joinRef.current || undefined, language, worldId: start.worldId });
+          onLaunch({ role: spectatingRef.current ? 'spectator' : 'guest', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: {}, lobbyJoin: joinRef.current || undefined, language, worldId: start.worldId, gameMode: start.gameMode });
         }
       },
     });
@@ -413,7 +422,7 @@ export function ManualMultiplayerSetup({
   const copyInviteLink = async () => {
     if (!currentRoomCode) return;
     try {
-      const url = `${window.location.origin}${window.location.pathname}?room=${currentRoomCode}`;
+      const url = `${window.location.origin}${window.location.pathname}?room=${currentRoomCode}&mode=${gameMode}`;
       await navigator.clipboard.writeText(url);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2500);
@@ -437,16 +446,16 @@ export function ManualMultiplayerSetup({
     const session = sessionRef.current;
     if (!session) return;
     const players = [localPlayerRef.current, ...guestPlayersRef.current];
-    session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: { players, worldId: selectedWorldId } });
+    session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: { players, worldId: launchWorldId, gameMode } });
     hostedLobbyRef.current?.update(players.length, 'in_game');
     handedOffRef.current = true;
-    onLaunch({ role: 'host', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: { ...peerPlayerIdsRef.current }, hostedLobby: hostedLobbyRef.current || undefined, language, worldId: selectedWorldId });
+    onLaunch({ role: 'host', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: { ...peerPlayerIdsRef.current }, hostedLobby: hostedLobbyRef.current || undefined, language, worldId: launchWorldId, gameMode });
   };
 
   const launchSolo = () => {
     if (!applyNickname()) return;
     sessionRef.current?.close();
-    const launch = createSoloMultiplayerLaunch({ player: localPlayerRef.current, language, worldId: selectedWorldId });
+    const launch = createSoloMultiplayerLaunch({ player: localPlayerRef.current, language, worldId: launchWorldId, gameMode });
     sessionRef.current = launch.session;
     guestPlayersRef.current = [];
     peerPlayerIdsRef.current = {};
@@ -524,7 +533,7 @@ export function ManualMultiplayerSetup({
   };
 
   return (
-    <div className="coop-setup-screen absolute inset-0 z-[110] flex items-center justify-center p-3 md:p-6">
+    <div className={`coop-setup-screen ${gameMode === 'friends' ? 'coop-setup-screen--friends' : ''} absolute inset-0 z-[110] flex items-center justify-center p-3 md:p-6`}>
       <div className="coop-setup-screen__city" aria-hidden="true" />
       <div className="coop-setup-screen__grid" aria-hidden="true" />
       <section className="coop-setup-shell relative flex max-h-[94dvh] w-full max-w-6xl flex-col">
@@ -548,7 +557,7 @@ export function ManualMultiplayerSetup({
                 </span>
               </div>
               <p className="coop-setup-header__subtitle">
-                {tr('setup.subtitle')}
+                {gameMode === 'friends' ? 'Meet in Sunline Valley. The host saves your shared discoveries.' : tr('setup.subtitle')}
               </p>
             </div>
           </div>
@@ -565,6 +574,14 @@ export function ManualMultiplayerSetup({
           </button>
         </header>
 
+        {(mode === 'choose' || mode === 'host' || mode === 'direct_host') && <div className="coop-mode-picker" aria-label="Game mode">
+          <button type="button" aria-pressed={gameMode === 'survival'} onClick={() => setGameMode('survival')} className={gameMode === 'survival' ? 'is-selected' : ''}>
+            <span>SURVIVAL</span><strong>Reality Breach</strong><small>The original combat run. Waves, bosses, extraction.</small>
+          </button>
+          <button type="button" aria-pressed={gameMode === 'friends'} onClick={() => setGameMode('friends')} className={gameMode === 'friends' ? 'is-selected coop-mode-picker__friends' : 'coop-mode-picker__friends'}>
+            <span>FRIENDS MODE</span><strong>Sunline Expedition</strong><small>Harvest forests. Dig into mountains. Forge tools, build outposts and haul cargo with friends.</small>
+          </button>
+        </div>}
         {/* Command Navigation Tabs */}
         {mode === 'choose' && (
           <nav className="coop-setup-nav" aria-label="Multiplayer setup navigation">
@@ -664,20 +681,20 @@ export function ManualMultiplayerSetup({
 
                   <CoopSkinSelector value={selectedSkinId} language={language} disabled={loading} onChange={selectSkin} />
 
-                  <CoopWorldSelector
+                  {gameMode === 'survival' && <CoopWorldSelector
                     unlockedWorldIds={worldProgress.unlockedWorldIds}
                     selectedWorldId={selectedWorldId}
                     onChange={setSelectedWorldId}
                     disabled={loading}
                     description="Discover worlds in order. Redeploy directly to any world your squad leader has unlocked."
-                  />
+                  />}
 
-                  <CoopImprintSummary
+                  {gameMode === 'survival' && <CoopImprintSummary
                     imprint={operatorImprint}
                     language={language}
                     locked={loading}
                     onUpgrade={allocateImprintRank}
-                  />
+                  />}
 
                   {activeTab === 'loadout' && (
                     <div className="flex items-center justify-between pt-2 border-t border-cyan-400/20">
@@ -737,13 +754,13 @@ export function ManualMultiplayerSetup({
                         </button>
                       </div>
 
-                      <CoopWorldSelector
+                      {gameMode === 'survival' && <CoopWorldSelector
                         unlockedWorldIds={worldProgress.unlockedWorldIds}
                         selectedWorldId={selectedWorldId}
                         onChange={setSelectedWorldId}
                         disabled={loading}
                         description="Discover worlds in order. Redeploy directly to any world your squad leader has unlocked."
-                      />
+                      />}
                     </>
                   )}
 
@@ -933,12 +950,12 @@ export function ManualMultiplayerSetup({
           {/* HOST VIEW: SQUAD READY ROOM */}
           {mode === 'host' && (
             <div className="space-y-6">
-              <CoopWorldSelector
+              {gameMode === 'survival' && <CoopWorldSelector
                 unlockedWorldIds={worldProgress.unlockedWorldIds}
                 selectedWorldId={selectedWorldId}
                 onChange={setSelectedWorldId}
                 description="Squad leader may choose any unlocked world until deployment."
-              />
+              />}
               {/* CODE & SHARE HERO CARD */}
               <div className="border border-cyan-400/40 bg-gradient-to-br from-cyan-950/40 to-black/60 p-5 shadow-[0_0_30px_rgba(0,240,255,0.15)]" style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}>
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1178,12 +1195,12 @@ export function ManualMultiplayerSetup({
           {/* MANUAL DIRECT CO-OP SCREENS (PRESERVED FOR AIR-GAPPED ENVIRONMENTS) */}
           {mode === 'direct_host' && (
             <div className="space-y-4 border border-cyan-400/30 bg-cyan-950/20 p-5">
-              <CoopWorldSelector
+              {gameMode === 'survival' && <CoopWorldSelector
                 unlockedWorldIds={worldProgress.unlockedWorldIds}
                 selectedWorldId={selectedWorldId}
                 onChange={setSelectedWorldId}
                 description="Choose any unlocked world before starting the match."
-              />
+              />}
               <div className="text-sm font-black uppercase tracking-wider text-white">
                 {tr('setup.directHost')}
               </div>
@@ -1288,12 +1305,13 @@ function parseStartPayload(value: unknown, minimumPlayers: number) {
   // the richer deployment envelope rolls out.
   if (Array.isArray(value)) {
     const players = parsePlayers(value, minimumPlayers);
-    return players ? { players, worldId: 'neon_bastion' as WorldId } : null;
+    return players ? { players, worldId: 'neon_bastion' as WorldId, gameMode: 'survival' as CoopGameMode } : null;
   }
   if (!value || typeof value !== 'object') return null;
-  const payload = value as { players?: unknown; worldId?: unknown };
+  const payload = value as { players?: unknown; worldId?: unknown; gameMode?: unknown };
   const players = parsePlayers(payload.players, minimumPlayers);
-  return players ? { players, worldId: normalizeWorldId(payload.worldId) } : null;
+  const gameMode = normalizeCoopGameMode(payload.gameMode);
+  return players ? { players, gameMode, worldId: gameMode === 'friends' ? 'friends_frontier' as WorldId : normalizeWorldId(payload.worldId) } : null;
 }
 
 function guestColor(index: number) {

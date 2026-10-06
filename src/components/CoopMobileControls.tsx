@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
-import { Backpack, ChevronLeft, ChevronRight, Crosshair, Hammer, Map, MapPin, MessageSquare, MoreHorizontal, RotateCcw, ShieldPlus, Wrench, X } from 'lucide-react';
+import { Bomb, Backpack, ChevronLeft, ChevronRight, Crosshair, Hammer, Map, MapPin, MessageSquare, MoreHorizontal, RotateCcw, ShieldPlus, Wrench, X } from 'lucide-react';
 import type { CoopStructureType } from '../game/multiplayer/CoopFieldEngineering';
 import { soundManager } from '../game/SoundManager';
 
@@ -7,10 +7,13 @@ export type MobileCoopAction =
   | { type: 'move'; x: number; y: number; sprinting: boolean }
   | { type: 'look'; deltaX: number; deltaY: number }
   | { type: 'hold'; control: 'fire' | 'aim' | 'jump' | 'slide' | 'sprint' | 'interact'; pressed: boolean }
-  | { type: 'tap'; control: 'reload' | 'previousWeapon' | 'nextWeapon' | 'toggleBuild' | 'placeBuild' | 'ping' | 'backpack' | 'map' | 'chat' | 'buildRotateLeft' | 'buildRotateRight' | 'buildActivate' | 'buildRelocate' | 'buildDismantle' }
+  | { type: 'tap'; control: 'grenade' | 'reload' | 'previousWeapon' | 'nextWeapon' | 'toggleBuild' | 'placeBuild' | 'ping' | 'backpack' | 'map' | 'chat' | 'buildRotateLeft' | 'buildRotateRight' | 'buildActivate' | 'buildRelocate' | 'buildDismantle' }
   | { type: 'buildType'; buildType: CoopStructureType };
 
 type Props = {
+  spellcaster?: boolean;
+  creativeBuilding?: boolean;
+  onCreativeLibrary?: () => void;
   buildMode: boolean;
   buildType: CoopStructureType;
   onAction: (action: MobileCoopAction) => void;
@@ -72,7 +75,7 @@ function HoldButton({ label, title, className = '', control, onAction, onDrag, c
 
 /** Mobile-only co-op HUD. It emits high-level actions; MultiplayerArena keeps
  * authority, prediction, and all input sequencing in one place. */
-export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
+export function CoopMobileControls({ spellcaster = false, creativeBuilding = false, onCreativeLibrary, buildMode, buildType, onAction }: Props) {
   const joystickRef = useRef<HTMLDivElement>(null);
   const joystickPointerRef = useRef<number | null>(null);
   const lastJoystickTapAtRef = useRef(0);
@@ -157,7 +160,7 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
         <TapButton label="MAP" title="Open tactical map" onAction={() => onAction({ type: 'tap', control: 'map' })}><Map size={16} /></TapButton>
         <TapButton label="PING" title="Ping current target" onAction={() => onAction({ type: 'tap', control: 'ping' })}><MapPin size={16} /></TapButton>
         <TapButton label="CHAT" title="Open squad chat" onAction={() => onAction({ type: 'tap', control: 'chat' })}><MessageSquare size={16} /></TapButton>
-        <TapButton label="RELOAD" onAction={() => onAction({ type: 'tap', control: 'reload' })}><RotateCcw size={16} /></TapButton>
+        {!spellcaster && <TapButton label="RELOAD" onAction={() => onAction({ type: 'tap', control: 'reload' })}><RotateCcw size={16} /></TapButton>}
         <TapButton label="BUILD" onAction={() => onAction({ type: 'tap', control: 'toggleBuild' })} className={buildMode ? 'coop-touch-button--active' : ''}><Hammer size={17} /></TapButton>
       </div>}
     </div>
@@ -204,20 +207,21 @@ export function CoopMobileControls({ buildMode, buildType, onAction }: Props) {
     </div>
 
     <div className="coop-touch-combat">
-      <HoldButton label="AIM" title="Hold to aim; drag to look" control="aim" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
-      <HoldButton label="FIRE" title="Hold to fire; drag to look" control="fire" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
+      <TapButton label="GRENADE" title="Throw grenade" onAction={() => onAction({ type: 'tap', control: 'grenade' })} className="coop-touch-button--grenade"><Bomb size={18} /></TapButton>
+      <HoldButton label={spellcaster ? "SOULS" : "AIM"} title={spellcaster ? "Cast Hellseed; drag to look" : "Hold to aim; drag to look"} control="aim" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
+      <HoldButton label={spellcaster ? "CAST" : "FIRE"} title={spellcaster ? "Hold to cast; drag to look" : "Hold to fire; drag to look"} control="fire" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
       <HoldButton label="USE" control="interact" onAction={onAction} className="coop-touch-button--use"><ShieldPlus size={19} /></HoldButton>
       <TapButton label="PREV" title="Previous weapon" onAction={() => onAction({ type: 'tap', control: 'previousWeapon' })} className="coop-touch-button--previous"><ChevronLeft size={19} /></TapButton>
       <TapButton label="NEXT" title="Next weapon" onAction={() => onAction({ type: 'tap', control: 'nextWeapon' })} className="coop-touch-button--next"><ChevronRight size={19} /></TapButton>
     </div>
 
     {buildMode && <div className="coop-touch-build" aria-label="Build controls">
-      <div className="coop-touch-build__types">{BUILD_TYPES.map(type => <button key={type} type="button" data-selected={type === buildType} onPointerDown={event => { event.preventDefault(); onAction({ type: 'buildType', buildType: type }); }}>{BUILD_LABELS[type]}</button>)}</div>
+      <div className="coop-touch-build__types">{creativeBuilding && <TapButton label="LIBRARY" onAction={() => onCreativeLibrary?.()}><Hammer size={16} /></TapButton>}{!creativeBuilding && BUILD_TYPES.map(type => <button key={type} type="button" data-selected={type === buildType} onPointerDown={event => { event.preventDefault(); onAction({ type: 'buildType', buildType: type }); }}>{BUILD_LABELS[type]}</button>)}</div>
       <div className="coop-touch-build__actions">
         <TapButton label="ROT L" onAction={() => onAction({ type: 'tap', control: 'buildRotateLeft' })}><RotateCcw size={14} /></TapButton>
         <TapButton label="PLACE" onAction={() => onAction({ type: 'tap', control: 'placeBuild' })} className="coop-touch-button--place"><Hammer size={19} /></TapButton>
         <TapButton label="ROT R" onAction={() => onAction({ type: 'tap', control: 'buildRotateRight' })}><RotateCcw size={14} /></TapButton>
-        <TapButton label="POWER" onAction={() => onAction({ type: 'tap', control: 'buildActivate' })}><Wrench size={14} /></TapButton>
+        <TapButton label={creativeBuilding ? "PAINT" : "POWER"} onAction={() => onAction({ type: 'tap', control: 'buildActivate' })}><Wrench size={14} /></TapButton>
         <TapButton label="MOVE" onAction={() => onAction({ type: 'tap', control: 'buildRelocate' })}><Crosshair size={14} /></TapButton>
         <TapButton label="SALVAGE" onAction={() => onAction({ type: 'tap', control: 'buildDismantle' })}><X size={15} /></TapButton>
       </div>

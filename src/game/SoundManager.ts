@@ -358,6 +358,13 @@ export class SoundManager {
     source.start();
   }
 
+  playFrontierHit(kind: 'wood' | 'soil' | 'stone' | 'ore') {
+    const woody = kind === 'wood', earthy = kind === 'soil';
+    this.playNoise(earthy ? .16 : .075, earthy ? .055 : .07, earthy ? 750 : woody ? 1300 : 3600);
+    this.playTone(woody ? 135 : earthy ? 75 : 820, woody || earthy ? 'triangle' : 'sine', .09, .065, woody ? -65 : earthy ? -40 : -230, .002);
+    if (!earthy) this.playKick(.055, .075);
+  }
+
   playHit() {
     // Sharp impact
     this.playTone(120, 'triangle', 0.06, 0.15, -80, 0.002);
@@ -370,6 +377,33 @@ export class SoundManager {
     this.playTone(50, 'sine', 0.6, 0.4, -30, 0.05);
     this.playNoise(0.6, 0.3, 400);
     this.playKick(0.3, 0.5);
+  }
+
+  playGrenadeThrow() {
+    this.playNoise(.12, .07, 2600); this.playTone(130, 'triangle', .16, .08, -65, .01);
+  }
+
+  playSpell(id: string, impact = false) {
+    const frequency = id === 'astral_lance' ? 740 : id === 'soul_nova' ? 220 : id === 'cinderhex_engine' ? 330 : 150;
+    this.playTone(frequency, 'sine', impact ? .65 : .28, .12, impact ? -frequency * .7 : frequency * .9, .02);
+    this.playTone(frequency * 1.5, 'triangle', .35, .05, -frequency * .4, .04);
+    this.playNoise(id === 'rift_meteor' && impact ? .55 : .18, impact ? .16 : .06, id === 'astral_lance' ? 3600 : 1200);
+  }
+
+  playRealityBreach(stage: 'opened' | 'sealed' | 'failed') {
+    if (stage === 'sealed') {
+      this.playTone(65, 'sine', 1.1, .32, -42, .02);
+      this.playNoise(.65, .2, 700);
+      this.playTone(261.63, 'triangle', .9, .13, 80, .08);
+      this.playTone(392, 'sine', 1.0, .1, 130, .08);
+    } else if (stage === 'failed') {
+      this.playTone(180, 'sawtooth', .65, .12, -120, .03);
+      this.playNoise(.4, .12, 500);
+    } else {
+      this.playTone(90, 'sine', 1.3, .2, 220, .1);
+      this.playTone(440, 'triangle', 1.1, .06, -250, .2);
+      this.playNoise(.7, .06, 1200);
+    }
   }
 
   playCollect() {

@@ -1,3 +1,9 @@
+import { updateFrontierSunShadow } from './rendering/FriendsSunShadow';
+import { createFriendsEnvironment } from './rendering/FriendsWorldVisuals';
+import { FriendsVehicleCamera } from './rendering/FriendsVehicleCamera';
+import type { FriendsVehicle } from './multiplayer/FriendsExpedition';
+import type { CoopRealityBreachSnapshot } from './multiplayer/CoopRealityBreach';
+import { createBreachCathedral } from './rendering/RealityBreachVisuals';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { GameEngine } from './Engine';
@@ -14,6 +20,7 @@ import { COOP_FIRST_PERSON_EYE_HEIGHT } from './multiplayer/playerMovement';
 import { createFloatingPlatformShell } from './rendering/floatingPlatformShell';
 import { getWorldDefinition, sampleWorldSurface, type WorldId, type WorldSurfaceKind } from './world/WorldDefinitions';
 import { FirstPersonCameraKinetics } from './rendering/FirstPersonCameraKinetics';
+import { GroundedCameraMotion } from './rendering/GroundedCameraMotion';
 
 export interface Renderer3DOptions {
   /** Co-op takes place on a finite floating megastructure. Its edge is open
@@ -125,6 +132,9 @@ export class Renderer3D {
   adsProgress: number = 0;
   /** Optional external presentation offset used by the network snapshot bridge. */
   presentationVerticalOffset: number = 0;
+  presentationVehicle?: FriendsVehicle;
+  presentationGrounded = false;
+  private readonly friendsVehicleCamera = new FriendsVehicleCamera();
   presentationSprinting: boolean = false;
   presentationSliding: boolean = false;
   /** Short-lived first-person body lean supplied by wall-jump presentation. */
@@ -152,6 +162,7 @@ export class Renderer3D {
   
   // Lighting
   dirLight!: THREE.DirectionalLight;
+  private frontierShadowTime = 0;
   ambientLight!: THREE.AmbientLight;
   playerPointLight!: THREE.PointLight;
   camKeyLight!: THREE.DirectionalLight;
@@ -173,6 +184,7 @@ export class Renderer3D {
   gasPerimeterRing!: THREE.Mesh;
   
   // High-End FPS Viewmodel Rig
+  frontierToolActive = false;
   fpsWeaponGroup!: THREE.Group;
   weaponRoot!: THREE.Group;
   barrelRoot!: THREE.Group;
@@ -233,6 +245,7 @@ export class Renderer3D {
   walkBobTimer: number = 0;
   idleBreathTimer: number = 0;
   firstPersonKinetics: FirstPersonCameraKinetics;
+  private groundedCameraMotion = new GroundedCameraMotion();
   
   // Third-person character model
   thirdPersonPlayerGroup!: THREE.Group;
@@ -421,7 +434,7 @@ export class Renderer3D {
 
     // 2. World camera stays deliberately extreme; the viewmodel gets its own
     // projection so it remains readable at a 130° world FOV.
-    this.camera = new THREE.PerspectiveCamera(this.WORLD_FOV, window.innerWidth / window.innerHeight, 0.05, 32000);
+    this.camera = new THREE.PerspectiveCamera(this.WORLD_FOV, window.innerWidth / window.innerHeight, this.worldId === 'friends_frontier' ? 2 : .05, 32000);
     this.scene.add(this.camera);
     if (this.floatingPlatform && options.coopEnemyBatching !== false) this.coopEnemyBatchRenderer = new CoopEnemyBatchRenderer(this.scene);
     this.viewmodelScene = new THREE.Scene();
@@ -481,17 +494,33 @@ export class Renderer3D {
   setCoopWorld(worldId: WorldId) {
     if (!this.floatingPlatform || worldId === this.worldId) return;
     this.worldId = worldId;
+    this.camera.near = worldId === 'friends_frontier' ? 2 : .05;
+    this.camera.updateProjectionMatrix();
     this.rebuildEnvironment();
+  }
+
+  setRealityBreach(breach: CoopRealityBreachSnapshot | undefined, elapsedMs: number) {
+    const material = this.floorMesh?.material;
+    if (!(material instanceof THREE.ShaderMaterial) || !material.uniforms.breachPower) return;
+    material.uniforms.breachPower.value = !breach || breach.phase === 'dormant' ? 0
+      : breach.phase === 'linking' ? .2 + breach.progressMs / 8000 * .8 : Math.min(1, breach.remainingMs / 4000);
+    if (breach) {
+      material.uniforms.breachCenter.value.set(breach.x, breach.y);
+      material.uniforms.breachColor.value.set(breach.phase === 'surge' ? 0xff5c39 : breach.phase === 'overdrive' ? 0xafffc9 : 0xffb86b);
+    }
+    material.uniforms.breachTime.value = elapsedMs / 1000;
   }
 
   private rebuildEnvironment() {
     for (const object of this.environmentObjects) {
+      object.userData.disposed = true;
+      object.userData.skyTexture?.dispose();
       this.scene.remove(object);
       object.traverse(child => {
         const renderable = child as THREE.Mesh;
         renderable.geometry?.dispose?.();
         const materials = Array.isArray(renderable.material) ? renderable.material : renderable.material ? [renderable.material] : [];
-        for (const material of materials) material.dispose();
+        for (const material of materials) { if (object.name === 'friends-frontier-environment') (material as THREE.MeshStandardMaterial).map?.dispose(); material.dispose(); }
       });
     }
     this.environmentObjects = [];
@@ -603,6 +632,7 @@ export class Renderer3D {
 
     // Magenta Counter-Rim Light for volumetric depth
     const magentaLight = new THREE.DirectionalLight(0xff0088, 1.5);
+    magentaLight.name = 'world-counter-rim';
     magentaLight.position.set(-400, 500, -300);
     this.scene.add(magentaLight);
 
@@ -623,6 +653,37 @@ export class Renderer3D {
   }
 
   private setupEnvironment() {
+    this.renderer.toneMappingExposure = 1.4;
+    this.camKeyLight.intensity = 1.8;
+    const rim = this.scene.getObjectByName('world-counter-rim') as THREE.DirectionalLight | undefined;
+    if (rim) { rim.color.setHex(0xff0088); rim.intensity = 1.5; }
+    if (this.floatingPlatform && this.worldId === 'friends_frontier') {
+      this.scene.fog = new THREE.FogExp2(0xaec4bd, .000009);
+      this.camera.far = 110000; this.camera.updateProjectionMatrix();
+      // Daylight has a gentle sky fill and one sun. The combat camera's
+      // white flood and magenta rim washed out the valley's actual materials.
+      this.renderer.toneMappingExposure = 1.05;
+      this.camKeyLight.intensity = .2;
+      if (rim) { rim.color.setHex(0xc3deea); rim.intensity = .35; }
+      this.ambientLight.color.setHex(0xe1f4e5); this.ambientLight.intensity = .72;
+      this.dirLight.color.setHex(0xffe6c4); this.dirLight.intensity = 2.1;
+      this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFShadowMap;
+      this.renderer.shadowMap.autoUpdate = false;
+      this.dirLight.castShadow = true; this.dirLight.shadow.mapSize.set(2048, 2048);
+      Object.assign(this.dirLight.shadow.camera, { left: -1700, right: 1700, top: 1700, bottom: -1700, near: 10, far: 6500 });
+      this.dirLight.shadow.camera.updateProjectionMatrix(); this.dirLight.shadow.normalBias = 1.5; this.dirLight.shadow.bias = -.0003;
+      this.scene.add(this.dirLight.target);
+      const environment = createFriendsEnvironment(); this.scene.add(environment);
+      // A plain screen background needs no sky, cloud or mist geometry and
+      // cannot leave clipped polygons outside the playable valley.
+      const skyCanvas = document.createElement('canvas'); skyCanvas.width = 16; skyCanvas.height = 256;
+      const skyContext = skyCanvas.getContext('2d')!, gradient = skyContext.createLinearGradient(0, 0, 0, 256);
+      gradient.addColorStop(0, '#527ea0'); gradient.addColorStop(1, '#f7dac0'); skyContext.fillStyle = gradient; skyContext.fillRect(0, 0, 16, 256);
+      const background = new THREE.CanvasTexture(skyCanvas); background.colorSpace = THREE.SRGBColorSpace; this.scene.background = background; environment.userData.skyTexture = background;
+      this.floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial()); this.floorMesh.visible = false; this.scene.add(this.floorMesh);
+      this.gridHelper = new THREE.GridHelper(1, 1); this.gridHelper.visible = false; this.scene.add(this.gridHelper);
+      return;
+    }
     if (this.floatingPlatform && this.worldId !== 'neon_bastion') {
       this.setupDistinctCoopWorld();
       this.setupGasZoneVisuals();
@@ -643,6 +704,10 @@ export class Renderer3D {
         fineGridColor: { value: new THREE.Color(0x1b5f80) },
         majorGridColor: { value: new THREE.Color(0x46d8ff) },
         worldCenter: { value: new THREE.Vector2(GAME_WIDTH / 2, GAME_HEIGHT / 2) },
+        breachCenter: { value: new THREE.Vector2(6000, 6000) },
+        breachColor: { value: new THREE.Color(0xffb86b) },
+        breachPower: { value: 0 },
+        breachTime: { value: 0 },
       },
       vertexShader: `
         varying vec2 vWorldGrid;
@@ -658,6 +723,10 @@ export class Renderer3D {
         uniform vec3 fineGridColor;
         uniform vec3 majorGridColor;
         uniform vec2 worldCenter;
+        uniform vec2 breachCenter;
+        uniform vec3 breachColor;
+        uniform float breachPower;
+        uniform float breachTime;
         varying vec2 vWorldGrid;
 
         float gridLine(vec2 coordinate, float spacing) {
@@ -667,14 +736,26 @@ export class Renderer3D {
         }
 
         void main() {
+          // Broken stone, radial inlays and broad service lanes replace the
+          // full-screen luminous checkerboard. This is all walkable ground.
+          vec2 p = vWorldGrid - worldCenter;
+          float radial = length(p);
+          vec2 block = floor(vWorldGrid / 64.0);
+          float grain = fract(sin(dot(block, vec2(127.1,311.7))) * 43758.5453);
           float fine = gridLine(vWorldGrid, 125.0);
           float major = gridLine(vWorldGrid, 500.0);
-          // A stable city-power glow gives the floor readable light without
-          // sampling any dynamic point lights or reflective screen effects.
-          float plazaGlow = 1.0 - smoothstep(900.0, 7600.0, length(vWorldGrid - worldCenter));
-          vec3 color = mix(baseColor, plazaGlowColor, plazaGlow * 0.62);
-          color = mix(color, fineGridColor, fine * 0.82);
-          color = mix(color, majorGridColor, major * 0.94);
+          float avenue = 1.0 - smoothstep(32.0, 48.0, min(abs(p.x), abs(p.y)));
+          float plaza = 1.0 - smoothstep(680.0, 1050.0, radial);
+          float inlay = 1.0 - smoothstep(2.0, 5.0, abs(mod(radial + 125.0, 250.0) - 125.0));
+          float scar = pow(abs(sin(p.x * .013 + sin(p.y * .009) * 5.0)), 48.0);
+          vec3 color = mix(vec3(.035,.05,.065), vec3(.08,.115,.13), grain * .4 + plaza * .35);
+          color *= 1.0 - fine * .2 - scar * .18;
+          color = mix(color, vec3(.065,.105,.12), avenue * .45);
+          color += vec3(.12,.065,.025) * inlay * plaza * .55;
+          color += majorGridColor * major * .045;
+          float breachDistance = length(vWorldGrid - breachCenter);
+          float wave = pow(max(0.0, sin(breachDistance * .016 - breachTime * 3.0)), 16.0);
+          color += breachColor * breachPower * (wave * .23 + .035) * (1.0 - smoothstep(1000.0, 1400.0, breachDistance));
           gl_FragColor = vec4(color, 1.0);
         }
       `,
@@ -694,6 +775,7 @@ export class Renderer3D {
     // Collidable architecture comes from the same deterministic layout used by
     // Engine movement. These are real city blocks, not decorative ghosts.
     this.setupDistrictCity();
+    if (this.floatingPlatform) this.scene.add(createBreachCathedral());
     if (this.floatingPlatform) this.setupWorldBridgehead();
     if (!this.floatingPlatform) this.setupDistantSkyline();
 
@@ -1171,9 +1253,9 @@ export class Renderer3D {
         side: THREE.BackSide,
         depthWrite: false,
         uniforms: {
-          zenith: { value: new THREE.Color(0x0b1640) },
-          horizon: { value: new THREE.Color(0x2a6b99) },
-          underglow: { value: new THREE.Color(0x6b2458) },
+          zenith: { value: new THREE.Color(0x02060e) },
+          horizon: { value: new THREE.Color(0x243949) },
+          underglow: { value: new THREE.Color(0x572e23) },
         },
         vertexShader: `varying vec3 vPosition; void main() { vPosition = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
         fragmentShader: `
@@ -1431,6 +1513,7 @@ export class Renderer3D {
     const fog = this.scene.fog as THREE.FogExp2;
     const inGas = gasZone && Math.hypot(position.x - gasZone.x, position.y - gasZone.y) <= gasZone.radius;
 
+    if (this.floatingPlatform && this.worldId === 'friends_frontier') return;
     if (this.floatingPlatform && this.worldId !== 'neon_bastion') {
       const definition = getWorldDefinition(this.worldId);
       const theme = definition.theme;
@@ -1477,6 +1560,10 @@ export class Renderer3D {
       this.dirLight.intensity = THREE.MathUtils.lerp(this.dirLight.intensity, targetDirIntensity, 1 - Math.exp(-deltaTime * 0.002));
     }
 
+    const cathedralOrbit = this.scene.getObjectByName('cathedral-orbit');
+    if (cathedralOrbit) cathedralOrbit.rotation.z += deltaTime * .000035;
+    const cathedralDebris = this.scene.getObjectByName('cathedral-debris');
+    if (cathedralDebris) cathedralDebris.rotation.y += deltaTime * .000025;
     const storm = this.scene.getObjectByName('storm-cloud-ring');
     if (storm) storm.rotation.y += deltaTime * 0.000015;
   }
@@ -2505,13 +2592,14 @@ export class Renderer3D {
   prepareFrame(engine: GameEngine, deltaTime: number) {
     this.activeViewMode = engine.viewMode;
     if (engine.viewMode === 'THIRD_PERSON') {
+      this.groundedCameraMotion.reset();
       this.thirdPersonPlayerGroup.position.set(engine.player.position.x, this.presentationVerticalOffset, engine.player.position.y);
       this.thirdPersonPlayerGroup.scale.set(1, this.presentationSliding ? 0.62 : 1, this.presentationSliding ? 1.16 : 1);
       this.thirdPersonPlayerGroup.rotation.y = this.yaw + Math.PI;
       this.thirdPersonPlayerGroup.updateMatrixWorld(true);
       return;
     }
-    if (engine.viewMode !== 'FIRST_PERSON') return;
+    if (engine.viewMode !== 'FIRST_PERSON') { this.groundedCameraMotion.reset(); return; }
     const player = engine.player;
     const targetAds = this.isAimingDownSights ? 1 : 0;
     this.adsProgress = this.damp(this.adsProgress, targetAds, 17, deltaTime);
@@ -2533,8 +2621,8 @@ export class Renderer3D {
       isReloading: this.presentationReloading || this.presentationHandgunReloadProgress > 0.01,
       isDashing: engine.isDashing,
       isSliding: this.presentationSliding,
-      isAirborne: this.presentationVerticalOffset > 0.08,
-      verticalOffset: this.presentationVerticalOffset,
+      isAirborne: this.presentationVerticalOffset > 0.08 && !this.presentationGrounded,
+      verticalOffset: this.worldId === 'friends_frontier' ? undefined : this.presentationVerticalOffset,
       mouseDeltaX: this.lastMouseDeltaX,
       mouseDeltaY: this.lastMouseDeltaY,
     });
@@ -2555,9 +2643,12 @@ export class Renderer3D {
     const shakeMult = 1 - this.adsProgress * 0.7;
     const shakeX = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
     const shakeY = (Math.random() - 0.5) * engine.screenShake * 0.8 * shakeMult;
+    const eyeElevation = this.worldId === 'friends_frontier'
+      ? this.groundedCameraMotion.update(this.presentationVerticalOffset, this.presentationGrounded, this.presentationSliding, deltaTime)
+      : this.presentationVerticalOffset - (this.presentationSliding ? 9 : 0);
     this.camera.position.set(
       player.position.x + kinetics.cameraTranslation.x + shakeX,
-      COOP_FIRST_PERSON_EYE_HEIGHT + this.presentationVerticalOffset - (this.presentationSliding ? 9 : 0) + kinetics.cameraTranslation.y + shakeY,
+      COOP_FIRST_PERSON_EYE_HEIGHT + eyeElevation + kinetics.cameraTranslation.y + shakeY,
       player.position.y + kinetics.cameraTranslation.z
     );
     this.camera.rotation.order = 'YXZ';
@@ -2798,7 +2889,7 @@ export class Renderer3D {
     // CAMERA & VIEWPORT UPDATE
     // ==========================================
     if (viewMode === 'FIRST_PERSON') {
-      this.fpsWeaponGroup.visible = true;
+      this.fpsWeaponGroup.visible = !this.frontierToolActive;
       this.thirdPersonPlayerGroup.visible = false;
     } else if (viewMode === 'THIRD_PERSON') {
       this.fpsWeaponGroup.visible = false;
@@ -2831,6 +2922,8 @@ export class Renderer3D {
         player.position.y + camOffsetZ + shoulderZ + (Math.random() - 0.5) * thirdShake
       );
       this.camera.lookAt(focusX, 30 + this.presentationVerticalOffset, focusZ);
+      if (this.presentationVehicle) this.friendsVehicleCamera.update(this.camera, this.presentationVehicle, this.yaw, this.pitch, deltaTime);
+      else this.friendsVehicleCamera.reset();
 
       // Position Third-Person Character
       this.thirdPersonPlayerGroup.position.set(player.position.x, this.presentationVerticalOffset, player.position.y);
@@ -2919,6 +3012,11 @@ export class Renderer3D {
 
     // World and viewmodel use separate projections. clearDepth keeps the gun
     // readable without allowing world geometry to cut through the hand.
+    if (this.worldId === 'friends_frontier' && performance.now()-this.frontierShadowTime>100) {
+      this.frontierShadowTime=performance.now();this.renderer.shadowMap.needsUpdate=true;
+      updateFrontierSunShadow(this.dirLight,new THREE.Vector3(this.camera.position.x,this.camera.position.y-30,this.camera.position.z));
+      this.dirLight.target.updateMatrixWorld();
+    }
     this.renderer.render(this.scene, this.camera);
     if (viewMode === 'FIRST_PERSON') {
       this.renderer.autoClear = false;
@@ -5465,6 +5563,11 @@ export class Renderer3D {
   }
 
   destroy() {
+    for (const object of this.environmentObjects) { object.userData.skyTexture?.dispose(); object.traverse(child => { child.userData.disposed = true; }); }
+    for (const object of this.environmentObjects) if (object.name === 'friends-frontier-environment') object.traverse(child => {
+      const renderable = child as THREE.Mesh; renderable.geometry?.dispose();
+      for (const material of Array.isArray(renderable.material) ? renderable.material : renderable.material ? [renderable.material] : []) { (material as THREE.MeshStandardMaterial).map?.dispose(); material.dispose(); }
+    });
     window.removeEventListener('resize', this.handleResize);
     window.removeEventListener('mousemove', this.onMouseMove);
     window.removeEventListener('mousedown', this.onMouseDown);
@@ -5517,6 +5620,7 @@ export class Renderer3D {
     this.speedLineMesh?.geometry.dispose();
     this.speedLineMaterial?.dispose();
     this.unmount();
+    this.dirLight.shadow.map?.dispose();
     this.renderer.dispose();
   }
 }

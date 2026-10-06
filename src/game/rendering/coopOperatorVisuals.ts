@@ -503,6 +503,7 @@ export function updateCoopOperatorRig(
   elapsedMs: number,
   deltaMs: number,
   fallProgress?: number,
+  groundedSurface = false,
 ): void {
   const downed = player.lifeState === 'downed';
   const falling = fallProgress !== undefined;
@@ -608,9 +609,9 @@ export function updateCoopOperatorRig(
   rig.commsLed.visible = commsBlink;
 
   // 4. DYNAMIC JUMP-JET THRUSTER FLARE (FIRE RED / ORANGE & BIGGER FLAMES)
-  const isMoving = player.sprinting || player.sliding || player.z > 0.5;
+  const isMoving = player.sprinting || player.sliding || (player.z > 0.5 && !groundedSurface);
   const isSliding = player.sliding;
-  const isAirborne = player.z > 0.5;
+  const isAirborne = player.z > 0.5 && !groundedSurface;
   const jetActive = Boolean(player.jetActive || player.motion?.jetActive);
   const doubleJumpSequence = player.motion?.lastDoubleJumpSequence ?? -1;
   if (doubleJumpSequence >= 0 && doubleJumpSequence !== rig.lastDoubleJumpSequence) {

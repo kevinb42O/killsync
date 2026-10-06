@@ -1,3 +1,15 @@
+import { FRIENDS_STEP_HEIGHT } from '../world/FriendsTerrain';
+import { PLAYER_TRAIN_COST, isPlayerRail, railSamples } from '../world/FriendsPlayerRail';
+import { FriendsFrontier, type FrontierSnapshot, type FrontierRequest } from './FriendsFrontier';
+import { FriendsBuilding, friendsBuildFloor, friendsBuildCeiling, friendsVehicleBuildBodies, resolveFriendsBuildCollisions, type FriendsBuildingSnapshot, type FriendsBuildRequest, type FriendsBuildResult } from './FriendsBuilding';
+import { FriendsProjects, type FriendsProjectSnapshot } from './FriendsProjects';
+import { insideFriendsCombat, FRIENDS_SALVAGE } from '../world/FriendsRegion';
+import { FriendsExpedition, friendsCockpitInteraction, friendsWorldFloor, friendsVehicleFloor, friendsVehicleCeiling, FRIENDS_FLIGHT_CEILING, resolveFriendsVehicleCollisions, type FriendsTransportSave, type FriendsProgress, type FriendsSnapshot } from './FriendsExpedition';
+import type { CoopGameMode } from './CoopGameMode';
+import { FRIENDS_HUB, FRIENDS_MARKETS, FRIENDS_FOUNDRY } from '../world/FriendsRegion';
+import { COOP_SPELLS, isCoopSpell, MANA_MAX, MANA_REGEN_PER_SECOND, type CoopSpellId } from '../combat/coopSpells';
+import { advanceGrenade, grenadeDamage, GRENADE_CAPACITY, GRENADE_FUSE_MS, GRENADE_RADIUS, GRENADE_RECHARGE_MS, type CoopGrenadeSnapshot } from '../combat/coopGrenades';
+import { CoopRealityBreach, BREACH_PULSE_RADIUS, type CoopRealityBreachSnapshot } from './CoopRealityBreach';
 import { COOP_MAX_PLAYERS, CoopPing, CoopPingKind, MultiplayerInputFrame } from './protocol';
 export type { CoopPing, CoopPingKind } from './protocol';
 import { GAME_WIDTH } from '../../constants';
@@ -28,7 +40,7 @@ import { COOP_STATION_COUNT, CoopStationDirector } from './CoopStationDirector';
 import { CoopWeaponFoundry, coopFoundryUpgradeCost, generateCoopWeaponFoundrySite, isCoopFirearmId, type CoopFoundryResult, type CoopWeaponFoundrySnapshot } from './CoopWeaponFoundry';
 import { COOP_PASSIVE_BY_ID, passiveCooldownMs, passiveDamage, passiveRadius, passiveRankCost, type CoopPassiveModuleId, type CoopPassiveRuntime, type CoopPassiveSnapshot } from './CoopPassiveModules';
 import { awardMedals, createRunStats, type CoopPlayerRunStats, type CoopRunResultsSnapshot } from './CoopResults';
-import { advancePlayerMovement, COOP_PLAYER_RADIUS, isOnCoopPlatform, type PlayerMotionState } from './playerMovement';
+import { advancePlayerMovement, COOP_PLAYER_RADIUS, isOnCoopPlatform, type PlayerMotionState, type PlayerMovementMemory } from './playerMovement';
 import { findEnemyDetour, hasClearAttackPath, moveTacticalEnemy } from './enemyTactics';
 import { SpatialHash } from './SpatialHash';
 import { CoopGasZone, GAS_DPS, type CoopGasZoneSnapshot } from './CoopGasZone';
@@ -167,6 +179,9 @@ export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   experienceToNextLevel: number;
   coins: number;
   pendingDataCores: number;
+  mana?: number;
+  grenades?: number;
+  grenadeRechargeRemainingMs?: number;
   weaponStates: CoopWeaponRuntime[];
   /** Compatibility projection; weaponStates are authoritative. */
   weaponLevels: number[];
@@ -207,7 +222,10 @@ export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   jetActive?: boolean;
   lastProcessedInput?: number;
   lastProcessedFireAction?: number;
-  motion?: Pick<PlayerMotionState, 'verticalVelocity' | 'lastJumpSequence' | 'lastWallJumpSequence' | 'lastDoubleJumpSequence' | 'wallJumpDirectionX' | 'wallJumpDirectionY' | 'airActionConsumedSinceGrounded' | 'jetIgnitedThisAirTime' | 'airborneMs' | 'groundedMs' | 'jetFuel' | 'jetActive' | 'slideAngle'>;
+  platformVelocityX?: number;
+  platformVelocityY?: number;
+  platformVelocityZ?: number;
+  motion?: PlayerMovementMemory & Pick<PlayerMotionState, 'verticalVelocity' | 'lastJumpSequence' | 'lastWallJumpSequence' | 'lastDoubleJumpSequence' | 'wallJumpDirectionX' | 'wallJumpDirectionY' | 'airActionConsumedSinceGrounded' | 'jetIgnitedThisAirTime' | 'jetLaunchFloor' | 'airborneMs' | 'groundedMs' | 'jetFuel' | 'jetActive' | 'slideAngle'>;
 }
 
 export interface CoopEnemySnapshot {
@@ -301,7 +319,7 @@ export type CoopInventoryDropErrorCode = 'alive_required' | 'empty';
 export interface CoopInventoryDropError { code: CoopInventoryDropErrorCode; }
 export interface CoopAmmoCacheSnapshot { id: number; x: number; y: number; ammoType: AmmoType; amount: number; color: string; }
 
-export type CoopCombatEventKind = 'enemy_hit' | 'enemy_killed' | 'damage_number' | 'drop_spawned' | 'pickup_collected' | 'level_up' | 'weapon_upgraded' | 'weapon_fired' | 'projectile_impact' | 'artifact_cast' | 'reload_started' | 'reload_shell_loaded' | 'reload_finished' | 'empty_fire' | 'ammo_collected' | 'player_damaged' | 'player_downed' | 'player_falling' | 'player_revived' | 'player_redeployed' | 'player_eliminated' | 'player_extracted' | 'revive_started' | 'squad_wiped' | 'solo_defeat' | 'station_online' | 'station_purchase' | 'foundry_online' | 'foundry_upgrade' | 'arc_beam' | 'arc_chain' | 'objective_started' | 'objective_completed' | 'mission_started' | 'mission_stage' | 'demolition_charge_planted' | 'demolition_charge_detonated' | 'mission_completed' | 'mission_expired' | 'boss_spawned' | 'boss_defeated' | 'boss_ability' | 'exfil_deployed' | 'private_exfil_inbound' | 'passive_triggered' | 'self_revived' | 'round_started' | 'round_completed' | 'gas_warning' | 'gas_spread' | 'gas_settled' | 'mask_broken' | 'mask_damaged' | 'gas_damaged' | 'structure_built' | 'structure_damaged' | 'structure_destroyed' | 'structure_dismantled' | 'structure_activated' | 'structure_healed' | 'fabricator_charged' | 'fabricator_scrap' | 'fence_triggered' | 'bridge_online' | 'bridge_segment_built' | 'bridge_completed' | 'world_transition' | 'ping';
+export type CoopCombatEventKind = 'grenade_thrown' | 'grenade_detonated' | 'spell_cast' | 'spell_impact' | 'enemy_hit' | 'enemy_killed' | 'damage_number' | 'drop_spawned' | 'pickup_collected' | 'level_up' | 'weapon_upgraded' | 'weapon_fired' | 'projectile_impact' | 'artifact_cast' | 'reload_started' | 'reload_shell_loaded' | 'reload_finished' | 'empty_fire' | 'ammo_collected' | 'player_damaged' | 'player_downed' | 'player_falling' | 'player_revived' | 'player_redeployed' | 'player_eliminated' | 'player_extracted' | 'revive_started' | 'squad_wiped' | 'solo_defeat' | 'station_online' | 'station_purchase' | 'foundry_online' | 'foundry_upgrade' | 'arc_beam' | 'arc_chain' | 'objective_started' | 'objective_completed' | 'mission_started' | 'mission_stage' | 'demolition_charge_planted' | 'demolition_charge_detonated' | 'mission_completed' | 'mission_expired' | 'boss_spawned' | 'boss_defeated' | 'boss_ability' | 'exfil_deployed' | 'private_exfil_inbound' | 'passive_triggered' | 'self_revived' | 'round_started' | 'round_completed' | 'gas_warning' | 'gas_spread' | 'gas_settled' | 'mask_broken' | 'mask_damaged' | 'gas_damaged' | 'structure_built' | 'structure_damaged' | 'structure_destroyed' | 'structure_dismantled' | 'structure_activated' | 'structure_healed' | 'fabricator_charged' | 'fabricator_scrap' | 'fence_triggered' | 'bridge_online' | 'bridge_segment_built' | 'bridge_completed' | 'world_transition' | 'breach_opened' | 'breach_sealed' | 'breach_failed' | 'ping';
 
 /** A replay-safe presentation event. It is also repeated in snapshots briefly
  * so packet loss cannot suppress feedback on a guest. */
@@ -361,8 +379,13 @@ export interface CoopSnapshot {
   /** Current authoritative frames include this; optional for older replays. */
   world?: CoopWorldSnapshot;
   bridge?: CoopWorldBridgeSnapshot;
+  realityBreach?: CoopRealityBreachSnapshot;
+  mode?: CoopGameMode;
+  friends?: FriendsSnapshot;
   players: CoopPlayerSnapshot[];
   enemies: CoopEnemySnapshot[];
+  grenades?: CoopGrenadeSnapshot[];
+  spellZones?: Array<{ id: number; ownerId: string; x: number; y: number; radius: number; resolvesAtMs: number; weaponId: CoopSpellId }>;
   projectiles: CoopProjectileSnapshot[];
   gems: CoopGemSnapshot[];
   items: CoopItemSnapshot[];
@@ -407,7 +430,7 @@ export interface CoopWorldBridgeSnapshot {
   width: number;
 }
 
-type CoopPlayer = CoopPlayerSnapshot & { verticalVelocity: number; lastJumpSequence: number; lastWallJumpSequence: number; lastDoubleJumpSequence: number; wallJumpDirectionX: number; wallJumpDirectionY: number; airActionConsumedSinceGrounded: boolean; jetIgnitedThisAirTime: boolean; airborneMs: number; groundedMs: number; lastReloadSequence: number; lastFireActionId: number; lastAltFireActionId: number; lastInteractActionId: number; slideAngle: number; aimPitch: number; previousFiring: boolean; shotSequence: number; lastDamageEventAtMs: number; passiveRuntime: CoopPassiveRuntime[]; lastArmorDamageAtMs: number; lastGasNoticeAtMs: number; fabricatorRechargeAtMs: number; artifactTargetId?: number; artifactHitCount: number; artifactLastActionAtMs: number; artifactBarrierExpiresAtMs: number; artifactProcExpiresAtMs: number; lastArtifactX: number; lastArtifactY: number; slipstreamReadyAtMs: number; echoPositions: Array<{ x: number; y: number }> };
+type CoopPlayer = CoopPlayerSnapshot & PlayerMovementMemory & { verticalVelocity: number; lastJumpSequence: number; lastWallJumpSequence: number; lastDoubleJumpSequence: number; wallJumpDirectionX: number; wallJumpDirectionY: number; airActionConsumedSinceGrounded: boolean; jetIgnitedThisAirTime: boolean; jetLaunchFloor?: number; airborneMs: number; groundedMs: number; lastReloadSequence: number; lastFireActionId: number; lastAltFireActionId: number; lastGrenadeActionId: number; grenadeRechargeAtMs: number; lastInteractActionId: number; slideAngle: number; aimPitch: number; previousFiring: boolean; shotSequence: number; lastDamageEventAtMs: number; passiveRuntime: CoopPassiveRuntime[]; lastArmorDamageAtMs: number; lastGasNoticeAtMs: number; fabricatorRechargeAtMs: number; artifactTargetId?: number; artifactHitCount: number; artifactLastActionAtMs: number; artifactBarrierExpiresAtMs: number; artifactProcExpiresAtMs: number; lastArtifactX: number; lastArtifactY: number; slipstreamReadyAtMs: number; echoPositions: Array<{ x: number; y: number }> };
 type CoopEnemy = CoopEnemySnapshot & { hitFlashUntilMs: number; deathUntilMs?: number; killedByPlayerId?: string; targetLeaseUntilMs: number; nextAttackAtMs?: number; structureStunUntilMs?: number; targetStructureId?: number; chillExpiresAtMs?: number; rimeGrantedAtMs?: number; missionAnchorX?: number; missionAnchorY?: number; cinderhexByOwner?: Map<string, { stacks: number; expiresAtMs: number; nextTickAtMs: number; damageSinceFragment: number }> };
 type CoopProjectile = CoopProjectileSnapshot & {
   verticalVelocity: number;
@@ -415,6 +438,7 @@ type CoopProjectile = CoopProjectileSnapshot & {
   penetration: number;
   damageIntervalMs: number;
   nextDamageAt: number;
+  hitEnemyIds?: Set<number>;
 };
 type CoopStructure = CoopStructureSnapshot & {
   destroyAtMs?: number;
@@ -439,6 +463,8 @@ export class CoopSimulation {
   private readonly sweptEnemies: CoopEnemy[] = [];
   private readonly activeEnemyIds = new Set<number>();
   private enemies: CoopEnemy[] = [];
+  private grenades: CoopGrenadeSnapshot[] = [];
+  private spellZones: NonNullable<CoopSnapshot['spellZones']> = [];
   private projectiles: CoopProjectile[] = [];
   private gems: CoopGemSnapshot[] = [];
   private items: CoopItemSnapshot[] = [];
@@ -459,6 +485,8 @@ export class CoopSimulation {
   private randomState: number;
   private encounterDirector!: EncounterDirector;
   private runDirector!: CoopRunDirector;
+  private realityBreach!: CoopRealityBreach;
+  private nextBreachCircuitAtMs = 0;
   private spawnTopology = new SpawnTopology();
   private stationDirector!: CoopStationDirector;
   private weaponFoundry!: CoopWeaponFoundry;
@@ -485,8 +513,17 @@ export class CoopSimulation {
   private nextWorldHazardAtMs = 0;
   private worldHazardSequence = 0;
   private bridgeState: CoopWorldBridgeSnapshot;
+  private friends?: FriendsExpedition;
+  private friendsFrontier?: FriendsFrontier;
+  private friendsBuilding?: FriendsBuilding;
+  private friendsProjects?: FriendsProjects;
+  private friendsHostId = '';
+  private friendsBuildCheckedRevision = -1;
+  private friendsEmptySinceMs: number | undefined;
 
-  constructor(players: CoopPlayerSeed[], seed: number = 0xdecafbad, runId = `coop-${Date.now().toString(36)}-${(seed >>> 0).toString(36)}`, worldId: WorldId = 'neon_bastion') {
+  constructor(players: CoopPlayerSeed[], seed: number = 0xdecafbad, runId = `coop-${Date.now().toString(36)}-${(seed >>> 0).toString(36)}`, worldId: WorldId = 'neon_bastion', private readonly mode: CoopGameMode = 'survival', progress?: FriendsProgress, building?: FriendsBuildingSnapshot, projects?: FriendsProjectSnapshot, frontier?: FrontierSnapshot, transport?: FriendsTransportSave) {
+    if (mode === 'friends') { worldId = 'friends_frontier'; this.friendsFrontier = new FriendsFrontier(frontier); this.friends = new FriendsExpedition(progress, transport, this.friendsFrontier.terrain); this.friendsBuilding = new FriendsBuilding(building, (this.friendsBuilding?.snapshot().revision || 0) + 1, this.friendsFrontier?.terrain); this.friendsFrontier.preserveTerrainWork(this.friendsBuilding.getPieces(),frontier?.terrain); this.friends.resetAircraft(this.friendsFrontier.terrain); this.friends.setRailway(this.friendsBuilding.getPieces(), this.friendsBuilding.getRevision()); if (!frontier) this.friendsFrontier.adaptLegacyBuildings(this.friendsBuilding.getPieces()); this.friendsProjects = new FriendsProjects(projects); this.friendsHostId = players[0]?.id || ''; }
+    else if (worldId === 'friends_frontier') worldId = 'neon_bastion';
     this.randomState = seed >>> 0;
     this.runId = runId;
     this.currentWorldId = normalizeWorldId(worldId);
@@ -506,12 +543,15 @@ export class CoopSimulation {
     this.spawnTopology = new SpawnTopology(this.currentWorldId);
     const insertion = this.squadCentre();
     this.gasZone = new CoopGasZone(insertion, seed, this.currentWorldId);
-    this.stationDirector = new CoopStationDirector(seed, insertion, { x: this.gasZone.x, y: this.gasZone.y }, this.currentWorldId);
-    const foundrySite = generateCoopWeaponFoundrySite(seed, insertion, { x: this.gasZone.x, y: this.gasZone.y }, this.stationDirector.positions, this.currentWorldId);
+    this.stationDirector = new CoopStationDirector(seed, insertion, { x: this.gasZone.x, y: this.gasZone.y }, this.currentWorldId, this.friends ? FRIENDS_MARKETS : undefined);
+    const foundrySite = this.friends ? FRIENDS_FOUNDRY : generateCoopWeaponFoundrySite(seed, insertion, { x: this.gasZone.x, y: this.gasZone.y }, this.stationDirector.positions, this.currentWorldId);
     this.weaponFoundry = new CoopWeaponFoundry(COOP_STATION_COUNT + 1, foundrySite.x, foundrySite.y);
     this.fieldMissionDirector = new CoopFieldMissionDirector(seed, insertion, [...this.stationDirector.positions, foundrySite, { x: this.gasZone.x, y: this.gasZone.y }], this.currentWorldId);
-    this.spawnGasEnclave();
+    if (this.friends) this.weaponFoundry.openForExpedition();
+    else this.spawnGasEnclave();
     this.runDirector = new CoopRunDirector(seed, [...this.stationDirector.positions.map(site => ({ ...site, radius: 105 })), { ...foundrySite, radius: 180 }], this.currentWorldId);
+    this.realityBreach = new CoopRealityBreach(this.currentWorldId);
+    this.nextBreachCircuitAtMs = 0;
     this.worldHazardSequence = 0;
     this.nextWorldHazardAtMs = this.elapsedMs + worldHazardIntervalMs(this.currentWorldId, true);
   }
@@ -548,7 +588,7 @@ export class CoopSimulation {
 
   private buildBridgeSegment(player: CoopPlayer, definition: typeof COOP_STRUCTURE_DEFINITIONS.bridge_segment): CoopBuildError | undefined {
     if (this.bridgeState.state === 'locked' || this.bridgeState.state === 'terminal') return { code: 'bridge_locked' };
-    if (this.bridgeState.state === 'complete' || this.bridgeState.state === 'crossing') return { code: 'bridge_complete' };
+    if (!this.friends && this.bridgeState.state === 'complete' || this.bridgeState.state === 'crossing') return { code: 'bridge_complete' };
     if (Math.hypot(player.x - this.bridgeState.buildX, player.y - this.bridgeState.buildY) > COOP_BUILD_RANGE + 180) return { code: 'bridge_range' };
     const charges = player.fabricatorCharges || 0;
     if (charges < definition.chargeCost) return { code: 'charges', amount: definition.chargeCost - charges };
@@ -584,6 +624,7 @@ export class CoopSimulation {
     this.worldStartedAtMs = this.elapsedMs;
     this.enemies = [];
     this.projectiles = [];
+    this.grenades = []; this.spellZones = [];
     this.gems = [];
     this.items = [];
     this.ammoCaches = [];
@@ -632,6 +673,7 @@ export class CoopSimulation {
 
   addPlayer(player: CoopPlayerSeed): boolean {
     if (this.matchState !== 'active' || this.players.has(player.id) || this.players.size >= COOP_MAX_PLAYERS) return false;
+    this.friends?.resetAircraft(this.friendsFrontier?.terrain, [...this.players.values()]);
     const index = this.players.size;
     const angle = index / COOP_MAX_PLAYERS * Math.PI * 2;
     const skinId = normalizeCoopSkinId(player.skinId);
@@ -643,15 +685,17 @@ export class CoopSimulation {
     const imprint = normalizeCoopImprintLoadout(player.imprint);
     const modifiers = coopImprintModifiers(imprint.ranks);
     this.players.set(player.id, {
-      ...player, skinId, operatorId, imprint, x: COOP_WORLD_SIZE / 2 + Math.cos(angle) * 100, y: COOP_WORLD_SIZE / 2 + Math.sin(angle) * 100,
+      ...player, skinId, operatorId, imprint, x: (this.friends ? FRIENDS_HUB.x : COOP_WORLD_SIZE / 2) + Math.cos(angle) * (this.friends ? 65 : 100), y: (this.friends ? FRIENDS_HUB.y + 90 : COOP_WORLD_SIZE / 2) + Math.sin(angle) * (this.friends ? 65 : 100),
       angle: 0, health: modifiers.maxHealth, maxHealth: modifiers.maxHealth, movementMultiplier: modifiers.movementMultiplier, selectedSlot: 0, z: 0, sprinting: false, sliding: false, crouching: false,
       level: 1, experience: 0, experienceToNextLevel: getRunXPRequired(1), coins: insertion.credits, pendingDataCores: 0,
+      mana: operatorId === 'royal_inferno' ? MANA_MAX : undefined, grenades: GRENADE_CAPACITY, grenadeRechargeRemainingMs: 0,
       weaponStates, weaponLevels: weaponStates.map(state => state.level), selectedWeaponLevel: weaponStates[0]?.level || 1, selectedWeaponId: weaponStates[0]?.weaponId || 'plasma_gun', isAiming: false, isReloading: false, isSwitching: false,
       lifeState: 'alive', downedRemainingMs: 0, reviveProgressMs: 0, invulnerableRemainingMs: 0,
       selfRevives: 0, selfReviveProgressMs: 0, armorTier: insertion.armorTier, armorHp: maxArmorHp(insertion.armorTier), gasMaskHp: 0, gasMaskMaxHp: 150, passiveModules: [], fabricatorCharges: COOP_STARTING_FABRICATOR_CHARGES,
       artifactResource: 0, artifactResourceMax: operator.resourceMax, artifactResourceKind: operator.resource, artifactBarrier: 0, jetFuel: 100, jetActive: false,
-      verticalVelocity: 0, lastJumpSequence: -1, lastWallJumpSequence: -1, lastDoubleJumpSequence: -1, wallJumpDirectionX: 0, wallJumpDirectionY: 0, airActionConsumedSinceGrounded: false, jetIgnitedThisAirTime: false, airborneMs: 0, groundedMs: 0, lastReloadSequence: -1, lastFireActionId: 0, lastAltFireActionId: 0, lastInteractActionId: 0, slideAngle: 0, aimPitch: 0, previousFiring: false, shotSequence: 0, lastDamageEventAtMs: -Infinity, passiveRuntime: [], lastArmorDamageAtMs: -Infinity, lastGasNoticeAtMs: -Infinity, fabricatorRechargeAtMs: COOP_FABRICATOR_RECHARGE_MS, artifactHitCount: 0, artifactLastActionAtMs: -Infinity, artifactBarrierExpiresAtMs: 0, artifactProcExpiresAtMs: 0, lastArtifactX: COOP_WORLD_SIZE / 2, lastArtifactY: COOP_WORLD_SIZE / 2, slipstreamReadyAtMs: 0, echoPositions: [],
+      verticalVelocity: 0, lastJumpSequence: -1, lastWallJumpSequence: -1, lastDoubleJumpSequence: -1, wallJumpDirectionX: 0, wallJumpDirectionY: 0, airActionConsumedSinceGrounded: false, jetIgnitedThisAirTime: false, airborneMs: 0, groundedMs: 0, lastReloadSequence: -1, lastFireActionId: 0, lastAltFireActionId: 0, lastGrenadeActionId: 0, grenadeRechargeAtMs: 0, lastInteractActionId: 0, slideAngle: 0, aimPitch: 0, previousFiring: false, shotSequence: 0, lastDamageEventAtMs: -Infinity, passiveRuntime: [], lastArmorDamageAtMs: -Infinity, lastGasNoticeAtMs: -Infinity, fabricatorRechargeAtMs: COOP_FABRICATOR_RECHARGE_MS, artifactHitCount: 0, artifactLastActionAtMs: -Infinity, artifactBarrierExpiresAtMs: 0, artifactProcExpiresAtMs: 0, lastArtifactX: COOP_WORLD_SIZE / 2, lastArtifactY: COOP_WORLD_SIZE / 2, slipstreamReadyAtMs: 0, echoPositions: [],
     });
+    if(this.friendsFrontier){const p=this.players.get(player.id)!;p.z=this.friendsFrontier.terrain.floor(p.x,p.y,6000,0)??0;}
     this.runStats.set(player.id, createRunStats(player.id));
     return true;
   }
@@ -663,6 +707,7 @@ export class CoopSimulation {
   /** Owner testing shortcut. A world is session-global, so this deliberately
    * moves the entire squad and rebuilds every active-world authority system. */
   adminSetWorld(destination: WorldId) {
+    if (this.friends || destination === 'friends_frontier') return false;
     if (destination === this.currentWorldId) return false;
     this.transitionToWorld(destination);
     this.markAdminModified(`teleported squad to ${getWorldDefinition(destination).name}`);
@@ -757,6 +802,7 @@ export class CoopSimulation {
     const clearedIds = new Set(targets.map(enemy => enemy.id));
     this.enemies = this.enemies.filter(enemy => !clearedIds.has(enemy.id));
     this.projectiles = [];
+    this.grenades = []; this.spellZones = [];
     this.hazards = [];
     if (count) this.markAdminModified(`cleared ${count} hostiles`);
     return count;
@@ -827,6 +873,11 @@ export class CoopSimulation {
       return;
     }
 
+    if (this.friends) {
+      const validInputs = new Map<string, MultiplayerInputFrame>();
+      for (const [id, input] of this.inputByPlayer) if (this.elapsedMs - (this.inputReceivedAtMs.get(id) ?? -Infinity) <= COOP_STALE_INPUT_MS) validInputs.set(id, input);
+      this.friends.update(dt, this.elapsedMs, [...this.players.values()], validInputs, this.friendsBuilding?.getPieces(), this.friendsFrontier?.terrain);
+    }
     // Remote-shot compensation runs during input processing, so seed the
     // broad phase before any player can fire this tick.
     this.enemySpatialIndex.rebuild(this.enemies);
@@ -844,6 +895,7 @@ export class CoopSimulation {
       if (player.artifactProc && this.elapsedMs >= player.artifactProcExpiresAtMs) player.artifactProc = undefined;
       if (player.operatorId === 'crimson_strike' && this.elapsedMs - player.artifactLastActionAtMs > 6_000) player.artifactResource = Math.max(0, player.artifactResource - 12 * seconds);
       if (player.operatorId === 'void_runner' && this.elapsedMs - player.artifactLastActionAtMs > 5_000) { player.artifactResource = 0; player.artifactTargetId = undefined; }
+      if (player.lifeState !== 'alive' || stale) player.lastGrenadeActionId = Math.max(player.lastGrenadeActionId, storedInput?.grenadeActionId || 0);
       if (player.lifeState === 'downed') {
         if (player.selfRevives > 0 && input?.reviving) {
           player.selfReviveProgressMs = Math.min(6_000, player.selfReviveProgressMs + dt);
@@ -860,7 +912,7 @@ export class CoopSimulation {
       if (player.armorTier > 0 && this.elapsedMs - player.lastArmorDamageAtMs >= 3_000) {
         player.armorHp = Math.min(maxArmorHp(player.armorTier), player.armorHp + dt * .024);
       }
-      if (player.lifeState === 'alive' && this.gasZone.isInsideGas(player.x, player.y, PLAYER_RADIUS)) {
+      if (!this.friends && player.lifeState === 'alive' && this.gasZone.isInsideGas(player.x, player.y, PLAYER_RADIUS)) {
         const gasDamage = (GAS_DPS * dt) / 1000;
         if (player.gasMaskHp > 0) {
           const prevMask = player.gasMaskHp;
@@ -876,7 +928,8 @@ export class CoopSimulation {
       }
       if (input) {
         player.lastProcessedInput = input.sequence;
-        advancePlayerMovement(
+        const piloting = this.friends?.vehicles().some(v => v.pilotId === player.id);
+        if (!piloting) advancePlayerMovement(
           player,
           input,
           dt,
@@ -884,6 +937,7 @@ export class CoopSimulation {
           (position, radius) => this.getPlayerStructureWallContact(position, player.z, radius),
           (position, radius) => this.getPlayerStructureFloor(position, radius),
           this.currentWorldId,
+          this.friends ? { elevationAware: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined,
         );
         if (Math.hypot(player.x - player.lastArtifactX, player.y - player.lastArtifactY) >= 60) {
           player.echoPositions.push({ x: player.x, y: player.y });
@@ -903,7 +957,7 @@ export class CoopSimulation {
         if (requestedSlot !== player.selectedSlot && !player.isSwitching) this.switchWeapon(player, requestedSlot);
         player.selectedWeaponId = this.weapon(player).weaponId;
         player.selectedWeaponLevel = this.weapon(player).level;
-        player.isAiming = Boolean(input.aiming) && player.selectedSlot !== 3 && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
+        player.isAiming = !isCoopSpell(player.selectedWeaponId) && Boolean(input.aiming) && player.selectedSlot !== 3 && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
         if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; this.startReload(player); }
         this.advanceWeaponActions(player);
         const fireActionId = input.fireActionId || 0;
@@ -913,17 +967,23 @@ export class CoopSimulation {
         const altFireActionId = input.altFireActionId || 0;
         if (altFireActionId > player.lastAltFireActionId) {
           player.lastAltFireActionId = altFireActionId;
-          if (player.selectedSlot === 3) this.tryArtifactSpender(player);
+          if (!(this.friends && input.friendsTool) && (player.selectedSlot === 3 || player.operatorId === 'royal_inferno')) this.tryArtifactSpender(player);
         }
+        const grenadeActionId = input.grenadeActionId || 0;
+        if (grenadeActionId > player.lastGrenadeActionId) { player.lastGrenadeActionId = grenadeActionId; if (!(this.friends && input.friendsTool)) this.throwGrenade(player); }
         const interactActionId = input.interactActionId || 0;
         if (interactActionId > player.lastInteractActionId) {
           player.lastInteractActionId = interactActionId;
           this.handleFieldInteraction(player);
         }
-        if (input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
+        if (!piloting && this.friendsFrontier && input.friendsTool && input.firing) {
+          const pitch = player.aimPitch, a = player.angle;
+          this.friendsFrontier.tool(player, input.friendsTool, { x: player.x, y: player.y, z: player.z + 26, dx: Math.cos(a) * Math.cos(pitch), dy: Math.sin(a) * Math.cos(pitch), dz: Math.sin(pitch) }, this.elapsedMs, this.friendsBuilding!.getPieces(), player.id === this.friendsHostId || this.friendsBuilding!.getGuestAccess(), [...this.players.values()]);
+        }
+        if (!piloting && !(this.friendsFrontier && input.friendsTool) && input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
       }
-      if (!input) advancePlayerMovement(player, undefined, dt, undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId);
+      if (!input) advancePlayerMovement(player, undefined, dt, this.friends ? (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius) : undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId, this.friends ? { elevationAware: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined);
     }
 
     if (bridgeCrossed) {
@@ -931,6 +991,7 @@ export class CoopSimulation {
       return;
     }
 
+    if (!this.friends) {
     this.updateRun(dt);
     const gasEvent = this.gasZone.tick(dt, this.elapsedMs);
     if (gasEvent.warningTriggered) {
@@ -945,11 +1006,14 @@ export class CoopSimulation {
     this.updateFieldMission(dt);
     this.updateMissionPings();
     this.updatePrivateExfil(dt);
+    } else this.updateFriends();
     if (this.results) return;
+    this.updateOrdnance(dt);
+    if (!this.friends) this.updateRealityBreach(dt);
     this.updateArtifactEffects(dt);
     this.updateArtifactStatuses();
     this.updatePassiveModules();
-    this.scheduleEncounters();
+    if (!this.friends) this.scheduleEncounters();
     this.updateStructures(dt);
     // Scheduling may add a packet. One linear rebuild replaces the former
     // all-enemies separation scan performed by every moving enemy.
@@ -964,6 +1028,7 @@ export class CoopSimulation {
       const holdingMissionPosition = Boolean(missionAnchor && (!nearestIntruder || Math.hypot(nearestIntruder.x - missionAnchor.x, nearestIntruder.y - missionAnchor.y) > 700));
       const target = holdingMissionPosition ? missionAnchor : this.resolveEnemyTarget(enemy);
       if (!target) continue;
+      if (this.friends && (!insideFriendsCombat(target.x, target.y, (target as { z?: number }).z ?? 0))) { enemy.attackWindupUntilMs = undefined; this.cancelEnemyHazards(enemy.id); continue; }
       const gasBoundEnemy = this.isGasEnclaveEnemy(enemy);
       // Toxic Hunt enemies defend the gas enclave. A player who has left the
       // cloud cannot be pursued or attacked by its defenders.
@@ -1004,7 +1069,7 @@ export class CoopSimulation {
         const neighbors = this.enemySpatialIndex.query(enemy.x, enemy.y, enemy.radius + MAX_ENEMY_RADIUS + 48, this.nearbyEnemies);
         const fenceSlowed = this.structures.some(structure => structure.type === 'arc_fence' && structure.state !== 'destroying'
           && structureContainsCircle(structure, enemy.x, enemy.y, enemy.radius));
-        enemy.facingAngle = moveTacticalEnemy(enemy, travelTarget, neighbors, this.elapsedMs, fenceSlowed ? dt * COOP_ARC_FENCE_SLOW_MULTIPLIER : dt, clearAttackPath, this.currentWorldId);
+        enemy.facingAngle = moveTacticalEnemy(enemy, travelTarget, neighbors, this.elapsedMs, dt * (fenceSlowed ? COOP_ARC_FENCE_SLOW_MULTIPLIER : 1) * this.realityBreach.movementScale(enemy.x, enemy.y), clearAttackPath, this.currentWorldId);
       }
       this.updateEnemyStructureInteractions(enemy, dt);
       structureStunned = (enemy.structureStunUntilMs || 0) > this.elapsedMs;
@@ -1043,6 +1108,7 @@ export class CoopSimulation {
     // Combat AI can pursue intruders, but the whole enclave remains physically
     // inside the moving gas instead of being left behind by its next patrol.
     this.constrainGasEnclave();
+    if (this.friends) for (const enemy of this.enemies) { const dx = enemy.x - FRIENDS_SALVAGE.x, dy = enemy.y - FRIENDS_SALVAGE.y, d = Math.hypot(dx, dy), r = FRIENDS_SALVAGE.radius - enemy.radius - 8; if (d > r) { enemy.x = FRIENDS_SALVAGE.x + dx / d * r; enemy.y = FRIENDS_SALVAGE.y + dy / d * r; } }
     this.activeEnemyIds.clear();
     for (const enemy of this.enemies) if (!enemy.dying) this.activeEnemyIds.add(enemy.id);
     this.updateHazards();
@@ -1077,6 +1143,7 @@ export class CoopSimulation {
           projectile.y = clamp(projectile.y, 30, COOP_WORLD_SIZE - 30);
         }
       }
+      if (this.friends && insideFriendsCombat(previousX, previousY, previousZ) !== insideFriendsCombat(projectile.x, projectile.y, projectile.z)) { projectile.lifeMs = 0; continue; }
       const blockedByWorld = firearmProjectile && this.clipFirearmSegmentToWorld(projectile, previousX, previousY, previousZ);
       projectile.lifeMs -= dt;
       if (projectile.presentationOnly) {
@@ -1100,6 +1167,8 @@ export class CoopSimulation {
           const verticalHit = projectile.z >= -projectile.radius && projectile.z <= ENEMY_HIT_HEIGHT + enemy.radius + projectile.radius;
           if (!horizontalHit || !verticalHit) continue;
         }
+        if (projectile.hitEnemyIds?.has(enemy.id)) continue;
+        projectile.hitEnemyIds?.add(enemy.id);
         this.applyDamage(enemy, projectile.damage, projectile.ownerId, projectile.weaponId);
         if (projectile.weaponId === 'sonic_boom') {
           enemy.x = clamp(enemy.x + Math.cos(projectile.angle) * 48, enemy.radius, COOP_WORLD_SIZE - enemy.radius);
@@ -1119,6 +1188,7 @@ export class CoopSimulation {
     // enclave leash so those effects cannot leave its gas shelter between
     // authoritative ticks.
     this.constrainGasEnclave();
+    if (this.friends) for (const enemy of this.enemies) { const dx = enemy.x - FRIENDS_SALVAGE.x, dy = enemy.y - FRIENDS_SALVAGE.y, d = Math.hypot(dx, dy), r = FRIENDS_SALVAGE.radius - enemy.radius - 8; if (d > r) { enemy.x = FRIENDS_SALVAGE.x + dx / d * r; enemy.y = FRIENDS_SALVAGE.y + dy / d * r; } }
     this.updateRevives(dt);
     this.finalizeDefeatIfNeeded();
     this.updateDrops(seconds);
@@ -1128,8 +1198,96 @@ export class CoopSimulation {
     for (const id of this.enemyNavigation.keys()) if (!this.activeEnemyIds.has(id)) this.enemyNavigation.delete(id);
     retainInPlace(this.combatEvents, event => this.elapsedMs - event.atMs <= COMBAT_EVENT_RETENTION_MS);
     retainInPlace(this.projectiles, projectile => projectile.lifeMs > 0
-      && projectile.z > -projectile.radius && projectile.z < 1800
+      && projectile.z > -projectile.radius && projectile.z < (this.friends ? FRIENDS_FLIGHT_CEILING + 500 : 1800)
       && projectile.x > -100 && projectile.y > -100 && projectile.x < COOP_WORLD_SIZE + 100 && projectile.y < COOP_WORLD_SIZE + 100);
+  }
+
+  private recoverFriend(player: CoopPlayer) {
+    this.friends?.resetAircraft(this.friendsFrontier?.terrain,[...this.players.values()]);
+    player.x = FRIENDS_HUB.x; player.y = FRIENDS_HUB.y + 90; player.z = this.friendsFrontier?.terrain.floor(player.x,player.y,6000,0)??0;
+    player.platformVelocityX = 0; player.platformVelocityY = 0; player.platformVelocityZ = 0;
+    player.verticalVelocity = 0; player.health = player.maxHealth; player.lifeState = 'alive';
+    player.velocityX = player.velocityY = 0;
+    player.coyoteMs = player.jumpBufferMs = player.slideMs = 0;
+    player.slideHeld = false;
+    player.invulnerableRemainingMs = 5000; player.isAiming = false; player.isReloading = false; player.isSwitching = false;
+    player.airActionConsumedSinceGrounded = false; player.jetActive = false; player.jetIgnitedThisAirTime = false;
+    player.sliding = false; player.crouching = false;
+    for (const weapon of player.weaponStates) { this.cancelReload(weapon); weapon.state = 'ready'; }
+    this.emitCombatEvent({ kind: 'player_redeployed', x: player.x, y: player.y, playerId: player.id, color: '#8de6ce' });
+  }
+
+  private updateFriends() {
+    const expedition = this.friends!;
+    const occupied = [...this.players.values()].some(p => p.lifeState === 'alive' && insideFriendsCombat(p.x, p.y, p.z));
+    if (expedition.snapshot().salvageState === 'active' && !occupied) {
+      if (this.friendsEmptySinceMs === undefined) this.friendsEmptySinceMs = this.elapsedMs;
+      for (const enemy of this.enemies) { enemy.attackWindupUntilMs = undefined; this.cancelEnemyHazards(enemy.id); }
+      if (this.elapsedMs - this.friendsEmptySinceMs >= 10000) { this.enemies = this.enemies.filter(e => e.missionId !== -777); expedition.resetSalvage(this.elapsedMs); }
+    } else this.friendsEmptySinceMs = undefined;
+    for (const player of this.players.values()) { if (player.z < -600) this.recoverFriend(player); this.friendsFrontier?.pack(player); this.friendsFrontier?.explore(player, this.elapsedMs); }
+    const buildRevision = this.friendsBuilding!.getRevision();
+    if (buildRevision !== this.friendsBuildCheckedRevision) {
+      this.friendsBuildCheckedRevision = buildRevision;
+      for (const id of this.friendsProjects!.update(this.friendsBuilding!.getPieces())) {
+        for (const player of this.players.values()) player.coins += 300;
+        this.emitCombatEvent({ kind: 'station_online', x: id === 'garden_walk' ? 8350 : id === 'observatory' ? 6280 : FRIENDS_HUB.x, y: id === 'garden_walk' ? 7530 : id === 'observatory' ? 8650 : FRIENDS_HUB.y, color: '#8de6ce', amount: 300 });
+      }
+    }
+    if (!this.enemies.some(enemy => enemy.missionId === -777 && !enemy.dying) && expedition.finishSalvage(this.elapsedMs)) {
+      for (const player of this.players.values()) player.coins += 600;
+    }
+
+  }
+
+  private updateRealityBreach(dt: number) {
+    // Do not compete with extraction or a completed run.
+    const canOpen = this.runDirector.currentPhase !== 'exfil' && this.runDirector.currentPhase !== 'checkpoint';
+    const operators = [...this.players.values()];
+    const transition = this.realityBreach.update(dt, this.worldElapsedMs(), operators, canOpen);
+    const breach = this.realityBreach.snapshot(this.worldElapsedMs());
+    this.updateBreachCircuit(breach);
+    if (!transition) return;
+    this.emitCombatEvent({ kind: transition === 'opened' ? 'breach_opened' : transition === 'sealed' ? 'breach_sealed' : 'breach_failed',
+      x: breach.x, y: breach.y, amount: transition === 'sealed' ? breach.reward : undefined,
+      color: transition === 'failed' ? '#ff6b45' : transition === 'sealed' ? '#afffc9' : '#ffb86b' });
+    if (transition !== 'sealed') return;
+    const contributors = breach.anchors.map(anchor => anchor.occupantId).filter((id): id is string => Boolean(id));
+    for (const player of operators) {
+      if (player.lifeState !== 'alive') continue;
+      player.coins += breach.reward;
+      player.health = Math.min(player.maxHealth, player.health + 25);
+    }
+    let index = 0;
+    for (const enemy of this.enemies) {
+      if (enemy.dying || Math.hypot(enemy.x - breach.x, enemy.y - breach.y) > BREACH_PULSE_RADIUS) continue;
+      const ownerId = contributors[index++ % contributors.length];
+      if (!ownerId) continue;
+      // Bosses remain fights. Ordinary enemies receive the full squad pulse.
+      const damage = enemy.id === this.bossEnemyId ? Math.min(enemy.maxHealth * .03, 350 + breach.cycle * 75) : 350 + breach.cycle * 75;
+      this.applyDamage(enemy, damage, ownerId, undefined, 'world');
+    }
+  }
+
+  private updateBreachCircuit(breach: CoopRealityBreachSnapshot) {
+    if (breach.phase !== 'linking' || this.elapsedMs < this.nextBreachCircuitAtMs) return;
+    this.nextBreachCircuitAtMs = this.elapsedMs + 500;
+    const linked = breach.anchors.filter(anchor => anchor.occupantId);
+    if (!linked.length) return;
+    for (const enemy of this.enemies) {
+      if (enemy.dying) continue;
+      let ownerId: string | undefined;
+      for (let index = 0; index < linked.length; index++) {
+        const from = linked[index], to = linked[(index + 1) % linked.length];
+        const dx = to.x - from.x, dy = to.y - from.y;
+        const lengthSquared = dx * dx + dy * dy;
+        const t = lengthSquared > 0 ? Math.max(0, Math.min(1, ((enemy.x - from.x) * dx + (enemy.y - from.y) * dy) / lengthSquared)) : 0;
+        const distance = Math.hypot(enemy.x - from.x - t * dx, enemy.y - from.y - t * dy);
+        if (distance <= (linked.length === 1 ? 135 : 26) + enemy.radius) { ownerId = from.occupantId; break; }
+      }
+      if (!ownerId) continue;
+      this.applyDamage(enemy, enemy.id === this.bossEnemyId ? Math.min(75, enemy.maxHealth * .002) : 75, ownerId, undefined, 'world');
+    }
   }
 
   createSnapshot(): CoopSnapshot {
@@ -1138,26 +1296,31 @@ export class CoopSimulation {
       tick: this.simulationTick, elapsedMs: Math.round(this.elapsedMs), kills: this.kills,
       world: { id: world.id, tier: world.tier, name: world.name, elapsedMs: Math.round(this.elapsedMs - this.worldStartedAtMs) },
       bridge: { ...this.bridgeState },
-      players: [...this.players.values()].map(({ verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastAltFireActionId: _lastAltFireActionId, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, artifactTargetId: _artifactTargetId, artifactHitCount: _artifactHitCount, artifactLastActionAtMs: _artifactLastActionAtMs, artifactBarrierExpiresAtMs: _artifactBarrierExpiresAtMs, artifactProcExpiresAtMs: _artifactProcExpiresAtMs, lastArtifactX: _lastArtifactX, lastArtifactY: _lastArtifactY, slipstreamReadyAtMs: _slipstreamReadyAtMs, echoPositions: _echoPositions, ...player }) => ({ ...player, privateExfilAvailable: this.fieldMissionDirector.completions > 0 || this.runDirector.snapshot(this.elapsedMs).contractIndex > 0, privateExfilCalled: this.privateExfilCalled, fabricatorRechargeRemainingMs: this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, jetFuel: player.jetFuel, jetActive: player.jetActive, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
+      mode: this.mode,
+      friends: this.friends ? { ...this.friends.snapshot(), building: this.friendsBuilding?.snapshot(), projects: this.friendsProjects?.snapshot(), frontier: this.friendsFrontier?.snapshot() } : undefined,
+      realityBreach: this.friends ? undefined : this.realityBreach.snapshot(this.worldElapsedMs()),
+      players: [...this.players.values()].map(({ velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, jetLaunchFloor, airborneMs, groundedMs, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastAltFireActionId: _lastAltFireActionId, lastGrenadeActionId: _lastGrenadeActionId, grenadeRechargeAtMs: _grenadeRechargeAtMs, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, artifactTargetId: _artifactTargetId, artifactHitCount: _artifactHitCount, artifactLastActionAtMs: _artifactLastActionAtMs, artifactBarrierExpiresAtMs: _artifactBarrierExpiresAtMs, artifactProcExpiresAtMs: _artifactProcExpiresAtMs, lastArtifactX: _lastArtifactX, lastArtifactY: _lastArtifactY, slipstreamReadyAtMs: _slipstreamReadyAtMs, echoPositions: _echoPositions, ...player }) => ({ ...player, privateExfilAvailable: this.fieldMissionDirector.completions > 0 || this.runDirector.snapshot(this.elapsedMs).contractIndex > 0, privateExfilCalled: this.privateExfilCalled, fabricatorRechargeRemainingMs: this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, jetLaunchFloor, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, jetFuel: player.jetFuel, jetActive: player.jetActive, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
       enemies: this.enemies.map(({ hitFlashUntilMs, deathUntilMs, killedByPlayerId: _killedBy, targetLeaseUntilMs: _lease, nextAttackAtMs: _nextAttack, targetStructureId: _targetStructureId, structureStunUntilMs: _structureStunUntilMs, chillExpiresAtMs: _chillExpiresAtMs, rimeGrantedAtMs: _rimeGrantedAtMs, missionAnchorX: _missionAnchorX, missionAnchorY: _missionAnchorY, cinderhexByOwner: _cinderhexByOwner, ...enemy }) => ({
         ...enemy,
         hitFlashMs: Math.max(0, hitFlashUntilMs - this.elapsedMs),
         deathRemainingMs: enemy.dying ? Math.max(0, (deathUntilMs || this.elapsedMs) - this.elapsedMs) : 0,
       })),
-      projectiles: this.projectiles.map(({ damage: _damage, penetration: _penetration, damageIntervalMs: _interval, nextDamageAt: _next, ...projectile }) => ({ ...projectile })),
+      grenades: this.grenades.map(grenade => ({ ...grenade })),
+      spellZones: this.spellZones.map(zone => ({ ...zone })),
+      projectiles: this.projectiles.map(({ damage: _damage, penetration: _penetration, damageIntervalMs: _interval, nextDamageAt: _next, hitEnemyIds: _hitEnemyIds, ...projectile }) => ({ ...projectile })),
       gems: this.gems.map(gem => ({ ...gem })),
       items: this.items.map(item => ({ ...item })),
       ammoCaches: this.ammoCaches.map(cache => ({ ...cache })),
       combatEvents: this.combatEvents.map(event => ({ ...event })),
       matchState: this.matchState,
       run: this.runDirector.snapshot(Math.round(this.worldElapsedMs())),
-      buyStations: this.stationDirector.snapshot(),
-      weaponFoundry: this.weaponFoundry.snapshot(),
-      gasZone: this.gasZone.snapshot(Math.round(this.elapsedMs)),
-      fieldMissions: this.fieldMissionDirector.snapshot(),
+      buyStations: this.friends ? [] : this.stationDirector.snapshot(),
+      weaponFoundry: this.friends ? undefined : this.weaponFoundry.snapshot(),
+      gasZone: this.friends ? undefined : this.gasZone.snapshot(Math.round(this.elapsedMs)),
+      fieldMissions: this.friends ? undefined : this.fieldMissionDirector.snapshot(),
       privateExfil: this.privateExfil && { ...this.privateExfil },
       results: this.results && { ...this.results, players: this.results.players.map(player => ({ ...player, passiveDamageById: { ...player.passiveDamageById } })) },
-      encounter: this.encounterDirector.snapshot(buildEncounterClusters(this.encounterPlayers(), this.encounterEnemies()).length),
+      encounter: this.friends ? undefined : this.encounterDirector.snapshot(buildEncounterClusters(this.encounterPlayers(), this.encounterEnemies()).length),
       hazards: this.hazards.map(({ damage: _damage, resolved: _resolved, ...hazard }) => ({ ...hazard })),
       pings: this.pings.map(ping => ({
         ...ping,
@@ -1174,8 +1337,61 @@ export class CoopSimulation {
 
   /** Host-authoritative field fabrication. A client supplies intent and a
    * hologram pose; the simulation repeats every spatial and economy check. */
+  setFriendsGuestAccess(allowed: boolean) { this.friendsBuilding?.setGuestAccess(allowed); }
+  restoreFriendsWorld(playerId: string, progress: FriendsProgress, building: FriendsBuildingSnapshot, projects?: FriendsProjectSnapshot, frontier?: FrontierSnapshot, transport?: FriendsTransportSave) {
+    if (!this.friends || playerId !== this.friendsHostId) return false;
+    const nextTerrainRevision = (this.friendsFrontier?.terrain.revision || 0) + 1;
+    this.friendsFrontier = new FriendsFrontier(frontier); this.friends = new FriendsExpedition(progress, transport, this.friendsFrontier.terrain); this.friendsBuilding = new FriendsBuilding(building, (this.friendsBuilding?.snapshot().revision || 0) + 1, this.friendsFrontier?.terrain); this.friendsFrontier.terrain.revision = Math.max(nextTerrainRevision, this.friendsFrontier.terrain.revision); this.friendsFrontier.preserveTerrainWork(this.friendsBuilding.getPieces(),frontier?.terrain); this.friends.resetAircraft(this.friendsFrontier.terrain); this.friends.setRailway(this.friendsBuilding.getPieces(), this.friendsBuilding.getRevision()); if (!frontier) this.friendsFrontier.adaptLegacyBuildings(this.friendsBuilding.getPieces()); this.friendsProjects = new FriendsProjects(projects); this.friendsBuildCheckedRevision = -1;
+    this.enemies = []; this.hazards = []; this.projectiles = []; this.grenades = []; this.spellZones = [];
+    for (const player of this.players.values()) this.recoverFriend(player);
+    return true;
+  }
+  friendsBuild(playerId: string, request: FriendsBuildRequest): FriendsBuildResult {
+    const player = this.players.get(playerId);
+    if (!player || !this.friendsBuilding) return { playerId, requestId: request?.requestId || 0, ok: false, message: 'Building is available in Friends mode.', revision: 0 };
+    const target=this.friendsBuilding.getPieces().find(p=>p.id===request.pieceId);
+    if(this.friends?.hasTrain() && (['undo','redo'].includes(request.action) || target && this.friends.trackInUse(target.id) && ['move','remove'].includes(request.action))) return {playerId,requestId:request.requestId,ok:false,message:'Dismantle the train before editing or undoing its track.',revision:this.friendsBuilding.getRevision()};
+    if(request.action==='place' && request.pose && request.shape && isPlayerRail(request.shape)) {
+      const trees=this.friendsFrontier?.treesNear(request.pose.x,request.pose.y) || [];
+      // Track geometry is validated by FriendsBuilding; trunks must be cleared too.
+      const samples=railSamples({...request.pose,shape:request.shape});
+      if(trees.some(t=>samples.some(q=>Math.hypot(t.x-q.x,t.y-q.y)<85 && Math.abs(t.z-q.z)<100)))return {playerId,requestId:request.requestId,ok:false,message:'Cut the trees in this track corridor first.',revision:this.friendsBuilding.getRevision()};
+    }
+    const result=this.friendsBuilding.request(player, request, this.friendsHostId, [...this.players.values(), ...friendsVehicleBuildBodies(this.friends?.vehicles())], (before, after) => this.friendsFrontier?.buildTransition(player, before, after));
+    if(result.ok)this.friends?.setRailway(this.friendsBuilding.getPieces(),this.friendsBuilding.getRevision(),[...this.players.values()]);
+    return result;
+  }
+  friendsAction(playerId: string, request: FrontierRequest) {
+    const player = this.players.get(playerId);
+    if (!player || !this.friendsFrontier || !this.friendsBuilding || !this.friends) return { playerId, requestId: request?.requestId || 0, ok: false, message: 'World unavailable.' };
+    if (request && ['train_place', 'train_remove', 'train_hold', 'train_depart'].includes(request.action)) {
+      if (!this.friendsFrontier.acceptRequest(player, request.requestId)) return { playerId, requestId: request.requestId, ok: false, message: 'This operation was already handled.' };
+      if(player.lifeState!=='alive' || playerId!==this.friendsHostId && !this.friendsBuilding.getGuestAccess())return {playerId,requestId:request.requestId,ok:false,message:'You need building access to operate the railway.'};
+      if(request.action==='train_place') {
+        const error=this.friends.trainPlacement(this.friendsBuilding.getPieces(),player).error || this.friendsFrontier.purchaseTrain(player);
+        if(error)return {playerId,requestId:request.requestId,ok:false,message:error};
+        this.friends.placeTrain(this.friendsBuilding.getPieces(),player);
+        return {playerId,requestId:request.requestId,ok:true,message:'Train assembled on your track. Add track for more carriages. Depart from beside the train.'};
+      }
+      const near = this.friends.vehicles().some(v => v.kind === 'train' && Math.hypot(player.x-v.x, player.y-v.y, player.z-v.z) < 280);
+      if (player.lifeState !== 'alive' || !near || playerId !== this.friendsHostId && !this.friendsBuilding.getGuestAccess()) return { playerId, requestId: request.requestId, ok: false, message: 'Board or stand beside the train to operate it.' };
+      if(request.action==='train_remove') { const error=this.friends.removeTrain([...this.players.values()]);if(error)return {playerId,requestId:request.requestId,ok:false,message:error};this.friendsFrontier.refund(player,PLAYER_TRAIN_COST);return {playerId,requestId:request.requestId,ok:true,message:'Train dismantled. Materials returned to shared storage; cargo is kept for your next train.'}; }
+      this.friends.controlTrain(request.action as 'train_hold' | 'train_depart'); return { playerId, requestId: request.requestId, ok: true, message: request.action === 'train_hold' ? 'Train held for loading.' : 'Sunline departing.' };
+    }
+    const result = this.friendsFrontier.request(player, request, this.elapsedMs, this.friendsBuilding.getPieces(), this.friends.vehicles(), playerId === this.friendsHostId || this.friendsBuilding.getGuestAccess());
+    if (result.ok && request.action === 'home') this.recoverFriend(player);
+    return result;
+  }
+  private friendsOverhead(position: { x: number; y: number; z: number }) {
+    const terrain = this.friendsFrontier?.terrain.ceiling(position.x, position.y, position.z);
+    const a = friendsVehicleCeiling(this.friends!.vehicles(), position.x, position.y, position.z);
+    const b = this.friendsBuilding && friendsBuildCeiling(this.friendsBuilding.getPieces(), position.x, position.y, position.z);
+    return Math.min(a ?? Infinity, b ?? Infinity, terrain ?? Infinity);
+  }
+
   buildStructure(playerId: string, requestedType: unknown, requestedX: number, requestedY: number, requestedAngle: number, requestId?: number): CoopBuildError | undefined {
     const player = this.players.get(playerId);
+    if (this.friends) return { code: 'invalid_blueprint' };
     if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
     if (!this.acceptEngineeringRequest(this.latestBuildRequestByPlayer, playerId, requestId)) return { code: 'stale_request' };
     if (!isCoopStructureType(requestedType)) return { code: 'invalid_blueprint' };
@@ -1387,6 +1603,7 @@ export class CoopSimulation {
   /** Reliable purchase entry point. The WebRTC/UI layer supplies only intent;
    * every range, price, slot, and ownership check happens here on the host. */
   purchase(playerId: string, stationId: number, itemId: CoopShopItemId): CoopPurchaseError | undefined {
+    if(this.friends)return {code:'station_range'};
     const player = this.players.get(playerId);
     const station = this.stationDirector.snapshot().find(candidate => candidate.id === stationId && candidate.state === 'active');
     if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
@@ -1542,6 +1759,7 @@ export class CoopSimulation {
       lastGasX: this.gasZone.x, lastGasY: this.gasZone.y,
     };
     this.constrainGasEnclave();
+    if (this.friends) for (const enemy of this.enemies) { const dx = enemy.x - FRIENDS_SALVAGE.x, dy = enemy.y - FRIENDS_SALVAGE.y, d = Math.hypot(dx, dy), r = FRIENDS_SALVAGE.radius - enemy.radius - 8; if (d > r) { enemy.x = FRIENDS_SALVAGE.x + dx / d * r; enemy.y = FRIENDS_SALVAGE.y + dy / d * r; } }
   }
 
   /** Optional contracts must remain completable even when the ambient
@@ -1585,7 +1803,18 @@ export class CoopSimulation {
   }
 
   private handleFieldInteraction(player: CoopPlayer) {
+    if (this.friends && friendsCockpitInteraction(this.friends.vehicles(), player)) { this.friends.interact(player, this.elapsedMs); return; }
     if (this.collectManualDrop(player)) return;
+    if (this.friends) {
+      const outcome = this.friends.interact(player, this.elapsedMs);
+      if (outcome === 'salvage') {
+        const types = ['basic', 'basic', 'fast', 'ranged', 'tank', 'basic', 'fast', 'ranged'] as const;
+        types.forEach((type, index) => this.spawnMissionEnemy(type, 4260, 7050, 'guard', 1, '#ff9878', index, -777));
+      }
+      if (outcome === 'signal') player.coins += 150;
+      if (outcome === 'restore') for (const member of this.players.values()) member.coins += 900;
+      return;
+    }
     const mission = this.fieldMissionDirector.current;
     if (!mission) {
       const site = this.fieldMissionDirector.snapshot().sites
@@ -1665,6 +1894,7 @@ export class CoopSimulation {
     enclave.lastGasX = this.gasZone.x;
     enclave.lastGasY = this.gasZone.y;
     this.constrainGasEnclave();
+    if (this.friends) for (const enemy of this.enemies) { const dx = enemy.x - FRIENDS_SALVAGE.x, dy = enemy.y - FRIENDS_SALVAGE.y, d = Math.hypot(dx, dy), r = FRIENDS_SALVAGE.radius - enemy.radius - 8; if (d > r) { enemy.x = FRIENDS_SALVAGE.x + dx / d * r; enemy.y = FRIENDS_SALVAGE.y + dy / d * r; } }
   }
 
   private constrainGasEnclave() {
@@ -1938,6 +2168,7 @@ export class CoopSimulation {
   /** Host-only Foundry transaction. The requested firearm need not be
    * equipped, but it must belong to the requesting player's own loadout. */
   forgeWeapon(playerId: string, foundryId: number, requestedWeapon: unknown): CoopFoundryResult | undefined {
+    if(this.friends)return {code:'foundry_inactive'};
     const player = this.players.get(playerId);
     const foundry = this.weaponFoundry.snapshot();
     if (!player || player.lifeState !== 'alive' || player.z > COOP_GROUNDED_INTERACTION_MAX_Z) return { code: 'alive_required' };
@@ -2184,6 +2415,8 @@ export class CoopSimulation {
   }
 
   private queueHazard(enemy: CoopEnemy, kind: CoopHazardSnapshot['kind'], x: number, y: number, radius: number, damage: number, windupMs: number, color: string) {
+    if (this.friends && !insideFriendsCombat(x, y)) return;
+    if (this.friends) radius = Math.min(radius, Math.max(4, FRIENDS_SALVAGE.radius - Math.hypot(x - FRIENDS_SALVAGE.x, y - FRIENDS_SALVAGE.y) - 3));
     enemy.attackWindupUntilMs = this.elapsedMs + windupMs;
     this.hazards.push({ id: this.nextEntityId++, enemyId: enemy.id, kind, x, y, radius, damage, startsAtMs: this.elapsedMs, resolvesAtMs: this.elapsedMs + windupMs, color, resolved: false });
   }
@@ -2202,6 +2435,7 @@ export class CoopSimulation {
       const absorbedBy = new Set<CoopStructure>();
       for (const player of this.players.values()) {
         if (player.lifeState !== 'alive' || Math.hypot(player.x - hazard.x, player.y - hazard.y) > hazard.radius + PLAYER_RADIUS) continue;
+        if (this.friends && (!insideFriendsCombat(player.x, player.y, player.z) || !insideFriendsCombat(hazard.x, hazard.y))) continue;
         // A gas enclave attack is cancelled for an operator who escapes the
         // cloud during its warning window.
         if (gasBoundSource && !this.gasZone.isInsideGas(player.x, player.y, PLAYER_RADIUS)) continue;
@@ -2323,8 +2557,10 @@ export class CoopSimulation {
   }
 
   private resolvePlayerStructureCollisions(position: { x: number; y: number }, z: number, radius: number) {
-    if (z > 34) return false;
-    let collided = false;
+    let collided = this.friends ? resolveFriendsVehicleCollisions(this.friends.vehicles(), position, z, radius) : false;
+    if (this.friendsFrontier) { collided = this.friendsFrontier.terrain.collide(position, z, radius) || collided; collided = this.friendsFrontier.collideTrees(position, z, radius) || collided; }
+    if (this.friendsBuilding) collided = resolveFriendsBuildCollisions(this.friendsBuilding.getPieces(), position, z, radius) || collided;
+    if (z > 34) return collided;
     for (const structure of this.structures) {
       if (structure.state === 'destroying') continue;
       collided = resolveBarricadeCollision(position, radius, structure) || collided;
@@ -2333,6 +2569,9 @@ export class CoopSimulation {
   }
 
   private getPlayerStructureWallContact(position: { x: number; y: number }, z: number, radius: number) {
+    const terrainContact = this.friendsFrontier?.terrain.wallContact(position, z, radius);
+    if (terrainContact) return terrainContact;
+    if (this.friendsBuilding) { const test = { ...position }; if (resolveFriendsBuildCollisions(this.friendsBuilding.getPieces(), test, z, radius + 2, 50, 0)) { const d = Math.hypot(test.x - position.x, test.y - position.y); if (d > .001) return { normalX: (test.x - position.x) / d, normalY: (test.y - position.y) / d }; } }
     if (z > 34) return undefined;
     for (const structure of this.structures) {
       if (structure.state === 'destroying') continue;
@@ -2342,8 +2581,12 @@ export class CoopSimulation {
     return undefined;
   }
 
-  private getPlayerStructureFloor(position: { x: number; y: number }, radius: number) {
-    let floor: number | undefined;
+  private getPlayerStructureFloor(position: { x: number; y: number; z?: number }, radius: number) {
+    let floor = this.friends ? friendsWorldFloor(this.friends.vehicles(), position.x, position.y, position.z ?? 0) : undefined;
+    const terrainFloor = this.friendsFrontier?.terrain.floor(position.x, position.y, position.z ?? 0);
+    if (terrainFloor !== undefined) floor = Math.max(floor ?? -Infinity, terrainFloor);
+    const creativeFloor = this.friendsBuilding && friendsBuildFloor(this.friendsBuilding.getPieces(), position.x, position.y, position.z ?? 0);
+    if (creativeFloor !== undefined) floor = Math.max(floor ?? -Infinity, creativeFloor);
     for (const structure of this.structures) {
       if (structure.state === 'destroying') continue;
       const top = getStructureWalkableTop(structure, position.x, position.y, radius);
@@ -2565,6 +2808,7 @@ export class CoopSimulation {
    * revive opportunities. */
   private damagePlayer(player: CoopPlayer, amount: number, sourceX: number, sourceY: number) {
     if (this.matchState !== 'active' || player.lifeState !== 'alive' || player.invulnerableRemainingMs > 0 || amount <= 0) return;
+    if (this.friends && (!insideFriendsCombat(player.x, player.y, player.z) || !insideFriendsCombat(sourceX, sourceY))) return;
     this.cancelRevivesBy(player.id);
     player.lastArmorDamageAtMs = this.elapsedMs;
     const artifactAbsorbed = Math.min(player.artifactBarrier, amount);
@@ -2616,6 +2860,7 @@ export class CoopSimulation {
   }
 
   private downPlayer(player: CoopPlayer) {
+    if (this.friends) { this.recoverFriend(player); return; }
     if (player.carryingHostage) {
       const hostage = this.fieldMissionDirector.current?.hostage;
       if (hostage?.carrierId === player.id) {
@@ -2649,6 +2894,7 @@ export class CoopSimulation {
   }
 
   private eliminatePlayer(player: CoopPlayer, reason: string) {
+    if (this.friends) { this.recoverFriend(player); return; }
     if (player.lifeState === 'eliminated' || player.lifeState === 'extracted') return;
     player.health = 0; player.lifeState = 'eliminated'; player.downedRemainingMs = 0;
     player.reviveProgressMs = 0; player.selfReviveProgressMs = 0; player.reviverId = undefined; player.isAiming = false; player.isReloading = false; player.isSwitching = false;
@@ -2741,6 +2987,7 @@ export class CoopSimulation {
   }
 
   private finalizeDefeatIfNeeded() {
+    if (this.friends) return;
     if (this.matchState !== 'active' || [...this.players.values()].some(player => player.lifeState === 'alive')) return;
     // A purchased Emergency Reboot creates a short, solo clutch window even
     // when no teammate is still standing to perform the normal revive.
@@ -2779,10 +3026,97 @@ export class CoopSimulation {
   private finishReload(player: CoopPlayer, weapon: CoopWeaponRuntime) { weapon.state = 'ready'; weapon.reloadStartedAtMs = undefined; weapon.reloadEndsAtMs = undefined; player.isReloading = false; player.weaponActionEndsAtMs = undefined; this.emitCombatEvent({ kind: 'reload_finished', x: player.x, y: player.y, playerId: player.id, weaponId: weapon.weaponId, color: COOP_FIREARM_BY_ID[weapon.weaponId].visual.muzzleColor }); }
   private cancelReload(weapon: CoopWeaponRuntime) { weapon.state = 'ready'; weapon.reloadStartedAtMs = undefined; weapon.reloadEndsAtMs = undefined; }
 
+  private throwGrenade(player: CoopPlayer) {
+    if (player.lifeState !== 'alive' || player.carryingHostage || (player.grenades ?? 0) <= 0 || this.grenades.length >= 16) return;
+    player.grenades = (player.grenades || 0) - 1;
+    if (!player.grenadeRechargeAtMs) player.grenadeRechargeAtMs = this.elapsedMs + GRENADE_RECHARGE_MS;
+    const pitch = clamp(player.aimPitch + .30, -.45, 1.1), speed = 560;
+    // Start at the hand. Swept authority prevents throwing through nearby cover.
+    this.grenades.push({ id: this.nextEntityId++, ownerId: player.id, x: player.x, y: player.y, z: player.z + 28, fuseMs: GRENADE_FUSE_MS, vx: Math.cos(player.angle) * Math.cos(pitch) * speed, vy: Math.sin(player.angle) * Math.cos(pitch) * speed, vz: Math.sin(pitch) * speed + 150 });
+    this.emitCombatEvent({ kind: 'grenade_thrown', x: player.x, y: player.y, z: player.z + 28, playerId: player.id, color: '#fbbf24' });
+  }
+
+  private updateOrdnance(dt: number) {
+    for (const player of this.players.values()) {
+      if (player.lifeState === 'alive' && player.mana !== undefined) player.mana = Math.min(MANA_MAX, player.mana + MANA_REGEN_PER_SECOND * dt / 1000);
+      if (player.grenadeRechargeAtMs && this.elapsedMs >= player.grenadeRechargeAtMs) {
+        player.grenades = Math.min(GRENADE_CAPACITY, (player.grenades || 0) + 1);
+        player.grenadeRechargeAtMs = player.grenades < GRENADE_CAPACITY ? this.elapsedMs + GRENADE_RECHARGE_MS : 0;
+      }
+      player.grenadeRechargeRemainingMs = Math.max(0, player.grenadeRechargeAtMs - this.elapsedMs);
+    }
+    this.grenades = this.grenades.filter(grenade => {
+      const insideBefore = insideFriendsCombat(grenade.x, grenade.y, grenade.z);
+      const detonated = advanceGrenade(grenade, dt, (from, x, y, z) => {
+        const distance = Math.hypot(x - from.x, y - from.y);
+        const hit = distance > .001 ? raycastWorldObstacles(from.x, from.y, from.z, x - from.x, y - from.y, (z - from.z) / distance, distance, this.currentWorldId) : undefined;
+        if (!hit) return undefined;
+        if (Math.abs(hit.z - hit.obstacle.elevation) < .02) return { x: hit.x, y: hit.y, z: hit.z, nx: 0, ny: 0, nz: 1 };
+        const sides = [{ d: Math.abs(hit.x - hit.obstacle.x), nx: -1, ny: 0 }, { d: Math.abs(hit.x - hit.obstacle.x - hit.obstacle.width), nx: 1, ny: 0 }, { d: Math.abs(hit.y - hit.obstacle.y), nx: 0, ny: -1 }, { d: Math.abs(hit.y - hit.obstacle.y - hit.obstacle.height), nx: 0, ny: 1 }];
+        const side = sides.reduce((best, next) => next.d < best.d ? next : best);
+        return { x: hit.x, y: hit.y, z: hit.z, nx: side.nx, ny: side.ny, nz: 0 };
+      });
+      if (this.friends && insideBefore !== insideFriendsCombat(grenade.x, grenade.y, grenade.z)) return false;
+      if (!detonated) return true;
+      for (const enemy of this.enemies) {
+        const distance = Math.hypot(enemy.x - grenade.x, enemy.y - grenade.y, 24 - grenade.z);
+        if (enemy.dying || distance > GRENADE_RADIUS) continue;
+        const horizontal = Math.hypot(enemy.x - grenade.x, enemy.y - grenade.y);
+        if (horizontal > 1 && raycastWorldObstacles(grenade.x, grenade.y, Math.max(8, grenade.z), enemy.x - grenade.x, enemy.y - grenade.y, (24 - Math.max(8, grenade.z)) / horizontal, horizontal, this.currentWorldId)) continue;
+        this.applyDamage(enemy, grenadeDamage(distance), grenade.ownerId, undefined, 'world');
+      }
+      this.emitCombatEvent({ kind: 'grenade_detonated', x: grenade.x, y: grenade.y, z: grenade.z, playerId: grenade.ownerId, amount: GRENADE_RADIUS, color: '#ffc777' });
+      return false;
+    });
+    this.spellZones = this.spellZones.filter(zone => {
+      if (this.friends && !insideFriendsCombat(zone.x, zone.y)) return false;
+      if (this.elapsedMs < zone.resolvesAtMs) return true;
+      const owner = this.players.get(zone.ownerId);
+      for (const enemy of this.enemies) if (!enemy.dying && Math.hypot(enemy.x - zone.x, enemy.y - zone.y) <= zone.radius && hasClearAttackPath(zone, enemy, this.currentWorldId)) {
+        this.applyDamage(enemy, 190 * (owner ? this.imprintModifiers(owner).damageMultiplier * (1 + .1 * (owner.weaponStates.find(w => w.weaponId === zone.weaponId)?.level || 1) - .1) : 1), zone.ownerId, zone.weaponId);
+      }
+      this.emitCombatEvent({ kind: 'spell_impact', x: zone.x, y: zone.y, z: 8, playerId: zone.ownerId, weaponId: zone.weaponId, amount: zone.radius, color: COOP_SPELLS[zone.weaponId].color });
+      return false;
+    });
+  }
+
+  private castSpell(player: CoopPlayer, id: CoopSpellId, actionId: number) {
+    const weapon = this.weapon(player), spell = COOP_SPELLS[id];
+    if (this.elapsedMs < weapon.nextFireAtMs || (player.mana || 0) < spell.cost || weapon.state !== 'ready') return;
+    player.mana = Math.max(0, (player.mana || 0) - spell.cost);
+    weapon.nextFireAtMs = this.elapsedMs + spell.cooldownMs;
+    player.shotSequence++;
+    const stats = this.runStats.get(player.id); if (stats) stats.shotsFired++;
+    this.emitCombatEvent({ kind: 'spell_cast', x: player.x, y: player.y, z: player.z + 24, playerId: player.id, weaponId: id, color: spell.color, actionId });
+    const damageMultiplier = this.imprintModifiers(player).damageMultiplier * (1 + .1 * (weapon.level - 1));
+    if (id === 'soul_nova') {
+      const radius = 340;
+      for (const enemy of this.enemies) if (!enemy.dying && (!this.friends || insideFriendsCombat(player.x, player.y, player.z)) && Math.hypot(enemy.x - player.x, enemy.y - player.y, player.z) <= radius && hasClearAttackPath(player, enemy, this.currentWorldId)) {
+        this.applyDamage(enemy, 85 * damageMultiplier, player.id, id);
+        enemy.slowMultiplier = Math.min(enemy.slowMultiplier, enemy.type === 'titan' ? .9 : enemy.type === 'elite' ? .8 : .45); enemy.chillStacks = Math.max(3, enemy.chillStacks || 0); enemy.chillExpiresAtMs = this.elapsedMs + 2400;
+      }
+      this.emitCombatEvent({ kind: 'spell_impact', x: player.x, y: player.y, z: player.z + 12, playerId: player.id, weaponId: id, amount: radius, color: spell.color });
+      return;
+    }
+    if (id === 'rift_meteor') {
+      const range = player.aimPitch < -.06 ? clamp((player.z + 28) / Math.tan(-player.aimPitch), 60, 800) : 650;
+      const hit = raycastWorldObstacles(player.x, player.y, player.z + 24, Math.cos(player.angle), Math.sin(player.angle), Math.tan(player.aimPitch), range, this.currentWorldId);
+      const distance = hit ? Math.max(10, hit.distance - 10) : range;
+      if (this.friends && insideFriendsCombat(player.x, player.y, player.z) !== insideFriendsCombat(player.x + Math.cos(player.angle) * distance, player.y + Math.sin(player.angle) * distance)) return;
+      this.spellZones.push({ id: this.nextEntityId++, ownerId: player.id, weaponId: id, x: player.x + Math.cos(player.angle) * distance, y: player.y + Math.sin(player.angle) * distance, radius: 230, resolvesAtMs: this.elapsedMs + 1050 });
+      return;
+    }
+    const definition = COOP_FIREARM_BY_ID[id];
+    const projectile: CoopProjectile = { id: this.nextEntityId++, ownerId: player.id, weaponId: id, x: player.x, y: player.y, z: player.z + 24, angle: player.angle, pitch: player.aimPitch, radius: id === 'astral_lance' ? 14 : 9, lifeMs: id === 'astral_lance' ? 450 : 1800, velocity: id === 'astral_lance' ? 3600 : definition.projectileVelocity, verticalVelocity: Math.sin(player.aimPitch) * (id === 'astral_lance' ? 3600 : definition.projectileVelocity), damage: (id === 'astral_lance' ? 115 : definition.baseDamage) * damageMultiplier, penetration: id === 'astral_lance' ? 8 : 1, hitEnemyIds: id === 'astral_lance' ? new Set<number>() : undefined, damageIntervalMs: 1, nextDamageAt: this.elapsedMs };
+    this.fastForwardShot(projectile, this.inputAgeMs.get(player.id) || 0);
+    if (projectile.lifeMs > 0 && projectile.penetration > 0) this.projectiles.push(projectile);
+  }
+
   private tryCastWeapon(player: CoopPlayer, triggerPressed: boolean, actionId = 0) {
     if (player.carryingHostage) return;
     const weapon = this.weapon(player), definition = COOP_FIREARM_BY_ID[weapon.weaponId];
     if (player.isSwitching || weapon.state === 'switching') return;
+    if (isCoopSpell(weapon.weaponId)) { this.castSpell(player, weapon.weaponId, actionId); return; }
     if (weapon.state === 'reloading') {
       if (definition.reloadStyle === 'shell_by_shell' && weapon.magazineAmmo > 0 && triggerPressed) { this.cancelReload(weapon); player.isReloading = false; }
       else return;
@@ -2835,10 +3169,13 @@ export class CoopSimulation {
       projectile.y += Math.sin(projectile.angle) * horizontalVelocity * seconds;
       projectile.z += projectile.verticalVelocity * seconds;
       projectile.lifeMs -= stepMs;
+      if (this.friends && insideFriendsCombat(previousX, previousY, previousZ) !== insideFriendsCombat(projectile.x, projectile.y, projectile.z)) { projectile.lifeMs = 0; break; }
       const blockedByWorld = this.clipFirearmSegmentToWorld(projectile, previousX, previousY, previousZ);
       const candidates = this.sweptFirearmHits(projectile, previousX, previousY, previousZ);
       for (const enemy of candidates) {
         if (enemy.dying) continue;
+        if (projectile.hitEnemyIds?.has(enemy.id)) continue;
+        projectile.hitEnemyIds?.add(enemy.id);
         this.applyDamage(enemy, projectile.damage, projectile.ownerId, projectile.weaponId);
         if (projectile.penetration !== 999) projectile.penetration--;
         if (projectile.penetration <= 0) break;
@@ -2935,7 +3272,8 @@ export class CoopSimulation {
 
   /** The only co-op path allowed to damage an enemy. It creates presentation
    * state and funnels all lethal outcomes through one idempotent death flow. */
-  private applyDamage(enemy: CoopEnemy, amount: number, playerId: string, weaponId?: CoopWeaponId) {
+  private applyDamage(enemy: CoopEnemy, amount: number, playerId: string, weaponId?: CoopWeaponId, source: 'weapon' | 'world' = 'weapon') {
+    if (this.friends) { const owner = this.players.get(playerId); if (!owner || !insideFriendsCombat(owner.x, owner.y, owner.z) || !insideFriendsCombat(enemy.x, enemy.y)) return 0; }
     if (enemy.dying || amount <= 0) return;
     const damage = Math.max(0, Math.min(amount, enemy.health));
     enemy.health = Math.max(0, enemy.health - damage);
@@ -2946,7 +3284,7 @@ export class CoopSimulation {
       } else if (isPassiveModule(weaponId)) {
         stats.passiveDamage += damage;
         stats.passiveDamageById[weaponId] = (stats.passiveDamageById[weaponId] || 0) + damage;
-      } else { stats.firearmDamage += damage; stats.shotsHit++; }
+      } else if (source === 'weapon') { stats.firearmDamage += damage; stats.shotsHit++; }
       if (enemy.id === this.bossEnemyId) stats.bossDamage += damage;
     }
     enemy.hitFlashUntilMs = this.elapsedMs + HIT_FLASH_MS;
@@ -3119,7 +3457,7 @@ export class CoopSimulation {
   }
 
   private tryArtifactSpender(player: CoopPlayer) {
-    if (player.lifeState !== 'alive' || player.isReloading || player.isSwitching || player.jetActive) return;
+    if (player.lifeState !== 'alive' || player.carryingHostage || player.isReloading || player.isSwitching || player.jetActive) return;
     switch (player.operatorId) {
       case 'neon_vanguard': return this.castStormcall(player);
       case 'crimson_strike': return this.castReckoning(player);
@@ -3454,6 +3792,11 @@ export class CoopSimulation {
   }
 
   private spawnAmmoCache(x: number, y: number, player: CoopPlayer, elite: boolean, killedByPlayerId: string) {
+    if (player.operatorId === 'royal_inferno') {
+      const ally = [...this.players.values()].find(candidate => candidate.lifeState === 'alive' && candidate.operatorId !== 'royal_inferno');
+      if (!ally) return;
+      player = ally;
+    }
     const selected = this.weapon(player);
     const weapon = player.weaponStates.reduce((lowest, candidate) => candidate.reserveAmmo / COOP_FIREARM_BY_ID[candidate.weaponId].maxReserve < lowest.reserveAmmo / COOP_FIREARM_BY_ID[lowest.weaponId].maxReserve ? candidate : lowest, selected);
     const definition = COOP_FIREARM_BY_ID[weapon.weaponId];
@@ -3510,7 +3853,7 @@ export class CoopSimulation {
 
     const collectedCacheIds = new Set<number>();
     for (const cache of this.ammoCaches) {
-      const player = this.closestAttractedPlayer(cache.x, cache.y, ITEM_MAGNET_RANGE);
+      const player = this.closestAttractedPlayer(cache.x, cache.y, ITEM_MAGNET_RANGE, true);
       if (!player) continue;
       const dx = player.x - cache.x, dy = player.y - cache.y, distance = Math.hypot(dx, dy);
       if (distance < ITEM_MAGNET_RANGE * this.imprintModifiers(player).pickupRadiusMultiplier && distance > .0001) { const step = Math.min(distance, 360 * seconds); cache.x += dx / distance * step; cache.y += dy / distance * step; }
@@ -3705,11 +4048,11 @@ export class CoopSimulation {
     return target;
   }
 
-  private closestAttractedPlayer(x: number, y: number, baseRange: number): CoopPlayer | undefined {
+  private closestAttractedPlayer(x: number, y: number, baseRange: number, needsAmmo = false): CoopPlayer | undefined {
     let target: CoopPlayer | undefined;
     let score = Infinity;
     for (const player of this.players.values()) {
-      if (player.health <= 0) continue;
+      if (player.health <= 0 || (needsAmmo && (player.operatorId === 'royal_inferno' || !player.weaponStates.some(state => state.reserveAmmo < COOP_FIREARM_BY_ID[state.weaponId].maxReserve)))) continue;
       const distance = Math.hypot(player.x - x, player.y - y);
       const range = baseRange * this.imprintModifiers(player).pickupRadiusMultiplier;
       if (distance > range) continue;
@@ -3723,6 +4066,7 @@ export class CoopSimulation {
   }
 
   private resolveEnemyTarget(enemy: CoopEnemy) {
+    if (this.friends) { const target = [...this.players.values()].filter(p => p.lifeState === 'alive' && insideFriendsCombat(p.x, p.y, p.z)).sort((a, b) => Math.hypot(a.x - enemy.x, a.y - enemy.y) - Math.hypot(b.x - enemy.x, b.y - enemy.y))[0]; enemy.targetPlayerId = target?.id; return target; }
     if (enemy.type !== 'phantom' && enemy.type !== 'titan') {
       const leasedDecoy = enemy.targetStructureId === undefined ? undefined : this.structures.find(structure => structure.id === enemy.targetStructureId && structure.type === 'decoy_beacon' && structure.state !== 'destroying');
       if (leasedDecoy && this.elapsedMs < enemy.targetLeaseUntilMs) return leasedDecoy;
@@ -3747,6 +4091,7 @@ export class CoopSimulation {
   }
 
   private closestEnemy(x: number, y: number): CoopEnemy | undefined {
+    if (this.friends && !insideFriendsCombat(x, y)) return undefined;
     let target: CoopEnemy | undefined;
     let distance = Infinity;
     for (const enemy of this.enemies) {
@@ -3787,6 +4132,7 @@ function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: n
 }
 
 const WORLD_ENEMY_NAMES: Readonly<Record<WorldId, Readonly<Record<keyof typeof ENEMY_TYPES, string>>>> = Object.freeze({
+  friends_frontier: { basic: 'Salvage Drone', fast: 'Scrap Runner', ranged: 'Wreck Sentry', tank: 'Cargo Guardian', phantom: 'Echo', elite: 'Wreck Keeper', titan: 'Wreck Heart' },
   neon_bastion: { basic: 'Signal Drone', fast: 'Neon Ripper', ranged: 'Rail Seer', tank: 'Bastion Bulwark', phantom: 'Static Phantom', elite: 'Grid Commander', titan: 'Singularity' },
   cinderworks: { basic: 'Slag Drone', fast: 'Ash Hound', ranged: 'Magma Artillerist', tank: 'Crucible Guard', phantom: 'Smoke Stalker', elite: 'Forge Warden', titan: 'Furnace Sovereign' },
   white_silence: { basic: 'Frostling', fast: 'Shard Runner', ranged: 'Cryo Seer', tank: 'Glacial Bulwark', phantom: 'White Wraith', elite: 'Rime Commander', titan: 'Pale Leviathan' },
@@ -3794,6 +4140,7 @@ const WORLD_ENEMY_NAMES: Readonly<Record<WorldId, Readonly<Record<keyof typeof E
 });
 
 const WORLD_BOSS_NAMES: Readonly<Record<WorldId, Readonly<Record<CoopBossKind, string>>>> = Object.freeze({
+  friends_frontier: { neural_overlord: 'Wreck Keeper', void_architect: 'Cargo Guardian', singularity: 'Wreck Heart' },
   neon_bastion: { neural_overlord: 'Neural Overlord', void_architect: 'Void Architect', singularity: 'Singularity' },
   cinderworks: { neural_overlord: 'Kiln Marshal', void_architect: 'Crucible Engine', singularity: 'Furnace Sovereign' },
   white_silence: { neural_overlord: 'Rime Matriarch', void_architect: 'Cryostorm Colossus', singularity: 'Pale Leviathan' },
@@ -3801,6 +4148,7 @@ const WORLD_BOSS_NAMES: Readonly<Record<WorldId, Readonly<Record<CoopBossKind, s
 });
 
 const WORLD_ENEMY_COLORS: Readonly<Record<WorldId, readonly string[]>> = Object.freeze({
+  friends_frontier: ['#ffa08c', '#ffd494', '#8de6ce', '#9cb8b0', '#d4b3ff', '#f5bc9e', '#fff4d8'],
   neon_bastion: ['#00f0ff', '#ffb020', '#34d399', '#ff4f64', '#d8b4fe', '#e879f9', '#f8fafc'],
   cinderworks: ['#ff6a1a', '#ffb020', '#ff3b0a', '#b91c1c', '#9a3412', '#ffd166', '#fff0c2'],
   white_silence: ['#d9f7ff', '#67e8f9', '#a5f3fc', '#60a5fa', '#e0e7ff', '#c4b5fd', '#ffffff'],
@@ -3808,6 +4156,7 @@ const WORLD_ENEMY_COLORS: Readonly<Record<WorldId, readonly string[]>> = Object.
 });
 
 const WORLD_GEM_COLORS: Readonly<Record<WorldId, string>> = Object.freeze({
+  friends_frontier: '#8de6ce',
   neon_bastion: EXPERIENCE_GEM_COLOR,
   cinderworks: '#ffb020',
   white_silence: '#a5f3fc',

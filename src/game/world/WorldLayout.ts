@@ -1,3 +1,4 @@
+import { friendsRegionObstacles } from './FriendsRegion';
 import { GAME_HEIGHT, GAME_WIDTH } from '../../constants';
 import { getWorldDefinition, isWorldSurfaceWalkable, type WorldId } from './WorldDefinitions';
 
@@ -99,10 +100,12 @@ function hash2D(x: number, y: number) {
 export function getWorldDistrictAt(x: number, y: number): WorldDistrict {
   const sx = Math.max(0, Math.min(Math.floor(x / WORLD_SECTOR_SIZE), Math.ceil(GAME_WIDTH / WORLD_SECTOR_SIZE) - 1));
   const sy = Math.max(0, Math.min(Math.floor(y / WORLD_SECTOR_SIZE), Math.ceil(GAME_HEIGHT / WORLD_SECTOR_SIZE) - 1));
-  // The centre remains legible and calm; outer sectors progressively vary.
-  const ring = Math.max(Math.abs(sx - WORLD_CENTER_SECTOR_X), Math.abs(sy - WORLD_CENTER_SECTOR_Y));
-  const index = ring < 1 ? 0 : (hash2D(sx, sy) + sx + sy * 3) % districts.length;
-  return WORLD_DISTRICTS[districts[index]];
+  // Districts are coherent wedges around the cathedral rather than a random
+  // color per tile. Position now communicates a recognizable neighborhood.
+  const dx = sx - WORLD_CENTER_SECTOR_X, dy = sy - WORLD_CENTER_SECTOR_Y;
+  if (Math.hypot(dx, dy) < 2.6) return WORLD_DISTRICTS.signal_plaza;
+  const angle = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2);
+  return WORLD_DISTRICTS[districts[1 + Math.floor(angle / (Math.PI * 2) * 5)]];
 }
 
 /** Buildings are deliberately placed beside broad 180-unit combat corridors.
@@ -111,6 +114,7 @@ export function getWorldDistrictAt(x: number, y: number): WorldDistrict {
 export function getWorldObstacles(worldId: WorldId = 'neon_bastion'): WorldObstacle[] {
   const cached = obstacleCache.get(worldId);
   if (cached) return cached;
+  if (worldId === 'friends_frontier') { const obstacles = friendsRegionObstacles(); cacheWorldObstacles(worldId, obstacles); return obstacles; }
   if (worldId !== 'neon_bastion') return buildDistinctWorldObstacles(worldId);
   const result: WorldObstacle[] = [];
   const sectorsX = Math.ceil(GAME_WIDTH / WORLD_SECTOR_SIZE);
@@ -127,7 +131,7 @@ export function getWorldObstacles(worldId: WorldId = 'neon_bastion'): WorldObsta
       const district = getWorldDistrictAt((sx + 0.5) * WORLD_SECTOR_SIZE, (sy + 0.5) * WORLD_SECTOR_SIZE).id;
       const baseX = sx * WORLD_SECTOR_SIZE;
       const baseY = sy * WORLD_SECTOR_SIZE;
-      const westSide = (random & 1) === 0;
+      const westSide = (random & 2) === 0;
       const firstWidth = 66 + (random % 42);
       const firstHeight = 160 + ((random >>> 8) % 110);
       result.push({
@@ -155,6 +159,14 @@ export function getWorldObstacles(worldId: WorldId = 'neon_bastion'): WorldObsta
         });
       }
     }
+  }
+
+  // Four authored buttresses frame the open cathedral court. The renderer
+  // consumes these same bounds, so the new landmark has real walls.
+  for (const [index, offset] of [[-920, -920], [920, -920], [920, 920], [-920, 920]].entries()) {
+    result.push({ id: `cathedral-buttress:${index}`, x: GAME_WIDTH / 2 + offset[0] - 90,
+      y: GAME_HEIGHT / 2 + offset[1] - 90, width: 180, height: 180,
+      elevation: 740 + index % 2 * 180, district: 'signal_plaza', kind: 'tower' });
   }
 
   for (const line of WORLD_TRANSIT_LINES) {
@@ -272,10 +284,11 @@ export function isWorldPositionClear(x: number, y: number, radius: number, world
 /** Returns the outward normal of a nearby solid surface without moving the
  * body. Unlike collision resolution, this remains true at resting contact, so
  * a player can jump away from a wall without continuing to press into it. */
-export function getWorldWallContact(x: number, y: number, radius: number, tolerance = 3, worldId: WorldId = 'neon_bastion'): WorldWallContact | undefined {
+export function getWorldWallContact(x: number, y: number, radius: number, tolerance = 3, worldId: WorldId = 'neon_bastion', elevation?: number): WorldWallContact | undefined {
   let nearest: WorldWallContact | undefined;
   let nearestDistance = Infinity;
   for (const obstacle of getNearbyWorldObstacles(x, y, radius + tolerance + 4, worldId)) {
+    if (elevation !== undefined && elevation >= obstacle.elevation) continue;
     const nearestX = Math.max(obstacle.x, Math.min(x, obstacle.x + obstacle.width));
     const nearestY = Math.max(obstacle.y, Math.min(y, obstacle.y + obstacle.height));
     const dx = x - nearestX, dy = y - nearestY;
@@ -358,6 +371,7 @@ export function resolveWorldCollisions(
   radius: number,
   clampToWorld = true,
   worldId: WorldId = 'neon_bastion',
+  elevation?: number,
 ): WorldCollisionResult {
   let collided = false;
   let blockedX = false;
@@ -366,6 +380,7 @@ export function resolveWorldCollisions(
   for (let pass = 0; pass < 2; pass++) {
     let resolvedSomething = false;
     for (const obstacle of getNearbyWorldObstacles(position.x, position.y, radius + 20, worldId)) {
+      if (elevation !== undefined && elevation >= obstacle.elevation) continue;
       const nearestX = Math.max(obstacle.x, Math.min(position.x, obstacle.x + obstacle.width));
       const nearestY = Math.max(obstacle.y, Math.min(position.y, obstacle.y + obstacle.height));
       let dx = position.x - nearestX;

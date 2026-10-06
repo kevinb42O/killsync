@@ -1,7 +1,9 @@
+import { FRONTIER_SIZE } from './FriendsTerrain';
 import { GAME_HEIGHT, GAME_WIDTH } from '../../constants';
 
 export const WORLD_IDS = ['neon_bastion', 'cinderworks', 'white_silence', 'null_garden'] as const;
-export type WorldId = typeof WORLD_IDS[number];
+export type SurvivalWorldId = typeof WORLD_IDS[number];
+export type WorldId = SurvivalWorldId | 'friends_frontier';
 export type WorldSurfaceKind = 'solid' | 'burning' | 'thin_ice' | 'energy' | 'void';
 
 export interface WorldBounds { width: number; height: number; }
@@ -55,8 +57,8 @@ const bounds = Object.freeze({ width: GAME_WIDTH, height: GAME_HEIGHT });
 
 export const WORLD_DEFINITIONS: Readonly<Record<WorldId, WorldDefinition>> = Object.freeze({
   neon_bastion: {
-    id: 'neon_bastion', tier: 1, name: 'NEON BASTION', subtitle: 'THE LAST SIGNAL CITY',
-    description: 'A stable cyber-city suspended above the storm void.', bounds,
+    id: 'neon_bastion', tier: 1, name: 'NEON BASTION', subtitle: 'THE BREACH CATHEDRAL',
+    description: 'A shattered signal city beneath a suspended cathedral. Link its reality breaches and turn the sky against the horde.', bounds,
     bridgehead: { x: GAME_WIDTH - 250, y: GAME_HEIGHT / 2 },
     difficulty: { threatMultiplier: 1, healthMultiplier: 1, damageMultiplier: 1, rewardMultiplier: 1 },
     insertion: { minimumWeaponLevel: 1, credits: 0, armorTier: 0 }, movementGravity: 1550,
@@ -86,14 +88,22 @@ export const WORLD_DEFINITIONS: Readonly<Record<WorldId, WorldDefinition>> = Obj
     insertion: { minimumWeaponLevel: 4, credits: 840, armorTier: 2 }, movementGravity: 1050,
     theme: { clearColor: 0x05020d, fogColor: 0x29134a, zenithColor: 0x020106, horizonColor: 0x3d1762, underglowColor: 0x12052a, groundColor: 0x171024, accentColor: 0xd8b4fe, dangerColor: 0xff4fd8, ambientColor: 0xb794f6, sunColor: 0xffe7a3 },
   },
+  friends_frontier: {
+    id: 'friends_frontier', tier: 1, name: 'SUNLINE VALLEY', subtitle: 'FRIENDS EXPEDITION',
+    description: 'Ride the railway, pilot the Sunskiff, and uncover the valley at your own pace.', bounds: { width: FRONTIER_SIZE, height: FRONTIER_SIZE },
+    bridgehead: { x: 6000, y: 5630 },
+    difficulty: { threatMultiplier: 1, healthMultiplier: 1, damageMultiplier: .65, rewardMultiplier: 1 },
+    insertion: { minimumWeaponLevel: 1, credits: 750, armorTier: 1 }, movementGravity: 1550,
+    theme: { clearColor: 0x9abbc4, fogColor: 0xaacbcc, zenithColor: 0x527ea0, horizonColor: 0xf7dac0, underglowColor: 0x86bda9, groundColor: 0x365c51, accentColor: 0x8de6ce, dangerColor: 0xffa08c, ambientColor: 0xe1f4e5, sunColor: 0xffdfb3 },
+  },
 });
 
 export function normalizeWorldId(value: unknown): WorldId {
-  return typeof value === 'string' && (WORLD_IDS as readonly string[]).includes(value) ? value as WorldId : 'neon_bastion';
+  return typeof value === 'string' && (value === 'friends_frontier' || (WORLD_IDS as readonly string[]).includes(value)) ? value as WorldId : 'neon_bastion';
 }
 
 export function getWorldDefinition(worldId: WorldId = 'neon_bastion') { return WORLD_DEFINITIONS[normalizeWorldId(worldId)]; }
-export function nextWorldId(worldId: WorldId): WorldId | undefined { return WORLD_IDS[WORLD_IDS.indexOf(worldId) + 1]; }
+export function nextWorldId(worldId: WorldId): WorldId | undefined { return worldId === 'friends_frontier' ? undefined : WORLD_IDS[WORLD_IDS.indexOf(worldId) + 1]; }
 export function higherWorldIds(worldId: WorldId) { const tier = getWorldDefinition(worldId).tier; return WORLD_IDS.filter(id => getWorldDefinition(id).tier > tier); }
 
 /** Authoritative analytic surface map. Rendering consumes the same shapes, so
@@ -101,7 +111,9 @@ export function higherWorldIds(worldId: WorldId) { const tier = getWorldDefiniti
  * an unannounced death volume. Keep samples allocation-free: movement, spawn
  * placement and AI call this in hot paths. */
 export function sampleWorldSurface(worldId: WorldId, x: number, y: number): WorldSurfaceSample {
-  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > GAME_WIDTH || y > GAME_HEIGHT) return VOID;
+  const sizeX = worldId === 'friends_frontier' ? FRONTIER_SIZE : GAME_WIDTH, sizeY = worldId === 'friends_frontier' ? FRONTIER_SIZE : GAME_HEIGHT;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > sizeX || y > sizeY) return VOID;
+  if (worldId === 'friends_frontier') return SOLID;
   if (worldId === 'neon_bastion') return SOLID;
   if (worldId === 'cinderworks') return sampleCinderworks(x, y);
   if (worldId === 'white_silence') return sampleWhiteSilence(x, y);
@@ -195,7 +207,7 @@ export function normalizeCoopWorldProgress(value: unknown): CoopWorldProgress {
   const requested = Array.isArray(record.unlockedWorldIds) ? record.unlockedWorldIds.map(normalizeWorldId) : [];
   const unlocked = new Set<WorldId>(['neon_bastion']);
   for (const id of requested) {
-    const index = WORLD_IDS.indexOf(id);
+    const index = WORLD_IDS.indexOf(id as SurvivalWorldId);
     for (let prerequisite = 0; prerequisite <= index; prerequisite++) unlocked.add(WORLD_IDS[prerequisite]);
   }
   return { version: 1, unlockedWorldIds: WORLD_IDS.filter(id => unlocked.has(id)) };
@@ -215,8 +227,8 @@ export function writeCoopWorldProgress(progress: CoopWorldProgress) {
 
 export function unlockCoopWorld(progress: CoopWorldProgress, requestedWorldId: WorldId) {
   const current = normalizeCoopWorldProgress(progress);
-  const targetIndex = WORLD_IDS.indexOf(requestedWorldId);
-  const highestIndex = Math.max(...current.unlockedWorldIds.map(id => WORLD_IDS.indexOf(id)));
+  const targetIndex = WORLD_IDS.indexOf(requestedWorldId as SurvivalWorldId);
+  const highestIndex = Math.max(...current.unlockedWorldIds.map(id => WORLD_IDS.indexOf(id as SurvivalWorldId)));
   if (targetIndex > highestIndex + 1) return current;
   return normalizeCoopWorldProgress({ version: 1, unlockedWorldIds: [...current.unlockedWorldIds, requestedWorldId] });
 }

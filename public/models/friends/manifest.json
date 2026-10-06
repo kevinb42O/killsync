@@ -1,0 +1,308 @@
+[
+  {
+    "name": "train-electric-bullet-a",
+    "pack": "train-kit",
+    "path": "public/models/friends/train-kit/train-electric-bullet-a.glb",
+    "source": "https://kenney.nl/assets/train-kit"
+  },
+  {
+    "name": "monorail_trainFlat",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/monorail_trainFlat.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "craft_cargoA",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/craft_cargoA.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "desk_chair",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/desk_chair.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "desk_computer",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/desk_computer.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "machine_generator",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/machine_generator.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "machine_wireless",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/machine_wireless.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "barrel",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/barrel.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "satelliteDish_detailed",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/satelliteDish_detailed.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "hangar_smallA",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/hangar_smallA.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "rocket_fuelA",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/rocket_fuelA.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "rocks_smallA",
+    "pack": "space-kit",
+    "path": "public/models/friends/space-kit/rocks_smallA.glb",
+    "source": "https://kenney.nl/assets/space-kit"
+  },
+  {
+    "name": "tree_oak",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/tree_oak.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "tree_detailed",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/tree_detailed.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "tree_pineTallA_detailed",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/tree_pineTallA_detailed.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "rock_largeA",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/rock_largeA.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "plant_bush",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/plant_bush.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "flower_purpleA",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/flower_purpleA.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "column",
+    "pack": "building-kit",
+    "path": "public/models/friends/building-kit/column.glb",
+    "source": "https://kenney.nl/assets/building-kit"
+  },
+  {
+    "name": "roof-flat-square",
+    "pack": "building-kit",
+    "path": "public/models/friends/building-kit/roof-flat-square.glb",
+    "source": "https://kenney.nl/assets/building-kit"
+  },
+  {
+    "name": "wall-window-wide-square",
+    "pack": "building-kit",
+    "path": "public/models/friends/building-kit/wall-window-wide-square.glb",
+    "source": "https://kenney.nl/assets/building-kit"
+  },
+  {
+    "name": "wall-doorway-wide-round",
+    "pack": "building-kit",
+    "path": "public/models/friends/building-kit/wall-doorway-wide-round.glb",
+    "source": "https://kenney.nl/assets/building-kit"
+  },
+  {
+    "name": "tower-hexagon-base",
+    "pack": "castle-kit",
+    "path": "public/models/friends/castle-kit/tower-hexagon-base.glb",
+    "source": "https://kenney.nl/assets/castle-kit"
+  },
+  {
+    "name": "tower-hexagon-mid",
+    "pack": "castle-kit",
+    "path": "public/models/friends/castle-kit/tower-hexagon-mid.glb",
+    "source": "https://kenney.nl/assets/castle-kit"
+  },
+  {
+    "name": "tower-hexagon-roof",
+    "pack": "castle-kit",
+    "path": "public/models/friends/castle-kit/tower-hexagon-roof.glb",
+    "source": "https://kenney.nl/assets/castle-kit"
+  },
+  {
+    "name": "wall-narrow-wood-fence",
+    "pack": "castle-kit",
+    "path": "public/models/friends/castle-kit/wall-narrow-wood-fence.glb",
+    "source": "https://kenney.nl/assets/castle-kit"
+  },
+  {
+    "name": "flag-pennant",
+    "pack": "castle-kit",
+    "path": "public/models/friends/castle-kit/flag-pennant.glb",
+    "source": "https://kenney.nl/assets/castle-kit"
+  },
+  {
+    "name": "mushroom_red",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/mushroom_red.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "mushroom_tan",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/mushroom_tan.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "grass",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/grass.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "tree_oak_fall",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/tree_oak_fall.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "tree_plateau",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/tree_plateau.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "tree_pineRoundD",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/tree_pineRoundD.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "rock_tallC",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/rock_tallC.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "rock_largeB",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/rock_largeB.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "statue_obelisk",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/statue_obelisk.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "statue_column",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/statue_column.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "bridge_wood",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/bridge_wood.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "flower_yellowA",
+    "pack": "nature-kit",
+    "path": "public/models/friends/nature-kit/flower_yellowA.glb",
+    "source": "https://kenney.nl/assets/nature-kit"
+  },
+  {
+    "name": "workbench",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/workbench.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "campfire-pit",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/campfire-pit.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "signpost",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/signpost.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "tent",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/tent.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "resource-planks",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/resource-planks.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "grass-large",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/grass-large.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "tool-axe",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/tool-axe.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "tool-axe-upgraded",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/tool-axe-upgraded.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "tool-pickaxe",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/tool-pickaxe.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "tool-pickaxe-upgraded",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/tool-pickaxe-upgraded.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "tool-shovel",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/tool-shovel.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "tool-shovel-upgraded",
+    "pack": "survival-kit",
+    "path": "public/models/friends/survival-kit/tool-shovel-upgraded.glb",
+    "source": "https://kenney.nl/assets/survival-kit"
+  }
+]
