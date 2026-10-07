@@ -40,6 +40,9 @@ export interface PlayerMovementMemory {
 
 export interface PlayerMovementEnvironment {
   elevationAware: boolean;
+  towingScale?: number;
+  /** Temporary development shortcut, enabled only by Friends mode. */
+  devFlightAllowed?: boolean;
   volumetric?: boolean;
   ceiling: number;
   stepHeight?: number;
@@ -59,6 +62,7 @@ export interface PlayerMotionState extends PlayerMovementMemory {
   x: number;
   y: number;
   z: number;
+  friendsDevFlight?: boolean;
   angle: number;
   sprinting: boolean;
   sliding: boolean;
@@ -106,6 +110,36 @@ export function advancePlayerMovement(
 ) {
   const duration = Math.max(0, Math.min(50, deltaMs));
   if (duration === 0) return;
+  const wasFlying = player.friendsDevFlight;
+  player.friendsDevFlight = Boolean(transport?.devFlightAllowed && (input ? input.friendsDevFlight : wasFlying));
+  if (player.friendsDevFlight || wasFlying) {
+    // Flight starts/stops immediately and never inherits a slide, falling
+    // velocity, queued jump, or movement from a vehicle deck.
+    player.velocityX = player.velocityY = player.verticalVelocity = 0;
+    player.platformVelocityX = player.platformVelocityY = player.platformVelocityZ = 0;
+    player.coyoteMs = player.jumpBufferMs = player.slideMs = 0;
+    player.slideHeld = player.sliding = player.crouching = player.jetActive = false;
+    player.jetIgnitedThisAirTime = player.airActionConsumedSinceGrounded = false;
+    player.airborneMs = player.groundedMs = 0;
+    player.sprinting = false;
+  }
+  if (player.friendsDevFlight) {
+    if (!input) return;
+    player.angle = input.aimAngle / 65535 * Math.PI * 2;
+    const pitch = input.aimPitch / 65535 * (Math.PI * .44 * 2) - Math.PI * .44;
+    const forward = (input.movement & 1 ? 1 : 0) - (input.movement & 2 ? 1 : 0);
+    const strafe = (input.movement & 8 ? 1 : 0) - (input.movement & 4 ? 1 : 0);
+    const vertical = Number(Boolean(input.jetHeld)) - Number(Boolean(input.friendsDevFlightDown));
+    const x = Math.cos(player.angle) * Math.cos(pitch) * forward - Math.sin(player.angle) * strafe;
+    const y = Math.sin(player.angle) * Math.cos(pitch) * forward + Math.cos(player.angle) * strafe;
+    const z = Math.sin(pitch) * forward + vertical;
+    const distance = (input.sprinting ? 2400 : 900) * duration / 1000 / Math.max(1, Math.hypot(x, y, z));
+    player.x += x * distance;
+    player.y += y * distance;
+    player.z += z * distance;
+    player.sprinting = input.sprinting;
+    return;
+  }
   // Small shared steps prevent sprint/slide tunnelling and let genuine ramps
   // change elevation gradually without granting a whole block of auto-climb.
   const idle = !input?.movement && !input?.jumpPressed && !input?.jetHeld && !player.jetActive
@@ -190,7 +224,7 @@ function advanceMovementStep(
     const carryMultiplier = player.carryingHostage ? .82 : 1;
     const surfaceMultiplier = grounded ? groundSurface.movementMultiplier : 1;
     const slideMultiplier = groundSurface.kind === 'thin_ice' ? 2.8 : 2.35;
-    const speed = 300 * Math.max(1, Math.min(1.16, player.movementMultiplier || 1)) * carryMultiplier * surfaceMultiplier * (player.sliding ? slideMultiplier : player.crouching ? 0.55 : !grounded ? 1.10 : player.sprinting ? 1.65 : 1);
+    const speed = 300 * Math.max(1, Math.min(1.16, player.movementMultiplier || 1)) * carryMultiplier * surfaceMultiplier * Math.max(.3, Math.min(1, transport?.towingScale ?? 1)) * (player.sliding ? slideMultiplier : player.crouching ? 0.55 : !grounded ? 1.10 : player.sprinting ? 1.65 : 1);
     let displacementX = movement.x * speed * seconds;
     let displacementY = movement.y * speed * seconds;
     if (transport) {

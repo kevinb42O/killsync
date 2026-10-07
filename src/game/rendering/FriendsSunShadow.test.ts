@@ -23,4 +23,13 @@ describe('stable frontier sunlight shadows',()=>{
     expect(light.target.position.clone().sub(anchored).dot(right)).toBeCloseTo(texel*3,9);
     expect(light.position.clone().sub(light.target.position).normalize().distanceTo(forward)).toBeLessThan(1e-9);
   });
+  it('uses the same stable texel basis as the shadow camera at the zenith',()=>{
+    const light=sunlight(),direction=new THREE.Vector3(0,1,0);
+    updateFrontierSunShadow(light,new THREE.Vector3(6000,670,5600),direction);light.shadow.updateMatrices(light);
+    const matrix=light.shadow.matrix.clone(),anchor=light.target.position.clone();
+    expect(light.shadow.camera.up.toArray()).toEqual([0,0,1]);
+    expect(matrix.elements.every(Number.isFinite)).toBe(true);
+    updateFrontierSunShadow(light,anchor.clone().add(new THREE.Vector3(.1,.1,.1)),direction);light.shadow.updateMatrices(light);
+    expect(light.shadow.matrix.elements).toEqual(matrix.elements);
+  });
 });

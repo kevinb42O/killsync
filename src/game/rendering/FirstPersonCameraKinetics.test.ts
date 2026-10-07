@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { FirstPersonCameraKinetics } from './FirstPersonCameraKinetics';
 
 describe('FirstPersonCameraKinetics', () => {
+  it('keeps the Friends camera exactly still after resetting a landing impulse', () => {
+    const kinetics = new FirstPersonCameraKinetics();
+    kinetics.notifyLand(1.8); kinetics.notifyJump(); kinetics.reset();
+    for (let frame = 0; frame < 300; frame++) {
+      const output = kinetics.update({ deltaTime: frame%3 ? 16.67 : 50, yaw: .7, pitch: 0, playerVelocity: { x: 0, y: 0 }, isSprinting: false, isMoving: false, isAiming: false, adsProgress: 0, isAirborne: false, idleCameraMotion: false });
+      expect(output.cameraTranslation).toEqual({ x: 0, y: 0, z: 0 });
+      expect(output.cameraRotation).toEqual({ pitch: 0, yaw: 0, roll: 0 });
+    }
+  });
   it('initializes with default frequencies and zero initial weights', () => {
     const kinetics = new FirstPersonCameraKinetics();
     expect(kinetics.walkFrequency).toBe(1.85);

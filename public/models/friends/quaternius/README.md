@@ -16,3 +16,9 @@ restored its texture bindings using the pack's named textures, set bark metalnes
 to zero and leaf alpha testing to 0.45. Files are local and need no external host.
 Texture filenames and original geometry are preserved. No scripts from the
 mirror were downloaded or executed.
+
+Bark-only detail index lists (`*_BarkLOD.json`) are generated with
+`node tools/build-frontier-tree-lods.mjs` using meshoptimizer. These CC0 derived
+meshes share the original vertex positions, UVs and normals. Foliage geometry and
+textures are unchanged at every viewing distance; wood detail is selected from
+projected simplification error. The simplifier runs offline, never in the game.

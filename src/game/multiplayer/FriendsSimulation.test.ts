@@ -1,4 +1,5 @@
 import { FRIENDS_AIRFIELD_HEIGHT, FRIENDS_ARRIVAL_HEIGHT } from '../world/FriendsTerrain';
+import { SCENIC_WAGONS } from '../world/FriendsTrainLayout';
 import { railSimulation, railExpedition } from './friendsRailTestFixtures';
 import type { FriendsBuildPiece } from './FriendsBuilding';
 import { describe, expect, it } from 'vitest';
@@ -17,14 +18,14 @@ const input = (sequence: number, extra: Partial<MultiplayerInputFrame> = {}): Mu
 const run = (s: CoopSimulation, ms: number) => { for (let elapsed = 0; elapsed < ms; elapsed += 50) s.tick(50); };
 
 describe('separate Friends expedition', () => {
-  it('stays safe and active for ten idle minutes, without a prebuilt settlement or train', () => {
+  it('stays safe and active for ten idle minutes, with a sightseeing service and no prebuilt player settlement', () => {
     const s = new FriendsSimulation(seeds);
     run(s, 600000);
     const frame = s.createSnapshot();
     expect(frame.mode).toBe('friends'); expect(frame.world?.id).toBe('friends_frontier');
     expect(frame.enemies).toHaveLength(0); expect(frame.gasZone).toBeUndefined(); expect(frame.realityBreach).toBeUndefined(); expect(frame.fieldMissions).toBeUndefined();
     expect(frame.matchState).toBe('active'); expect(frame.results).toBeUndefined(); expect(frame.run.phase).toBe('insertion');
-    expect(frame.buyStations).toHaveLength(0); expect(frame.weaponFoundry).toBeUndefined(); expect(frame.friends!.vehicles.filter(v=>v.kind==='train')).toHaveLength(0);
+    expect(frame.buyStations).toHaveLength(0); expect(frame.weaponFoundry).toBeUndefined(); expect(frame.friends!.vehicles.filter(v=>v.kind==='train'&&v.scenic)).toHaveLength(SCENIC_WAGONS.length+1); expect(frame.friends!.vehicles.filter(v=>v.kind==='train'&&!v.scenic)).toHaveLength(0);
     expect(frame.players.every(p => p.health === p.maxHealth && p.coins === 750)).toBe(true);
  }, 60000);
   it('leaves default survival directors, starting resources and spawning intact', () => {
@@ -115,12 +116,13 @@ describe('separate Friends expedition', () => {
   it('takes and releases cockpit controls before collecting nearby loot, even over a market', () => {
     const s = new FriendsSimulation(seeds), p = s['players'].get('host')!, v = s['friends']!['aircraft'];
     v.x = FRIENDS_MARKETS[0].x - 100; v.y = FRIENDS_MARKETS[0].y;
+    v.z = s['friendsFrontier']!.terrain.floor(v.x + 100, v.y, 6000, 0) + 14;
     p.x = v.x + 100; p.y = v.y; p.z = v.z;
     s['items'].push({ id: 99999, x: p.x, y: p.y, type: 'coin_gold', value: 100, color: '#facc15', manualDropKind: 'cash' });
     s.setInput('host', input(1, { interactActionId: 1 })); s.tick(COOP_STEP_MS);
     expect(s.createSnapshot().friends!.vehicles.find(v=>v.kind==='aircraft')!.pilotId).toBe('host'); expect(p.coins).toBe(750);
     s.setInput('host', input(2, { interactActionId: 2 })); s.tick(COOP_STEP_MS);
-    expect(s.createSnapshot().friends!.vehicles.find(v=>v.kind==='aircraft')!.pilotId).toBeUndefined(); expect(p.z).toBe(FRIENDS_AIRFIELD_HEIGHT+14);
+    expect(s.createSnapshot().friends!.vehicles.find(v=>v.kind==='aircraft')!.pilotId).toBeUndefined(); expect(p.z).toBe(v.z);
     expect(p.coins).toBe(750); expect(s.createSnapshot().items).toHaveLength(1);
   });
   it('pilots the aircraft with validated inputs, carries crew, releases controls, and stops on stale input', () => {
@@ -215,7 +217,7 @@ describe('separate Friends expedition', () => {
   it('preserves legacy progress on load without restoring the removed settlement', () => {
     const progress=normalizeFriendsProgress({signals:['garden','archive','wreck'],discovered:['depot'],restored:true});
     const s=new FriendsSimulation(seeds,22,progress);expect(s.createSnapshot().friends!.progress).toEqual(progress);
-    expect(s.createSnapshot().friends!.vehicles).toHaveLength(1);
+    expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(1);
   });
   it('replicates expedition state through compact keyframes and deltas; interpolates decks with passengers', () => {
     const s = railSimulation(seeds, false), p = s['players'].get('host')!, v = s.createSnapshot().friends!.vehicles[0]; p.x = v.x; p.y = v.y; p.z = v.z;

@@ -1,138 +1,209 @@
 import * as THREE from 'three';
-import { type FrontierTree, type FrontierSnapshot } from '../multiplayer/FriendsFrontier';
+import { FRIENDS_TREE_SIZES, FRIENDS_FOREST_DETAIL_END } from '../world/FriendsVegetationAppearance';
+import { type FrontierTree, type FrontierSnapshot, frontierTrees } from '../multiplayer/FriendsFrontier';
 import { FRONTIER_SIZE, terrainHash } from '../world/FriendsTerrain';
-import { fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
+import { FRIENDS_ASSETS, fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
 
-export const FOREST_DETAIL_START = 800;
-export const FOREST_DETAIL_END = 1600;
-const GRID = Math.ceil(FRONTIER_SIZE / 512), TILE = 4096;
+export const FOREST_DETAIL_END = FRIENDS_FOREST_DETAIL_END;
 const KINDS = ['pine', 'oak', 'autumnOak'] as const;
 const ASSETS: FriendsAssetId[] = ['frontierPine', 'frontierBirch', 'frontierMaple'];
-const coverage = `uniform sampler2D forestCoverage; uniform float forestGrid;
-float detailCoverage(vec2 p){return texture2D(forestCoverage,(floor(p/512.)+.5)/forestGrid).r;}
-float dither(){return fract(dot(floor(gl_FragCoord.xy),vec2(.754877666,.569840296)));}`;
+const SHADOW_RADIUS = 1400;
+const TILE = 2048;
+interface BarkLevels { sourceIndices: number; sourceVertices: number; levels: { error: number; indices: number[] }[] }
+interface Part { geometry: THREE.BufferGeometry[]; errors: number[]; material: THREE.Material; transform: THREE.Matrix4; bark: boolean }
+interface Species { parts: Part[]; bounds: THREE.Sphere }
+interface Entry { tree: FrontierTree; species: number; sphere: THREE.Sphere; matrices: Float32Array[]; levels: number[]; supported: boolean }
+interface Bucket { mesh: THREE.InstancedMesh; slots: string[]; entries: Entry[]; part: number }
+interface Tile { bounds: THREE.Sphere; entries: Entry[] }
 
-/** Full-map, spatially culled billboards baked from the same licensed meshes as
- * the nearby trees. Each tree costs two triangles, independent of distance. */
+/** Simplify only opaque wood, when its estimated error is smaller than a pixel.
+ * Foliage, alpha masks, source vertices, UVs and normals never change with range. */
+export function forestWoodLevel(errors: readonly number[], worldScale: number, pixelsPerWorldUnit: number, previous = 0) {
+  let level = 0;
+  for (let i = errors.length - 1; i > 0; i--) if (errors[i] * worldScale * pixelsPerWorldUnit <= .6) { level = i; break; }
+  // Keep an existing coarser level through minor camera bob at its boundary.
+  // Both thresholds remain below one pixel of estimated geometric error.
+  if (previous > level && previous < errors.length && errors[previous] * worldScale * pixelsPerWorldUnit <= .75) return previous;
+  return level;
+}
+
+/** One shared 3D canopy per species at every distance. CPU spatial culling packs
+ * visible trees into a handful of instanced draws; no baked views or crossfade. */
 export class FriendsForestLOD {
   private group = new THREE.Group();
   private worker?: Worker;
   private disposed = false;
-  private atlas?: THREE.WebGLRenderTarget;
-  private materials: THREE.ShaderMaterial[] = [];
-  private ready = new Uint8Array(GRID * GRID);
-  private coverage = new THREE.DataTexture(this.ready, GRID, GRID, THREE.RedFormat);
-  private slots = new Map<string, { mesh: THREE.InstancedMesh; index: number; tree: FrontierTree }>();
-  private removed = new Set<string>();
-  private trees?: FrontierTree[];
-  private baked = false;
-  private pending?: FrontierTree[];
-  private chunks = new Map<string, FrontierTree[]>();
+  private species: Species[] = [];
+  private natural?: FrontierTree[];
+  private entries: Entry[] = [];
+  private tiles: Tile[] = [];
+  private buckets = new Map<string, Bucket>();
   private stateRevision = -1;
   private plantedStamp = '';
-  constructor(private scene: THREE.Scene, private renderer: THREE.WebGLRenderer) {
-    this.group.name = 'frontier-persistent-distant-forests'; scene.add(this.group);
-    this.coverage.magFilter = this.coverage.minFilter = THREE.NearestFilter; this.coverage.needsUpdate = true;
+  private gradeStamp = '';
+  private rebuilt = false;
+  private frustum = new THREE.Frustum();
+  private projection = new THREE.Matrix4();
+  private viewport = new THREE.Vector2();
+  private visibleCount = 0;
+  constructor(scene: THREE.Scene, private renderer: THREE.WebGLRenderer, private shade: (m: THREE.Material) => void = () => {}) {
+    this.group.name = 'frontier-instanced-3d-forests'; scene.add(this.group);
     try {
       this.worker = new Worker(new URL('./frontierVegetation.worker.ts', import.meta.url), { type: 'module' });
-      this.worker.onmessage = e => { this.trees = e.data; this.worker?.terminate(); this.worker = undefined; this.prepare(); };
+      this.worker.onmessage = e => { this.natural = e.data; this.worker?.terminate(); this.worker = undefined; this.rebuilt = true; };
+      this.worker.onerror = () => { this.worker?.terminate(); this.worker = undefined; this.fallbackNatural(); };
       this.worker.postMessage(null);
-    } catch { /* An unsupported worker does not prevent detailed nearby trees. */ }
-    void Promise.all(ASSETS.map(loadFriendsAsset)).then(sources => {
+    } catch {
+      // Defer the CPU fallback until assets are ready. Worker failure must not remove forests.
+    }
+    void Promise.all(ASSETS.map(async id => {
+      const [source, levels] = await Promise.all([loadFriendsAsset(id), fetch(`${import.meta.env.BASE_URL}models/friends/${FRIENDS_ASSETS[id]}_BarkLOD.json`).then(r => r.ok ? r.json() as Promise<BarkLevels> : undefined).catch(() => undefined)]);
+      return { source, levels };
+    })).then(models => {
       if (this.disposed) return;
-      this.bake(sources); this.baked = true; this.prepare();
-    }).catch(()=>{ /* Keep detailed assets visible if the atlas cannot be built. */ });
+      this.species = models.map(({ source, levels }, kind) => this.prepare(source, KINDS[kind], levels));
+      if (!this.worker && !this.natural) this.fallbackNatural();
+      this.rebuilt = true;
+    }).catch(error => console.warn('Could not load frontier tree geometry', error));
   }
-  private prepare() { if (this.baked && this.trees) { this.pending = this.trees; this.trees = undefined; } }
-  private bake(sources: THREE.Group[]) {
-    const cellW = 256, cellH = 384;
-    this.atlas = new THREE.WebGLRenderTarget(cellW * 8, cellH * 3, { depthBuffer: true, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
-    const previousTarget = this.renderer.getRenderTarget(), viewport = this.renderer.getViewport(new THREE.Vector4()), scissor = this.renderer.getScissor(new THREE.Vector4()), scissorTest = this.renderer.getScissorTest();
-    const clearColor = this.renderer.getClearColor(new THREE.Color()), clearAlpha = this.renderer.getClearAlpha(), autoClear = this.renderer.autoClear;
-    const shadow = this.renderer.shadowMap.enabled;
-    const stage = new THREE.Scene(); stage.add(new THREE.HemisphereLight(0xe1f4e5,0x64715b,1.2));
-    const sun = new THREE.DirectionalLight(0xffe6c4,2.1); sun.position.set(300,500,-200); stage.add(sun);
-    const camera = new THREE.OrthographicCamera(-120,120,340,-20,1,2000);
-    this.renderer.shadowMap.enabled = false; this.renderer.autoClear = false; this.renderer.setRenderTarget(this.atlas); this.renderer.setScissorTest(false); this.renderer.setClearColor(0,0); this.renderer.clear();
-    sources.forEach((source, kind) => {
-      const model = fitFriendsAsset(source,{x:180,y:320,z:180},0,'contain'); stage.add(model);
-      for (let angle = 0; angle < 8; angle++) {
-        const yaw = angle * Math.PI / 4; camera.position.set(Math.sin(yaw)*800,160,Math.cos(yaw)*800); camera.lookAt(0,160,0); camera.updateMatrixWorld();
-        this.renderer.setViewport(angle*cellW,kind*cellH,cellW,cellH); this.renderer.setScissor(angle*cellW,kind*cellH,cellW,cellH); this.renderer.setScissorTest(true); this.renderer.render(stage,camera);
+  private fallbackNatural() {
+    if (this.disposed || this.natural) return;
+    this.natural = [];
+    for (let x = 0; x < Math.ceil(FRONTIER_SIZE / 512); x++) for (let y = 0; y < Math.ceil(FRONTIER_SIZE / 512); y++) this.natural.push(...frontierTrees(x, y));
+    this.rebuilt = true;
+  }
+  private prepare(source: THREE.Group, kind: typeof KINDS[number], levels?: BarkLevels): Species {
+    const fitted = fitFriendsAsset(source, FRIENDS_TREE_SIZES[kind], 0, 'contain');
+    fitted.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(fitted).getBoundingSphere(new THREE.Sphere());
+    const parts: Part[] = [];
+    fitted.traverse(child => {
+      if (!(child instanceof THREE.Mesh) || Array.isArray(child.material)) return;
+      const material = child.material as THREE.MeshStandardMaterial;
+      const bark = material.name.endsWith('_Bark');
+      // Leaf cards retain the asset's alpha cutoff and depth writes. MSAA softens
+      // coverage without transparency sorting or changing the canopy silhouette.
+      material.alphaToCoverage = !bark; material.transparent = false; material.depthWrite = true;
+      if (bark) material.side = THREE.FrontSide;
+      this.shade(material);
+      const geometry = [child.geometry], errors = [0];
+      if (bark && levels?.sourceIndices === child.geometry.index?.count && levels.sourceVertices === child.geometry.getAttribute('position').count) {
+        const scale = child.matrixWorld.getMaxScaleOnAxis();
+        for (const level of levels.levels) {
+          if (!Number.isFinite(level.error) || level.error < 0 || level.indices.length % 3 || level.indices.some(i => i < 0 || i >= levels.sourceVertices)) continue;
+          // Shared immutable attributes: only index topology differs for wood.
+          const reduced = new THREE.BufferGeometry();
+          for (const name of Object.keys(child.geometry.attributes)) reduced.setAttribute(name, child.geometry.getAttribute(name));
+          reduced.setIndex(level.indices); reduced.boundingBox = child.geometry.boundingBox; reduced.boundingSphere = child.geometry.boundingSphere;
+          geometry.push(reduced); errors.push(level.error * scale);
+        }
       }
-      model.removeFromParent(); disposeTree(model);
+      parts.push({ geometry, errors, material, transform: child.matrixWorld.clone(), bark });
     });
-    this.renderer.setRenderTarget(previousTarget); this.renderer.setViewport(viewport); this.renderer.setScissor(scissor); this.renderer.setScissorTest(scissorTest); this.renderer.setClearColor(clearColor,clearAlpha); this.renderer.autoClear = autoClear; this.renderer.shadowMap.enabled = shadow;
-    KINDS.forEach((_,kind) => this.materials.push(new THREE.ShaderMaterial({
-      fog: true, uniforms: { ...THREE.UniformsLib.fog, atlas: {value:this.atlas!.texture}, kind: {value:kind}, forestCoverage:{value:this.coverage}, forestGrid:{value:GRID}},
-      vertexShader: `varying vec2 vUv; varying vec3 treeOrigin; varying float angle;
-#include <fog_pars_vertex>
-void main(){
- vec3 origin=(modelMatrix*instanceMatrix*vec4(0.,0.,0.,1.)).xyz; treeOrigin=origin;
- vec2 toward=normalize(cameraPosition.xz-origin.xz); vec3 right=vec3(toward.y,0.,-toward.x);
- float scale=length(instanceMatrix[0].xyz); float yaw=atan(instanceMatrix[2].x,instanceMatrix[2].z);
- angle=mod(floor((atan(toward.x,toward.y)-yaw)*1.273239545+8.5),8.);
- vUv=uv; vec3 world=origin+right*position.x*scale+vec3(0.,position.y*scale,0.);
- vec4 mvPosition=viewMatrix*vec4(world,1.); gl_Position=projectionMatrix*mvPosition;
-#include <fog_vertex>
-}`,
-      fragmentShader: `uniform sampler2D atlas; uniform float kind; varying vec2 vUv; varying vec3 treeOrigin; varying float angle;
-${coverage}
-#include <fog_pars_fragment>
-void main(){vec4 c=texture2D(atlas,vec2((vUv.x+angle)/8.,(vUv.y+kind)/3.));if(c.a<.45)discard;
-float blend=smoothstep(${FOREST_DETAIL_START.toFixed(1)},${FOREST_DETAIL_END.toFixed(1)},distance(cameraPosition,treeOrigin+vec3(0.,160.,0.)));
-if(dither()>mix(1.,blend,detailCoverage(treeOrigin.xz)))discard;
-gl_FragColor=vec4(c.rgb,1.);
-#include <fog_fragment>
-#include <colorspace_fragment>
-}`,
-    })));
+    return { parts, bounds };
   }
-  /** Add complementary screen-space fades to the real instanced models. */
-  detailMaterial(material: THREE.Material) {
-    material.onBeforeCompile = shader => {
-      shader.vertexShader = 'varying vec3 forestPosition;\n'+shader.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
-forestPosition=(modelMatrix*instanceMatrix*vec4(position,1.)).xyz;`);
-      shader.fragmentShader = 'varying vec3 forestPosition;\n'+shader.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-float forestFade=1.-smoothstep(${FOREST_DETAIL_START.toFixed(1)},${FOREST_DETAIL_END.toFixed(1)},distance(cameraPosition,forestPosition));
-if(fract(dot(floor(gl_FragCoord.xy),vec2(.754877666,.569840296)))>forestFade)discard;`);
-    }; material.needsUpdate = true;
+  private rebuild(trees: FrontierTree[], ground: (tree: FrontierTree) => boolean) {
+    this.entries = trees.map(tree => {
+      const species = KINDS.indexOf(tree.kind), model = this.species[species];
+      const root = new THREE.Matrix4().compose(new THREE.Vector3(tree.x, tree.z, tree.y), new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, terrainHash(tree.x, tree.y) * Math.PI * 2), new THREE.Vector3().setScalar(tree.scale));
+      return { tree, species, sphere: model.bounds.clone().applyMatrix4(root), supported: ground(tree), levels: model.parts.map(() => 0), matrices: model.parts.map(p => new Float32Array(new THREE.Matrix4().multiplyMatrices(root, p.transform).elements)) };
+    });
+    const tiles = new Map<string, Entry[]>();
+    for (const entry of this.entries) {
+      const key = `${Math.floor(entry.tree.x / TILE)},${Math.floor(entry.tree.y / TILE)}`;
+      const list = tiles.get(key) || []; list.push(entry); tiles.set(key, list);
+    }
+    this.tiles = [...tiles.values()].map(entries => {
+      const box = new THREE.Box3();
+      for (const entry of entries) box.union(entry.sphere.getBoundingBox(new THREE.Box3()));
+      return { entries, bounds: box.getBoundingSphere(new THREE.Sphere()) };
+    });
+    this.rebuilt = false;
   }
-  setReady(cx: number, cy: number, ready: boolean) { if(cx<0||cy<0||cx>=GRID||cy>=GRID)return;this.ready[cy*GRID+cx]=ready?255:0;this.coverage.needsUpdate=true; }
-  private install(trees: FrontierTree[], prefix = '') {
-    for (let kind=0;kind<3;kind++) {
-      const list=trees.filter(t=>t.kind===KINDS[kind]); if(!list.length)continue;
-      const geo=new THREE.PlaneGeometry(240,360); geo.translate(0,160,0);
-      const mesh=new THREE.InstancedMesh(geo,this.materials[kind],list.length);mesh.name=prefix+'distant-'+KINDS[kind];
-      list.forEach((tree,index)=>{this.write(mesh,index,tree,!this.removed.has(tree.id));this.slots.set(tree.id,{mesh,index,tree});const key=`${Math.floor(tree.x/512)},${Math.floor(tree.y/512)}`;if(!tree.id.startsWith('planted:')){const chunk=this.chunks.get(key)||[];chunk.push(tree);this.chunks.set(key,chunk);}});
-      mesh.computeBoundingSphere(); this.group.add(mesh);
+  update(f: FrontierSnapshot, ground: (tree: FrontierTree) => boolean, dirty: ReadonlySet<string>, camera: THREE.PerspectiveCamera, enabled = true) {
+    this.group.visible = enabled;
+    if (!this.species.length || !this.natural) return;
+    const stamp = f.planted.map(t => `${t.id}:${t.x}:${t.y}:${t.z}:${t.scale}:${t.kind}`).join(',');
+    const rebuild = this.rebuilt || stamp !== this.plantedStamp;
+    if (rebuild) { this.rebuild([...this.natural, ...f.planted], ground); this.plantedStamp = stamp; }
+    const grades = JSON.stringify(f.terrain.grades || []), gradesChanged = grades !== this.gradeStamp;
+    if (!rebuild && (gradesChanged || dirty.size)) for (const entry of this.entries) if (gradesChanged || dirty.has(`${Math.floor(entry.tree.x / 512)},${Math.floor(entry.tree.y / 512)}`)) entry.supported = ground(entry.tree);
+    this.gradeStamp = grades;
+    // Snapshot revision includes harvest/regrowth, while support is invalidated
+    // only by terrain edits. No terrain sampling or matrix rebuilding per frame.
+    if (f.revision !== this.stateRevision || rebuild) {
+      this.removed = new Set(f.harvested); this.stateRevision = f.revision;
+    }
+    this.visibleCount = 0;
+    if (!enabled) return;
+    camera.updateMatrixWorld();
+    this.frustum.setFromProjectionMatrix(this.projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const pixels = this.renderer.getDrawingBufferSize(this.viewport).y * .5 * camera.projectionMatrix.elements[5];
+    const view = camera.matrixWorldInverse.elements;
+    for (const bucket of this.buckets.values()) bucket.entries.length = 0;
+    for (const tile of this.tiles) {
+      const nearTile = Math.hypot(tile.bounds.center.x - camera.position.x, tile.bounds.center.z - camera.position.z) < tile.bounds.radius + SHADOW_RADIUS;
+      if (!nearTile && !this.frustum.intersectsSphere(tile.bounds)) continue;
+      for (const entry of tile.entries) {
+        if (!entry.supported || this.removed.has(entry.tree.id)) continue;
+        const shadow = entry.sphere.center.distanceTo(camera.position) - entry.sphere.radius < SHADOW_RADIUS;
+        // Nearby offscreen trees remain in the shadow pass when turning around.
+        if (!shadow && !this.frustum.intersectsSphere(entry.sphere)) continue;
+        this.visibleCount++;
+        const p = entry.sphere.center;
+        const depth = Math.max(1, -(view[2] * p.x + view[6] * p.y + view[10] * p.z + view[14]) - entry.sphere.radius);
+        const model = this.species[entry.species];
+        model.parts.forEach((part, index) => {
+          const level = part.bark ? forestWoodLevel(part.errors, entry.tree.scale, pixels / depth, entry.levels[index]) : 0;
+          entry.levels[index] = level;
+          const key = `${entry.species}:${index}:${level}:${Number(shadow)}`;
+          let bucket = this.buckets.get(key);
+          if (!bucket) {
+            const capacity = this.entries.filter(e => e.species === entry.species).length;
+            const mesh = new THREE.InstancedMesh(part.geometry[level], part.material, Math.max(1, capacity));
+            mesh.name = `forest-${KINDS[entry.species]}-${part.bark ? 'wood' : 'leaves'}-${level}-${shadow ? 'shadow' : 'far'}`;
+            mesh.frustumCulled = false; mesh.castShadow = shadow; mesh.receiveShadow = true; mesh.count = 0;
+            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.group.add(mesh);
+            bucket = { mesh, slots: [], entries: [], part: index }; this.buckets.set(key, bucket);
+          }
+          bucket.entries.push(entry);
+        });
+      }
+    }
+    for (const bucket of this.buckets.values()) {
+      // A planted tree can enlarge a species after an instance buffer was made.
+      if (bucket.entries.length > bucket.mesh.instanceMatrix.count) {
+        // Release the old GPU instance buffer before replacing its capacity.
+        // Geometry and materials belong to the species and remain shared.
+        bucket.mesh.dispose();
+        bucket.mesh.instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(bucket.entries.length * 16), 16).setUsage(THREE.DynamicDrawUsage);
+        bucket.slots = [];
+      }
+      let changed = rebuild;
+      const matrices = bucket.mesh.instanceMatrix.array as Float32Array;
+      bucket.entries.forEach((entry, index) => {
+        if (rebuild || bucket.slots[index] !== entry.tree.id) { matrices.set(entry.matrices[bucket.part], index * 16); bucket.slots[index] = entry.tree.id; changed = true; }
+      });
+      bucket.mesh.count = bucket.entries.length; bucket.mesh.visible = bucket.mesh.count > 0;
+      if (changed) bucket.mesh.instanceMatrix.needsUpdate = true;
     }
   }
-  private write(mesh:THREE.InstancedMesh,index:number,tree:FrontierTree,visible:boolean) {
-    const matrix=new THREE.Matrix4().compose(new THREE.Vector3(tree.x,tree.z,tree.y),new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP,terrainHash(tree.x,tree.y)*Math.PI*2),new THREE.Vector3().setScalar(visible?tree.scale:0));mesh.setMatrixAt(index,matrix);mesh.instanceMatrix.needsUpdate=true;
+  private removed = new Set<string>();
+  get arrivalReady(){return this.species.length>0 && this.natural!==undefined;}
+  get stats() {
+    let draws = 0, triangles = 0;
+    if (this.group.visible) for (const { mesh } of this.buckets.values()) if (mesh.visible) { draws++; triangles += mesh.count * (mesh.geometry.index?.count || mesh.geometry.getAttribute('position').count) / 3; }
+    return { trees: this.visibleCount, draws, triangles };
   }
-  update(f:FrontierSnapshot, ground:(tree:FrontierTree)=>boolean, dirty:ReadonlySet<string>) {
-    let installed=false;
-    if(this.pending){
-      installed=true;
-      const tiles=new Map<string,FrontierTree[]>();for(const tree of this.pending){const key=`${Math.floor(tree.x/TILE)},${Math.floor(tree.y/TILE)}`;const list=tiles.get(key)||[];list.push(tree);tiles.set(key,list);}this.pending=undefined;
-      for(const list of tiles.values())this.install(list);
+  dispose() {
+    this.disposed = true; this.worker?.terminate();
+    for (const { mesh } of this.buckets.values()) mesh.dispose();
+    const textures = new Set<THREE.Texture>();
+    for (const model of this.species) for (const part of model.parts) {
+      part.geometry.forEach(g => g.dispose());
+      for (const value of Object.values(part.material)) if (value instanceof THREE.Texture) textures.add(value);
+      part.material.dispose();
     }
-    const changed=f.revision!==this.stateRevision;const next=changed?new Set(f.harvested):this.removed;
-    if(changed)for(const id of new Set([...this.removed,...next]))if(next.has(id)!==this.removed.has(id)){const slot=this.slots.get(id);if(slot)this.write(slot.mesh,slot.index,slot.tree,!next.has(id)&&ground(slot.tree));}
-    this.removed=next;
-    const groundDirty=installed?new Set([...dirty,...f.terrain.edits.map(e=>`${Math.floor(e[0]/16)},${Math.floor(e[1]/16)}`)]):dirty;
-    if(installed)for(const g of f.terrain.grades || []){const r=g[3]+320;for(let a=Math.floor((g[0]-r)/512);a<=Math.floor((g[0]+r)/512);a++)for(let b=Math.floor((g[1]-r)/512);b<=Math.floor((g[1]+r)/512);b++)(groundDirty as Set<string>).add(`${a},${b}`);}
-    for(const key of groundDirty)for(const tree of this.chunks.get(key)||[]){const slot=this.slots.get(tree.id);if(slot)this.write(slot.mesh,slot.index,tree,!next.has(tree.id)&&ground(tree));}
-    for(const tree of f.planted)if(groundDirty.has(`${Math.floor(tree.x/512)},${Math.floor(tree.y/512)}`)){const slot=this.slots.get(tree.id);if(slot)this.write(slot.mesh,slot.index,tree,ground(tree));}
-    const stamp=f.planted.map(t=>`${t.id}:${t.x}:${t.y}:${t.z}`).join(',');
-    if(this.materials.length&&stamp!==this.plantedStamp){
-      for(const child of [...this.group.children])if(child.name.startsWith('planted-')){(child as THREE.InstancedMesh).geometry.dispose();(child as THREE.InstancedMesh).dispose();child.removeFromParent();}
-      for(const id of this.slots.keys())if(id.startsWith('planted:'))this.slots.delete(id);
-      this.install(f.planted.filter(ground),'planted-');this.plantedStamp=stamp;
-    }
-    this.stateRevision=f.revision;
+    textures.forEach(t => t.dispose()); this.group.removeFromParent();
   }
-  dispose(){this.disposed=true;this.worker?.terminate();this.atlas?.dispose();this.coverage.dispose();this.materials.forEach(m=>m.dispose());this.group.traverse(o=>{if(o instanceof THREE.InstancedMesh){o.geometry.dispose();o.dispose();}});this.group.removeFromParent();}
 }
-function disposeTree(model:THREE.Group){const textures=new Set<THREE.Texture>();model.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material]){for(const v of Object.values(m))if(v instanceof THREE.Texture)textures.add(v);m.dispose();}}});textures.forEach(t=>t.dispose());}

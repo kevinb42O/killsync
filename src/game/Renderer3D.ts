@@ -1,10 +1,10 @@
-import { updateFrontierSunShadow } from './rendering/FriendsSunShadow';
 import { createFriendsEnvironment } from './rendering/FriendsWorldVisuals';
 import { FriendsVehicleCamera } from './rendering/FriendsVehicleCamera';
 import type { FriendsVehicle } from './multiplayer/FriendsExpedition';
 import type { CoopRealityBreachSnapshot } from './multiplayer/CoopRealityBreach';
 import { createBreachCathedral } from './rendering/RealityBreachVisuals';
 import * as THREE from 'three';
+import { FriendsNightVision } from './rendering/FriendsNightVision';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { GameEngine } from './Engine';
 import { Enemy, Projectile, ExperienceGem, WorldItem, Treasure, OperatorDefinition, Weapon, Shop } from '../types';
@@ -107,6 +107,7 @@ export class Renderer3D {
   private speedLineMaterial!: THREE.ShaderMaterial;
   private speedLineMesh!: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
   private speedLineIntensity = 0;
+  private nightVision?: FriendsNightVision;
   /** Kept wholly separate from desktop settings so touch hardware trades a
    * little invisible rendering detail for materially steadier frame pacing. */
   private readonly mobilePerformance: boolean;
@@ -134,6 +135,8 @@ export class Renderer3D {
   presentationVerticalOffset: number = 0;
   presentationVehicle?: FriendsVehicle;
   presentationGrounded = false;
+  presentationWorldRender?: (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) => boolean;
+  presentationViewmodelVisible = true;
   private readonly friendsVehicleCamera = new FriendsVehicleCamera();
   presentationSprinting: boolean = false;
   presentationSliding: boolean = false;
@@ -162,7 +165,6 @@ export class Renderer3D {
   
   // Lighting
   dirLight!: THREE.DirectionalLight;
-  private frontierShadowTime = 0;
   ambientLight!: THREE.AmbientLight;
   playerPointLight!: THREE.PointLight;
   camKeyLight!: THREE.DirectionalLight;
@@ -469,6 +471,7 @@ export class Renderer3D {
 
     // 5. Setup Environment (Grid floor, sky/horizon, pillars)
     this.rebuildEnvironment();
+    if (this.worldId === 'friends_frontier') this.nightVision = new FriendsNightVision(this.scene);
 
     // 6. Setup High-End FPS Viewmodel (Production Cyber Arm & Blaster)
     this.setupFPSViewmodel();
@@ -488,6 +491,8 @@ export class Renderer3D {
   setCoopSuitPalette(palette?: RendererSuitPalette) {
     this.coopSuitPalette = palette;
   }
+
+  toggleFriendsNightVision() { return this.nightVision?.toggle() ?? false; }
 
   /** Replaces only static world geometry. Player rigs, weapons, particles and
    * network presentation remain alive through an inter-world bridge crossing. */
@@ -662,11 +667,12 @@ export class Renderer3D {
       this.camera.far = 110000; this.camera.updateProjectionMatrix();
       // Daylight has a gentle sky fill and one sun. The combat camera's
       // white flood and magenta rim washed out the valley's actual materials.
-      this.renderer.toneMappingExposure = 1.05;
-      this.camKeyLight.intensity = .2;
-      if (rim) { rim.color.setHex(0xc3deea); rim.intensity = .35; }
-      this.ambientLight.color.setHex(0xe1f4e5); this.ambientLight.intensity = .72;
-      this.dirLight.color.setHex(0xffe6c4); this.dirLight.intensity = 2.1;
+      this.renderer.toneMappingExposure = .90;
+      this.camKeyLight.intensity = .10;
+      if (rim) { rim.color.setHex(0xc3deea); rim.intensity = .20; }
+      this.ambientLight.color.setHex(0xe1f4e5); this.ambientLight.intensity = .65;
+      const islandFill=new THREE.HemisphereLight(0xc7e9ff,0x778361,.60);islandFill.name='frontier-sky-fill';this.scene.add(islandFill);
+      this.dirLight.color.setHex(0xffe6c4); this.dirLight.intensity = 1.85;
       this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFShadowMap;
       this.renderer.shadowMap.autoUpdate = false;
       this.dirLight.castShadow = true; this.dirLight.shadow.mapSize.set(2048, 2048);
@@ -2447,6 +2453,15 @@ export class Renderer3D {
     this.firstPersonKinetics.notifyLand(impactVelocity);
   }
 
+  resetFirstPersonPresentation() {
+    this.firstPersonKinetics.reset();
+    this.groundedCameraMotion.reset();
+    this.lastMouseDeltaX = this.lastMouseDeltaY = 0;
+    this.recoilOffset = this.recoilRotOffset = 0;
+    this.swayX = this.swayY = this.swayTilt = 0;
+    this.presentationCameraRoll = this.presentationCameraPitchOffset = 0;
+  }
+
   triggerMuzzleFlash(color: string = '#00f0ff') {
     this.notifyFired();
     this.muzzleFlashTimer = 48;
@@ -2625,6 +2640,7 @@ export class Renderer3D {
       verticalOffset: this.worldId === 'friends_frontier' ? undefined : this.presentationVerticalOffset,
       mouseDeltaX: this.lastMouseDeltaX,
       mouseDeltaY: this.lastMouseDeltaY,
+      idleCameraMotion: this.worldId !== 'friends_frontier',
     });
 
     const adsDamp = 1 - this.adsProgress * 0.88;
@@ -2739,7 +2755,7 @@ export class Renderer3D {
   }
 
   // Render loop called once per frame from GameEngine
-  render(engine: GameEngine, deltaTime: number) {
+  render(engine: GameEngine, deltaTime: number, beforeSceneRender?: () => void) {
     this.renderer.info.reset();
     const player = engine.player;
     const viewMode = engine.viewMode;
@@ -3012,18 +3028,18 @@ export class Renderer3D {
 
     // World and viewmodel use separate projections. clearDepth keeps the gun
     // readable without allowing world geometry to cut through the hand.
-    if (this.worldId === 'friends_frontier' && performance.now()-this.frontierShadowTime>100) {
-      this.frontierShadowTime=performance.now();this.renderer.shadowMap.needsUpdate=true;
-      updateFrontierSunShadow(this.dirLight,new THREE.Vector3(this.camera.position.x,this.camera.position.y-30,this.camera.position.z));
-      this.dirLight.target.updateMatrixWorld();
-    }
-    this.renderer.render(this.scene, this.camera);
-    if (viewMode === 'FIRST_PERSON') {
+    beforeSceneRender?.();
+    const nightVisionPass = this.nightVision?.beginFrame(this.renderer, this.camera, deltaTime,
+      this.worldId === 'friends_frontier' && viewMode === 'FIRST_PERSON' && !this.presentationSpectating);
+    if (!this.presentationWorldRender?.(this.renderer,this.scene,this.camera)) this.renderer.render(this.scene, this.camera);
+    if (viewMode === 'FIRST_PERSON' && this.presentationViewmodelVisible) {
       this.renderer.autoClear = false;
       this.renderer.clearDepth();
       this.renderer.render(this.viewmodelScene, this.viewmodelCamera);
       this.renderer.autoClear = true;
     }
+
+    if (nightVisionPass) this.nightVision?.endFrame(this.renderer);
 
     // Ease both edges of the effect so tapping sprint never produces a flash.
     // ADS suppresses the streaks to preserve a clean sight picture.
@@ -5563,6 +5579,7 @@ export class Renderer3D {
   }
 
   destroy() {
+    this.nightVision?.dispose();
     for (const object of this.environmentObjects) { object.userData.skyTexture?.dispose(); object.traverse(child => { child.userData.disposed = true; }); }
     for (const object of this.environmentObjects) if (object.name === 'friends-frontier-environment') object.traverse(child => {
       const renderable = child as THREE.Mesh; renderable.geometry?.dispose();

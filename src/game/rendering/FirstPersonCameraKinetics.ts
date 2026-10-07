@@ -39,6 +39,8 @@ export interface FirstPersonKineticsInput {
   verticalVelocity?: number;
   mouseDeltaX?: number;
   mouseDeltaY?: number;
+  /** Keep a stationary world camera fixed while the held weapon can breathe. */
+  idleCameraMotion?: boolean;
 }
 
 export interface FirstPersonKineticsOutput {
@@ -318,10 +320,11 @@ export class FirstPersonCameraKinetics {
 
     // 5. Idle Resting Breathing Motion
     const idleWeight = (1.0 - this.movingWeight) * (1.0 - this.airborneWeight * 0.5) * adsDamp * intensity;
-    const breathY = Math.sin(this.breathTimer) * 0.12 * idleWeight;
-    const breathX = Math.cos(this.breathTimer * 0.5) * 0.06 * idleWeight;
-    const breathPitch = Math.sin(this.breathTimer) * 0.0016 * idleWeight;
-    const breathRoll = Math.cos(this.breathTimer * 0.5) * 0.0012 * idleWeight;
+    const idleCameraWeight = input.idleCameraMotion === false ? 0 : idleWeight;
+    const breathY = Math.sin(this.breathTimer) * 0.12 * idleCameraWeight;
+    const breathX = Math.cos(this.breathTimer * 0.5) * 0.06 * idleCameraWeight;
+    const breathPitch = Math.sin(this.breathTimer) * 0.0016 * idleCameraWeight;
+    const breathRoll = Math.cos(this.breathTimer * 0.5) * 0.0012 * idleCameraWeight;
 
     // Jump & Land vertical camera translation
     const jumpCamY = 0.75 * this.jumpSpringPos * adsDamp * intensity;

@@ -10,14 +10,14 @@ export class FriendsCaveVisuals extends THREE.Group {
   private flame:THREE.ShaderMaterial;
   private dust:THREE.ShaderMaterial;
   private shadowStamp='';
-  private originalBackground:THREE.Scene['background'];
   private torchPositions:THREE.Vector3[]=[];
   private torchCool:boolean[]=[];
   private exteriorFog=new THREE.Color(0xaec4bd);
   private caveFog=new THREE.Color(0x030509);
   private mist=0;
+  private lastTime?:number;
   constructor(private scene:THREE.Scene,private camera:THREE.PerspectiveCamera,private terrain:FriendsTerrain,private renderer:THREE.WebGLRenderer){
-    super();this.name='lantern-descent-cave';this.originalBackground=scene.background;
+    super();this.name='lantern-descent-cave';
     const torches=[...CAVE_TORCHES,...[{x:6096,y:5456},{x:6160,y:5344},{x:6224,y:5216}].map(p=>({...p,z:terrain.floor(p.x,p.y,6000,0)??640}))];
     const wood=new THREE.MeshStandardMaterial({color:0x34221a,roughness:1}),iron=new THREE.MeshStandardMaterial({color:0x333833,metalness:.75,roughness:.55});
     applyFriendsCaveLighting(wood);applyFriendsCaveLighting(iron);
@@ -44,15 +44,18 @@ export class FriendsCaveVisuals extends THREE.Group {
     for(const room of CAVE_ROOMS)for(let i=0;i<72;i++){const angle=i*2.399,r=Math.sqrt((i+.5)/72)*.85,x=room.x+Math.cos(angle)*room.rx*r,y=room.y+Math.sin(angle)*room.ry*r;const ranges=caveColumn(x,y);const range=ranges.at(-1);if(!range)continue;dustPositions.push(x,range[0]+32+(range[1]-range[0]-64)*((i*.618)%1),y);seeds.push(i);}
     const particles=new THREE.BufferGeometry();particles.setAttribute('position',new THREE.Float32BufferAttribute(dustPositions,3));particles.setAttribute('seed',new THREE.Float32BufferAttribute(seeds,1));this.add(new THREE.Points(particles,this.dust));
   }
-  update(time:number){
+  update(time:number,minedUnderground=false,exteriorFog=this.exteriorFog){
     this.flame.uniforms.time.value=time;this.dust.uniforms.time.value=time;
-    const underground=Boolean(caveAt(this.camera.position.x,this.camera.position.z,this.camera.position.y));
-    this.mist+=(Number(underground)-this.mist)*.08;this.scene.background=underground?this.caveFog:this.originalBackground;
-    if(this.scene.fog instanceof THREE.FogExp2){this.scene.fog.color.copy(this.exteriorFog).lerp(this.caveFog,this.mist);this.scene.fog.density=.000009+this.mist*.00020;}
+    const underground=minedUnderground||Boolean(caveAt(this.camera.position.x,this.camera.position.z,this.camera.position.y));
+    // A roof occludes the exterior through depth testing. Changing the whole
+    // background here also blackened open entrances and gaps between blocks.
+    const dt=this.lastTime===undefined?1/60:Math.max(0,Math.min(.1,time-this.lastTime));this.lastTime=time;
+    this.mist+=(Number(underground)-this.mist)*(1-Math.exp(-dt*5));
+    if(this.scene.fog instanceof THREE.FogExp2){this.scene.fog.color.copy(exteriorFog).lerp(this.caveFog,this.mist);this.scene.fog.density=.000009+this.mist*.00020;}
     const nearest=this.torchPositions.map((p,i)=>({p,i,d:p.distanceTo(this.camera.position)})).sort((a,b)=>a.d-b.d);
     this.lights.forEach((light,i)=>{const t=nearest[i];light.visible=Boolean(t&&underground&&t.d<400);if(!t)return;light.position.copy(t.p);light.color.setHex(this.torchCool[t.i]?0x7dc6d1:0xffac53);light.intensity=(this.torchCool[t.i]?14000:18000)*(1+.055*Math.sin(time*8.1+t.i)+.025*Math.sin(time*17.3+t.i*3));});
     const shadowStamp=`${nearest[0]?.i}:${this.terrain.revision}`;if(underground&&shadowStamp!==this.shadowStamp){this.shadowStamp=shadowStamp;this.lights[0].shadow.needsUpdate=true;this.renderer.shadowMap.needsUpdate=true;}
     return underground;
   }
-  dispose(){if(this.scene.background===this.caveFog)this.scene.background=this.originalBackground;this.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.Points){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();if(o instanceof THREE.InstancedMesh)o.dispose();}if(o instanceof THREE.PointLight)o.shadow.map?.dispose();});this.removeFromParent();}
+  dispose(){this.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.Points){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();if(o instanceof THREE.InstancedMesh)o.dispose();}if(o instanceof THREE.PointLight)o.shadow.map?.dispose();});this.removeFromParent();}
 }

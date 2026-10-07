@@ -6,7 +6,9 @@ import type { CoopPlayerSeed } from './CoopSimulation';
 export function railFixture(loop=false) {
   const pieces:FriendsBuildPiece[]=[];
   const add=(x:number,y:number,rotation:number,shape:FriendsBuildPiece['shape']='rail_straight')=>pieces.push({id:pieces.length+1,x,y,z:0,rotation,shape,finish:'timber',author:'Host',revision:1});
-  if(!loop)for(let i=0;i<28;i++)add(2944+i*256,9800,0);
+  // Keep this player-built line clear of the authored Grand Traverse tunnel
+  // cover. Its protected roof correctly resists the fixture's flat grades.
+  if(!loop)for(let i=0;i<28;i++)add(2944+i*256,10800,0);
   else {
     for(let i=0;i<4;i++)add(8384+i*256,6000,0);add(9408,6128,0,'rail_curve');
     for(let i=0;i<4;i++)add(9536,6384+i*256,1);add(9408,7408,1,'rail_curve');

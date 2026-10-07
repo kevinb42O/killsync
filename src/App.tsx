@@ -94,7 +94,7 @@ export default function App() {
   const [gameState, setGameState] = useState<GameState>(() => {
     if (typeof window !== 'undefined') {
       const roomParam = new URLSearchParams(window.location.search).get('room') || new URLSearchParams(window.location.search).get('join');
-      if (roomParam) return 'MULTIPLAYER_SETUP';
+      if (roomParam || new URLSearchParams(window.location.search).get('mode') === 'friends') return 'MULTIPLAYER_SETUP';
     }
     return 'MENU';
   });

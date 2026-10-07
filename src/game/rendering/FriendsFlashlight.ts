@@ -10,12 +10,12 @@ export class FriendsFlashlight {
   private target = new THREE.Object3D();
   private hand = new THREE.Group();
   private lens: THREE.MeshStandardMaterial;
-  private enabled = true;
+  private enabled = false;
   private forward = new THREE.Vector3();
   private offset = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, viewmodel: THREE.Scene, private camera: THREE.PerspectiveCamera, private renderer: THREE.WebGLRenderer) {
-    this.light.name = 'held-flashlight-beam';
+    this.light.name = 'held-flashlight-beam';this.light.visible=false;this.hand.visible=false;
     // A broad usable shoulder around a brighter centre, on one shadowed light.
     const size=128, pixels=new Uint8Array(size*size*4);
     for(let y=0;y<size;y++)for(let x=0;x<size;x++){
@@ -50,6 +50,7 @@ export class FriendsFlashlight {
     const grip = new THREE.Mesh(new THREE.BoxGeometry(.12, .09, .13), glove); grip.position.set(0, -.05, .025); this.hand.add(grip);
     const sleeve = part(.065, .24, .19, rubber); sleeve.position.y = -.075; sleeve.rotation.x = 1.3;
   }
+  get equipped(){return this.enabled;}
   toggle() {
     this.enabled = !this.enabled;
     if(!this.enabled){this.hand.visible=false;this.light.visible=false;}

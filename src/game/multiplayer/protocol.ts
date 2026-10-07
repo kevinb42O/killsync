@@ -6,10 +6,10 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v41 opens spawn-area excavation and removes the former lake slowdown, alongside cave exploration and free construction testing. Incrementing this makes
+/** v45 adds Grand Traverse passenger seating and inclined train poses, alongside cargo orientation and rope bends. Incrementing this makes
  * a stale tab fail the handshake cleanly instead of silently misreading the
  * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 41;
+export const MULTIPLAYER_PROTOCOL_VERSION = 46;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
@@ -31,7 +31,10 @@ export interface MultiplayerInputFrame {
   aimAngle: number;
   /** Quantized camera pitch. Zero is the lowest valid look angle. */
   aimPitch: number;
-  friendsTool?: 0 | 1 | 2 | 3 | 4;
+  friendsTool?: 0 | 1 | 2 | 3 | 4 | 5;
+  /** Temporary C-toggle for unrestricted flight; only Friends accepts it. */
+  friendsDevFlight?: boolean;
+  friendsDevFlightDown?: boolean;
   selectedSlot: number;
   firing: boolean;
   /** Monotonic trigger-pull id. Repeated input frames make semi-auto fire
@@ -117,7 +120,7 @@ export interface CoopAdminNotice {
   modified?: boolean;
 }
 
-type MultiplayerReliableEventName = 'ready' | 'spectate' | 'roster' | 'start' | 'skin_update' | 'cast' | 'revive' | 'station_purchase' | 'station_purchase_result' | 'operator_redeploy' | 'operator_redeploy_result' | 'foundry_upgrade' | 'foundry_upgrade_result' | 'friends_action' | 'friends_action_result' | 'friends_build' | 'friends_build_result' | 'build_structure' | 'build_structure_result' | 'dismantle_structure' | 'dismantle_structure_result' | 'structure_action' | 'structure_action_result' | 'inventory_drop' | 'imprint_update' | 'leave' | 'error' | 'ping' | 'chat' | 'admin_request' | 'admin_result' | 'admin_notice';
+type MultiplayerReliableEventName = 'friends_hello' | 'friends_welcome' | 'friends_identity' | 'friends_sync' | 'friends_start_ack' | 'ready' | 'spectate' | 'roster' | 'setup_mode' | 'start' | 'skin_update' | 'cast' | 'revive' | 'station_purchase' | 'station_purchase_result' | 'operator_redeploy' | 'operator_redeploy_result' | 'foundry_upgrade' | 'foundry_upgrade_result' | 'friends_action' | 'friends_action_result' | 'friends_build' | 'friends_build_result' | 'build_structure' | 'build_structure_result' | 'dismantle_structure' | 'dismantle_structure_result' | 'structure_action' | 'structure_action_result' | 'inventory_drop' | 'imprint_update' | 'leave' | 'error' | 'ping' | 'chat' | 'admin_request' | 'admin_result' | 'admin_notice';
 
 interface MultiplayerReliableEventBase {
   type: 'event';
@@ -173,6 +176,8 @@ export type MultiplayerWireMessage =
 
 export interface ManualSignal {
   version: number;
+  /** Absent for Survival; Friends negotiates its own world channel schema. */
+  friendsProtocol?: number;
   kind: 'offer' | 'answer';
   sessionId: string;
   peerId: string;
@@ -199,7 +204,9 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   movement: boundedInteger(frame.movement, 15),
   aimAngle: boundedInteger(frame.aimAngle, 65535),
   aimPitch: boundedInteger(frame.aimPitch, 65535),
-  friendsTool: boundedInteger(frame.friendsTool, 4) as 0 | 1 | 2 | 3 | 4,
+  friendsTool: boundedInteger(frame.friendsTool, 5) as 0 | 1 | 2 | 3 | 4 | 5,
+  friendsDevFlight: Boolean(frame.friendsDevFlight),
+  friendsDevFlightDown: Boolean(frame.friendsDevFlightDown),
   // The simulation clamps this against the real live weapon catalogue. Keep
   // the transport future-proof without letting malformed packets grow unbound.
   selectedSlot: boundedInteger(frame.selectedSlot, 31),

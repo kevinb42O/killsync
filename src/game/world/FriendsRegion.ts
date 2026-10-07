@@ -2,7 +2,8 @@ import type { WorldObstacle } from './WorldLayout';
 
 // Arrival, transport and construction are separate places connected by paths.
 export const FRIENDS_HUB = { x: 5900, y: 5620 };
-export const FRIENDS_AIRPAD = { x: 4700, y: 5720 };
+// A naturally level shoulder fits the cabin without flattening the hillside.
+export const FRIENDS_AIRPAD = { x: 5140, y: 6416 };
 export const FRIENDS_BUILD_MEADOW = { x: 6260, y: 6100, radius: 540 };
 export const FRIENDS_LAKE = { x: 7440, y: 6520, rx: 1040, ry: 710 };
 export const FRIENDS_SALVAGE = { x: 4260, y: 7050, radius: 620, ceiling: 300 };

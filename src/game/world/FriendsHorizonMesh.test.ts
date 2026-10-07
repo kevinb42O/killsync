@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { meshBlockHorizon, type HorizonMeshData } from './FriendsHorizonMesh';
+import { meshBlockHorizon, meshOrganicHorizon, type HorizonMeshData } from './FriendsHorizonMesh';
+import { islandArchRange } from './FriendsIsland';
 import { baseTerrainHeight } from './FriendsTerrain';
 
 function unpack(mesh:HorizonMeshData){
@@ -18,7 +19,8 @@ describe('persistent block horizon',()=>{
     for(let i=0;i<mesh.positions.length;i+=9){
       if(mesh.normals[i+1]!==1)continue;
       const x=(mesh.positions[i]+mesh.positions[i+3]+mesh.positions[i+6])/3,z=(mesh.positions[i+2]+mesh.positions[i+5]+mesh.positions[i+8])/3;
-      expect(mesh.positions[i+1]).toBe(baseTerrainHeight(Math.floor(x/32)*32+16,Math.floor(z/32)*32+16));
+      const sx=Math.floor(x/32)*32+16,sy=Math.floor(z/32)*32+16,opening=islandArchRange(sx,sy);
+      expect([baseTerrainHeight(sx,sy),...(opening?[opening[0]]:[])]).toContain(mesh.positions[i+1]);
     }
   });
   it('merges flat surfaces and winds every triangle toward its stated normal',()=>{
@@ -30,11 +32,26 @@ describe('persistent block horizon',()=>{
     }
   });
   it('emits a continuous boundary cliff once across adjacent tiles',()=>{
-    const left=unpack(meshBlockHorizon(14848,8192,512)),right=unpack(meshBlockHorizon(15360,8192,512)),edge=15360;
-    for(let y=8192;y<8704;y+=32){
+    const left=unpack(meshBlockHorizon(24064,15360,512)),right=unpack(meshBlockHorizon(24576,15360,512)),edge=24576;
+    for(let y=15360;y<15872;y+=32){
       const lh=baseTerrainHeight(edge-16,y+16),rh=baseTerrainHeight(edge+16,y+16);
       const count=(mesh:typeof left)=>{let hits=0;for(let i=0;i<mesh.positions.length;i+=18){if(Math.abs(mesh.normals[i])!==1||mesh.positions[i]!==edge)continue;const z=Array.from(mesh.positions.slice(i,i+18)).filter((_,j)=>j%3===2);if(Math.min(...z)<=y&&Math.max(...z)>=y+32)hits++;}return hits;};
       expect(count(left)+count(right)).toBe(lh===rh?0:1);
     }
+  });
+});
+
+describe('organic island horizon',()=>{
+  it('joins adjacent terrain tiles without a seam and has slope normals',()=>{
+    const left=meshOrganicHorizon(24064,15360,512),right=meshOrganicHorizon(24576,15360,512);
+    const edge=(mesh:HorizonMeshData,x:number)=>{const result=new Map<number,number[]>();for(let i=0;i<mesh.positions.length;i+=3)if(mesh.positions[i]+mesh.tx===x)result.set(mesh.positions[i+2]+mesh.ty,[mesh.positions[i+1],...mesh.normals.slice(i,i+3)]);return result;};
+    expect(edge(left,24576)).toEqual(edge(right,24576));
+    expect(Array.from(left.normals).some((v,i)=>i%3!==1&&v!==0)).toBe(true);
+    expect(left.indices.length).toBeGreaterThan(0);
+  });
+  it('omits hidden ocean bed while preserving the volumetric gate roof',()=>{
+    expect(meshOrganicHorizon(0,44032,512).indices.length).toBe(0);
+    const gate=meshOrganicHorizon(15360,10240,512);
+    expect(Array.from(gate.normals).some((v,i)=>i%3===1&&v<0)).toBe(true);
   });
 });

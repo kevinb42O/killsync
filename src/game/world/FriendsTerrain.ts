@@ -1,4 +1,10 @@
+import { scenicTransitAir, scenicRailColumns, scenicTransitProtected, scenicTransitSurface, scenicStructureRanges, scenicRailFloor, scenicRailCeiling } from './FriendsRailInfrastructure';
+import { ISLAND_SEA_LEVEL, ISLAND_ARCH, ISLAND_LANDMARK_SITES, islandCoastDistance, islandMountainHeight, islandSeaStackHeight, islandVolcanoHeight, ISLAND_LAKES, islandLakeRadius, islandSmooth, islandArchRange, createIslandRuins, type IslandStoneBox } from './FriendsIsland';
 import { caveColumn, caveEntranceFloor, explorationCave } from './FriendsCave';
+import { FRIENDS_AIRPAD } from './FriendsRegion';
+import { castleTerrainHeight, HIGHFALL_CASTLE } from './FriendsCastle';
+import { createCastleStairs, type CastleStairs } from './FriendsCastleStairs';
+let castleStairsField:CastleStairs|undefined;
 /** Deterministic, editable volumetric ground. Simulation, prediction and mesh
  * generation consume this same field; no invisible plane remains below a dig. */
 export const FRONTIER_SIZE = 48_000;
@@ -10,15 +16,16 @@ export const TERRAIN_BOTTOM = -512;
 export type TerrainMaterial = 0 | 1 | 2 | 3 | 4; // air, soil, stone, copper, iron
 export type TerrainEdit = [number, number, number, TerrainMaterial];
 export type TerrainGrade = [number, number, number, number]; // centre x/y, original ground height, core radius
-export const TERRAIN_GENERATION = 2;
+export const TERRAIN_GENERATION = 4;
 export type TerrainSnapshot = { revision: number; edits: TerrainEdit[]; generation?: number; grades?: TerrainGrade[] };
 export type TerrainRay = { x: number; y: number; z: number; dx: number; dy: number; dz: number };
 export type TerrainHit = { x: number; y: number; z: number; vx: number; vy: number; vz: number; nx: number; ny: number; nz: number; distance: number; material: TerrainMaterial };
 export const FRONTIER_SITES = [
   { id: 'mine', name: 'COPPER HOLLOW', x: 6260, y: 6190, detail: 'Walk into the hillside. Mine the copper seams and smelt your cargo.', color: '#e4a16b' },
   { id: 'forest', name: 'CEDAR REACH', x: 10700, y: 4200, detail: 'A deep woodland. Bring timber home and plant the next forest.', color: '#95b989' },
-  { id: 'ridge', name: 'HIGHFALL RIDGE', x: 15600, y: 8700, detail: 'An alpine landing site above rich iron deposits.', color: '#c2d4df' },
-  { id: 'coast', name: 'THE LONG SHORE', x: 28700, y: 19000, detail: 'A distant coast of salt water, ridges and scattered salvage.', color: '#82c9cc' },
+  { id: 'ridge', name: 'HIGHFALL RIDGE', x: 15600, y: 8700, detail: 'A towering alpine range above the World Gate and rich iron deposits.', color: '#c2d4df' },
+  { id: 'coast', name: 'THE LONG SHORE', x: 27600, y: 19000, detail: 'A distant coast of salt water, ridges and scattered salvage.', color: '#82c9cc' },
+  ...ISLAND_LANDMARK_SITES,
 ] as const;
 const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
 export function terrainHash(x: number, y: number, z = 0) {
@@ -35,8 +42,8 @@ function rollingGround(x: number, y: number) {
   return 96 + terrainNoise(x / 2200, y / 2200) * 760 + terrainNoise(x / 550, y / 550) * 144;
 }
 const gridHeight = (h: number) => Math.max(TERRAIN_BOTTOM + 96, Math.round(h / VOXEL_SIZE) * VOXEL_SIZE);
-export const FRIENDS_AIRFIELD_HEIGHT = gridHeight(rollingGround(4704,5728));
-export const FRIENDS_ARRIVAL_HEIGHT = gridHeight(rollingGround(5904,5712));
+const LEGACY_AIRFIELD_HEIGHT = gridHeight(rollingGround(4704,5728));
+const LEGACY_ARRIVAL_HEIGHT = gridHeight(rollingGround(5904,5712));
 export const FRIENDS_CAVE_HEIGHT = gridHeight(rollingGround(6000,6192));
 export const FRIENDS_LAKE_LEVEL = gridHeight(rollingGround(7440,6520)) - 64;
 function grade(h: number, x: number, y: number, cx: number, cy: number, top: number, core: number, collar: number) {
@@ -55,11 +62,11 @@ export function legacyTerrainHeight(x: number, y: number) {
   const beyond=smooth(Math.max(x-10500,y-11000,1600-x,2400-y)/1300);
   return gridHeight(landmarks(beyond*rollingGround(x,y),x,y));
 }
-export function baseTerrainHeight(x: number, y: number) {
+export function previousTerrainHeight(x: number, y: number) {
   // The same terrain field covers the whole world. No rectangular basin mask.
   let h=landmarks(rollingGround(x,y),x,y,false);
-  h=grade(h,x,y,4704,5728,FRIENDS_AIRFIELD_HEIGHT,220,420);
-  h=grade(h,x,y,5904,5712,FRIENDS_ARRIVAL_HEIGHT,160,380);
+  h=grade(h,x,y,4704,5728,LEGACY_AIRFIELD_HEIGHT,220,420);
+  h=grade(h,x,y,5904,5712,LEGACY_ARRIVAL_HEIGHT,160,380);
   // A dry hollow keeps existing construction at its saved elevation. Water
   // is absent; removing it must not raise terrain into older player builds.
   const hollow=Math.hypot((x-7440)/1040,(y-6520)/710);
@@ -68,12 +75,96 @@ export function baseTerrainHeight(x: number, y: number) {
   const mouth=caveEntranceFloor(x,y);
   return mouth===undefined?gridHeight(h):Math.min(gridHeight(h),mouth);
 }
+/** Generation 4: an eroded archipelago silhouette, continental shelf, low
+ * beaches and dunes. Cave protection follows the authored rooms themselves. */
+export function baseTerrainHeight(x: number, y: number) {
+  const coast=islandCoastDistance(x,y);
+  const mountains=Math.max(islandMountainHeight(x,y,terrainNoise),islandVolcanoHeight(x,y));
+  const inland=rollingGround(x,y)+mountains;
+  // A submerged shelf rises continuously into the swash zone. Sand spits and
+  // dunes undulate above it before blending into hills; no vertical map lip.
+  const shelf=ISLAND_SEA_LEVEL+coast*.12;
+  const duneEnvelope=islandSmooth(coast/480)*(1-islandSmooth((coast-900)/1200));
+  const dune= (28+48*terrainNoise(x/260,y/420)
+    +42*Math.pow(.5+.5*Math.sin(coast/150+x/700+y/900),2))*duneEnvelope;
+  const beach=ISLAND_SEA_LEVEL+Math.max(0,coast)*.15+dune;
+  const beachWidth=1500+600*terrainNoise(x/4200+8,y/4200);
+  let h=coast<0?shelf:beach+(inland-beach)*islandSmooth((coast-650)/beachWidth);
+  h=Math.max(-416,h);
+  // Two small cave approach collars preserve the authored mouths only.
+  const mouthBlend=1-islandSmooth((Math.hypot(x-6384,y-5152)-300)/380);
+  h=h*(1-mouthBlend)+previousTerrainHeight(x,y)*mouthBlend;
+  const copperBlend=1-islandSmooth((Math.hypot((x-6610)/1.2,y-6190)-360)/260);
+  h=h*(1-copperBlend)+previousTerrainHeight(x,y)*copperBlend;
+  const lake=ISLAND_LAKES[0],r=islandLakeRadius(x,y,lake);
+  if(r<1.45){
+    const bed=lake.level-224+80*terrainNoise(x/330,y/310);
+    h=bed+(h-bed)*islandSmooth((r-.64)/.81);
+  }
+  // Keep roofs without projecting a rectangular plateau onto the landscape.
+  const entrance=caveEntranceFloor(x,y);
+  if(entrance===undefined)for(const [,roof] of caveColumn(x,y))h=Math.max(h,roof+64);
+  else h=Math.min(h,entrance);
+  const mountain=castleTerrainHeight(x,y,Math.min(5856,Math.max(h,islandSeaStackHeight(x,y))));
+  return gridHeight(castleStairsField?.terrainHeight(x,y,mountain)??mountain);
+}
+// Vehicles and arrivals follow their individual terrain cells, without grading.
+export const FRIENDS_AIRFIELD_HEIGHT=baseTerrainHeight(FRIENDS_AIRPAD.x,FRIENDS_AIRPAD.y);
+/** A permanent voxel deck shared by rendering, prediction and simulation. */
+export const FRIENDS_SPAWN_PLATFORM = {
+  x: 5904, y: 5712, size: 288, thickness: 64, clearance: 96,
+  top: Math.max(...Array.from({ length: 81 }, (_, i) =>
+    baseTerrainHeight(5776 + (i % 9) * 32, 5584 + Math.floor(i / 9) * 32))) + 32,
+} as const;
+export const FRIENDS_ARRIVAL_HEIGHT=FRIENDS_SPAWN_PLATFORM.top;
+/** Salvage pickup in a surveyed clearing about 750m east-northeast of arrival. */
+export const FRIENDS_HAULING_PLATFORM = {
+  x: 14800, y: 4464, size: 288, thickness: 64, clearance: 128,
+  top: Math.max(...Array.from({ length: 81 }, (_, i) =>
+    baseTerrainHeight(14672 + (i % 9) * 32, 4336 + Math.floor(i / 9) * 32))) + 32,
+} as const;
+export const FRIENDS_FIXED_PLATFORMS = [FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORM] as const;
+export function friendsFixedPlatformAt(x:number,y:number){
+  return FRIENDS_FIXED_PLATFORMS.find(p=>x>=p.x-p.size/2&&x<p.x+p.size/2&&y>=p.y-p.size/2&&y<p.y+p.size/2);
+}
+export function friendsFixedPlatformProtected(x:number,y:number,z:number){
+  const p=friendsFixedPlatformAt(x,y);return Boolean(p&&z>=p.top-p.thickness&&z<p.top+p.clearance);
+}
+export function friendsSpawnPlatformContains(x: number, y: number) {
+  const p = FRIENDS_SPAWN_PLATFORM;
+  return x >= p.x - p.size / 2 && x < p.x + p.size / 2
+    && y >= p.y - p.size / 2 && y < p.y + p.size / 2;
+}
+export function friendsSpawnProtected(x: number, y: number, z: number) {
+  const p = FRIENDS_SPAWN_PLATFORM;
+  return friendsSpawnPlatformContains(x, y) && z >= p.top - p.thickness && z < p.top + p.clearance;
+}
+export function frontierSiteElevation(site: {id:string;x:number;y:number}) {
+  if(site.id==='arch')return islandArchRange(site.x,site.y)?.[0]??baseTerrainHeight(site.x,site.y);
+  if(site.id==='citadel')return HIGHFALL_CASTLE.floor+64;
+  return baseTerrainHeight(site.x,site.y)+(site.id==='portal'?288:0);
+}
+export const CASTLE_STAIRS = createCastleStairs(baseTerrainHeight);
+castleStairsField=CASTLE_STAIRS;
+export const ISLAND_RUINS = createIslandRuins(baseTerrainHeight);
+const ruinTiles = new Map<string, IslandStoneBox[]>();
+for(const b of ISLAND_RUINS)for(let x=Math.floor((b.x-b.w/2)/512);x<=Math.floor((b.x+b.w/2)/512);x++)for(let y=Math.floor((b.y-b.d/2)/512);y<=Math.floor((b.y+b.d/2)/512);y++){
+  const k=`${x},${y}`,list=ruinTiles.get(k)||[];list.push(b);ruinTiles.set(k,list);
+}
+const noRuins:IslandStoneBox[]=[],ruinColumns=new Map<string,IslandStoneBox[]>();
+export function islandRuinsAt(x:number,y:number){
+  const boxes=ruinTiles.get(`${Math.floor(x/512)},${Math.floor(y/512)}`);if(!boxes)return noRuins;
+  const k=`${Math.floor(x/32)},${Math.floor(y/32)}`;let column=ruinColumns.get(k);
+  if(!column){const sx=Math.floor(x/32)*32+16,sy=Math.floor(y/32)*32+16;column=boxes.filter(b=>sx>=b.x-b.w/2&&sx<b.x+b.w/2&&sy>=b.y-b.d/2&&sy<b.y+b.d/2);ruinColumns.set(k,column);}
+  return column;
+}
 export function terrainProtected(x: number, y: number) {
   // Vegetation clearance around arrival and the aircraft. This is not an
   // excavation reserve: players may reshape this ground.
-  return Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - 4700, y - 5720) < 300;
+  return Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
 }
 export function naturalCave(x: number, y: number, z: number, roofLimit=Infinity) {
+  const arch=islandArchRange(x,y);if(arch&&z>=arch[0]&&z<arch[1])return true;
   if(z<roofLimit&&explorationCave(x,y,z))return true;
   // Preserve authored floors and ramp ledges where random mining seams cross
   // the labyrinth. Player edits still take precedence in material().
@@ -93,17 +184,21 @@ export class FriendsTerrain {
   constructor(saved?: TerrainSnapshot) { if (saved) this.restore(saved); }
   restore(saved: TerrainSnapshot) {
     this.edits.clear(); this.columns.clear();this.heights.clear();this.grades=[];this.gradeTiles.clear();
-    for(const g of saved.grades || [])if(validTerrainGrade(g))this.addGrade(g,false);
-    if(saved.generation!==TERRAIN_GENERATION)for(const e of saved.edits || [])if(validTerrainEdit(e)) {const x=(e[0]+.5)*32,y=(e[1]+.5)*32; if(legacyTerrainHeight(x,y)!==baseTerrainHeight(x,y))this.addGrade([x,y,legacyTerrainHeight(x,y),48],false);}
-    for (const e of (saved.edits || []).slice(0, 6000)) if (validTerrainEdit(e)) this.write(e[0], e[1], e[2], e[3]);
+    // The landscape redesign intentionally retires former flat settlement
+    // grades and excavations. New edits persist normally in generation 4.
+    if(saved.generation===TERRAIN_GENERATION){
+      for(const g of saved.grades || [])if(validTerrainGrade(g))this.addGrade(g,false);
+      for(const e of (saved.edits || []).slice(0,6000))if(validTerrainEdit(e) && !friendsFixedPlatformProtected((e[0]+.5)*32,(e[1]+.5)*32,(e[2]+.5)*32))this.write(e[0],e[1],e[2],e[3]);
+    }
     this.revision = Number.isSafeInteger(saved.revision) ? saved.revision : 0;
   }
   snapshot(): TerrainSnapshot { return { generation:TERRAIN_GENERATION, grades:this.grades.map(g=>[...g] as TerrainGrade), revision: this.revision, edits: [...this.edits].map(([k, m]) => [...k.split(',').map(Number), m] as TerrainEdit) }; }
   height(vx: number, vy: number) { const k = `${vx},${vy}`; let h = this.heights.get(k); if (h === undefined) { h = this.surfaceHeight((vx + .5) * VOXEL_SIZE, (vy + .5) * VOXEL_SIZE); if (this.heights.size > 100000) this.heights.clear(); this.heights.set(k, h); } return h; }
   surfaceHeight(x: number,y: number) {
+    const platform=friendsFixedPlatformAt(x,y);if(platform)return platform.top;
     const natural=baseTerrainHeight(x,y);let h=natural;
-    for(const g of this.gradeTiles.get(`${Math.floor(x/512)},${Math.floor(y/512)}`) || [])h=Math.min(h,grade(natural,x,y,g[0],g[1],g[2],g[3],320));
-    return gridHeight(h);
+    for(const g of this.gradeTiles.get(`${Math.floor(x/512)},${Math.floor(y/512)}`) || []){const adjusted=grade(natural,x,y,g[0],g[1],g[2],g[3],320);h=natural<g[2]?Math.max(h,adjusted):Math.min(h,adjusted);}
+    return scenicTransitSurface(x,y,gridHeight(h));
   }
   addGrade(g: TerrainGrade, revise=true) {
     if(!validTerrainGrade(g))return;
@@ -114,11 +209,25 @@ export class FriendsTerrain {
     this.heights.clear();if(revise)this.revision++;
   }
   material(vx: number, vy: number, vz: number): TerrainMaterial {
-    const edit = this.edits.get(key(vx, vy, vz)); return edit ?? this.naturalMaterial(vx,vy,vz);
+    const x=(vx+.5)*32,y=(vy+.5)*32,z=(vz+.5)*32;
+    if (friendsFixedPlatformProtected(x,y,z)) return z < friendsFixedPlatformAt(x,y)!.top ? 2 : 0;
+    const edit = this.edits.get(key(vx, vy, vz));
+    if(edit!==undefined)return edit;
+    if(scenicTransitAir(x,y,z))return 0;
+    return this.naturalMaterial(vx,vy,vz);
+  }
+  /** Hidden voxel backing remains mineable, but cannot erase the paving
+   * beneath a fan stair or become a phantom floor above its exact surface. */
+  exposedMaterial(vx:number,vy:number,vz:number):TerrainMaterial {
+    const value=this.material(vx,vy,vz);if(!value||this.edits.has(key(vx,vy,vz)))return value;
+    const boxes=islandRuinsAt((vx+.5)*32,(vy+.5)*32),z=(vz+.5)*32;
+    const owner=boxes.find(b=>z>=b.z&&z<b.z+b.h);
+    return owner?.detail==='stair-core'&&!boxes.some(b=>b.detail!=='stair-core'&&z>=b.z&&z<b.z+b.h)?0:value;
   }
   private naturalMaterial(vx: number, vy: number, vz: number): TerrainMaterial {
     const x = (vx + .5) * VOXEL_SIZE, y = (vy + .5) * VOXEL_SIZE, z = (vz + .5) * VOXEL_SIZE;
     const top=this.height(vx,vy);
+    if(islandRuinsAt(x,y).some(b=>z>=b.z&&z<b.z+b.h))return 2;
     if (x < 0 || y < 0 || x >= FRONTIER_SIZE || y >= FRONTIER_SIZE || z < TERRAIN_BOTTOM || z >= top) return 0;
     // Keep two solid foundation layers under migrated player work; new caves
     // can continue below them without removing the existing build's support.
@@ -133,7 +242,7 @@ export class FriendsTerrain {
     return 2;
   }
   set(vx: number, vy: number, vz: number, material: TerrainMaterial) {
-    if (!validTerrainEdit([vx, vy, vz, material])) return false;
+    if (!validTerrainEdit([vx, vy, vz, material]) || friendsFixedPlatformProtected((vx+.5)*32,(vy+.5)*32,(vz+.5)*32) || scenicTransitProtected((vx+.5)*32,(vy+.5)*32,(vz+.5)*32)) return false;
     const k = key(vx,vy,vz);
     if (material === this.naturalMaterial(vx,vy,vz)) {
       this.edits.delete(k); const column = this.columns.get(`${vx},${vy}`); column?.delete(vz); if (!column?.size) this.columns.delete(`${vx},${vy}`);
@@ -153,26 +262,35 @@ export class FriendsTerrain {
     if (changes) for (const z of changes) { bottom = Math.min(bottom, z - 1); top = Math.max(top, z + 1); }
     const x = (vx + .5) * VOXEL_SIZE, y = (vy + .5) * VOXEL_SIZE;
     if ((x > 5980 && x < 7000 && Math.abs(y - 6192) < 200) || x > 10000) bottom = Math.min(bottom, x>5980 && x<7000 && Math.abs(y-6192)<200 ? FRIENDS_CAVE_HEIGHT/32-3 : -8);
+    const arch=islandArchRange(x,y);if(arch)bottom=Math.min(bottom,arch[0]/32-1);
+    for(const b of islandRuinsAt(x,y)){bottom=Math.min(bottom,b.z/32-1);top=Math.max(top,(b.z+b.h)/32);}
     for(const [floor]of caveColumn(x,y))bottom=Math.min(bottom,Math.floor(floor/32)-1);
+    for(const [lo]of scenicStructureRanges(x,y))bottom=Math.min(bottom,Math.floor((lo-32)/32));
+    for(const p of scenicRailColumns(x,y))bottom=Math.min(bottom,Math.floor((p.z-96)/32));
     return { bottom: Math.max(-16, bottom), top };
   }
   floor(x: number, y: number, z: number, step = FRIENDS_STEP_HEIGHT): number | undefined {
+    const stair=CASTLE_STAIRS.floor(x,y,z,step);
+    const rail=scenicRailFloor(x,y,z,step);
+    let best=Math.max(stair??-Infinity,rail??-Infinity);
     const vx = Math.floor(x / VOXEL_SIZE), vy = Math.floor(y / VOXEL_SIZE);
     for (let vz = Math.floor((z + step) / VOXEL_SIZE) - 1; vz >= -16; vz--) {
-      if (this.material(vx, vy, vz) && !this.material(vx, vy, vz + 1)) return (vz + 1) * VOXEL_SIZE;
+      if (this.exposedMaterial(vx, vy, vz) && !this.exposedMaterial(vx, vy, vz + 1)) {best=Math.max(best,(vz+1)*VOXEL_SIZE);break;}
     }
-    return undefined;
+    return Number.isFinite(best)?best:undefined;
   }
   supports(x: number, y: number, z: number) {
+    const stair=CASTLE_STAIRS.floor(x,y,z,0);if(stair!==undefined&&Math.abs(stair-z)<.001)return true;
     const top=Math.round(z/VOXEL_SIZE);if(Math.abs(top*VOXEL_SIZE-z)>=1)return false;
     const vx=Math.floor(x/VOXEL_SIZE),vy=Math.floor(y/VOXEL_SIZE);
-    return Boolean(this.material(vx,vy,top-1)) && !this.material(vx,vy,top);
+    return Boolean(this.exposedMaterial(vx,vy,top-1)) && !this.exposedMaterial(vx,vy,top);
   }
   ceiling(x: number, y: number, z: number): number | undefined {
+    const deck=scenicRailCeiling(x,y,z);
     const vx = Math.floor(x / VOXEL_SIZE), vy = Math.floor(y / VOXEL_SIZE);
-    const max = Math.ceil(this.height(vx, vy) / VOXEL_SIZE) + 2;
-    for (let vz = Math.floor((z + .1) / VOXEL_SIZE); vz <= max; vz++) if (vz * VOXEL_SIZE > z + .1 && this.material(vx, vy, vz)) return vz * VOXEL_SIZE;
-    return undefined;
+    const max = Math.ceil(Math.max(this.height(vx,vy),...islandRuinsAt(x,y).map(b=>b.z+b.h)) / VOXEL_SIZE) + 2;
+    for (let vz = Math.floor((z + .1) / VOXEL_SIZE); vz <= max; vz++) if (vz * VOXEL_SIZE > z + .1 && this.exposedMaterial(vx, vy, vz)) return Math.min(deck??Infinity,vz*VOXEL_SIZE);
+    return deck;
   }
   collide(p: { x: number; y: number }, z: number, radius: number, bodyHeight = 50, step = FRIENDS_STEP_HEIGHT) {
     let collided = false;
@@ -180,7 +298,13 @@ export class FriendsTerrain {
       const xmin = Math.floor((p.x - radius) / VOXEL_SIZE), xmax = Math.floor((p.x + radius) / VOXEL_SIZE), ymin = Math.floor((p.y - radius) / VOXEL_SIZE), ymax = Math.floor((p.y + radius) / VOXEL_SIZE);
       for (let vx = xmin; vx <= xmax; vx++) for (let vy = ymin; vy <= ymax; vy++) {
         let solid = false;
-        for (let vz = Math.floor((z + step + .1) / VOXEL_SIZE); vz * VOXEL_SIZE < z + bodyHeight - .1; vz++) if (this.material(vx, vy, vz)) { solid = true; break; }
+        for (let vz = Math.floor((z + step + .1) / VOXEL_SIZE); vz * VOXEL_SIZE < z + bodyHeight - .1; vz++) if (this.material(vx, vy, vz)) {
+          const owner=islandRuinsAt((vx+.5)*32,(vy+.5)*32).find(b=>(vz+.5)*32>=b.z&&(vz+.5)*32<b.z+b.h);
+          // Only the recessed stair core yields to the exact fan surface.
+          // A wall sharing its cell must retain ordinary solid collision.
+          if(owner?.detail==='stair-core')continue;
+          solid = true; break;
+        }
         if (!solid) continue;
         const cx = (vx + .5) * VOXEL_SIZE, cy = (vy + .5) * VOXEL_SIZE, nearX = Math.max(cx - 16, Math.min(cx + 16, p.x)), nearY = Math.max(cy - 16, Math.min(cy + 16, p.y));
         const dx = p.x - nearX, dy = p.y - nearY, distance = Math.hypot(dx, dy);
@@ -191,7 +315,7 @@ export class FriendsTerrain {
         collided = true;
       }
     }
-    return collided;
+    return CASTLE_STAIRS.collide(p,z,radius)||collided;
   }
   wallContact(position: { x: number; y: number }, z: number, radius: number) {
     const probe = { ...position };
@@ -215,7 +339,7 @@ export class FriendsTerrain {
   }
 }
 export function validTerrainEdit(e: unknown): e is TerrainEdit {
-  return Array.isArray(e) && e.length === 4 && e.every(Number.isSafeInteger) && e[0] >= 0 && e[0] < FRONTIER_SIZE / VOXEL_SIZE && e[1] >= 0 && e[1] < FRONTIER_SIZE / VOXEL_SIZE && e[2] >= -16 && e[2] < 192 && e[3] >= 0 && e[3] <= 4;
+  return Array.isArray(e) && e.length === 4 && e.every(Number.isSafeInteger) && e[0] >= 0 && e[0] < FRONTIER_SIZE / VOXEL_SIZE && e[1] >= 0 && e[1] < FRONTIER_SIZE / VOXEL_SIZE && e[2] >= -16 && e[2] < 256 && e[3] >= 0 && e[3] <= 4;
 }
 
 export function validTerrainGrade(g: unknown): g is TerrainGrade {return Array.isArray(g) && g.length===4 && g.every(Number.isFinite) && g[0]>=0 && g[0]<FRONTIER_SIZE && g[1]>=0 && g[1]<FRONTIER_SIZE && g[2]>=TERRAIN_BOTTOM+96 && g[2]<=6000 && g[2]%32===0 && g[3]>=32 && g[3]<=512;}

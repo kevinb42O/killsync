@@ -1,3 +1,7 @@
+import { FriendsWorldHost, FriendsWorldGuest } from './FriendsWorldReplication';
+import { FRIENDS_SESSION_PROTOCOL } from './FriendsCrewIdentity';
+import { compactSnapshotWirePayload, expandSnapshotWirePayload, SnapshotReplicator, SnapshotDecoder } from './snapshotReplication';
+import type { CoopSnapshot } from './CoopSimulation';
 import {
   clampInputFrame,
   isMultiplayerWireMessage,
@@ -37,6 +41,9 @@ type ManagedPeer = {
   inputChannel?: RTCDataChannel;
   stateChannel?: RTCDataChannel;
   reliableChannel?: RTCDataChannel;
+  worldChannel?: RTCDataChannel;
+  negotiationTimer?: ReturnType<typeof setTimeout>;
+  friendsAdmitted?: boolean;
   estimatedOneWayMs: number;
   latencySampledAt: number;
   disconnectTimer?: number | NodeJS.Timeout;
@@ -45,6 +52,8 @@ const DISCONNECTED_PEER_GRACE_MS = 12_000;
 
 export interface ManualWebRTCSessionOptions {
   role: MultiplayerRole;
+  friends?: boolean;
+  relayOnly?: boolean;
   sessionId?: string;
   iceServers?: RTCIceServer[];
   onPeerChange?: (peers: MultiplayerPeerInfo[]) => void;
@@ -66,6 +75,17 @@ export class ManualWebRTCSession {
   readonly role: MultiplayerRole;
   readonly sessionId: string;
   private readonly iceServers: RTCIceServer[];
+  readonly friends: boolean;
+  private readonly relayOnly: boolean;
+  private readonly friendsHost = new FriendsWorldHost();
+  private readonly friendsReplicator = new SnapshotReplicator();
+  private readonly friendsDecoder = new SnapshotDecoder();
+  private readonly friendsGuest = new FriendsWorldGuest(message=>{this.sendEvent({type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'friends_sync',payload:message});},()=>{this.friendsDecoder.reset();this.latestStateTick=-1;this.friendsStateReceivedAt=0;this.snapshotAssemblers.clear();});
+  friendsStateReceivedAt = 0;
+  get friendsEpoch() { return this.role==='host'?this.friendsHost.epoch:this.friendsGuest.epoch; }
+  get friendsSyncProgress() { return this.friendsGuest.assembler.progress; }
+  admitFriendsPeer(peerId:string) { const p=this.peers.get(peerId);if(p)p.friendsAdmitted=true; }
+  resetFriendsWorld() { this.friendsHost.reset();this.friendsReplicator.reset(); }
   private readonly peers = new Map<string, ManagedPeer>();
   private onPeerChange?: ManualWebRTCSessionOptions['onPeerChange'];
   private onInput?: ManualWebRTCSessionOptions['onInput'];
@@ -78,6 +98,8 @@ export class ManualWebRTCSession {
 
   constructor(options: ManualWebRTCSessionOptions) {
     this.role = options.role;
+    this.friends = options.friends === true;
+    this.relayOnly = options.relayOnly === true;
     this.sessionId = options.sessionId || createId('session');
     // The lobby service may provide short-lived TURN credentials. Redundant STUN
     // ensures WAN traversal succeeds without requiring a private server.
@@ -135,45 +157,55 @@ export class ManualWebRTCSession {
     this.bindChannel(peer, peer.inputChannel, 'input');
     this.bindChannel(peer, peer.stateChannel, 'state');
     this.bindChannel(peer, peer.reliableChannel, 'reliable');
+    if(this.friends){peer.worldChannel=peer.connection.createDataChannel('friends-world',{ordered:true});this.bindChannel(peer,peer.worldChannel,'friends-world');}
 
+    try {
     await peer.connection.setLocalDescription(await peer.connection.createOffer());
-    await waitForIceGathering(peer.connection);
+    await waitForIceGathering(peer.connection, this.friends);
     return encodeSignal({
       version: MULTIPLAYER_PROTOCOL_VERSION,
+      ...(this.friends ? {friendsProtocol:FRIENDS_SESSION_PROTOCOL} : {}),
       kind: 'offer',
       sessionId: this.sessionId,
       peerId,
       description: peer.connection.localDescription!.toJSON(),
     });
+    } catch(error) {this.disconnectPeer(peerId);throw error;}
   }
 
   /** Guest-only: accept a host offer and return one copyable answer. */
   async acceptOffer(offerCode: string): Promise<string> {
     this.assertRole('guest');
     const offer = decodeSignal(offerCode, 'offer');
+    this.checkFriendsSignal(offer);
     this.remoteSessionId = offer.sessionId;
     const peer = this.createPeer(offer.peerId);
+    try {
     await peer.connection.setRemoteDescription(offer.description);
     await peer.connection.setLocalDescription(await peer.connection.createAnswer());
-    await waitForIceGathering(peer.connection);
+    await waitForIceGathering(peer.connection, this.friends);
     return encodeSignal({
       version: MULTIPLAYER_PROTOCOL_VERSION,
+      ...(this.friends ? {friendsProtocol:FRIENDS_SESSION_PROTOCOL} : {}),
       kind: 'answer',
       sessionId: offer.sessionId,
       peerId: offer.peerId,
       description: peer.connection.localDescription!.toJSON(),
     });
+    } catch(error) {this.disconnectPeer(peer.peerId);throw error;}
   }
 
   /** Host-only: finish the connection after a friend returns their answer. */
   async acceptAnswer(answerCode: string): Promise<void> {
     this.assertRole('host');
     const answer = decodeSignal(answerCode, 'answer');
+    this.checkFriendsSignal(answer);
     if (answer.sessionId !== this.sessionId) {
       throw new Error('This answer belongs to a different co-op session.');
     }
     const peer = this.peers.get(answer.peerId);
     if (!peer) throw new Error('This answer does not match an offer created in this browser.');
+    if(peer.connection.remoteDescription?.sdp===answer.description.sdp)return;
     await peer.connection.setRemoteDescription(answer.description);
   }
 
@@ -186,6 +218,20 @@ export class ManualWebRTCSession {
 
   broadcastState(frame: MultiplayerStateFrame, payloadForPeer?: (peerId: string) => unknown) {
     if (this.peers.size === 0) return;
+    if(this.friends && (frame.payload as CoopSnapshot)?.friends){
+      const snapshot=frame.payload as CoopSnapshot;this.friendsHost.update(snapshot);
+      const ids=[...this.peers.values()].filter(p=>p.friendsAdmitted&&p.worldChannel?.readyState==='open').map(p=>p.peerId);
+      this.friendsHost.pump(ids,performance.now(),(id,packet)=>this.send(this.peers.get(id)?.worldChannel,packet),m=>this.onError?.(m));
+      for(const id of ids){const p=this.peers.get(id)!;if(p.stateChannel?.readyState!=='open')continue;
+        const interest=(payloadForPeer?payloadForPeer(id):snapshot) as CoopSnapshot;
+        const motion=this.friendsHost.motion(id,interest) as {snapshot:CoopSnapshot}|undefined;if(!motion)continue;
+        const payload=compactSnapshotWirePayload({...motion,snapshot:this.friendsReplicator.payloadFor(id,motion.snapshot,frame.tick)});
+        const packets=encodeSnapshotPackets(JSON.stringify({...frame,payload}),frame.tick);
+        if(!packets.length||p.stateChannel.bufferedAmount+packets.reduce((a,b)=>a+b.byteLength,0)>64000){this.friendsReplicator.reset(id);continue;}
+        for(const packet of packets)if(!this.send(p.stateChannel,packet,false)){this.friendsReplicator.reset(id);break;}
+      }
+      return;
+    }
     for (const peer of this.peers.values()) {
       if (peer.stateChannel?.readyState !== 'open') continue;
       const peerFrame = payloadForPeer ? { ...frame, payload: payloadForPeer(peer.peerId) } : frame;
@@ -221,6 +267,7 @@ export class ManualWebRTCSession {
     const peer = this.peers.get(peerId);
     if (!peer) return false;
     clearTimeout(peer.disconnectTimer as number);
+    clearTimeout(peer.negotiationTimer);this.friendsHost.remove(peerId);this.friendsReplicator.reset(peerId);
     // Remove before closing: `close()` can synchronously emit another state
     // transition, which must not recursively try to remove the same peer.
     this.peers.delete(peerId);
@@ -228,6 +275,7 @@ export class ManualWebRTCSession {
     peer.inputChannel?.close();
     peer.stateChannel?.close();
     peer.reliableChannel?.close();
+    peer.worldChannel?.close();
     peer.connection.close();
     this.notifyPeers();
     return true;
@@ -238,10 +286,11 @@ export class ManualWebRTCSession {
     this.peers.clear();
     this.snapshotAssemblers.clear();
     for (const peer of peers) {
-      clearTimeout(peer.disconnectTimer as number);
+      clearTimeout(peer.disconnectTimer as number);clearTimeout(peer.negotiationTimer);
       peer.inputChannel?.close();
       peer.stateChannel?.close();
       peer.reliableChannel?.close();
+    peer.worldChannel?.close();
       peer.connection.close();
     }
     this.notifyPeers();
@@ -251,19 +300,23 @@ export class ManualWebRTCSession {
     const existing = this.peers.get(peerId);
     if (existing) {
       clearTimeout(existing.disconnectTimer as number);
-      existing.connection.close();
+      clearTimeout(existing.negotiationTimer);
       this.peers.delete(peerId);
+      existing.connection.onconnectionstatechange = null;
+      existing.connection.close();
     }
     this.snapshotAssemblers.delete(peerId);
-    const connection = new RTCPeerConnection({ iceServers: this.iceServers });
+    const connection = new RTCPeerConnection({ iceServers: this.iceServers, ...(this.friends&&this.relayOnly?{iceTransportPolicy:'relay' as const}:{}) });
     const peer: ManagedPeer = { peerId, connection, estimatedOneWayMs: 0, latencySampledAt: 0 };
     this.peers.set(peerId, peer);
+    if(this.friends)peer.negotiationTimer=setTimeout(()=>{if(this.peers.get(peerId)===peer&&connection.connectionState!=='connected')this.disconnectPeer(peerId);},35000);
     connection.onconnectionstatechange = () => {
       this.notifyPeers();
       if (connection.connectionState === 'connected') {
+        clearTimeout(peer.negotiationTimer);
         clearTimeout(peer.disconnectTimer as number);
       } else if (connection.connectionState === 'disconnected') {
-        this.onError?.(`Connection to ${peerId} was interrupted; attempting to reconnect.`);
+        if(!this.friends)this.onError?.(`Connection to ${peerId} was interrupted; attempting to reconnect.`);
         clearTimeout(peer.disconnectTimer as number);
         // Browsers may briefly enter `disconnected` during a route change.
         // Do not evict immediately, but never leave a dead peer occupying a
@@ -281,7 +334,7 @@ export class ManualWebRTCSession {
       }
     };
     connection.oniceconnectionstatechange = () => {
-      if (connection.iceConnectionState === 'failed') {
+      if (!this.friends && connection.iceConnectionState === 'failed') {
         this.onError?.(`Direct connection to ${peerId} failed. Try a different host network or reconnect.`);
       }
     };
@@ -295,6 +348,8 @@ export class ManualWebRTCSession {
       } else if (event.channel.label === 'reliable') {
         peer.reliableChannel = event.channel;
         this.bindChannel(peer, event.channel, 'reliable');
+      } else if(this.friends && event.channel.label==='friends-world'){
+        peer.worldChannel=event.channel;this.bindChannel(peer,event.channel,'friends-world');
       } else {
         event.channel.close();
       }
@@ -303,15 +358,16 @@ export class ManualWebRTCSession {
     return peer;
   }
 
-  private bindChannel(peer: ManagedPeer, channel: RTCDataChannel, kind: 'input' | 'state' | 'reliable') {
+  private bindChannel(peer: ManagedPeer, channel: RTCDataChannel, kind: 'input' | 'state' | 'reliable' | 'friends-world') {
     channel.binaryType = 'arraybuffer';
     channel.onmessage = (event) => this.receiveMessage(peer.peerId, kind, event.data);
     channel.onopen = () => this.notifyPeers();
-    channel.onclose = () => this.notifyPeers();
+    channel.onclose = () => {this.notifyPeers();if(this.friends&&this.peers.get(peer.peerId)===peer&&peer.connection.connectionState==='connected'){this.onError?.('The island data channel closed. Rejoin the room.');this.disconnectPeer(peer.peerId);}};
     channel.onerror = () => this.onError?.(`The ${kind} channel with ${peer.peerId} encountered an error.`);
   }
 
-  private receiveMessage(peerId: string, kind: 'input' | 'state' | 'reliable', raw: unknown) {
+  private receiveMessage(peerId: string, kind: 'input' | 'state' | 'reliable' | 'friends-world', raw: unknown) {
+    if(this.friends&&kind==='friends-world'){if(this.role==='guest'&&raw instanceof ArrayBuffer)this.friendsGuest.receive(raw,performance.now());return;}
     if ((kind === 'state' && this.role !== 'guest') || (kind === 'input' && this.role !== 'host')) return;
     if (kind === 'state' && raw instanceof ArrayBuffer) {
       let assembler = this.snapshotAssemblers.get(peerId);
@@ -331,9 +387,12 @@ export class ManualWebRTCSession {
         this.onInput?.(peerId, clampInputFrame(message), peer?.estimatedOneWayMs || 0);
       } else if (kind === 'state' && message.type === 'state') {
         if (!Number.isSafeInteger(message.tick) || message.tick <= this.latestStateTick) return;
-        const accepted = this.onState?.(message);
+        let state=message;
+        if(this.friends){const motion=expandSnapshotWirePayload(message.payload) as any;const decoded=this.friendsDecoder.decode(motion?.snapshot,message.tick);if(!decoded)return;const snapshot=this.friendsGuest.decode({...motion,snapshot:decoded});if(!snapshot)return;state={...message,payload:snapshot};this.friendsStateReceivedAt=performance.now();}
+        const accepted = this.onState?.(state);
         if (accepted !== false) this.latestStateTick = message.tick;
       } else if (kind === 'reliable' && message.type === 'event') {
+        if(this.friends && this.role==='host' && message.event==='friends_sync'){const m=message.payload as any;if(m?.kind==='ack')this.friendsHost.acknowledge(peerId,m.epoch,m.revision);else if(m?.kind==='request'){this.friendsHost.request(peerId);this.friendsReplicator.reset(peerId);}return;}
         this.onEvent?.(peerId, message);
       }
     } catch {
@@ -372,6 +431,15 @@ export class ManualWebRTCSession {
 
   private assertRole(role: MultiplayerRole) {
     if (this.role !== role) throw new Error(`Only the ${role} can perform this action.`);
+  }
+
+  private checkFriendsSignal(signal: ManualSignal) {
+    if (this.friends && signal.friendsProtocol !== FRIENDS_SESSION_PROTOCOL) {
+      throw new Error('Use a Friends connection from the current version. Both friends should reload the game.');
+    }
+    if (!this.friends && signal.friendsProtocol !== undefined) {
+      throw new Error('That connection belongs to Friends mode. Open Friends mode to join.');
+    }
   }
 }
 
@@ -424,7 +492,7 @@ function isManualSignal(value: unknown): value is ManualSignal {
     && typeof signal.description.sdp === 'string';
 }
 
-async function waitForIceGathering(connection: RTCPeerConnection): Promise<void> {
+async function waitForIceGathering(connection: RTCPeerConnection, completeGathering = false): Promise<void> {
   if (connection.iceGatheringState === 'complete') return;
   await new Promise<void>((resolve) => {
     let timeout = 0;
@@ -453,7 +521,7 @@ async function waitForIceGathering(connection: RTCPeerConnection): Promise<void>
       }
       // Once we have a public STUN server-reflexive candidate, if gathering quietens for 700ms, finish early
       window.clearTimeout(silenceTimer);
-      if (hasSrflx) {
+      if (hasSrflx && !completeGathering) {
         silenceTimer = window.setTimeout(finish, 700);
       }
     };

@@ -1,7 +1,11 @@
+import { vehicleWorldPoint,vehicleLocalPoint } from './FriendsVehiclePose';
+import { FriendsScenicRailwayVisuals } from '../rendering/FriendsScenicRailwayVisuals';
 import { FriendsFrontierVisuals } from '../rendering/FriendsFrontierVisuals';
+import type { FriendsEnvironmentChange } from '../world/FriendsEnvironmentPreview';
+import { FriendsHaulingVisuals } from '../rendering/FriendsHaulingVisuals';
 import type { FrontierTool } from './FriendsFrontier';
 import { FriendsBuildVisuals } from '../rendering/FriendsBuildVisuals';
-import { getFriendsBuildPose, raycastFriendsBuild, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildPose } from './FriendsBuilding';
+import { getFriendsBuildPose, raycastFriendsBuild, friendsBuildFloor, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildPose } from './FriendsBuilding';
 import { FriendsVehicleVisuals } from '../rendering/FriendsWorldVisuals';
 import { carryOnVehicle, friendsVehicleFloor, type FriendsVehicle } from './FriendsExpedition';
 import { isCoopSpell } from '../combat/coopSpells';
@@ -36,6 +40,9 @@ import { WALL_JUMP_MAX_CAMERA_ROLL, wallJumpCameraLean } from './wallJumpPresent
 import { getCoopSkin } from './CoopSkins';
 import { ProjectileImpactVisuals } from '../rendering/ProjectileImpactVisuals';
 import type { WorldId } from '../world/WorldDefinitions';
+import { FriendsSpawnVisuals } from '../rendering/FriendsSpawnVisuals';
+import { FriendsWorldArrival } from '../rendering/FriendsWorldArrival';
+import { friendsSpawnPlatformContains, FRIENDS_SPAWN_PLATFORM } from '../world/FriendsTerrain';
 
 type PresentationParticle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; z?: number; vz?: number; gravity?: number };
 type TransientArc = { group: THREE.Group; life: number; maxLife: number };
@@ -83,8 +90,12 @@ export class MultiplayerRendererBridge {
   private readonly renderer: Renderer3D;
   private worldId: WorldId;
   private readonly tacticalVisuals: CoopTacticalVisuals;
+  private readonly scenicRailVisuals?:FriendsScenicRailwayVisuals;
   private readonly friendsVehicleVisuals: FriendsVehicleVisuals;
+  private readonly friendsHaulingVisuals: FriendsHaulingVisuals;
   private readonly frontierVisuals?: FriendsFrontierVisuals;
+  private readonly friendsSpawnVisuals?: FriendsSpawnVisuals;
+  private readonly friendsWorldArrival?: FriendsWorldArrival;
   private lastFrontierHit = '';
   private friendsTool: FrontierTool = 1;
   private friendsToolFiring = false;
@@ -151,7 +162,19 @@ export class MultiplayerRendererBridge {
       coopEnemyBatching: !(import.meta.env.DEV && new URLSearchParams(window.location.search).get('coopBatch') === '0'),
     });
     this.friendsVehicleVisuals = new FriendsVehicleVisuals(this.renderer.scene);
-    if (worldId === 'friends_frontier') this.frontierVisuals = new FriendsFrontierVisuals(this.renderer.scene, this.renderer.viewmodelScene, this.renderer.renderer, this.renderer.camera);
+    if (worldId === 'friends_frontier') { this.friendsSpawnVisuals = new FriendsSpawnVisuals(); this.renderer.scene.add(this.friendsSpawnVisuals); }
+    if(worldId==='friends_frontier'){
+      this.friendsWorldArrival=new FriendsWorldArrival();
+      this.renderer.presentationWorldRender=(renderer,scene,camera)=>this.friendsWorldArrival!.render(renderer,scene,camera);
+    }
+    this.friendsHaulingVisuals = new FriendsHaulingVisuals(this.renderer.scene,this.renderer.viewmodelScene);
+    if (worldId === 'friends_frontier') this.frontierVisuals = new FriendsFrontierVisuals(this.renderer.scene, this.renderer.viewmodelScene, this.renderer.renderer, this.renderer.camera, {
+      sun: this.renderer.dirLight, ambient: this.renderer.ambientLight,
+      fill: this.renderer.scene.getObjectByName('frontier-sky-fill') as THREE.HemisphereLight,
+      cameraKey: this.renderer.camKeyLight,
+      rim: this.renderer.scene.getObjectByName('world-counter-rim') as THREE.DirectionalLight,
+    });
+    if(worldId==='friends_frontier')this.scenicRailVisuals=new FriendsScenicRailwayVisuals(this.renderer.scene);
     this.friendsBuildVisuals = new FriendsBuildVisuals(this.renderer.scene);
     this.tacticalVisuals = new CoopTacticalVisuals(this.renderer.scene);
     this.realityBreachVisuals = new RealityBreachVisuals(this.renderer.scene);
@@ -174,6 +197,7 @@ export class MultiplayerRendererBridge {
 
   mount(container: HTMLElement) {
     this.renderer.mount(container);
+    this.friendsWorldArrival?.mount(container);
     // Fetch and decode before the player opens fire. `activate()` is still
     // called on the first click to resume the AudioContext in browsers that
     // gate audio behind a trusted user gesture.
@@ -240,10 +264,13 @@ export class MultiplayerRendererBridge {
     return { x: origin.x, y: origin.z, z: origin.y, dx: direction.x, dy: direction.z, dz: direction.y };
   }
   getFriendsBuildPose(snapshot: CoopSnapshot | null, shape: FriendsBuildShape, rotationOffset = 0) {
-    return getFriendsBuildPose(snapshot?.friends?.building?.pieces || [], this.creativeRay(), shape, rotationOffset / (Math.PI / 2), snapshot?.friends?.frontier ? this.frontierVisuals?.terrain : undefined);
+    return getFriendsBuildPose(snapshot?.friends?.building?.pieces || [], this.creativeRay(), shape, rotationOffset / (Math.PI / 2), snapshot?.friends?.frontier ? this.frontierVisuals?.terrain : undefined,snapshot?.friends?.vehicles);
   }
   getFriendsTerrain() { return this.frontierVisuals?.terrain; }
+  getFriendsEnvironment() { return this.frontierVisuals?.environmentState; }
+  setFriendsEnvironment(change:FriendsEnvironmentChange) { this.frontierVisuals?.setEnvironment(change); }
   toggleFriendsFlashlight() { this.frontierVisuals?.toggleFlashlight(); }
+  toggleFriendsNightVision() { return this.renderer.toggleFriendsNightVision(); }
   setFriendsTool(tool: FrontierTool, firing: boolean) { this.friendsTool = tool; this.friendsToolFiring = firing; }
   getFriendsBuildTarget(snapshot: CoopSnapshot | null) { return raycastFriendsBuild(snapshot?.friends?.building?.pieces || [], this.creativeRay()); }
   setFriendsBuildPreview(shape?: FriendsBuildShape, pose?: FriendsBuildPose, valid = true, finish: FriendsBuildFinish = 'stone') { this.friendsBuildVisuals.preview(shape, pose, valid, finish); }
@@ -455,6 +482,7 @@ export class MultiplayerRendererBridge {
       this.wallJumpRoll = this.wallJumpPitch = this.wallJumpRollTarget = this.wallJumpPitchTarget = 0;
       this.lastPresentedLocalX = undefined;
       this.lastPresentedLocalY = undefined;
+      this.friendsSpawnVisuals?.clear();
     }
     this.visualElapsedMs = snapshot.tick !== this.lastSnapshotTick ? snapshot.elapsedMs : Math.min(snapshot.elapsedMs + 100, this.visualElapsedMs + deltaMs);
     this.lastSnapshotTick = snapshot.tick;
@@ -468,6 +496,19 @@ export class MultiplayerRendererBridge {
     const local = (isSpectating ? snapshot.players.find(player => player.id === spectatorTargetId) : undefined)
       || snapshot.players.find(player => player.id === localPlayerId) || snapshot.players[0];
     if (!local) return;
+    const arrivals = this.friendsSpawnVisuals?.update(snapshot.players, snapshot.combatEvents, deltaMs);
+    if(arrivals?.has(localPlayerId)&&!isSpectating)this.friendsWorldArrival?.start(local.x,local.y,local.z);
+    const resetCamera = this.lastPresentedLocalX === undefined || Boolean(arrivals?.has(local.id));
+    if (resetCamera) {
+      this.renderer.resetFirstPersonPresentation();
+      this.presentationShake = 0;
+      this.localWasAirborne = false; this.localAirborneTimeMs = 0;
+      this.wallJumpRoll = this.wallJumpPitch = this.wallJumpRollTarget = this.wallJumpPitchTarget = 0;
+      this.lastPresentedJumpSequence = local.motion?.lastJumpSequence ?? -1;
+      this.lastPresentedWallJumpSequence = local.motion?.lastWallJumpSequence ?? -1;
+      this.lastPresentedDoubleJumpSequence = local.motion?.lastDoubleJumpSequence ?? -1;
+      this.lastPresentedLocalX = undefined; this.lastPresentedLocalY = undefined; this.lastPresentedVehicle = undefined;
+    }
     const localSkin = getCoopSkin(local.skinId);
     this.renderer.setCoopSuitPalette({
       primary: localSkin.palette.glow,
@@ -488,11 +529,13 @@ export class MultiplayerRendererBridge {
     const targetY = localFall?.y ?? local.y;
     const presentedAngle = localFall?.angle ?? local.angle;
     const dtSeconds = Math.max(0.001, deltaMs / 1000);
-    const standingVehicle = snapshot.friends?.vehicles.find(v => { const floor = friendsVehicleFloor([v], targetX, targetY, local.z); return floor !== undefined && Math.abs(local.z - floor) < 2; });
-    this.renderer.presentationGrounded = Boolean(snapshot.friends && (standingVehicle || local.motion?.verticalVelocity === 0));
+    const standingLoad=snapshot.friends?.building?.pieces.find(p=>p.attachment&&Math.abs((friendsBuildFloor([p],targetX,targetY,local.z,0)??Infinity)-local.z)<2);
+    const standingVehicle = !local.friendsDevFlight ? snapshot.friends?.vehicles.find(v => { if(local.friendsSeat?.vehicleId===v.id||standingLoad?.attachment?.vehicleId===v.id)return true; const floor = friendsVehicleFloor([v], targetX, targetY, local.z); return floor !== undefined && Math.abs(local.z - floor) < 2; }) : undefined;
+    const onSpawnDeck = friendsSpawnPlatformContains(local.x, local.y) && Math.abs(local.z-FRIENDS_SPAWN_PLATFORM.top) < .1 && (local.motion?.verticalVelocity ?? 0) <= 0;
+    this.renderer.presentationGrounded = Boolean(snapshot.friends && !local.friendsDevFlight && (standingVehicle || onSpawnDeck || local.motion?.verticalVelocity === 0));
     if (this.lastPresentedLocalX !== undefined && this.lastPresentedLocalY !== undefined) {
       const reference = { x: this.lastPresentedLocalX, y: this.lastPresentedLocalY, z: this.lastLocalZ };
-      if (standingVehicle && this.lastPresentedVehicle?.id === standingVehicle.id) carryOnVehicle(reference, this.lastPresentedVehicle, standingVehicle);
+      if (standingVehicle && this.lastPresentedVehicle?.id === standingVehicle.id) Object.assign(reference,vehicleWorldPoint(standingVehicle,vehicleLocalPoint(this.lastPresentedVehicle,reference)));
       const vx = (targetX - reference.x) / dtSeconds;
       const vy = (targetY - reference.y) / dtSeconds;
       const speed = Math.hypot(vx, vy);
@@ -578,7 +621,7 @@ export class MultiplayerRendererBridge {
     if (isSpectating || isFallingLocal) this.wallJumpRoll = this.wallJumpPitch = 0;
     this.renderer.presentationCameraRoll = this.wallJumpRoll;
     this.renderer.presentationCameraPitchOffset = this.wallJumpPitch;
-    const groundedInValley = snapshot.friends && (standingVehicle || (local.motion?.verticalVelocity === 0 && currentZ > 0));
+    const groundedInValley = snapshot.friends && this.renderer.presentationGrounded;
     if (currentZ > 0.08 && !groundedInValley) {
       this.localAirborneTimeMs += deltaMs;
       this.localWasAirborne = true;
@@ -599,7 +642,7 @@ export class MultiplayerRendererBridge {
     this.renderer.presentationSliding = local.sliding || local.crouching;
     // The host owns spread and reload eligibility; this only presents the
     // replicated aim state through the renderer's existing ADS camera rig.
-    this.renderer.isAimingDownSights = local.isAiming;
+    this.renderer.isAimingDownSights = local.isAiming && this.friendsTool !== 5;
     this.renderer.presentationScoped = false;
     this.renderer.rightArmRoot.visible = !creativeBuilding && !isCoopSpell(selectedWeaponId);
     this.renderer.weaponRoot.visible = selectedWeaponId === 'plasma_gun' && !local.carryingHostage && !creativeBuilding;
@@ -682,6 +725,7 @@ export class MultiplayerRendererBridge {
     // module bought and triggered in the same snapshot can animate at once.
     this.syncPassiveModules(snapshot, local.id, !useThirdPerson);
     this.consumeCombatEvents(snapshot.combatEvents, localPlayerId, deltaMs);
+    if (resetCamera) this.presentationShake = 0;
     this.projectileImpactVisuals.update(deltaMs);
     this.renderState.particles = this.combatParticles;
     this.renderState.screenShake = this.presentationShake;
@@ -691,11 +735,15 @@ export class MultiplayerRendererBridge {
     this.syncRemotePlayers(snapshot, localPlayerId, isSpectating || Boolean(pilotedVehicle));
     this.structureVisuals.update(snapshot.structures || [], snapshot.elapsedMs);
     this.friendsVehicleVisuals.update(snapshot.friends, snapshot.elapsedMs);
+    this.scenicRailVisuals?.update(this.renderer.camera,Boolean(snapshot.friends?.scenicRailway));
     this.friendsBuildVisuals.update(snapshot.friends?.building);
-    this.frontierVisuals?.update(snapshot.friends?.frontier, local.x, local.y, snapshot.elapsedMs, pilotedVehicle || isSpectating ? 0 : this.friendsTool, this.friendsToolFiring, snapshot.friends?.progress.openedTreasures);
+    this.frontierVisuals?.update(snapshot.friends?.frontier, local.x, local.y, this.visualElapsedMs, pilotedVehicle || isSpectating || this.friendsTool===5 ? 0 : this.friendsTool, this.friendsToolFiring, snapshot.friends?.progress.openedTreasures,
+      Math.max(0, this.visualElapsedMs - (snapshot.elapsedMs - snapshot.world.elapsedMs)));
+    this.friendsWorldArrival?.update(deltaMs,this.frontierVisuals?.arrivalReadiness(local.x,local.y)??{ready:true,progress:1},Boolean(snapshot.friends)&&!isSpectating&&!isFallingLocal);
+    this.renderer.presentationViewmodelVisible=!this.friendsWorldArrival?.sequence.active || this.friendsWorldArrival.sequence.reveal>.92;
     const harvest = snapshot.friends?.frontier?.damage, harvestStamp = harvest && `${harvest.id}:${harvest.value}:${harvest.until}`;
     if (harvest?.by === localPlayerId && harvest.kind && (harvest.until || 0) > snapshot.elapsedMs && harvestStamp !== this.lastFrontierHit) { soundManager.playFrontierHit(harvest.kind); this.lastFrontierHit = harvestStamp!; }
-    this.renderer.frontierToolActive = Boolean(snapshot.friends?.frontier && this.friendsTool);
+    this.renderer.frontierToolActive = Boolean(snapshot.friends?.frontier && (this.friendsTool || this.frontierVisuals?.flashlightEquipped));
     this.tacticalVisuals.update(snapshot, this.visualElapsedMs);
     this.realityBreachVisuals.update(snapshot.realityBreach, snapshot.elapsedMs, this.renderer.camera);
     this.renderer.setRealityBreach(snapshot.realityBreach, snapshot.elapsedMs);
@@ -755,7 +803,10 @@ export class MultiplayerRendererBridge {
       if (projectile) this.projectileMuzzlePresentation.present(id, projectile, deltaMs);
       else this.projectileMuzzlePresentation.forget(id);
     }
-    this.renderer.render(engine, deltaMs);
+    this.renderer.render(engine, deltaMs, () => {
+      this.friendsHaulingVisuals.update(snapshot, localPlayerId, this.friendsTool, snapshot.elapsedMs,
+        point => this.renderer.projectViewmodelPointToWorld(point), !useThirdPerson);
+    });
   }
 
   destroy() {
@@ -766,8 +817,12 @@ export class MultiplayerRendererBridge {
     this.localFirearm.dispose();
     this.arcanaVisuals.dispose();
     this.friendsVehicleVisuals.dispose();
+    this.scenicRailVisuals?.dispose();
+    this.friendsHaulingVisuals.dispose();
     this.friendsBuildVisuals.dispose();
     this.frontierVisuals?.dispose();
+    this.friendsSpawnVisuals?.dispose();
+    this.friendsWorldArrival?.dispose();
     this.tacticalVisuals.dispose();
     this.realityBreachVisuals.dispose();
     this.structureVisuals.dispose();

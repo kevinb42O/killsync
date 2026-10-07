@@ -1,4 +1,5 @@
 import { frontierTrees } from './FriendsFrontier';
+import { collidePhysicalCargo } from './FriendsHauling';
 import { FriendsTerrain, FRIENDS_STEP_HEIGHT } from '../world/FriendsTerrain';
 import { friendsBuildFloor, friendsBuildCeiling, resolveFriendsBuildCollisions } from './FriendsBuilding';
 import { friendsWorldFloor, friendsVehicleFloor, friendsVehicleCeiling, FRIENDS_FLIGHT_CEILING, resolveFriendsVehicleCollisions, type FriendsSnapshot } from './FriendsExpedition';
@@ -19,13 +20,30 @@ export class LocalPlayerPrediction {
   private terrain = new FriendsTerrain();
   private terrainRevision = -1;
   private friends?: FriendsSnapshot;
+  private lastRedeployEventId = -1;
 
   constructor(private readonly playerId: string) {}
+
+  /** A Friends world import replaces the terrain beneath the same players. */
+  resetWorld() {
+    this.pending = [];
+    this.motion = undefined;
+    this.latestTick = -1;
+    this.lifeState = undefined;
+    this.terrainRevision = -1;
+    this.friends = undefined;
+    this.correction = { x: 0, y: 0, z: 0 };
+  }
 
   reconcile(snapshot: CoopSnapshot) {
     const player = snapshot.players.find(candidate => candidate.id === this.playerId);
     const nextWorldId = snapshot.world?.id || 'neon_bastion';
-    const reset = snapshot.tick < this.latestTick || player?.lifeState !== this.lifeState || snapshot.matchState !== 'active' || nextWorldId !== this.worldId;
+    const rewound = snapshot.tick < this.latestTick;
+    if (rewound) this.lastRedeployEventId = -1;
+    const redeployId = snapshot.combatEvents.reduce((latest, event) => event.kind === 'player_redeployed' && event.playerId === this.playerId ? Math.max(latest, event.id) : latest, this.lastRedeployEventId);
+    const redeployed = redeployId > this.lastRedeployEventId;
+    this.lastRedeployEventId = redeployId;
+    const reset = rewound || redeployed || player?.lifeState !== this.lifeState || snapshot.matchState !== 'active' || nextWorldId !== this.worldId;
     this.latestTick = snapshot.tick;
     this.lifeState = player?.lifeState;
     this.structures = snapshot.structures || [];
@@ -37,8 +55,9 @@ export class LocalPlayerPrediction {
     if (!player || player.lifeState !== 'alive') return;
     // Keep a passenger and its moving deck on the same interpolated timeline.
     // Ground prediction cannot replay a pilot’s remote vehicle motion.
+    const onLoad=this.friends?.building?.pieces.some(p=>p.attachment&&Math.abs((friendsBuildFloor([p],player.x,player.y,player.z,0)??Infinity)-player.z)<2);
     const vehicleFloor = this.friends && friendsVehicleFloor(this.friends.vehicles, player.x, player.y, player.z);
-    if (this.friends && (this.friends.vehicles.some(v => v.pilotId === player.id) || (vehicleFloor !== undefined && Math.abs(player.z - vehicleFloor) < 2))) { this.pending = []; this.motion = undefined; this.correction = { x: 0, y: 0, z: 0 }; return; }
+    if (this.friends && !player.friendsDevFlight && (onLoad || player.friendsSeat || this.friends.hauling?.ropes.some(r => r.id === player.id) || this.friends.vehicles.some(v => v.pilotId === player.id) || (vehicleFloor !== undefined && Math.abs(player.z - vehicleFloor) < 2))) { this.pending = []; this.motion = undefined; this.correction = { x: 0, y: 0, z: 0 }; return; }
     const previous = this.motion;
     this.pending = this.pending.filter(input => input.sequence > (player.lastProcessedInput ?? -1));
     this.motion = { ...player, verticalVelocity: 0, lastJumpSequence: -1, slideAngle: player.angle, ...player.motion };
@@ -65,7 +84,7 @@ export class LocalPlayerPrediction {
       ...snapshot,
       players: snapshot.players.map(player => player.id !== this.playerId || player.lifeState !== 'alive' ? player : {
         ...player, x: motion.x + this.correction.x, y: motion.y + this.correction.y, z: motion.z + this.correction.z,
-        angle: motion.angle, sprinting: motion.sprinting, sliding: motion.sliding, crouching: motion.crouching, jetFuel: motion.jetFuel, jetActive: motion.jetActive,
+        friendsDevFlight: motion.friendsDevFlight, angle: motion.angle, sprinting: motion.sprinting, sliding: motion.sliding, crouching: motion.crouching, jetFuel: motion.jetFuel, jetActive: motion.jetActive,
         motion: {
           ...player.motion,
           velocityX: motion.velocityX,
@@ -102,6 +121,7 @@ export class LocalPlayerPrediction {
       deltaMs,
       (position, radius) => {
         let collided = this.friends ? resolveFriendsVehicleCollisions(this.friends.vehicles, position, motion.z, radius) : false;
+        if (this.friends?.hauling) collided = collidePhysicalCargo(this.friends.hauling.cargo, position, motion.z, radius) || collided;
         if (this.friends?.frontier) {
           collided = this.terrain.collide(position, motion.z, radius) || collided;
           const cx = Math.floor(position.x / 512), cy = Math.floor(position.y / 512), removed = new Set(this.friends.frontier.harvested);
@@ -142,7 +162,7 @@ export class LocalPlayerPrediction {
         return floor;
       },
       this.worldId,
-      this.friends ? { elevationAware: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.friends!.building?.pieces || [], position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
+      this.friends ? { elevationAware: true, devFlightAllowed: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.friends!.building?.pieces || [], position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
     );
   }
 }

@@ -1,0 +1,20 @@
+import {createRequire} from 'node:module';
+import {homedir} from 'node:os';
+import {join} from 'node:path';
+import {mkdir,writeFile} from 'node:fs/promises';
+const require=createRequire(import.meta.url);
+let playwright;try{playwright=require('playwright');}catch{playwright=require(process.env.PLAYWRIGHT_MODULE||join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
+const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3001',report={date:new Date().toISOString(),checks:[],errors:[]};
+const browser=await playwright.chromium.launch({headless:true,args:['--enable-unsafe-swiftshader','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
+const check=name=>{report.checks.push(name);console.log('PASS',name);};
+async function open(url){const context=await browser.newContext({viewport:{width:700,height:500},reducedMotion:'reduce'});await context.addInitScript(()=>{localStorage.setItem('cinematicEffects','off');localStorage.setItem('killsync.friends.menu.pause','true');});const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));page.on('crash',()=>report.errors.push('Browser page crashed'));page.setDefaultTimeout(120000);await page.route('**/src/game/rendering/FriendsMenuScene.ts*', route=>route.abort());await page.goto(url,{waitUntil:'domcontentloaded'});return page;}
+let host,guest;
+try {
+ host=await open(`${origin}/?mode=friends`);await host.getByLabel('Your name',{exact:true}).fill('UI Host',{force:true});await host.getByRole('button',{name:'Open my island',exact:true}).click();await host.getByRole('heading',{name:'Your island is open.'}).waitFor();const code=await host.locator('.friends-menu__invite-code strong').innerText();check('actual Friends menu opens an island');
+ guest=await open(`${origin}/?mode=friends&room=${encodeURIComponent(code)}`);await guest.getByLabel('Your name',{exact:true}).fill('UI Guest',{force:true});await guest.getByRole('button',{name:'Join',exact:true}).first().click();await guest.getByRole('heading',{name:"You're invited."}).waitFor();await host.locator('.friends-menu__people').getByText('UI Guest',{exact:true}).waitFor();check('actual setup admission and roster converge');
+ await host.getByRole('button',{name:'Head into the island',exact:true}).click();await Promise.all([host.locator('.coop-arena').waitFor(),guest.locator('.coop-arena').waitFor()]);await guest.waitForFunction(()=>document.body.innerText.includes('¤ 750')&&!document.body.innerText.includes('Synchronizing island')); check('actual setup-to-arena handoff');
+ await guest.keyboard.press('g');await guest.locator('.frontier-pack').waitFor({state:'attached'});report.packPresentation=await guest.locator('.frontier-pack').evaluate(node=>{const parents=[];for(let n=node;n;n=n.parentElement){const s=getComputedStyle(n),r=n.getBoundingClientRect();parents.push({tag:n.tagName,class:n.className,display:s.display,visibility:s.visibility,width:r.width,height:r.height});}return parents;});await guest.getByRole('dialog',{name:'Frontier field pack'}).waitFor();check('guest receives the playable Friends field pack');await guest.screenshot({path:'artifacts/friends-multiplayer/guest-field-pack.png'});
+ await host.close();await guest.getByRole('button',{name:'Rejoin island',exact:true}).waitFor();await new Promise(resolve=>setTimeout(resolve,2000));await guest.getByRole('button',{name:'Rejoin island',exact:true}).waitFor();check('host departure keeps the terminal rejoin action visible');
+ if(report.errors.length)throw new Error(`Browser exceptions: ${report.errors.join('; ')}`);check('no runtime exception in actual React flow');
+}catch(error){report.failure=String(error);report.hostText=await host?.locator('body').innerText().catch(()=>null);report.guestText=await guest?.locator('body').innerText().catch(()=>null);throw error;}
+finally{await mkdir('artifacts/friends-multiplayer',{recursive:true});await writeFile('artifacts/friends-multiplayer/menu.json',JSON.stringify(report,null,2));await browser.close();}

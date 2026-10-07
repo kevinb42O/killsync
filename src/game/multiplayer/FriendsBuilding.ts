@@ -1,5 +1,9 @@
+import { scenicCargoWagon, SCENIC_WAGONS, SCENIC_CAR_LENGTH } from '../world/FriendsTrainLayout';
+import { vehicleLocalPoint, vehicleWorldPoint, vehiclePlaneHeight } from './FriendsVehiclePose';
+import type { FriendsVehicle } from './FriendsExpedition';
+import { scenicTransitProtected } from '../world/FriendsRailInfrastructure';
 import { FRIENDS_TERRAIN_SURFACES } from '../world/FriendsTerrainAppearance';
-import { FriendsTerrain, FRONTIER_SIZE, TERRAIN_BOTTOM, FRIENDS_STEP_HEIGHT, VOXEL_SIZE } from '../world/FriendsTerrain';
+import { FriendsTerrain, FRONTIER_SIZE, TERRAIN_BOTTOM, FRIENDS_STEP_HEIGHT, VOXEL_SIZE, FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORM } from '../world/FriendsTerrain';
 import { getNearbyWorldObstacles } from '../world/WorldLayout';
 import { FRIENDS_AIRPAD, FRIENDS_HUB } from '../world/FriendsRegion';
 import { isPlayerRail, railSamples, railOverlapError, snapRailPose } from '../world/FriendsPlayerRail';
@@ -57,7 +61,14 @@ export const FRIENDS_BUILD_CATALOG: Record<FriendsBuildShape, FriendsBuildDefini
   survey_lens: { name: 'Survey lens', group: 'Utilities', w: 32, d: 32, h: 64, description: 'Mount high on your own tower to establish an observatory.' },
   gathering_beacon: { name: 'Gathering beacon', group: 'Utilities', w: 32, d: 32, h: 64, description: 'Mark a shared meeting place on the map.' },
 };
-export type FriendsBuildPose = { x: number; y: number; z: number; rotation: number };
+export type FriendsBuildPose = { x: number; y: number; z: number; rotation: number; attachment?:{vehicleId:string;x:number;y:number;z:number}; vehicleFrame?:{angle:number;pitch:number} };
+export function resolveFriendsBuildPose<T extends FriendsBuildPose>(p:T,vehicles:readonly FriendsVehicle[]):T{
+  const a=p.attachment,v=a&&vehicles.find(v=>v.id===a.vehicleId&&scenicCargoWagon(v));
+  return v&&a?{...p,...vehicleWorldPoint(v,a),vehicleFrame:{angle:v.angle,pitch:v.pitch||0}}:p;
+}
+export function resolveFriendsBuildPieces(pieces:readonly FriendsBuildPiece[],vehicles:readonly FriendsVehicle[]){return pieces.map(p=>resolveFriendsBuildPose(p,vehicles));}
+const pieceFrame=(p:FriendsBuildPose)=>({x:p.x,y:p.y,z:p.z,angle:p.vehicleFrame!.angle,pitch:p.vehicleFrame!.pitch});
+const unframed=<T extends FriendsBuildPose>(p:T):T=>({...p,x:0,y:0,z:0,attachment:undefined,vehicleFrame:undefined});
 export type FriendsBuildPiece = FriendsBuildPose & { id: number; shape: FriendsBuildShape; finish: FriendsBuildFinish; author: string; revision: number };
 export type FriendsBuildingSnapshot = { revision: number; pieces: FriendsBuildPiece[]; guestsCanBuild: boolean };
 export type FriendsBuildActor = { id: string; label?: string; x: number; y: number; z: number; lifeState: string; bodyWidth?: number; bodyDepth?: number; bodyHeight?: number };
@@ -97,6 +108,12 @@ export function buildLocal(p: FriendsBuildPose, x: number, y: number) {
   return { x: (x - p.x) * c + (y - p.y) * s, y: -(x - p.x) * s + (y - p.y) * c };
 }
 export function worldBox(p: FriendsBuildPose, b: BuildBox): BuildBox {
+  if(p.vehicleFrame){
+    const b0=worldBox(unframed(p),b),points=[];
+    for(const x of [-1,1])for(const y of [-1,1])for(const z of [0,1])points.push(vehicleWorldPoint(pieceFrame(p),{x:b0.x+x*b0.w/2,y:b0.y+y*b0.d/2,z:b0.z+z*b0.h}));
+    const lo=(key:'x'|'y'|'z')=>Math.min(...points.map(p=>p[key])),hi=(key:'x'|'y'|'z')=>Math.max(...points.map(p=>p[key]));
+    return box((lo('x')+hi('x'))/2,(lo('y')+hi('y'))/2,lo('z'),hi('x')-lo('x'),hi('y')-lo('y'),hi('z')-lo('z'));
+  }
   const a = p.rotation * Math.PI / 2, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
   return box(p.x + b.x * c - b.y * s, p.y + b.x * s + b.y * c, p.z + b.z, p.rotation % 2 ? b.d : b.w, p.rotation % 2 ? b.w : b.d, b.h);
 }
@@ -104,15 +121,21 @@ const contains = (b: BuildBox, x: number, y: number, padding = 0) => Math.abs(x 
 export function friendsBuildFloor(pieces: readonly FriendsBuildPiece[], x: number, y: number, z: number, step = FRIENDS_STEP_HEIGHT) {
   let floor: number | undefined;
   for (const p of pieces) {
+    if(p.vehicleFrame){
+      const frame=pieceFrame(p),q=vehicleLocalPoint(frame,{x,y,z});
+      let top=friendsBuildFloor([unframed(p)],q.x,q.y,q.z,step);
+      if(top!==undefined){const height=vehiclePlaneHeight(frame,x,y,top),at=vehicleLocalPoint(frame,{x,y,z:height});top=friendsBuildFloor([unframed(p)],at.x,at.y,at.z,0.01);if(top!==undefined&&height<=z+step+.00001)floor=Math.max(floor??-Infinity,height);}
+      continue;
+    }
     const q = buildLocal(p, x, y), def = FRIENDS_BUILD_CATALOG[p.shape];
     const padding = isPlayerRail(p.shape) ? 64 : 0;
     if (Math.abs(q.x) > def.w / 2 + padding || Math.abs(q.y) > def.d / 2 + padding) continue;
     if (isSlope(p.shape)) {
       const top = p.z + (q.x / def.w + .5) * def.h;
-      if (top <= z + step) floor = Math.max(floor ?? -Infinity, top);
+      if (top <= z + step + .00001) floor = Math.max(floor ?? -Infinity, top);
     } else for (const b of friendsShapeBoxes(p.shape)) {
       const top = p.z + b.z + b.h;
-      if (contains(b, q.x, q.y) && top <= z + step) floor = Math.max(floor ?? -Infinity, top);
+      if (contains(b, q.x, q.y) && top <= z + step + .00001) floor = Math.max(floor ?? -Infinity, top);
     }
   }
   return floor;
@@ -120,6 +143,7 @@ export function friendsBuildFloor(pieces: readonly FriendsBuildPiece[], x: numbe
 export function friendsBuildCeiling(pieces: readonly FriendsBuildPiece[], x: number, y: number, z: number) {
   let ceiling: number | undefined;
   for (const p of pieces) {
+    if(p.vehicleFrame){const f=pieceFrame(p),q=vehicleLocalPoint(f,{x,y,z}),h=friendsBuildCeiling([unframed(p)],q.x,q.y,q.z);if(h!==undefined)ceiling=Math.min(ceiling??Infinity,vehiclePlaneHeight(f,x,y,h));continue;}
     const q = buildLocal(p, x, y);
     const def = FRIENDS_BUILD_CATALOG[p.shape];
     const padding = isPlayerRail(p.shape) ? 64 : 10;
@@ -131,6 +155,7 @@ export function friendsBuildCeiling(pieces: readonly FriendsBuildPiece[], x: num
 export function resolveFriendsBuildCollisions(pieces: readonly FriendsBuildPiece[], position: { x: number; y: number }, z: number, radius: number, bodyHeight = 50, step = FRIENDS_STEP_HEIGHT) {
   let collided = false;
   for (const p of pieces) {
+    if(p.vehicleFrame){const f=pieceFrame(p),q=vehicleLocalPoint(f,{...position,z});if(resolveFriendsBuildCollisions([unframed(p)],q,q.z,radius,bodyHeight,step)){const world=vehicleWorldPoint(f,q);position.x=world.x;position.y=world.y;collided=true;}continue;}
     const q = buildLocal(p, position.x, position.y), def = FRIENDS_BUILD_CATALOG[p.shape];
     const padding = radius + (isPlayerRail(p.shape) ? 64 : 0);
     if (Math.abs(q.x) >= def.w / 2 + padding || Math.abs(q.y) >= def.d / 2 + padding) continue;
@@ -159,6 +184,11 @@ export type FriendsBuildHit = { piece: FriendsBuildPiece; distance: number; x: n
 export function raycastFriendsBuild(pieces: readonly FriendsBuildPiece[], ray: FriendsBuildRay, maxDistance = FRIENDS_BUILD_REACH): FriendsBuildHit | undefined {
   let best: FriendsBuildHit | undefined;
   for (const p of pieces) {
+    if(p.vehicleFrame){
+      const f=pieceFrame(p),o=vehicleLocalPoint(f,ray),d=vehicleLocalPoint({...f,x:0,y:0,z:0},{x:ray.dx,y:ray.dy,z:ray.dz});
+      const hit=raycastFriendsBuild([unframed(p)],{...o,dx:d.x,dy:d.y,dz:d.z},maxDistance);
+      if(hit&&(!best||hit.distance<best.distance)){const point=vehicleWorldPoint(f,hit),normal=vehicleWorldPoint({...f,x:0,y:0,z:0},{x:hit.nx,y:hit.ny,z:hit.nz});best={...hit,...point,piece:p,nx:normal.x,ny:normal.y,nz:normal.z};}continue;
+    }
     const origin = buildLocal(p, ray.x, ray.y), a = p.rotation * Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
     const dirs = [ray.dx * c + ray.dy * s, -ray.dx * s + ray.dy * c, ray.dz], origins = [origin.x, origin.y, ray.z - p.z];
     for (const b of friendsShapeBoxes(p.shape)) {
@@ -184,8 +214,21 @@ export function raycastFriendsBuild(pieces: readonly FriendsBuildPiece[], ray: F
   }
   return best;
 }
-export function getFriendsBuildPose(pieces: readonly FriendsBuildPiece[], ray: FriendsBuildRay, shape: FriendsBuildShape, rotation: number, terrain?: FriendsTerrain): FriendsBuildPose | undefined {
+export function getFriendsBuildPose(pieces: readonly FriendsBuildPiece[], ray: FriendsBuildRay, shape: FriendsBuildShape, rotation: number, terrain?: FriendsTerrain, vehicles:readonly FriendsVehicle[]=[]): FriendsBuildPose | undefined {
   const def = FRIENDS_BUILD_CATALOG[shape], r = ((Math.round(rotation) % 4) + 4) % 4;
+  pieces=resolveFriendsBuildPieces(pieces,vehicles);
+  const obstruction=raycastFriendsBuild(pieces.filter(p=>!p.attachment),ray)?.distance??Infinity,groundDistance=terrain?.raycast(ray,FRIENDS_BUILD_REACH)?.distance??Infinity;
+  let cargoPose:FriendsBuildPose|undefined,nearest=Math.min(obstruction,groundDistance,FRIENDS_BUILD_REACH);
+  for(const v of vehicles.filter(scenicCargoWagon)){
+    const o=vehicleLocalPoint(v,ray),d=vehicleLocalPoint({...v,x:0,y:0,z:0},{x:ray.dx,y:ray.dy,z:ray.dz});
+    const localPieces=pieces.filter(p=>p.attachment?.vehicleId===v.id).map(p=>({...p,...p.attachment!,attachment:undefined,vehicleFrame:undefined}));
+    const hit=raycastFriendsBuild(localPieces,{...o,dx:d.x,dy:d.y,dz:d.z}),t=d.z<-.025?-o.z/d.z:Infinity;
+    const deck=t>0&&t<FRIENDS_BUILD_REACH&&Math.abs(o.x+d.x*t)<v.length/2&&Math.abs(o.y+d.y*t)<v.width/2;
+    const distance=hit?.distance??(deck?t:Infinity);if(distance>=nearest)continue;
+    const local=hit?getFriendsBuildPose(localPieces,{...o,dx:d.x,dy:d.y,dz:d.z},shape,rotation):{x:Math.round((o.x+d.x*t)/4)*4,y:Math.round((o.y+d.y*t)/4)*4,z:0,rotation:r};
+    if(local){nearest=distance;cargoPose={...vehicleWorldPoint(v,local),rotation:r,attachment:{vehicleId:v.id,x:local.x,y:local.y,z:local.z},vehicleFrame:{angle:v.angle,pitch:v.pitch||0}};}
+  }
+  if(cargoPose)return cargoPose;
   const buildHit = raycastFriendsBuild(pieces, ray), groundHit = terrain?.raycast(ray, FRIENDS_BUILD_REACH);
   const hit = buildHit && (!groundHit || buildHit.distance < groundHit.distance) ? buildHit : groundHit, snap = (n: number) => Math.round(n / 4) * 4;
   if (hit) {
@@ -214,12 +257,40 @@ export function getFriendsBuildPose(pieces: readonly FriendsBuildPiece[], ray: F
 function overlaps(a: BuildBox, b: BuildBox, margin = .1) {
   return Math.abs(a.x - b.x) < (a.w + b.w) / 2 - margin && Math.abs(a.y - b.y) < (a.d + b.d) / 2 - margin && a.z < b.z + b.h - margin && b.z < a.z + a.h - margin;
 }
-export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shape: unknown, pose: FriendsBuildPose | undefined, actor?: FriendsBuildActor, bodies: readonly FriendsBuildActor[] = [], ignoringId?: number, restoring = false, terrain?: FriendsTerrain): string | undefined {
+export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shape: unknown, pose: FriendsBuildPose | undefined, actor?: FriendsBuildActor, bodies: readonly FriendsBuildActor[] = [], ignoringId?: number, restoring = false, terrain?: FriendsTerrain, vehicles:readonly FriendsVehicle[]=[]): string | undefined {
+  if(pose?.attachment){
+    const a=pose.attachment;if(typeof a.vehicleId!=='string'||![pose.x,pose.y,pose.z].every(Number.isFinite))return 'Choose a valid freight deck placement.';const index=Number(a.vehicleId.replace('grand-',''));
+    if(!isFriendsShape(shape)||!Number.isInteger(index)||a.vehicleId!==`grand-${index}`||!SCENIC_WAGONS[index]||SCENIC_WAGONS[index]==='touring'||![a.x,a.y,a.z,pose.rotation].every(Number.isFinite)||![a.x,a.y,a.z].every(n=>n%4===0)||!Number.isInteger(pose.rotation)||pose.rotation<0||pose.rotation>3)return 'Choose a valid freight deck placement.';
+    const def=FRIENDS_BUILD_CATALOG[shape],w=pose.rotation%2?def.d:def.w,d=pose.rotation%2?def.w:def.d;
+    if(Math.abs(a.x)+w/2>SCENIC_CAR_LENGTH/2-14||Math.abs(a.y)+d/2>44||a.z<0||a.z+def.h>96||isPlayerRail(shape))return 'Keep cargo inside the deck and below tunnel clearance (8 m).';
+    const v=vehicles.find(v=>v.id===a.vehicleId&&scenicCargoWagon(v));if(!v&&!restoring)return 'This freight wagon is unavailable.';
+    const resolved=v?resolveFriendsBuildPose(pose,vehicles):pose;
+    if(actor&&(actor.lifeState!=='alive'||Math.hypot(resolved.x-actor.x,resolved.y-actor.y,resolved.z-actor.z)>FRIENDS_BUILD_REACH+64))return 'Move closer to the freight deck.';
+    const localPose={...pose,x:a.x,y:a.y,z:a.z,attachment:undefined,vehicleFrame:undefined},boxes=friendsShapeBoxes(shape).map(b=>worldBox(localPose,b));
+    const localPieces=pieces.filter(p=>p.id!==ignoringId&&p.attachment?.vehicleId===a.vehicleId).map(p=>({...p,...p.attachment!,attachment:undefined,vehicleFrame:undefined}));
+    if(boxes.some(b=>localPieces.some(p=>friendsShapeBoxes(p.shape).some(q=>overlaps(b,worldBox(p,q))))))return 'That freight space already contains a piece.';
+    if(v&&boxes.some(b=>bodies.some(body=>{const q=vehicleLocalPoint(v,body);return body.lifeState==='alive'&&overlaps(b,box(q.x,q.y,q.z,body.bodyWidth??38,body.bodyDepth??38,body.bodyHeight??50),0);})))return 'A friend or load is standing in the way.';
+    if(!restoring&&a.z!==0&&!boxes.some(b=>localPieces.some(p=>friendsShapeBoxes(p.shape).some(q=>overlaps(b,worldBox(p,q),-1)))))return 'Place cargo on the deck or on another secured piece.';
+    return;
+  }
   if (!isFriendsShape(shape) || !pose || ![pose.x, pose.y, pose.z, pose.rotation].every(Number.isFinite) || !Number.isInteger(pose.rotation) || pose.rotation < 0 || pose.rotation > 3 || ![pose.x, pose.y, pose.z].every(n => n % 4 === 0)) return 'Choose a valid snapped piece.';
   if (actor && (actor.lifeState !== 'alive' || Math.hypot(pose.x - actor.x, pose.y - actor.y, pose.z - actor.z) > FRIENDS_BUILD_REACH + 64)) return 'Move closer to the placement.';
   const def = FRIENDS_BUILD_CATALOG[shape], extent = Math.hypot(def.w, def.d) / 2;
   if (pose.z < TERRAIN_BOTTOM + 32 || pose.z + def.h > 6000 || pose.x - extent < 128 || pose.x + extent > FRONTIER_SIZE - 128 || pose.y - extent < 128 || pose.y + extent > FRONTIER_SIZE - 128) return 'Keep your build inside the valley and below the height limit.';
   if (Math.hypot(pose.x - FRIENDS_AIRPAD.x, pose.y - FRIENDS_AIRPAD.y) < 260 + extent) return 'Leave the aircraft bay clear.';
+  const spawn = FRIENDS_SPAWN_PLATFORM;
+  if (friendsShapeBoxes(shape).some(local => {
+    const b = worldBox(pose, local);
+    return Math.abs(b.x - spawn.x) < (b.w + spawn.size) / 2
+      && Math.abs(b.y - spawn.y) < (b.d + spawn.size) / 2
+      && b.z < spawn.top + spawn.clearance && b.z + b.h > spawn.top - spawn.thickness;
+  })) return 'Keep the player spawn platform clear.';
+  // Preserve existing saved builds; new construction must leave the hauling bay free.
+  if (!restoring && friendsShapeBoxes(shape).some(local=>{
+    const b=worldBox(pose,local),p=FRIENDS_HAULING_PLATFORM;
+    return Math.abs(b.x-p.x)<(b.w+p.size)/2&&Math.abs(b.y-p.y)<(b.d+p.size)/2
+      &&b.z<p.top+p.clearance&&b.z+b.h>p.top-p.thickness;
+  })) return 'Keep the hauling platform clear.';
   if (!restoring && pose.z < 160 && Math.hypot(pose.x-FRIENDS_HUB.x,pose.y-FRIENDS_HUB.y-90)<90+extent) return 'Leave room to spawn safely.';
   if (isPlayerRail(shape)) {
     const candidate = {...pose,shape}, overlap=railOverlapError(pieces,candidate,ignoringId); if(overlap)return overlap;
@@ -233,6 +304,8 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
   }
   const boxes = friendsShapeBoxes(shape).map(b => worldBox(pose, b));
   for (const b of boxes) {
+    if(!restoring)for(let dx=-b.w/2;dx<=b.w/2;dx+=32)for(let dy=-b.d/2;dy<=b.d/2;dy+=32)for(let z=b.z;z<=b.z+b.h;z+=32)
+      if(scenicTransitProtected(b.x+dx,b.y+dy,z))return 'Leave the Grand Traverse railway clearance free. Build beside or below the line.';
     if (terrain) {
       for (const dx of [-b.w / 2 + 1, 0, b.w / 2 - 1]) for (const dy of [-b.d / 2 + 1, 0, b.d / 2 - 1]) for (let z = b.z + 1; z < b.z + b.h; z += 32) if (terrain.material(Math.floor((b.x + dx) / 32), Math.floor((b.y + dy) / 32), Math.floor(z / 32))) return 'Excavate the ground before placing a piece there.';
     }
@@ -245,6 +318,7 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
 }
 type Edit = { before?: FriendsBuildPiece; after?: FriendsBuildPiece };
 export class FriendsBuilding {
+  vehicleProvider:()=>readonly FriendsVehicle[]=()=>[];
   private revision = 0;
   private nextId = 1;
   private pieces: FriendsBuildPiece[] = [];
@@ -256,7 +330,7 @@ export class FriendsBuilding {
     if (!saved || !Array.isArray(saved.pieces)) { this.revision = minimumRevision; return; }
     this.guestsCanBuild = saved.guestsCanBuild !== false;
     for (const p of saved.pieces.slice(0, FRIENDS_BUILD_LIMIT)) if (p && isFriendsShape(p.shape) && isFriendsFinish(p.finish) && Number.isSafeInteger(p.id) && p.id > 0 && p.id < 1000000000 && !this.pieces.some(q => q.id === p.id) && !friendsPlacementError(this.pieces, p.shape, p, undefined, [], undefined, true)) {
-      this.pieces.push({ ...p, author: String(p.author || 'Friend').slice(0, 24), revision: 1 }); this.nextId = Math.max(this.nextId, p.id + 1);
+      this.pieces.push({ ...p, vehicleFrame:undefined, author: String(p.author || 'Friend').slice(0, 24), revision: 1 }); this.nextId = Math.max(this.nextId, p.id + 1);
     }
     this.revision = Math.max(this.pieces.length ? 1 : 0, minimumRevision);
     this.pieces.forEach(p => { p.revision = this.revision; });
@@ -264,9 +338,10 @@ export class FriendsBuilding {
   setGuestAccess(allowed: boolean) { this.guestsCanBuild = allowed; this.revision++; }
   getGuestAccess() { return this.guestsCanBuild; }
   getRevision() { return this.revision; }
-  getPieces(): readonly FriendsBuildPiece[] { return this.pieces; }
-  snapshot(): FriendsBuildingSnapshot { return { revision: this.revision, pieces: this.pieces.map(p => ({ ...p })), guestsCanBuild: this.guestsCanBuild }; }
+  getPieces(): readonly FriendsBuildPiece[] { return this.pieces.some(p=>p.attachment)?resolveFriendsBuildPieces(this.pieces,this.vehicleProvider()):this.pieces; }
+  snapshot(): FriendsBuildingSnapshot { return { revision: this.revision, pieces: this.getPieces().map(p => ({ ...p })), guestsCanBuild: this.guestsCanBuild }; }
   request(actor: FriendsBuildActor, request: FriendsBuildRequest, hostId: string, bodies: readonly FriendsBuildActor[], economy?: (before?: FriendsBuildPiece, after?: Pick<FriendsBuildPiece, 'shape' | 'finish'>) => string | undefined): FriendsBuildResult {
+    if(request.pose){request={...request,pose:resolveFriendsBuildPose({...request.pose,vehicleFrame:undefined},this.vehicleProvider())};}
     const result = (ok: boolean, message: string): FriendsBuildResult => ({ playerId: actor.id, requestId: request.requestId, ok, message, revision: this.revision });
     if (!Number.isSafeInteger(request.requestId) || request.requestId <= (this.consumed.get(actor.id) || 0)) return result(false, 'This edit was already handled.');
     this.consumed.set(actor.id, request.requestId);
@@ -282,7 +357,7 @@ export class FriendsBuilding {
       const current = edit.after && this.pieces.find(p => p.id === edit.after!.id);
       if ((edit.after && (!current || current.revision !== edit.after.revision)) || (!edit.after && edit.before && this.pieces.some(p => p.id === edit.before!.id))) return result(false, 'A friend changed this piece. Their edit is protected.');
       if (edit.before) {
-        const issue = friendsPlacementError(this.pieces, edit.before.shape, edit.before, undefined, bodies, edit.after?.id, true, this.terrain);
+        const issue = friendsPlacementError(this.getPieces(), edit.before.shape, edit.before, undefined, bodies, edit.after?.id, true, this.terrain,this.vehicleProvider());
         if (issue || (!current && this.pieces.length >= FRIENDS_BUILD_LIMIT)) return result(false, issue || 'The world piece budget is full.');
       }
       const economicIssue = economy?.(current, edit.before); if (economicIssue) return result(false, economicIssue);
@@ -297,19 +372,19 @@ export class FriendsBuilding {
     if (request.action === 'place') {
       if (this.pieces.length >= FRIENDS_BUILD_LIMIT) return result(false, `World budget: ${FRIENDS_BUILD_LIMIT} pieces. Remove a piece to make room.`);
       if (!isFriendsFinish(request.finish)) return result(false, 'Choose a finish.');
-      const issue = friendsPlacementError(this.pieces, request.shape, request.pose, actor, bodies, undefined, false, this.terrain); if (issue) return result(false, issue);
+      const issue = friendsPlacementError(this.getPieces(), request.shape, request.pose, actor, bodies, undefined, false, this.terrain,this.vehicleProvider()); if (issue) return result(false, issue);
       const economicIssue = economy?.(undefined, { shape: request.shape!, finish: request.finish! }); if (economicIssue) return result(false, economicIssue);
       const after: FriendsBuildPiece = { ...request.pose!, id: this.nextId++, shape: request.shape!, finish: request.finish, author: (actor.label || 'Friend').slice(0, 24), revision: ++this.revision };
       this.pieces.push(after); edit = { after };
     } else if (request.action === 'remove' || request.action === 'paint' || request.action === 'move') {
       const before = this.pieces.find(p => p.id === request.pieceId);
       if (!before || before.revision !== request.expectedRevision) return result(false, 'The piece changed. Aim at it again.');
-      if (Math.hypot(before.x - actor.x, before.y - actor.y, before.z - actor.z) > FRIENDS_BUILD_REACH + 64) return result(false, 'Move closer to that piece.');
+      if (Math.hypot(resolveFriendsBuildPose(before,this.vehicleProvider()).x - actor.x, resolveFriendsBuildPose(before,this.vehicleProvider()).y - actor.y, resolveFriendsBuildPose(before,this.vehicleProvider()).z - actor.z) > FRIENDS_BUILD_REACH + 64) return result(false, 'Move closer to that piece.');
       if (request.action === 'paint' && !isFriendsFinish(request.finish)) return result(false, 'Choose a finish.');
-      if (request.action === 'move') { const issue = friendsPlacementError(this.pieces, before.shape, request.pose, actor, bodies, before.id, false, this.terrain); if (issue) return result(false, issue); }
+      if (request.action === 'move') { const issue = friendsPlacementError(this.getPieces(), before.shape, request.pose, actor, bodies, before.id, false, this.terrain,this.vehicleProvider()); if (issue) return result(false, issue); }
       const economicIssue = economy?.(before, request.action === 'remove' ? undefined : { shape: before.shape, finish: request.action === 'paint' ? request.finish! : before.finish }); if (economicIssue) return result(false, economicIssue);
       this.revision++; this.pieces = this.pieces.filter(p => p.id !== before.id);
-      const after = request.action === 'remove' ? undefined : { ...before, ...(request.action === 'move' ? request.pose : { finish: request.finish! }), revision: this.revision };
+      const after = request.action === 'remove' ? undefined : { ...before, ...(request.action==='move'?{attachment:undefined,vehicleFrame:undefined}:{}), ...(request.action === 'move' ? request.pose : { finish: request.finish! }), revision: this.revision };
       if (after) this.pieces.push(after); edit = { before, after };
     } else return result(false, 'Unknown building action.');
     const history = this.undo.get(actor.id) || []; history.push(edit); if (history.length > 64) history.shift(); this.undo.set(actor.id, history); this.redo.delete(actor.id);

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 /** Cave props and rock share the same subdued ambient response. Direct point
  * and spot lights remain intact; outdoor sunlight cannot light buried objects. */
 export function applyFriendsCaveLighting(material: THREE.MeshStandardMaterial) {
+  material.userData.frontierCaveLighting = true;
   const decorate = material.onBeforeCompile;
   const baseKey = material.customProgramCacheKey();
   material.onBeforeCompile = (shader, renderer) => {

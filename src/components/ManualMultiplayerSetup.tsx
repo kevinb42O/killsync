@@ -1,3 +1,5 @@
+import { FriendsCrewRegistry, FRIENDS_SESSION_PROTOCOL, readFriendsCredential, rememberFriendsCredential } from '../game/multiplayer/FriendsCrewIdentity';
+import { friendsWorldCrew, recoverFriendsWorld } from '../game/multiplayer/FriendsWorldStorage';
 import { normalizeCoopGameMode, type CoopGameMode } from '../game/multiplayer/CoopGameMode';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -42,6 +44,9 @@ import { COOP_OPERATOR_BY_ID, normalizeCoopOperatorId } from '../game/multiplaye
 import { COOP_FIREARM_BY_ID } from '../game/combat/coopFirearms';
 import { normalizeWorldId, readCoopWorldProgress, type WorldId } from '../game/world/WorldDefinitions';
 import { CoopWorldSelector } from './CoopWorldSelector';
+import { FriendsModeSetup } from './FriendsModeSetup';
+import { friendsConnectionText } from './FriendsMenuText';
+import { friendsMenuPlayer } from '../game/multiplayer/FriendsMenuIdentity';
 
 type SetupMode = 'choose' | 'host' | 'guest' | 'direct_host' | 'direct_guest';
 
@@ -59,6 +64,8 @@ export interface MultiplayerLaunch {
   /** Host-selected deployment. Guests receive this in the reliable start event. */
   worldId: WorldId;
   gameMode?: CoopGameMode;
+  friendsCrew?: FriendsCrewRegistry;
+  roomCode?: string;
 }
 
 export function createSoloMultiplayerLaunch({
@@ -72,13 +79,16 @@ export function createSoloMultiplayerLaunch({
   worldId?: WorldId;
   gameMode?: CoopGameMode;
 } = {}): MultiplayerLaunch {
+  const seed = gameMode === 'friends' ? friendsMenuPlayer(player) : player;
   const soloPlayer = {
-    ...player,
+    ...seed,
     // The setup screen normally validates a callsign first. The main-menu
     // shortcut must also work for a completely fresh browser profile.
-    label: player.label || 'OPERATOR',
+    label: seed.label || (gameMode === 'friends' ? 'Friend' : 'OPERATOR'),
   };
-  const session = new ManualWebRTCSession({ role: 'host', iceServers: [] });
+  const friendsCrew=gameMode==='friends'?new FriendsCrewRegistry(friendsWorldCrew()):undefined;
+  if(friendsCrew)soloPlayer.id=friendsCrew.saved.hostId;
+  const session = new ManualWebRTCSession({ role: 'host', iceServers: [], friends:gameMode==='friends' });
 
   return {
     role: 'host',
@@ -86,7 +96,7 @@ export function createSoloMultiplayerLaunch({
     localPlayerId: soloPlayer.id,
     players: [soloPlayer],
     peerPlayerIds: {},
-    soloTest: true,
+    soloTest: true, friendsCrew,
     language,
     gameMode,
     worldId: gameMode === 'friends' ? 'friends_frontier' : worldId,
@@ -109,15 +119,21 @@ export function ManualMultiplayerSetup({
   const joinRef = useRef<LobbyJoin | null>(null);
   const connectionTimeoutRef = useRef(0);
   const handedOffRef = useRef(false);
-  const localPlayerRef = useRef<CoopPlayerSeed>(createLocalPlayerSeed());
+  const localPlayerRef = useRef<CoopPlayerSeed>(createLocalPlayerSeed(initialGameMode));
+  const operationRef = useRef(0);
+  const busyRef = useRef(false);
   const readySentRef = useRef(false);
   const peerPlayerIdsRef = useRef<Record<string, string>>({});
   const guestPlayersRef = useRef<CoopPlayerSeed[]>([]);
   const spectatingRef = useRef(false);
+  const friendsCrewRef=useRef<FriendsCrewRegistry>();
+  const friendsWorldIdRef=useRef('');
 
   const [mode, setMode] = useState<SetupMode>('choose');
   const [gameMode, setGameMode] = useState<CoopGameMode>(initialGameMode);
   const [lobbies, setLobbies] = useState<PublicLobby[]>([]);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState(false);
   const [peers, setPeers] = useState<MultiplayerPeerInfo[]>([]);
   const [guestPlayers, setGuestPlayers] = useState<CoopPlayerSeed[]>([]);
   const [rosterPlayers, setRosterPlayers] = useState<CoopPlayerSeed[]>([]);
@@ -127,6 +143,7 @@ export function ManualMultiplayerSetup({
   const [nickname, setNickname] = useState(localPlayerRef.current.label);
   const [codeInputValue, setCodeInputValue] = useState(initialRoomCode || '');
   const [currentRoomCode, setCurrentRoomCode] = useState('');
+  const currentRoomCodeRef = useRef('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [showDirectFallback, setShowDirectFallback] = useState(false);
@@ -142,7 +159,8 @@ export function ManualMultiplayerSetup({
   const activeOperator = COOP_OPERATOR_BY_ID[activeSkin.id];
   const activeSignature = COOP_FIREARM_BY_ID[activeOperator.signatureWeaponId];
   const operatorImprint = getCoopOperatorImprint(imprintProfile, operatorId);
-  const tr = (key: CoopTextKey, params?: Record<string, string | number>) => coopText(language, key, params);
+  const tr = (key: CoopTextKey, params?: Record<string, string | number>) =>
+    (gameMode === 'friends' ? friendsConnectionText(language, key, params) : undefined) ?? coopText(language, key, params);
   const selectLanguage = (next: CoopLanguage) => {
     setLanguage(next); writeCoopLanguage(next); setStatus(''); setError(null);
   };
@@ -183,7 +201,7 @@ export function ManualMultiplayerSetup({
       setError(tr('error.callsign'));
       return false;
     }
-    localPlayerRef.current = { ...localPlayerRef.current, label };
+    localPlayerRef.current = { ...(gameMode === 'friends' ? friendsMenuPlayer(localPlayerRef.current) : localPlayerRef.current), label };
     try { localStorage.setItem('killsync.multiplayer.nickname', label); } catch { /* Storage fallback */ }
     return true;
   };
@@ -202,19 +220,21 @@ export function ManualMultiplayerSetup({
   };
 
   const refreshLobbies = async () => {
+    setDiscoveryLoading(true);
     try {
-      const list = await listPublicLobbies();
+      const list = await listPublicLobbies(gameMode);
       setLobbies(dedupeLobbies(list));
+      setDiscoveryError(false);
     } catch {
-      setLobbies([]);
-    }
+      setDiscoveryError(true);
+    } finally { setDiscoveryLoading(false); }
   };
 
   // Real-time discovery listener + periodic refresh
   useEffect(() => {
     void refreshLobbies();
     const unsubDiscovery = globalLobbyDiscovery.onLobbiesChange((discovered) => {
-      setLobbies(dedupeLobbies(discovered));
+      if(gameMode!=='friends')setLobbies(dedupeLobbies(discovered));
     });
 
     const timer = window.setInterval(() => void refreshLobbies(), 2_500);
@@ -222,7 +242,7 @@ export function ManualMultiplayerSetup({
       unsubDiscovery();
       window.clearInterval(timer);
     };
-  }, []);
+  }, [gameMode]);
 
   // Handle initial room code if provided via URL
   useEffect(() => {
@@ -236,6 +256,7 @@ export function ManualMultiplayerSetup({
   }, [initialRoomCode]);
 
   useEffect(() => () => {
+    operationRef.current++;
     if (!handedOffRef.current) {
       sessionRef.current?.close();
       hostedLobbyRef.current?.close();
@@ -244,7 +265,16 @@ export function ManualMultiplayerSetup({
     }
   }, []);
 
+  useEffect(()=>{
+    if(gameMode!=='friends'||(mode!=='guest'&&mode!=='direct_guest'))return;
+    const pulse=()=>{const session=sessionRef.current;if(!session||handedOffRef.current)return;
+      if(!friendsWorldIdRef.current)session.sendEvent({type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'friends_hello',payload:{schema:FRIENDS_SESSION_PROTOCOL}});
+      else session.sendEvent({type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'ready',payload:{...localPlayerRef.current,friendsProtocol:FRIENDS_SESSION_PROTOCOL,credential:readFriendsCredential(friendsWorldIdRef.current)}});
+    };pulse();const timer=window.setInterval(pulse,1000);return()=>window.clearInterval(timer);
+  },[gameMode,mode]);
+
   useEffect(() => {
+    if (gameMode==='friends')return;
     if ((mode !== 'guest' && mode !== 'direct_guest') || connectedPeers(peers) === 0 || readySentRef.current) return;
     window.clearTimeout(connectionTimeoutRef.current);
     const delivered = sessionRef.current?.sendEvent({
@@ -258,23 +288,76 @@ export function ManualMultiplayerSetup({
     setStatus(tr(spectatingRef.current ? 'status.spectating' : 'status.waitingHost'));
   }, [mode, peers]);
 
-  const createSession = async (role: 'host' | 'guest') => {
+  const createSession = async (role: 'host' | 'guest', operation = operationRef.current) => {
     window.clearTimeout(connectionTimeoutRef.current);
     sessionRef.current?.close();
     readySentRef.current = false;
     peerPlayerIdsRef.current = {};
     guestPlayersRef.current = [];
+    if(gameMode==='friends'&&role==='host'){await recoverFriendsWorld();friendsCrewRef.current=new FriendsCrewRegistry(friendsWorldCrew());localPlayerRef.current={...localPlayerRef.current,id:friendsCrewRef.current.saved.hostId};}
+    friendsWorldIdRef.current='';
+    const iceServers = await fetchIceServers(gameMode);
+    if (operation !== operationRef.current) throw new Error('Setup cancelled');
     const session = new ManualWebRTCSession({
-      role,
-      iceServers: await fetchIceServers(),
+      role, friends:gameMode==='friends',
+      iceServers,
       onPeerChange: (nextPeers) => {
+        if (operation !== operationRef.current) return;
         setPeers(nextPeers);
-        if (role === 'host') hostedLobbyRef.current?.update(1 + connectedPeers(nextPeers), 'waiting');
+        if (role === 'host') {
+          const active = new Set(nextPeers.filter(peer => peer.state !== 'failed' && peer.state !== 'closed').map(peer => peer.peerId));
+          const removed = new Set<string>();
+          const peerPlayers: Record<string, string> = peerPlayerIdsRef.current;
+          for (const [peerId, playerId] of Object.entries(peerPlayers)) {
+            if (!active.has(peerId)) { removed.add(playerId); delete peerPlayerIdsRef.current[peerId]; }
+          }
+          if (removed.size) {
+            guestPlayersRef.current = guestPlayersRef.current.filter(player => !removed.has(player.id));
+            setGuestPlayers(guestPlayersRef.current);
+            session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'roster', payload: [localPlayerRef.current, ...guestPlayersRef.current] });
+          }
+          hostedLobbyRef.current?.update(1 + guestPlayersRef.current.length, 'waiting');
+        } else if (readySentRef.current && !nextPeers.some(peer => peer.state !== 'failed' && peer.state !== 'closed')) {
+          resetRoom();
+          setError(gameMode === 'friends' ? (language === 'ru' ? 'Комната закрылась. Попросите друга открыть её снова.' : 'That room has closed. Ask your friend to reopen it.') : tr('error.offline'));
+        }
       },
-      onError: () => setError(tr('error.signalInterrupted')),
+      onError: () => { if (operation === operationRef.current) setError(tr('error.signalInterrupted')); },
       onEvent: (peerId, event) => {
+        if (operation !== operationRef.current) return;
+        if(gameMode==='friends') {
+          if(event.event==='friends_hello'&&role==='host') {
+            if((event.payload as any)?.schema!==FRIENDS_SESSION_PROTOCOL){session.sendEventTo(peerId,{type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'error',payload:'Reload Friends mode to use the same session version.'});return;}
+            session.sendEventTo(peerId,{type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'friends_welcome',payload:{schema:FRIENDS_SESSION_PROTOCOL,worldId:friendsCrewRef.current!.saved.worldId}});return;
+          }
+          if(event.event==='friends_welcome'&&role==='guest') {
+            const welcome=event.payload as any;if(welcome?.schema!==FRIENDS_SESSION_PROTOCOL||typeof welcome.worldId!=='string'){resetRoom();setError('Reload Friends mode to use the same session version.');return;}
+            friendsWorldIdRef.current=welcome.worldId;
+            session.sendEvent({type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'ready',payload:{...localPlayerRef.current,friendsProtocol:FRIENDS_SESSION_PROTOCOL,credential:readFriendsCredential(welcome.worldId)}});return;
+          }
+          if(event.event==='friends_identity'&&role==='guest') {
+            const credential=event.payload as any;if(credential?.worldId!==friendsWorldIdRef.current||typeof credential.playerId!=='string'||typeof credential.token!=='string')return;
+            rememberFriendsCredential(credential);localPlayerRef.current={...localPlayerRef.current,id:credential.playerId};return;
+          }
+          if(event.event==='error'&&role==='guest'){const message=typeof event.payload==='string'?event.payload:'Could not join this island.';resetRoom();setError(message);return;}
+        }
+        if (event.event === 'setup_mode' && role === 'guest' && event.payload !== gameMode) {
+          resetRoom();
+          setError(language === 'ru' ? 'Код относится к другому режиму. Используйте код комнаты друзей.' : 'That code opens a different game mode. Use a Friends room code to meet on the island.');
+          return;
+        }
         if (event.event === 'ready' && role === 'host') {
-          const player = parsePlayer(event.payload);
+          const parsed = parsePlayer(event.payload);
+          let player = parsed && (gameMode === 'friends' ? friendsMenuPlayer(parsed) : parsed);
+          if(gameMode==='friends'&&player){
+            if((event.payload as any)?.friendsProtocol!==FRIENDS_SESSION_PROTOCOL){session.sendEventTo(peerId,{type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'error',payload:'Reload Friends mode to use the same session version.'});return;}
+            const registry=friendsCrewRef.current!;const existing=peerPlayerIdsRef.current[peerId];
+            try { const identity=existing?{player:guestPlayersRef.current.find(p=>p.id===existing)!,credential:{worldId:registry.saved.worldId,playerId:existing,token:registry.saved.members[existing].token}}:registry.admit(player,(event.payload as any).credential,[localPlayerRef.current.id,...guestPlayersRef.current.map(p=>p.id)]);
+              player=identity.player;session.sendEventTo(peerId,{type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'friends_identity',payload:identity.credential});
+              if(existing){session.sendEventTo(peerId,{type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'roster',payload:[localPlayerRef.current,...guestPlayersRef.current]});return;}
+              session.admitFriendsPeer(peerId);
+            }catch(error){session.sendEventTo(peerId,{type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'error',payload:(error as Error).message});return;}
+          }
           if (!player || peerPlayerIdsRef.current[peerId] || player.id === localPlayerRef.current.id || guestPlayersRef.current.some(guest => guest.id === player.id)) return;
           if (guestPlayersRef.current.length >= COOP_MAX_PLAYERS - 1) {
             session.disconnectPeer(peerId);
@@ -286,15 +369,17 @@ export function ManualMultiplayerSetup({
             : [...guestPlayersRef.current, { ...player, color: guestColor(guestPlayersRef.current.length) }];
           guestPlayersRef.current = next;
           setGuestPlayers(next);
+          session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'setup_mode', payload: gameMode });
           session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'roster', payload: [localPlayerRef.current, ...next] });
           hostedLobbyRef.current?.update(next.length + 1, 'waiting');
           setStatus(tr('status.joined', { name: player.label }));
         }
         if (event.event === 'roster' && role === 'guest') {
           const players = parsePlayers(event.payload, 1);
-          if (players) setRosterPlayers(players);
+          if (players) {setRosterPlayers(gameMode === 'friends' ? players.map(friendsMenuPlayer) : players);if(gameMode==='friends'){readySentRef.current=true;window.clearTimeout(connectionTimeoutRef.current);setStatus(tr('status.waitingHost'));}}
         }
         if (event.event === 'skin_update' && role === 'host') {
+          if (gameMode === 'friends') return;
           const playerId = peerPlayerIdsRef.current[peerId];
           if (!playerId || !event.payload || typeof event.payload !== 'object') return;
           const requested = (event.payload as { skinId?: unknown }).skinId;
@@ -306,10 +391,14 @@ export function ManualMultiplayerSetup({
         }
         if (event.event === 'start' && role === 'guest') {
           const start = parseStartPayload(event.payload, spectatingRef.current ? 1 : 2);
-          const players = start?.players;
+          if (start && gameMode === 'friends' && start.gameMode !== 'friends') {
+            resetRoom(); setError(language === 'ru' ? 'Это комната режима выживания. Используйте код комнаты друзей.' : 'That is a Survival room. Use a Friends room code.'); return;
+          }
+          const players = start?.gameMode === 'friends' ? start.players.map(friendsMenuPlayer) : start?.players;
           if (!players || (!spectatingRef.current && !players.some(player => player.id === localPlayerRef.current.id))) return;
+          if(gameMode==='friends'){if((event.payload as any)?.friendsProtocol!==FRIENDS_SESSION_PROTOCOL){resetRoom();setError('Reload Friends mode to use the same session version.');return;}session.sendEvent({type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'friends_start_ack'});}
           handedOffRef.current = true;
-          onLaunch({ role: spectatingRef.current ? 'spectator' : 'guest', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: {}, lobbyJoin: joinRef.current || undefined, language, worldId: start.worldId, gameMode: start.gameMode });
+          onLaunch({ role: spectatingRef.current ? 'spectator' : 'guest', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: {}, lobbyJoin: joinRef.current || undefined, roomCode:currentRoomCodeRef.current, language, worldId: start.worldId, gameMode: start.gameMode });
         }
       },
     });
@@ -322,7 +411,9 @@ export function ManualMultiplayerSetup({
   };
 
   const hostSquad = async () => {
-    if (!applyNickname()) return;
+    if (busyRef.current || !applyNickname()) return;
+    busyRef.current = true;
+    const operation = ++operationRef.current;
     spectatingRef.current = false;
     setLoading(true);
     setError(null);
@@ -330,70 +421,83 @@ export function ManualMultiplayerSetup({
     try {
       const code = generateRoomCode();
       const [session, lobby] = await Promise.all([
-        createSession('host'),
-        HostedLobby.create(localPlayerRef.current.label, code),
+        createSession('host', operation),
+        HostedLobby.create(localPlayerRef.current.label, code, gameMode).then(lobby => {
+          if (operation !== operationRef.current) { lobby.close(); throw new Error('Setup cancelled'); }
+          return lobby;
+        }),
       ]);
+      if (operation !== operationRef.current) { session.close(); lobby.close(); return; }
       hostedLobbyRef.current?.close();
       hostedLobbyRef.current = lobby;
       setCurrentRoomCode(lobby.room.code || code);
-      lobby.setStatusListener(message => setStatus(localizeCoopSignalingMessage(language, message, 'status')));
+      currentRoomCodeRef.current = lobby.room.code || code;
+      lobby.setStatusListener(message => { if (operation === operationRef.current) setStatus(gameMode === 'friends' ? tr('status.frequencyActive') : localizeCoopSignalingMessage(language, message, 'status')); });
       lobby.start(session);
       lobby.update(1, 'waiting');
       setMode('host');
       setStatus(tr('status.frequencyActive'));
-    } catch {
-      setError(tr('error.initialize'));
+    } catch(error) {
+      if (operation === operationRef.current) setError(gameMode==='friends'?(error as Error).message:tr('error.initialize'));
     } finally {
-      setLoading(false);
+      if (operation === operationRef.current) { busyRef.current = false; setLoading(false); }
     }
   };
 
   const joinSquad = async (room: PublicLobby) => {
-    if (!applyNickname()) return;
-    spectatingRef.current = room.state === 'in_game';
+    if (busyRef.current || !applyNickname()) return;
+    if (gameMode === 'friends' && room.gameMode === 'survival') {
+      setError(language === 'ru' ? 'Это комната режима выживания. Используйте код комнаты друзей.' : 'That is a Survival room. Use a Friends room code.'); return;
+    }
+    busyRef.current = true;
+    const operation = ++operationRef.current;
+    spectatingRef.current = gameMode !== 'friends' && room.state === 'in_game';
     setLoading(true);
     setMode('guest');
     setCurrentRoomCode(room.code || room.id);
+    currentRoomCodeRef.current = room.code || room.id;
     setError(null);
     setStatus(tr(room.state === 'in_game' ? 'status.infiltrating' : 'status.connectingHost', { name: room.hostName }));
     try {
       const [session, join] = await Promise.all([
-        createSession('guest'),
-        LobbyJoin.create(room.id, localPlayerRef.current.label, spectatingRef.current),
+        createSession('guest', operation),
+        LobbyJoin.create(room.id, localPlayerRef.current.label, spectatingRef.current, gameMode).then(join => {
+          if (operation !== operationRef.current) { join.close(); throw new Error('Setup cancelled'); }
+          return join;
+        }),
       ]);
+      if (operation !== operationRef.current) { session.close(); join.close(); return; }
       joinRef.current?.close();
       joinRef.current = join;
       join.waitForHost(
         session,
-        message => setStatus(localizeCoopSignalingMessage(language, message, 'status')),
-        message => setError(localizeCoopSignalingMessage(language, message, 'error')),
+        message => { if (operation === operationRef.current) setStatus(gameMode === 'friends' ? tr('status.connectingHost', { name: room.hostName }) : localizeCoopSignalingMessage(language, message, 'status')); },
+        message => { if (operation === operationRef.current) setError(gameMode === 'friends' ? tr('error.negotiate') : localizeCoopSignalingMessage(language, message, 'error')); },
         () => {
-        window.clearTimeout(connectionTimeoutRef.current);
-        session.close();
-        setMode('choose');
-        setStatus('');
+          if (operation === operationRef.current) { resetRoom(); setError(tr('error.offline')); }
         },
       );
       connectionTimeoutRef.current = window.setTimeout(() => {
-        if (readySentRef.current) return;
-        join.close();
-        session.close();
+        if (operation !== operationRef.current || readySentRef.current) return;
+        resetRoom();
         setError(tr('error.timeout'));
-        setMode('choose');
-        setStatus('');
       }, 30_000);
-    } catch {
-      window.clearTimeout(connectionTimeoutRef.current);
-      setError(tr('error.offline'));
-      setStatus('');
-      setMode('choose');
+    } catch(error) {
+      if (operation === operationRef.current) { resetRoom(); setError(gameMode==='friends'?(error as Error).message:tr('error.offline')); }
     } finally {
-      setLoading(false);
+      if (operation === operationRef.current) { busyRef.current = false; setLoading(false); }
     }
   };
 
   const joinByCode = async (codeToJoin?: string) => {
-    const raw = codeToJoin || codeInputValue;
+    let raw = codeToJoin || codeInputValue;
+    if (gameMode === 'friends' && /https?:\/\//i.test(raw.trim())) {
+      try {
+        const invite = new URL(raw.trim());
+        if (invite.searchParams.get('mode') !== 'friends') { setError(tr('error.invalidCode')); return; }
+        raw = invite.searchParams.get('room') || '';
+      } catch { setError(tr('error.invalidCode')); return; }
+    }
     const targetCode = normalizeRoomCode(raw);
     if (!targetCode) {
       setError(tr('error.invalidCode'));
@@ -445,16 +549,18 @@ export function ManualMultiplayerSetup({
   const launchHost = () => {
     const session = sessionRef.current;
     if (!session) return;
-    const players = [localPlayerRef.current, ...guestPlayersRef.current];
-    session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: { players, worldId: launchWorldId, gameMode } });
+    const seeds = [localPlayerRef.current, ...guestPlayersRef.current];
+    const players = gameMode === 'friends' ? seeds.map(friendsMenuPlayer) : seeds;
+    session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'start', payload: { players, worldId: launchWorldId, gameMode, ...(gameMode==='friends'?{friendsProtocol:FRIENDS_SESSION_PROTOCOL}:{}) } });
     hostedLobbyRef.current?.update(players.length, 'in_game');
     handedOffRef.current = true;
-    onLaunch({ role: 'host', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: { ...peerPlayerIdsRef.current }, hostedLobby: hostedLobbyRef.current || undefined, language, worldId: launchWorldId, gameMode });
+    onLaunch({ role: 'host', session, localPlayerId: localPlayerRef.current.id, players, peerPlayerIds: { ...peerPlayerIdsRef.current }, hostedLobby: hostedLobbyRef.current || undefined, friendsCrew:friendsCrewRef.current, roomCode:currentRoomCode, language, worldId: launchWorldId, gameMode });
   };
 
-  const launchSolo = () => {
-    if (!applyNickname()) return;
+  const launchSolo = async () => {
+    if (busyRef.current || !applyNickname()) return;
     sessionRef.current?.close();
+    if(gameMode==='friends'){try{await recoverFriendsWorld();}catch(error){setError((error as Error).message);return;}}
     const launch = createSoloMultiplayerLaunch({ player: localPlayerRef.current, language, worldId: launchWorldId, gameMode });
     sessionRef.current = launch.session;
     guestPlayersRef.current = [];
@@ -465,72 +571,112 @@ export function ManualMultiplayerSetup({
 
   // Direct manual code fallback actions
   const createDirectOffer = async () => {
-    if (!applyNickname()) return;
+    if (busyRef.current || !applyNickname()) return;
+    busyRef.current = true;
+    const operation = mode === 'direct_host' ? operationRef.current : ++operationRef.current;
     setLoading(true);
     setError(null);
     setStatus(tr('status.generatingOffer'));
     try {
       const session = mode === 'direct_host' && sessionRef.current
         ? sessionRef.current
-        : await createSession('host');
+        : await createSession('host', operation);
+      if (operation !== operationRef.current) return;
       if (session.occupiedPeerSlots >= COOP_MAX_PLAYERS - 1) {
         setError(tr('error.squadFull'));
         setStatus('');
         return;
       }
-      setOfferCode(await session.createOffer());
+      const offer = await session.createOffer();
+      if (operation !== operationRef.current) return;
+      setOfferCode(offer);
       setAnswerCode('');
       setMode('direct_host');
       setStatus(tr('status.offerReady'));
     } catch {
-      setError(tr('error.createOffer'));
-      setStatus('');
-    } finally { setLoading(false); }
+      if (operation === operationRef.current) { setError(tr('error.createOffer')); setStatus(''); }
+    } finally { if (operation === operationRef.current) { busyRef.current = false; setLoading(false); } }
   };
 
   const createDirectAnswer = async () => {
+    if (busyRef.current) return;
     if (!applyNickname() || !offerCode.trim()) {
       if (!offerCode.trim()) setError(tr('error.pasteOffer'));
       return;
     }
+    busyRef.current = true;
+    const operation = ++operationRef.current;
     setLoading(true);
     setError(null);
     setStatus(tr('status.creatingAnswer'));
     try {
-      const session = await createSession('guest');
-      setAnswerCode(await session.acceptOffer(offerCode));
+      const session = await createSession('guest', operation);
+      const answer = await session.acceptOffer(offerCode);
+      if (operation !== operationRef.current) return;
+      setAnswerCode(answer);
       setMode('direct_guest');
       setStatus(tr('status.answerReady'));
     } catch {
-      setError(tr('error.invalidOffer'));
-      setStatus('');
-    } finally { setLoading(false); }
+      if (operation === operationRef.current) { setError(tr('error.invalidOffer')); setStatus(''); }
+    } finally { if (operation === operationRef.current) { busyRef.current = false; setLoading(false); } }
   };
 
   const acceptDirectAnswer = async () => {
+    if (busyRef.current) return;
     const session = sessionRef.current;
     if (!session || !answerCode.trim()) {
       setError(tr('error.pasteAnswer'));
       return;
     }
+    busyRef.current = true;
+    const operation = operationRef.current;
     setLoading(true);
     setError(null);
     try {
       await session.acceptAnswer(answerCode);
+      if (operation !== operationRef.current) return;
       setAnswerCode('');
       setStatus(tr('status.directConnected'));
     } catch {
-      setError(tr('error.invalidAnswer'));
-    } finally { setLoading(false); }
+      if (operation === operationRef.current) setError(tr('error.invalidAnswer'));
+    } finally { if (operation === operationRef.current) { busyRef.current = false; setLoading(false); } }
   };
 
-  const close = () => {
+  const resetRoom = () => {
+    operationRef.current++;
+    busyRef.current = false;
     window.clearTimeout(connectionTimeoutRef.current);
-    sessionRef.current?.close();
-    hostedLobbyRef.current?.close();
-    joinRef.current?.close();
+    sessionRef.current?.close(); sessionRef.current = null;
+    hostedLobbyRef.current?.close(); hostedLobbyRef.current = null;
+    joinRef.current?.close(); joinRef.current = null;
+    readySentRef.current = false;friendsWorldIdRef.current='';
+    peerPlayerIdsRef.current = {};
+    guestPlayersRef.current = [];
+    spectatingRef.current = false;
+    setPeers([]); setGuestPlayers([]); setRosterPlayers([]);
+    setMode('choose'); setStatus(''); setError(null); setLoading(false);
+    setCurrentRoomCode(''); currentRoomCodeRef.current = ''; setOfferCode(''); setAnswerCode('');
+  };
+  const close = () => {
+    resetRoom();
     onClose();
   };
+
+  if (gameMode === 'friends') return <FriendsModeSetup
+    mode={mode} language={language} nickname={nickname} nicknameValid={nicknameValid}
+    codeInput={codeInputValue} roomCode={currentRoomCode} lobbies={lobbies.filter(room => room.gameMode === 'friends')}
+    localPlayer={localPlayerRef.current} guestPlayers={guestPlayers} rosterPlayers={rosterPlayers}
+    connected={connectedPeers(peers) > 0} spectating={spectatingRef.current} loading={loading}
+    discoveryLoading={discoveryLoading} discoveryError={discoveryError} status={status} error={error}
+    copiedCode={copiedCode} copiedLink={copiedLink} offerCode={offerCode} answerCode={answerCode} initialRoomCode={initialRoomCode}
+    onNickname={name => { setNickname(name); setError(null); }} onNormalizeNickname={() => setNickname(normalizeNickname(nickname))}
+    onCode={code => { setCodeInputValue(code); setError(null); }} onLanguage={selectLanguage} onClose={close} onLeave={resetRoom}
+    onHost={() => void hostSquad()} onSolo={launchSolo} onJoinCode={() => void joinByCode()} onJoinRoom={room => void joinSquad(room)}
+    onRefresh={() => void refreshLobbies()} onLaunch={launchHost} onCopyCode={() => void copyRoomCode()} onCopyLink={() => void copyInviteLink()}
+    onManualHost={() => void createDirectOffer()} onManualGuest={() => { setOfferCode(''); setAnswerCode(''); setMode('direct_guest'); }}
+    onOffer={setOfferCode} onAnswer={setAnswerCode} onCreateAnswer={() => void createDirectAnswer()} onAcceptAnswer={() => void acceptDirectAnswer()}
+    onCopyText={text => { void navigator.clipboard.writeText(text).then(() => setStatus(language === 'ru' ? 'Текст скопирован.' : 'Connection text copied.')).catch(() => setError(tr('error.copyCode'))); }}
+  />;
 
   return (
     <div className={`coop-setup-screen ${gameMode === 'friends' ? 'coop-setup-screen--friends' : ''} absolute inset-0 z-[110] flex items-center justify-center p-3 md:p-6`}>
@@ -1279,11 +1425,12 @@ function createLocalId() {
   return `operator-${values[0].toString(36)}`;
 }
 
-function createLocalPlayerSeed(): CoopPlayerSeed {
+function createLocalPlayerSeed(gameMode: CoopGameMode = 'survival'): CoopPlayerSeed {
   const operatorId = selectedCoopOperatorId();
   const imprint = getCoopOperatorImprint(readCoopImprintProfile(), operatorId);
   const skinId = readCoopSkinId();
-  return { id: createLocalId(), label: savedNickname(), color: '#22d3ee', skinId, operatorId: normalizeCoopOperatorId(skinId), imprint: normalizeCoopImprintLoadout(imprint, operatorId) };
+  const player = { id: createLocalId(), label: savedNickname(), color: '#22d3ee', skinId, operatorId: normalizeCoopOperatorId(skinId), imprint: normalizeCoopImprintLoadout(imprint, operatorId) };
+  return gameMode === 'friends' ? friendsMenuPlayer(player) : player;
 }
 
 function parsePlayer(value: unknown): CoopPlayerSeed | null {

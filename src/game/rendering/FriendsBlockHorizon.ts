@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { HorizonMeshData } from '../world/FriendsHorizonMesh';
-import { meshBlockHorizon } from '../world/FriendsHorizonMesh';
+import { meshOrganicHorizon } from '../world/FriendsHorizonMesh';
 import { FRONTIER_SIZE, FriendsTerrain, TERRAIN_GENERATION, type TerrainGrade } from '../world/FriendsTerrain';
 
 export class FriendsBlockHorizon extends THREE.Group {
@@ -30,11 +30,12 @@ export class FriendsBlockHorizon extends THREE.Group {
     this.fallback.sort((a,b)=>Math.hypot(a[0]-x,a[1]-y)-Math.hypot(b[0]-x,b[1]-y));
   }
   update(){
-    if(this.fallback.length&&!this.queue.length){const [x,y]=this.fallback.shift()!;this.queue.push(meshBlockHorizon(x,y,4096,this.terrain?(x,y)=>this.terrain!.surfaceHeight(x,y):undefined));}
+    if(this.fallback.length&&!this.queue.length){const [x,y]=this.fallback.shift()!;this.queue.push(meshOrganicHorizon(x,y,4096,this.terrain?(x,y)=>this.terrain!.surfaceHeight(x,y):undefined));}
     for(let i=0;i<4&&this.queue.length;i++){
       const data=this.queue.shift()!,key=`${data.tx},${data.ty}`;if(this.installed.has(key))continue;this.installed.add(key);const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(data.positions,3));g.setAttribute('normal',new THREE.BufferAttribute(data.normals,3,true));g.setAttribute('uv',new THREE.BufferAttribute(data.uv,2));g.setAttribute('color',new THREE.BufferAttribute(data.colors,3,true));g.setIndex(new THREE.BufferAttribute(data.indices,1));g.computeBoundingSphere();
       const mesh=new THREE.Mesh(g,this.material);mesh.position.set(data.tx,0,data.ty);mesh.receiveShadow=true;this.add(mesh);
     }
   }
+  hasTerrainAt(x:number,y:number){return this.installed.has(`${Math.floor(x/4096)*4096},${Math.floor(y/4096)*4096}`);}
   dispose(){this.disposed=true;this.worker?.terminate();this.queue=[];this.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});this.removeFromParent();}
 }

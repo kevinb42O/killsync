@@ -25,7 +25,7 @@ describe('volumetric frontier and resource economy', () => {
     for(let x=256;x<48000;x+=512)for(let y=256;y<48000;y+=512){total++;if(frontierForestDensity(x,y)>0)wooded++;}
     expect(wooded/total).toBeGreaterThan(.2);expect(wooded/total).toBeLessThan(.4);
     expect(frontierForestDensity(10700,4200)).toBe(1);
-    const first=frontierTrees(21,8);expect(first.length).toBeGreaterThan(8);expect(frontierTrees(21,8)).toEqual(first);
+    const first=frontierTrees(21,8);expect(first.length).toBeGreaterThan(3);expect(first.length).toBeLessThanOrEqual(10);expect(frontierTrees(21,8)).toEqual(first);
     for(let x=10;x<20;x++)for(let y=14;y<20;y++)for(const tree of frontierTrees(x,y))if(!tree.id.startsWith('starter:'))expect(frontierForestDensity(tree.x,tree.y)).toBeGreaterThan(0);
   });
   it('excavates below zero, exposes a lower floor, and places harvested soil without duplication', () => {
@@ -60,12 +60,12 @@ describe('volumetric frontier and resource economy', () => {
     const f = flatFrontier(), p = actor({ x: 8000, y: 8000 }); f.tool(p,3,down(),1000,[],false); expect(f.snapshot().mined).toBe(0);
     f.tool(p,3,down(),1400,[]); f.tool(p,3,down(),1410,[]); expect(f.snapshot().mined).toBe(1);
     f.pack(p).soil=160; f.tool(p,3,down(),1800,[]); expect(f.snapshot().mined).toBe(1);
-    f.pack(p).soil=0; f.tool(p,3,down(5900,5630),2200,[]); expect(f.terrain.floor(5900,5630,6000,0)).toBe(baseTerrainHeight(5904,5648));
+    f.pack(p).soil=0; f.tool(p,3,down(5900,5630),2200,[]); expect(f.terrain.floor(5900,5630,6000,0)).toBe(FRIENDS_ARRIVAL_HEIGHT);
   });
   it('prevents filling an operator and rejects invalid terrain edits and malformed planted trees', () => {
     const f = flatFrontier(), p = actor({ x: 8000, y: 8000 }); f.tool(p,3,down(),1000,[]);
     f.tool(p,4,down(),1400,[],true,[actor({ id:'guest', x:8000, y:8000, z:-32 })]); expect(f.pack(p).soil).toBe(1);
-    expect(f.terrain.set(-1,2,3,0)).toBe(false); expect(f.terrain.set(250,250,200,1)).toBe(false);
+    expect(f.terrain.set(-1,2,3,0)).toBe(false); expect(f.terrain.set(250,250,256,1)).toBe(false);
     expect(isFrontierSave({ ...f.snapshot(), planted:[{ id:'bad',x:NaN,y:0,z:0,kind:'pine',scale:1 }] })).toBe(false);
     expect(isFrontierSave({ ...f.snapshot(), terrain:{revision:0,edits:[[1,2,3,9]]} })).toBe(false);
   });

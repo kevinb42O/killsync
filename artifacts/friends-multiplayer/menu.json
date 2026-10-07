@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-07T20:50:09.354Z",
+  "checks": [
+    "actual Friends menu opens an island",
+    "actual setup admission and roster converge",
+    "actual setup-to-arena handoff",
+    "guest receives the playable Friends field pack",
+    "host departure keeps the terminal rejoin action visible",
+    "no runtime exception in actual React flow"
+  ],
+  "errors": [],
+  "packPresentation": [
+    {
+      "tag": "SECTION",
+      "class": "frontier-pack",
+      "display": "flex",
+      "visibility": "visible",
+      "width": 652,
+      "height": 452
+    },
+    {
+      "tag": "DIV",
+      "class": "frontier-pack-backdrop",
+      "display": "grid",
+      "visibility": "visible",
+      "width": 700,
+      "height": 500
+    },
+    {
+      "tag": "DIV",
+      "class": "coop-arena coop-arena--friends absolute inset-0 z-[110] bg-[#05080e] coop-arena--interaction-blocked coop-arena--deployed",
+      "display": "block",
+      "visibility": "visible",
+      "width": 700,
+      "height": 500
+    },
+    {
+      "tag": "DIV",
+      "class": "app-shell relative w-full bg-[#0a0a0a] overflow-hidden text-white font-sans",
+      "display": "block",
+      "visibility": "visible",
+      "width": 700,
+      "height": 500
+    },
+    {
+      "tag": "DIV",
+      "class": "",
+      "display": "block",
+      "visibility": "visible",
+      "width": 700,
+      "height": 500
+    },
+    {
+      "tag": "BODY",
+      "class": "",
+      "display": "block",
+      "visibility": "visible",
+      "width": 700,
+      "height": 500
+    },
+    {
+      "tag": "HTML",
+      "class": "",
+      "display": "block",
+      "visibility": "visible",
+      "width": 700,
+      "height": 500
+    }
+  ]
+}

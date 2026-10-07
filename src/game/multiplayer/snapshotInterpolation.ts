@@ -1,6 +1,18 @@
-import { friendsVehicleFloor, pointOnGangway, trainGangways, vehicleLocal, type FriendsSnapshot, type FriendsVehicle } from './FriendsExpedition';
+import { resolveFriendsBuildPieces, friendsBuildFloor, type FriendsBuildPiece } from './FriendsBuilding';
+import { scenicVehicles, SCENIC_SEATS } from './FriendsScenicService';
+import { scenicRailway } from '../world/FriendsScenicRailway';
+import { vehicleWorldPoint, vehicleLocalPoint } from './FriendsVehiclePose';
+import { friendsVehicleFloor, pointOnGangway, trainGangways, gangwayHeight, type FriendsSnapshot, type FriendsVehicle } from './FriendsExpedition';
 import type { CoopGrenadeSnapshot } from '../combat/coopGrenades';
+import { securedCargoPose } from './FriendsHauling';
+import { interpolateCargoRotation } from './FriendsCargoPose';
 import { CoopEnemySnapshot, CoopPlayerSnapshot, CoopProjectileSnapshot, CoopSnapshot } from './CoopSimulation';
+
+/** Teleports are discontinuities, including a nearby Return Home. */
+function redeployedPlayers(previous: CoopSnapshot, current: CoopSnapshot) {
+  const oldEvents = new Set(previous.combatEvents.map(event => event.id));
+  return new Set(current.combatEvents.filter(event => event.kind === 'player_redeployed' && !oldEvents.has(event.id)).map(event => event.playerId));
+}
 
 /**
  * Smooths presentation only. It never feeds values back into the host
@@ -12,10 +24,11 @@ export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSna
   // Once presentation catches up, the authoritative snapshot is already the
   // exact result. Avoid cloning every moving entity on extra display frames.
   if (progress >= 1) return current;
+  const redeployed = redeployedPlayers(previous, current);
   const players = interpolateEntities(previous.players, current.players, progress, (old, next) => ({
     ...next,
-    x: lerp(old.x, next.x, progress), y: lerp(old.y, next.y, progress), angle: lerpAngle(old.angle, next.angle, progress),
-    health: lerp(old.health, next.health, progress), z: lerp(old.z, next.z, progress),
+    x: redeployed.has(next.id) ? next.x : lerp(old.x, next.x, progress), y: redeployed.has(next.id) ? next.y : lerp(old.y, next.y, progress), angle: lerpAngle(old.angle, next.angle, progress),
+    health: lerp(old.health, next.health, progress), z: redeployed.has(next.id) ? next.z : lerp(old.z, next.z, progress),
   }));
   const enemies = interpolateEntities(previous.enemies, current.enemies, progress, (old, next) => ({
     ...next,
@@ -64,7 +77,7 @@ export class CoopSnapshotInterpolator {
     const progress = Math.max(0, Math.min(1, alpha));
     if (progress >= 1) return current;
 
-    this.syncPlayers(previous.players, current.players, progress);
+    this.syncPlayers(previous.players, current.players, progress, redeployedPlayers(previous, current));
     this.syncEnemies(previous.enemies, current.enemies, progress);
     this.syncProjectiles(previous.projectiles, current.projectiles, progress);
     assignExact(this.frame, current);
@@ -104,7 +117,7 @@ export class CoopSnapshotInterpolator {
     for (const id of this.grenades.keys()) if (!this.activeGrenadeIds.has(id)) this.grenades.delete(id);
   }
 
-  private syncPlayers(previous: CoopPlayerSnapshot[], current: CoopPlayerSnapshot[], progress: number) {
+  private syncPlayers(previous: CoopPlayerSnapshot[], current: CoopPlayerSnapshot[], progress: number, redeployed: ReadonlySet<string>) {
     const previousById = indexEntities(previous);
     this.playerFrame.length = 0; this.activePlayerIds.clear();
     for (const next of current) {
@@ -113,7 +126,7 @@ export class CoopSnapshotInterpolator {
       if (!target) { target = { ...next }; this.players.set(next.id, target); }
       else assignExact(target, next);
       const old = previousById.get(next.id);
-      if (old) {
+      if (old && !redeployed.has(next.id)) {
         target.x = lerp(old.x, next.x, progress); target.y = lerp(old.y, next.y, progress);
         target.angle = lerpAngle(old.angle, next.angle, progress);
         target.health = lerp(old.health, next.health, progress); target.z = lerp(old.z, next.z, progress);
@@ -193,13 +206,27 @@ export type InterpolatedEntity = CoopPlayerSnapshot | CoopEnemySnapshot | CoopPr
 
 function interpolateFriends(previous: FriendsSnapshot | undefined, current: FriendsSnapshot | undefined, alpha: number): FriendsSnapshot | undefined {
   if (!current || !previous) return current;
-  return { ...current, vehicles: interpolateEntities(previous.vehicles, current.vehicles, alpha, (old, next) => ({ ...next,
-    x: lerp(old.x, next.x, alpha), y: lerp(old.y, next.y, alpha), z: lerp(old.z, next.z, alpha), angle: lerpAngle(old.angle, next.angle, alpha),
-  })) };
+  const vehicles = interpolateEntities(previous.vehicles, current.vehicles, alpha, (old, next) => {
+    if(next.scenic && old.scenic && old.routeDistance!==undefined && next.routeDistance!==undefined){
+      const length=scenicRailway().length,delta=(next.routeDistance-old.routeDistance+length*1.5)%length-length*.5;
+      // Large teleports (restore or developer travel) are snapped, ordinary motion follows the curve.
+      return Math.abs(delta)>900?next:{...next,...((pose)=>({x:pose.x,y:pose.y,z:pose.z,angle:pose.angle,pitch:pose.pitch,routeDistance:pose.routeDistance}))(scenicVehicles(old.routeDistance+delta*alpha)[0])};
+    }
+    return {...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha),angle:lerpAngle(old.angle,next.angle,alpha),pitch:lerp(old.pitch||0,next.pitch||0,alpha)};
+  });
+  const hauling = current.hauling && previous.hauling ? { ...current.hauling,
+    cargo: interpolateEntities(previous.hauling.cargo, current.hauling.cargo, alpha, (old,next) => next.secured ? securedCargoPose(next,vehicles) : old.secured ? next : ({ ...next, x:lerp(old.x,next.x,alpha), y:lerp(old.y,next.y,alpha), z:lerp(old.z,next.z,alpha), angle:lerpAngle(old.angle,next.angle,alpha), orientation:interpolateCargoRotation(old,next,alpha) })),
+    ropes: interpolateEntities(previous.hauling.ropes, current.hauling.ropes, alpha, (old,next) => ({...next, tension:lerp(old.tension,next.tension,alpha), length:lerp(old.length,next.length,alpha)})),
+  } : current.hauling;
+  return { ...current, vehicles, hauling, building:current.building&&{...current.building,pieces:resolveFriendsBuildPieces(current.building.pieces,vehicles)} };
 }
-function passengerAnchor(vehicles: FriendsVehicle[], player: CoopPlayerSnapshot) {
+function passengerAnchor(vehicles: FriendsVehicle[], player: CoopPlayerSnapshot,pieces:readonly FriendsBuildPiece[]=[]) {
+  if (player.friendsDevFlight) return undefined;
+  if(player.friendsSeat)return vehicles.find(v=>v.id===player.friendsSeat!.vehicleId);
+  const load=pieces.find(p=>p.attachment&&Math.abs((friendsBuildFloor([p],player.x,player.y,player.z,0)??Infinity)-player.z)<2);
+  if(load)return vehicles.find(v=>v.id===load.attachment!.vehicleId);
   const vehicle = vehicles.find(v => { const floor = friendsVehicleFloor([v], player.x, player.y, player.z); return floor !== undefined && Math.abs(player.z - floor) < 2; });
-  return vehicle || trainGangways(vehicles).find(link => Math.abs(player.z - link.z) < 2 && pointOnGangway(link, player.x, player.y))?.from;
+  return vehicle || trainGangways(vehicles).find(link => Math.abs(player.z - gangwayHeight(link,player.x,player.y)) < 2 && pointOnGangway(link, player.x, player.y))?.from;
 }
 function interpolatePassengers(previous: CoopSnapshot, current: CoopSnapshot, friends: FriendsSnapshot, players: CoopPlayerSnapshot[], alpha: number) {
   const oldPlayers = indexEntities(previous.players);
@@ -207,11 +234,14 @@ function interpolatePassengers(previous: CoopSnapshot, current: CoopSnapshot, fr
     const old = oldPlayers.get(target.id), next = current.players.find(p => p.id === target.id);
     if (!old || !next) continue;
     if (Math.hypot(next.x - old.x, next.y - old.y, next.z - old.z) > 900) { target.x = next.x; target.y = next.y; target.z = next.z; continue; }
-    const before = passengerAnchor(previous.friends!.vehicles, old), after = passengerAnchor(current.friends!.vehicles, next);
+    const before = passengerAnchor(previous.friends!.vehicles, old,previous.friends!.building?.pieces), after = passengerAnchor(current.friends!.vehicles, next,current.friends!.building?.pieces);
     if (!before || !after || before.id !== after.id) continue;
     const frame = friends.vehicles.find(v => v.id === after.id)!;
-    const a = vehicleLocal(before, old.x, old.y), b = vehicleLocal(after, next.x, next.y), x = lerp(a.x, b.x, alpha), y = lerp(a.y, b.y, alpha);
-    target.x = frame.x + x * Math.cos(frame.angle) - y * Math.sin(frame.angle); target.y = frame.y + x * Math.sin(frame.angle) + y * Math.cos(frame.angle);
-    target.z = frame.z + lerp(old.z - before.z, next.z - after.z, alpha);
+    if(next.friendsSeat){
+      const seat=SCENIC_SEATS[next.friendsSeat.index];if(seat)Object.assign(target,vehicleWorldPoint(frame,seat));
+      continue;
+    }
+    const a=vehicleLocalPoint(before,old),b=vehicleLocalPoint(after,next);
+    Object.assign(target,vehicleWorldPoint(frame,{x:lerp(a.x,b.x,alpha),y:lerp(a.y,b.y,alpha),z:lerp(a.z,b.z,alpha)}));
   }
 }

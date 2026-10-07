@@ -1,4 +1,5 @@
 import { COOP_MAX_PLAYERS } from './protocol';
+import type { CoopGameMode } from './CoopGameMode';
 
 /**
  * Unified real-time WebRTC signaling broker for KILLSYNC.
@@ -16,6 +17,7 @@ export interface PublicLobbyInfo {
   maxPlayers: number;
   playerCount: number;
   state: 'waiting' | 'in_game';
+  gameMode?: CoopGameMode;
   updatedAt: number;
   pingMs?: number;
 }
@@ -375,7 +377,7 @@ export class LobbyDiscovery {
         info.updatedAt = Date.now();
         // Overwrite any older lobby with same code or hostName to prevent ghost duplicates
         for (const [id, l] of this.lobbies.entries()) {
-          if (id !== info.id && (l.code === info.code || l.hostName === info.hostName)) {
+          if (id !== info.id && (l.code === info.code || info.gameMode !== 'friends' && l.gameMode !== 'friends' && l.hostName === info.hostName)) {
             this.lobbies.delete(id);
           }
         }
@@ -449,7 +451,8 @@ export class AutoHostedLobby {
     hostName: string,
     code?: string,
     id?: string,
-    private readonly client: MqttWsSignalingClient = getSharedMqttClient()
+    private readonly client: MqttWsSignalingClient = getSharedMqttClient(),
+    private readonly gameMode: CoopGameMode = 'survival',
   ) {
     this.code = code ? normalizeRoomCode(code) : generateRoomCode();
     this.id = id || `room-${this.code.toLowerCase()}`;
@@ -540,6 +543,7 @@ export class AutoHostedLobby {
       maxPlayers: this.maxPlayers,
       playerCount: this.playerCount,
       state: this.state,
+      gameMode: this.gameMode,
       updatedAt: Date.now(),
     };
     this.client.publish(TOPIC_LOBBY_LIST, JSON.stringify(info));

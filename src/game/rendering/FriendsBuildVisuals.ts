@@ -57,18 +57,22 @@ export function prepareFriendsBuildGeometry(geometry: THREE.BufferGeometry, shap
   return geometry;
 }
 
-export function createFriendsBuildMaterial(shape: FriendsBuildShape, finish: FriendsBuildFinish): THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[] {
+export function createFriendsBuildMaterial(shape: FriendsBuildShape, finish: FriendsBuildFinish, moving=false): THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[] {
   const terrain = FRIENDS_TERRAIN_SURFACES[finish as keyof typeof FRIENDS_TERRAIN_SURFACES];
   if (terrain && !isPlayerRail(shape) && shape !== 'glass') {
-    const top = frontierMaterial(terrain.asset, terrain.color, true);
-    return finish === 'grass' ? [top, frontierMaterial('Ground037', FRIENDS_TERRAIN_SURFACES.soil.color, true)] : top;
+    const top = frontierMaterial(terrain.asset, terrain.color, !moving);
+    return finish === 'grass' ? [top, frontierMaterial('Ground037', FRIENDS_TERRAIN_SURFACES.soil.color, !moving)] : top;
   }
   const f = FRIENDS_FINISHES[finish];
-  if (finish === 'timber' && !isPlayerRail(shape) && shape !== 'glass') return frontierMaterial('WoodFloor051', f.color, true);
+  if (finish === 'timber' && !isPlayerRail(shape) && shape !== 'glass') return frontierMaterial('WoodFloor051', f.color, !moving);
   return new THREE.MeshStandardMaterial({ vertexColors: isPlayerRail(shape), color: isPlayerRail(shape) ? '#ffffff' : shape === 'glass' ? '#a9e4d7' : f.color,
     roughness: shape === 'glass' ? .12 : f.roughness, metalness: f.metalness, transparent: shape === 'glass', opacity: shape === 'glass' ? .34 : 1,
     depthWrite: shape !== 'glass', side: shape === 'glass' ? THREE.DoubleSide : THREE.FrontSide,
     emissive: shape === 'lamp' ? '#ffc879' : shape === 'gathering_beacon' ? '#8de6ce' : shape === 'survey_lens' ? '#baa4fa' : '#000000', emissiveIntensity: .45 });
+}
+function buildQuaternion(p:FriendsBuildPose,target:THREE.Quaternion){
+  target.setFromEuler(new THREE.Euler(0,-(p.vehicleFrame?.angle||0),p.vehicleFrame?.pitch||0,'YXZ'));
+  return target.multiply(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP,-p.rotation*Math.PI/2));
 }
 export class FriendsBuildVisuals {
   readonly group = new THREE.Group();
@@ -86,24 +90,30 @@ export class FriendsBuildVisuals {
   constructor(scene: THREE.Scene) { this.group.name = 'friends-creations'; scene.add(this.group); }
   private geometry(shape: FriendsBuildShape) { let g = this.geometries.get(shape); if (!g) { g = prepareFriendsBuildGeometry(createFriendsBuildGeometry(shape), shape); this.geometries.set(shape, g); } return g; }
   update(building: FriendsBuildingSnapshot | undefined) {
-    this.group.visible = Boolean(building); if (!building || building.revision === this.revision) return;
+    this.group.visible = Boolean(building); if (!building) return;
+    if(building.revision===this.revision){
+      if(!building.pieces.some(p=>p.attachment))return;
+      const byId=new Map(building.pieces.map(p=>[p.id,p])),matrix=new THREE.Matrix4(),q=new THREE.Quaternion();
+      for(const mesh of [...this.batches.values(),...this.detailBatches]){const ids=mesh.userData.pieceIds as number[]|undefined;if(!ids)continue;let moved=false;ids.forEach((id,i)=>{const p=byId.get(id);if(!p?.attachment)return;matrix.compose(new THREE.Vector3(p.x,p.z,p.y),buildQuaternion(p,q),new THREE.Vector3(1,1,1));mesh.setMatrixAt(i,matrix);moved=true;});if(moved){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();}}
+      return;
+    }
     this.revision = building.revision;
     const grouped = new Map<string, typeof building.pieces>();
-    for (const p of building.pieces) { const k = `${p.shape}:${p.finish}`, a = grouped.get(k) || []; a.push(p); grouped.set(k, a); }
+    for (const p of building.pieces) { const k = `${p.shape}:${p.finish}:${p.attachment?'cargo':'world'}`, a = grouped.get(k) || []; a.push(p); grouped.set(k, a); }
     for (const mesh of this.batches.values()) mesh.visible = false;
     const matrix = new THREE.Matrix4(), quaternion = new THREE.Quaternion(), position = new THREE.Vector3();
     for (const [key, pieces] of grouped) {
       const { shape, finish } = pieces[0], f = FRIENDS_FINISHES[finish];
       let material = this.materials.get(key);
-      if (!material) { material = createFriendsBuildMaterial(shape, finish); this.materials.set(key, material); }
+      if (!material) { material = createFriendsBuildMaterial(shape, finish,Boolean(pieces[0].attachment)); this.materials.set(key, material); }
       let mesh = this.batches.get(key);
       if (!mesh || mesh.instanceMatrix.count < pieces.length) {
         if (mesh) { mesh.removeFromParent(); mesh.dispose(); }
         mesh = new THREE.InstancedMesh(this.geometry(shape), material, Math.max(8, 2 ** Math.ceil(Math.log2(pieces.length))));
         mesh.name = `creation:${key}`; mesh.castShadow = true; mesh.receiveShadow = true; this.batches.set(key, mesh); this.group.add(mesh);
       }
-      mesh.visible = true; mesh.count = pieces.length;
-      pieces.forEach((p, i) => { position.set(p.x, p.z, p.y); quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -p.rotation * Math.PI / 2); matrix.compose(position, quaternion, new THREE.Vector3(1, 1, 1)); mesh!.setMatrixAt(i, matrix); });
+      mesh.visible = true; mesh.count = pieces.length;mesh.userData.pieceIds=pieces.map(p=>p.id);
+      pieces.forEach((p, i) => { position.set(p.x, p.z, p.y); buildQuaternion(p,quaternion); matrix.compose(position, quaternion, new THREE.Vector3(1, 1, 1)); mesh!.setMatrixAt(i, matrix); });
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
     }
     this.clearDetails();
@@ -112,8 +122,8 @@ export class FriendsBuildVisuals {
       if (!pieces.length) { geometry.dispose(); return; }
       const material = new THREE.MeshStandardMaterial({ color, roughness: .65, emissive: luminous ? color : '#000000', emissiveIntensity: luminous ? .8 : 0 });
       const mesh = new THREE.InstancedMesh(geometry, material, pieces.length);
-      pieces.forEach((p,i) => { position.set(p.x,p.z,p.y); quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP,-p.rotation*Math.PI/2); matrix.compose(position,quaternion,new THREE.Vector3(1,1,1)); mesh.setMatrixAt(i,matrix); });
-      mesh.castShadow = true; mesh.computeBoundingSphere(); this.group.add(mesh); this.detailBatches.push(mesh); this.detailGeometries.push(geometry); this.detailMaterials.push(material);
+      pieces.forEach((p,i) => { position.set(p.x,p.z,p.y); buildQuaternion(p,quaternion); matrix.compose(position,quaternion,new THREE.Vector3(1,1,1)); mesh.setMatrixAt(i,matrix); });
+      mesh.userData.pieceIds=pieces.map(p=>p.id);mesh.castShadow = true; mesh.computeBoundingSphere(); this.group.add(mesh); this.detailBatches.push(mesh); this.detailGeometries.push(geometry); this.detailMaterials.push(material);
     };
     detail('workbench', new THREE.BoxGeometry(68,4,12).translate(0,67,18), '#ded0a6');
     detail('workbench', new THREE.BoxGeometry(7,14,20).translate(28,70,-16), '#667e7d');
@@ -145,7 +155,7 @@ export class FriendsBuildVisuals {
       this.group.add(this.ghost, this.outline);
     }
     this.ghostMaterial.color.set(valid ? FRIENDS_FINISHES[finish].color : '#f88472'); this.outlineMaterial.color.set(valid ? '#b7ffe1' : '#ff9481');
-    for (const object of [this.ghost, this.outline!]) { object.visible = true; object.position.set(pose.x, pose.z, pose.y); object.rotation.y = -pose.rotation * Math.PI / 2; }
+    for (const object of [this.ghost, this.outline!]) { object.visible = true; object.position.set(pose.x, pose.z, pose.y); buildQuaternion(pose,object.quaternion); }
   }
   private clearDetails() { this.detailBatches.forEach(m => { m.removeFromParent(); m.dispose(); }); this.detailGeometries.forEach(g => g.dispose()); this.detailMaterials.forEach(m => m.dispose()); this.detailBatches = []; this.detailGeometries = []; this.detailMaterials = []; }
   dispose() { this.clearDetails(); this.group.removeFromParent(); this.outline?.geometry.dispose(); this.batches.forEach(m => m.dispose()); this.geometries.forEach(g => g.dispose()); this.materials.forEach(material => { for (const m of Array.isArray(material) ? material : [material]) { m.map?.dispose(); m.normalMap?.dispose(); m.roughnessMap?.dispose(); m.dispose(); } }); this.ghostMaterial.dispose(); this.outlineMaterial.dispose(); }

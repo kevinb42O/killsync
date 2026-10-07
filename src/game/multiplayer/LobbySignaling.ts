@@ -1,5 +1,6 @@
-import { DEFAULT_PUBLIC_STUN_SERVERS, ManualWebRTCSession } from './ManualWebRTCSession';
+import { DEFAULT_PUBLIC_STUN_SERVERS, ManualWebRTCSession, decodeSignal } from './ManualWebRTCSession';
 import { COOP_MAX_PLAYERS } from './protocol';
+import type { CoopGameMode } from './CoopGameMode';
 import {
   AutoHostedLobby,
   AutoLobbyJoin,
@@ -16,6 +17,7 @@ export type PublicLobby = {
   maxPlayers: number;
   playerCount: number;
   state: 'waiting' | 'in_game';
+  gameMode?: CoopGameMode;
   pingMs?: number;
 };
 
@@ -38,13 +40,16 @@ function apiUrl(path: string) {
   return `${configured || ''}/api/multiplayer${path}`;
 }
 
+export function friendsUsesHttp() { return import.meta.env.VITE_FRIENDS_SIGNALING_MODE !== 'broker'; }
+
 function hasHttpSignalingFallback() {
   return Boolean(import.meta.env.VITE_MULTIPLAYER_SIGNALING_URL?.trim());
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const signal = init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000);
   const response = await fetch(apiUrl(path), {
-    ...init,
+    ...init, signal,
     headers: { 'Content-Type': 'application/json', ...init.headers },
   });
   if (!response.ok) {
@@ -56,7 +61,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 function auth(token: string) { return { Authorization: `Bearer ${token}` }; }
 
-export async function listPublicLobbies(): Promise<PublicLobby[]> {
+export async function listPublicLobbies(gameMode: CoopGameMode = 'survival'): Promise<PublicLobby[]> {
+  if (gameMode === 'friends' && friendsUsesHttp()) return (await request<{rooms:PublicLobby[]}>('/rooms?mode=friends')).rooms.filter(r=>r.gameMode==='friends');
   ensureLobbyDiscoveryStarted();
   const brokerLobbies: PublicLobby[] = globalLobbyDiscovery.getLobbies().map(l => ({
     id: l.id,
@@ -65,6 +71,7 @@ export async function listPublicLobbies(): Promise<PublicLobby[]> {
     maxPlayers: l.maxPlayers,
     playerCount: l.playerCount,
     state: l.state,
+    gameMode: l.gameMode,
     pingMs: l.pingMs,
   }));
 
@@ -106,7 +113,12 @@ export async function listPublicLobbies(): Promise<PublicLobby[]> {
   }
 }
 
-export async function fetchIceServers(): Promise<RTCIceServer[]> {
+export async function fetchIceServers(gameMode: CoopGameMode = 'survival'): Promise<RTCIceServer[]> {
+  if (gameMode === 'friends' && friendsUsesHttp()) {
+    const r=await request<{iceServers:RTCIceServer[]}>('/ice-servers?mode=friends');
+    if(!Array.isArray(r.iceServers)||!r.iceServers.length)throw new Error('The island connection service is unavailable.');
+    return r.iceServers;
+  }
   if (!hasHttpSignalingFallback()) return DEFAULT_PUBLIC_STUN_SERVERS;
   try {
     const response = await request<{ iceServers: RTCIceServer[] }>('/ice-servers');
@@ -127,6 +139,7 @@ export class HostedLobby {
   private busy = new Set<string>();
   private completed = new Set<string>();
   private offers = new Map<string, string>();
+  private offerTasks = new Map<string, Promise<string>>();
   private statusListener?: (status: string) => void;
   private closed = false;
   private playerCount = 1;
@@ -140,20 +153,21 @@ export class HostedLobby {
     this.token = token;
   }
 
-  static async create(hostName: string, customCode?: string) {
+  static async create(hostName: string, customCode?: string, gameMode: CoopGameMode = 'survival') {
     const code = customCode ? normalizeRoomCode(customCode) : generateRoomCode();
     const roomId = `room-${code.toLowerCase()}`;
-    const auto = new AutoHostedLobby(hostName, code, roomId);
+    const auto = new AutoHostedLobby(hostName, code, roomId, undefined, gameMode);
 
     let localToken: string | undefined;
-    if (hasHttpSignalingFallback()) {
+    if (gameMode === 'friends' && friendsUsesHttp() || hasHttpSignalingFallback()) {
       try {
         const response = await request<{ room: PublicLobby; hostToken: string }>('/rooms', {
           method: 'POST',
-          body: JSON.stringify({ id: roomId, hostName, maxPlayers: COOP_MAX_PLAYERS, code }),
+          body: JSON.stringify({ id: roomId, hostName, maxPlayers: COOP_MAX_PLAYERS, code, gameMode }),
         });
         localToken = response.hostToken;
-      } catch {
+      } catch (error) {
+        if(gameMode === 'friends' && friendsUsesHttp())throw error;
         // Local backend optional; broker carries the squad
       }
     }
@@ -165,6 +179,7 @@ export class HostedLobby {
       maxPlayers: COOP_MAX_PLAYERS,
       playerCount: 1,
       state: 'waiting',
+      gameMode,
     };
 
     return new HostedLobby(room, auto, localToken);
@@ -177,19 +192,14 @@ export class HostedLobby {
 
   start(session: ManualWebRTCSession) {
     // 1. Start real-time broker signaling
-    this.autoLobby.start(
+    if (!(this.room.gameMode === 'friends' && friendsUsesHttp())) this.autoLobby.start(
       async (requestId, guestName) => {
-        const existing = this.offers.get(requestId);
-        if (existing) return existing;
-        if (session.occupiedPeerSlots >= COOP_MAX_PLAYERS - 1) throw new Error('This squad is full.');
-        const offer = await session.createOffer();
-        this.offers.set(requestId, offer);
-        return offer;
+        return this.offerFor(session, requestId);
       },
       async (requestId, answer) => {
         if (this.completed.has(requestId)) return;
-        this.completed.add(requestId);
         await session.acceptAnswer(answer);
+        this.completed.add(requestId);
         this.statusListener?.('Operative connected via direct WebRTC link!');
       }
     );
@@ -208,24 +218,28 @@ export class HostedLobby {
           { headers: auth(this.token!), signal: controller.signal }
         );
         if (this.closed) return;
-        for (const join of joins) {
+        const activeRequests=new Set(joins.map(j=>j.requestId));
+        for(const [id,offer] of this.offers) if(!activeRequests.has(id)){ const peerId=decodeSignal(offer).peerId; if(!session.peerInfo.some(p=>p.peerId===peerId&&p.state==='connected'))session.disconnectPeer(peerId);this.offers.delete(id);this.busy.delete(id);this.completed.delete(id);this.offerTasks.delete(id); }
+        await Promise.all(joins.map(async join => {
           if (join.answer && this.busy.has(join.requestId) && !this.completed.has(join.requestId)) {
-            this.completed.add(join.requestId);
             await session.acceptAnswer(join.answer);
+            this.completed.add(join.requestId);
             if (this.closed) return;
             this.busy.delete(join.requestId);
-            this.offers.delete(join.requestId);
+            // Friends retains the offer until its join reservation expires so
+            // the cleanup pass also releases completed deduplication entries.
+            if (this.room.gameMode !== 'friends') this.offers.delete(join.requestId);
             this.statusListener?.(`${join.guestName} joined squad.`);
           } else if (!join.offer && !this.busy.has(join.requestId)) {
             if (session.occupiedPeerSlots >= COOP_MAX_PLAYERS - 1) {
               this.busy.add(join.requestId);
               this.statusListener?.('This squad is full.');
-              continue;
+              return;
             }
             this.busy.add(join.requestId);
             this.statusListener?.(`${join.guestName} joining…`);
             try {
-              const offer = this.offers.get(join.requestId) || await session.createOffer();
+              const offer = await this.offerFor(session, join.requestId);
               this.offers.set(join.requestId, offer);
               if (this.closed) return;
               await request(`/rooms/${this.room.id}/joins/${join.requestId}/offer`, {
@@ -239,7 +253,7 @@ export class HostedLobby {
               throw error;
             }
           }
-        }
+        }));
       } catch {
         if (!this.closed) this.statusListener?.('Reconnecting squad signal…');
       } finally {
@@ -250,11 +264,18 @@ export class HostedLobby {
     void poll();
   }
 
+  private offerFor(session: ManualWebRTCSession, requestId: string): Promise<string> {
+    const existing=this.offerTasks.get(requestId);if(existing)return existing;
+    if(session.occupiedPeerSlots>=COOP_MAX_PLAYERS-1)return Promise.reject(new Error('This squad is full.'));
+    const task=session.createOffer().then(offer=>{if(this.closed){session.disconnectPeer(decodeSignal(offer).peerId);throw new Error('Room closed');}this.offers.set(requestId,offer);return offer;}).catch(error=>{this.offerTasks.delete(requestId);throw error;});
+    this.offerTasks.set(requestId,task);return task;
+  }
+
   update(playerCount: number, state: 'waiting' | 'in_game') {
     if (this.closed) return;
     this.playerCount = playerCount;
     this.state = state;
-    this.autoLobby.update(playerCount, state);
+    if (!(this.room.gameMode === 'friends' && friendsUsesHttp())) this.autoLobby.update(playerCount, state);
     this.lastHeartbeat = Date.now();
     if (this.token) {
       void request(`/rooms/${this.room.id}`, {
@@ -271,6 +292,7 @@ export class HostedLobby {
     window.clearTimeout(this.timer);
     for (const controller of this.requests) controller.abort();
     this.requests.clear();
+    this.offerTasks.clear();this.offers.clear();this.busy.clear();this.completed.clear();
     if (this.token) {
       void request(`/rooms/${this.room.id}`, { method: 'DELETE', headers: auth(this.token) }).catch(() => undefined);
     }
@@ -294,7 +316,13 @@ export class LobbyJoin {
     this.autoJoin = autoJoin;
   }
 
-  static async create(roomId: string, guestName: string, spectate: boolean = false) {
+  static async create(roomId: string, guestName: string, spectate: boolean = false, gameMode: CoopGameMode = 'survival') {
+    if(gameMode==='friends' && friendsUsesHttp()){
+      const {room}=await request<{room:PublicLobby}>(`/rooms/${encodeURIComponent(roomId)}?mode=friends`);
+      if(room.gameMode!=='friends')throw new Error('That code opens a Survival room.');
+      const r=await request<{requestId:string;joinToken:string}>(`/rooms/${room.id}/joins`,{method:'POST',body:JSON.stringify({guestName,spectate:false})});
+      return new LobbyJoin(room.id,r.requestId,r.joinToken);
+    }
     ensureLobbyDiscoveryStarted();
     // Check if room exists in broker discovery or matches code
     const lobby = globalLobbyDiscovery.findLobbyByCode(roomId);
@@ -432,5 +460,5 @@ function playerMessage(serverMessage: string | undefined, status: number) {
   if (serverMessage === 'This squad is full.') return 'This squad is full.';
   if (serverMessage === 'This squad is no longer online.') return 'This squad is no longer available.';
   if (status >= 500) return 'Signal broker is busy. Try again in a moment.';
-  return 'Couldn’t reach the squad frequency. Try again.';
+  return serverMessage || 'Couldn’t reach the squad frequency. Try again.';
 }

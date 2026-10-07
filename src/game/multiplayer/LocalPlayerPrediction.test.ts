@@ -3,6 +3,7 @@ import { CoopSimulation, quantizeAngle, quantizePitch } from './CoopSimulation';
 import { LocalPlayerPrediction } from './LocalPlayerPrediction';
 import { COOP_STEP_MS } from './playerMovement';
 import { MULTIPLAYER_PROTOCOL_VERSION, type MultiplayerInputFrame } from './protocol';
+import { FriendsSimulation } from './FriendsSimulation';
 
 const command = (sequence: number, overrides: Partial<MultiplayerInputFrame> = {}): MultiplayerInputFrame => ({
   type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence, clientTime: sequence * COOP_STEP_MS,
@@ -12,6 +13,22 @@ const command = (sequence: number, overrides: Partial<MultiplayerInputFrame> = {
 const simulation = () => new CoopSimulation([{ id: 'guest', label: 'Guest', color: '#0ff' }]);
 
 describe('local player prediction', () => {
+  it('discards pre-teleport movement and reconciliation offsets on Return Home', () => {
+    const host = new FriendsSimulation([{ id: 'guest', label: 'Friend', color: '#fff' }]);
+    const prediction = new LocalPlayerPrediction('guest');
+    prediction.reconcile(host.createSnapshot());
+    for (let i = 1; i <= 5; i++) prediction.step(command(i));
+    host.friendsAction('guest', { requestId: 1, action: 'home' });
+    const returned = host.createSnapshot(); prediction.reconcile(returned);
+    const presented = prediction.present(returned, command(6, { movement: 0 }), 0, 0);
+    expect(presented.players[0].x).toBe(returned.players[0].x);
+    expect(presented.players[0].y).toBe(returned.players[0].y);
+    expect(presented.players[0].z).toBe(returned.players[0].z);
+    prediction.step(command(7));
+    const moved = prediction.present(returned, command(8, { movement: 0 }), 0, 0).players[0];
+    prediction.reconcile(returned);
+    expect(prediction.present(returned, command(8, { movement: 0 }), 0, 0).players[0].x).toBeCloseTo(moved.x);
+  });
   it.each([{}, { sprinting: true }, { sprinting: true, sliding: true }, { jumpPressed: true }])('matches authoritative motion for %j before a network response', overrides => {
     const host = simulation();
     const initial = host.createSnapshot();

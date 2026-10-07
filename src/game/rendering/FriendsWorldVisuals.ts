@@ -1,5 +1,8 @@
 import { addFriendsAsset, fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
 import * as THREE from 'three';
+import { createScenicTrainVisual,updateScenicTrainVisual } from './FriendsScenicTrainVisuals';
+import { FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORM } from '../world/FriendsTerrain';
+import { FRIENDS_DELIVERY_BAY } from '../world/FriendsHaulingGoal';
 import { trainGangways, type FriendsSnapshot, type FriendsVehicle } from '../multiplayer/FriendsExpedition';
 
 const palette = { grass: 0x476955, metal: 0x23464b, cream: 0xe9dfbe, dark: 0x19353a, mint: 0x8de6ce, amber: 0xffcf8a, purple: 0xc9b2eb };
@@ -30,9 +33,29 @@ function vehicleNameplates(group: THREE.Group, text: string, x: number, y: numbe
   const geometry=new THREE.PlaneGeometry(width,width/8);
   for(const side of [-1,1]){const plate=new THREE.Mesh(geometry,mat);plate.position.set(x,y,side*sideOffset);plate.rotation.y=side<0?Math.PI:0;group.add(plate);}
 }
-/** Terrain, trees and player construction supply the entire environment. */
+/** The spawn deck is terrain; these markings identify its permanent safe area. */
 export function createFriendsEnvironment(): THREE.Group {
-  const group = new THREE.Group(); group.name = 'friends-frontier-environment'; return group;
+  const group = new THREE.Group(); group.name = 'friends-frontier-environment';
+  const p = FRIENDS_SPAWN_PLATFORM, glow = new THREE.MeshBasicMaterial({ color: palette.mint });
+  for (const side of [-1, 1]) {
+    box(group, p.size - 12, .5, 3, p.x, p.top + .3, p.y + side * (p.size / 2 - 8), glow);
+    box(group, 3, .5, p.size - 12, p.x + side * (p.size / 2 - 8), p.top + .3, p.y, glow);
+  }
+  const ring = new THREE.Mesh(new THREE.RingGeometry(76, 79, 48), glow);
+  ring.rotation.x = -Math.PI / 2; ring.position.set(p.x, p.top + .6, p.y); group.add(ring);
+  sign(group, 'PLAYER SPAWN', p.x, p.top + 70, p.y - 120, 360, '#8de6ce');
+  const bay=FRIENDS_HAULING_PLATFORM, paint=new THREE.MeshBasicMaterial({color:0xffc36e});
+  for(const side of [-1,1]){
+    box(group,bay.size-12,.5,3,bay.x,bay.top+.3,bay.y+side*(bay.size/2-8),paint);
+    box(group,3,.5,bay.size-12,bay.x+side*(bay.size/2-8),bay.top+.3,bay.y,paint);
+    // The centre outline shows exactly where the core resets.
+    box(group,84,.5,2,bay.x,bay.top+.5,bay.y+side*34,paint);
+    box(group,2,.5,68,bay.x+side*42,bay.top+.5,bay.y,paint);
+  }
+  sign(group,'SALVAGE PICKUP',bay.x,bay.top+70,bay.y-92,340,'#ffc36e');
+  const goal=FRIENDS_DELIVERY_BAY;
+  sign(group,'DELIVERY BAY · GOAL',goal.x,goal.z+125,goal.y,440,goal.color);
+  return group;
 }
 
 function createLocomotive() {
@@ -113,8 +136,8 @@ export class FriendsVehicleVisuals {
     for(const mesh of this.gangways.values())mesh.visible=false;
     for (const vehicle of snapshot.vehicles) {
       let mesh = this.vehicles.get(vehicle.id);
-      if (!mesh) { mesh = vehicle.kind === 'train' ? vehicle.closed ? createLocomotive() : createTrainCar(Number(vehicle.id.at(-1))) : createAircraft(); mesh.name = vehicle.id; this.vehicles.set(vehicle.id, mesh); this.group.add(mesh); }
-      mesh.visible=true; this.pose(mesh, vehicle);
+      if (!mesh) { mesh = vehicle.kind === 'train' ? vehicle.scenic ? createScenicTrainVisual(Boolean(vehicle.closed),Number(vehicle.id.split('-').at(-1)),vehicle.wagonKind) : vehicle.closed ? createLocomotive() : createTrainCar(Number(vehicle.id.at(-1))) : createAircraft(); mesh.name = vehicle.id; this.vehicles.set(vehicle.id, mesh); this.group.add(mesh); }
+      mesh.visible=true; this.pose(mesh, vehicle);if(vehicle.scenic)updateScenicTrainVisual(mesh,vehicle);
       mesh.traverse(child => { if (child.name === 'sunskiff-rotor') child.rotation.y = elapsedMs * (vehicle.pilotId ? .06 : .018); });
     }
     for (const link of trainGangways(snapshot.vehicles)) {
@@ -123,22 +146,23 @@ export class FriendsVehicleVisuals {
       if (!gangway) {
         gangway = new THREE.Group(); gangway.name = 'flexible-train-gangway';
         box(gangway, 1, 2, link.width, 0, -1.75, 0, material(0x887f6b));
-        for (const side of [-1, 1]) box(gangway, 1, 3, 3, 0, 18, side * link.width / 2, material(palette.cream));
+        for (const side of [-1, 1]) box(gangway, 1, 3, 3, 0, 27, side * link.width / 2, material(0x8f9b98));
         this.gangways.set(key, gangway); this.group.add(gangway);
       }
       gangway.visible=true; gangway.position.set((link.ax + link.bx) / 2, link.z, (link.ay + link.by) / 2);
-      gangway.rotation.y = -Math.atan2(link.by - link.ay, link.bx - link.ax);
-      gangway.scale.x = Math.max(1, Math.hypot(link.bx - link.ax, link.by - link.ay));
+      gangway.rotation.set(0,-Math.atan2(link.by-link.ay,link.bx-link.ax),Math.atan2(link.bz-link.az,Math.hypot(link.bx-link.ax,link.by-link.ay)),'YXZ');
+      gangway.scale.x = Math.max(1, Math.hypot(link.bx - link.ax, link.by - link.ay,link.bz-link.az));
     }
 
   }
-  private pose(mesh: THREE.Group, v: FriendsVehicle) { mesh.position.set(v.x, v.z, v.y); mesh.rotation.y = -v.angle; }
+  private pose(mesh: THREE.Group, v: FriendsVehicle) { mesh.position.set(v.x, v.z, v.y); mesh.rotation.set(0,-v.angle,v.pitch||0,'YXZ'); }
   dispose() {
     this.group.userData.disposed = true;
     this.group.traverse(child => { child.userData.disposed = true; });
     this.group.removeFromParent();
-    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
-    this.group.traverse(child => { const m = child as THREE.Mesh; if (m.geometry) geometries.add(m.geometry); if (m.material) for (const mat of Array.isArray(m.material) ? m.material : [m.material]) materials.add(mat); });
-    geometries.forEach(g => g.dispose()); materials.forEach(m => { (m as THREE.SpriteMaterial).map?.dispose(); m.dispose(); }); this.vehicles.clear(); this.gangways.clear();
+    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>(), textures=new Set<THREE.Texture>();
+    this.group.traverse(child => { if(child instanceof THREE.SpotLight||child instanceof THREE.InstancedMesh)child.dispose();const resources=child.userData.railwayFinishResources;if(resources){textures.add(resources.grain);for(const material of resources.materials)materials.add(material);}
+      const m = child as THREE.Mesh; if (m.geometry) geometries.add(m.geometry); if (m.material) for (const mat of Array.isArray(m.material) ? m.material : [m.material]) materials.add(mat); });
+    geometries.forEach(g => g.dispose()); materials.forEach(m => { const map=(m as THREE.SpriteMaterial).map;if(map)textures.add(map);m.dispose(); });textures.forEach(t=>t.dispose()); this.vehicles.clear(); this.gangways.clear();
   }
 }

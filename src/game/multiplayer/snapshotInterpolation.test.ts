@@ -11,6 +11,18 @@ const snapshot = (x: number, angle: number): CoopSnapshot => ({
 });
 
 describe('interpolateCoopSnapshot', () => {
+  it('snaps redeployment immediately instead of pulling the player back toward a fall', () => {
+    const old = snapshot(-700, 0), next = snapshot(736, 0);
+    next.combatEvents = [{ id: 1, tick: 1, atMs: 50, kind: 'player_redeployed', playerId: 'host', x: next.players[0].x, y: next.players[0].y }];
+    const interpolator = new CoopSnapshotInterpolator();
+    for (const alpha of [0, .1, .5, .99]) {
+      for (const presented of [interpolateCoopSnapshot(old, next, alpha), interpolator.interpolate(old, next, alpha)]) {
+        expect(presented.players[0].z).toBe(736); expect(presented.players[0].x).toBe(736);
+      }
+    }
+    const later = snapshot(740, 0); later.combatEvents = next.combatEvents;
+    expect(interpolator.interpolate(next, later, .5).players[0].z).toBe(738);
+  });
   it('smooths positions and takes the shortest route around angle wraparound', () => {
     const result = interpolateCoopSnapshot(snapshot(0, Math.PI * 1.9), snapshot(100, Math.PI * 0.1), 0.5);
     expect(result.players[0].x).toBe(50);

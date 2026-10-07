@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { COOP_MAX_PLAYERS } from '../src/game/multiplayer/protocol';
+import { normalizeCoopGameMode, type CoopGameMode } from '../src/game/multiplayer/CoopGameMode';
 
 const ROOM_TTL_MS = 45_000;
 const JOIN_TTL_MS = 45_000;
@@ -29,11 +30,12 @@ type Room = {
   maxPlayers: number;
   playerCount: number;
   state: 'waiting' | 'in_game';
+  gameMode: CoopGameMode;
   updatedAt: number;
   joins: Map<string, Join>;
 };
 
-export type PublicRoom = Pick<Room, 'id' | 'code' | 'hostName' | 'maxPlayers' | 'playerCount' | 'state'>;
+export type PublicRoom = Pick<Room, 'id' | 'code' | 'hostName' | 'maxPlayers' | 'playerCount' | 'state' | 'gameMode'>;
 
 const rooms = new Map<string, Room>();
 const requestRates = new Map<string, { startedAt: number; count: number }>();
@@ -50,14 +52,16 @@ export function createMultiplayerRouter() {
   router.options('*', (_, response) => response.sendStatus(204));
   router.use((request, response, next) => {
     const now = Date.now();
-    const key = request.ip || request.socket.remoteAddress || 'unknown';
+    const friends=request.query.mode==='friends'||request.body?.gameMode==='friends'||rooms.get(request.params.roomId || request.path.split('/')[2])?.gameMode==='friends';
+    const limit=friends?1200:RATE_LIMIT_PER_WINDOW;
+    const key = (friends?'friends:':'survival:')+(request.ip || request.socket.remoteAddress || 'unknown');
     const current = requestRates.get(key);
     const bucket = !current || now - current.startedAt >= RATE_WINDOW_MS ? { startedAt: now, count: 0 } : current;
     bucket.count++;
     requestRates.set(key, bucket);
-    response.setHeader('RateLimit-Limit', String(RATE_LIMIT_PER_WINDOW));
-    response.setHeader('RateLimit-Remaining', String(Math.max(0, RATE_LIMIT_PER_WINDOW - bucket.count)));
-    if (bucket.count > RATE_LIMIT_PER_WINDOW) {
+    response.setHeader('RateLimit-Limit', String(limit));
+    response.setHeader('RateLimit-Remaining', String(Math.max(0, limit - bucket.count)));
+    if (bucket.count > limit) {
       response.setHeader('Retry-After', String(Math.ceil((bucket.startedAt + RATE_WINDOW_MS - now) / 1000)));
       return response.status(429).json({ error: 'Too many signaling requests. Try again shortly.' });
     }
@@ -67,6 +71,13 @@ export function createMultiplayerRouter() {
   router.get('/rooms', (_, response) => {
     purgeExpired();
     response.json({ rooms: [...rooms.values()].map(publicRoom).filter(room => room.state === 'in_game' || room.playerCount < room.maxPlayers) });
+  });
+
+  router.get('/rooms/:roomId', (request,response)=>{
+    purgeExpired();const key=cleanCode(request.params.roomId);
+    const room=rooms.get(request.params.roomId)||[...rooms.values()].find(r=>r.code===key);
+    if(!room)return response.status(404).json({error:'This squad is no longer online.'});
+    response.json({room:publicRoom(room)});
   });
 
   router.post('/rooms', (request, response) => {
@@ -82,6 +93,7 @@ export function createMultiplayerRouter() {
     const room: Room = {
       id, code: code || id, hostToken: token(), hostName, maxPlayers, playerCount: 1,
       state: 'waiting', updatedAt: Date.now(), joins: new Map(),
+      gameMode: normalizeCoopGameMode(request.body?.gameMode),
     };
     rooms.set(room.id, room);
     response.status(201).json({ room: publicRoom(room), hostToken: room.hostToken });
@@ -107,7 +119,7 @@ export function createMultiplayerRouter() {
     purgeExpired();
     const room = rooms.get(request.params.roomId);
     if (!room) return response.status(404).json({ error: 'This squad is no longer online.' });
-    const spectate = room.state === 'in_game' && request.body?.spectate === true;
+    const spectate = room.gameMode !== 'friends' && room.state === 'in_game' && request.body?.spectate === true;
     const pendingJoins = [...room.joins.values()].filter(join => !join.answer).length;
     if (pendingJoins >= MAX_PENDING_JOINS_PER_ROOM) return response.status(429).json({ error: 'This squad has too many pending joins.' });
     const spectators = [...room.joins.values()].filter(join => join.spectate).length;
@@ -168,7 +180,7 @@ function guestJoin(roomId: string, requestId: string, authorization?: string) {
   return join && authorization === `Bearer ${join.token}` ? join : undefined;
 }
 
-function publicRoom(room: Room): PublicRoom { return { id: room.id, code: room.code, hostName: room.hostName, maxPlayers: room.maxPlayers, playerCount: room.playerCount, state: room.state }; }
+function publicRoom(room: Room): PublicRoom { return { id: room.id, code: room.code, hostName: room.hostName, maxPlayers: room.maxPlayers, playerCount: room.playerCount, state: room.state, gameMode: room.gameMode }; }
 function shortId(prefix: string) { return `${prefix}-${crypto.randomBytes(5).toString('base64url')}`; }
 function token() { return crypto.randomBytes(24).toString('base64url'); }
 function cleanName(value: unknown) { return typeof value === 'string' ? value.replace(/[^a-z0-9 _-]/gi, '').trim().slice(0, 24) : ''; }

@@ -3,7 +3,7 @@ import { FriendsFrontier } from './FriendsFrontier';
 import { sampleWorldSurface } from '../world/WorldDefinitions';
 import { baseTerrainHeight } from '../world/FriendsTerrain';
 import type { FriendsBuildPiece } from './FriendsBuilding';
-const actor={id:'host',label:'Explorer',x:5904,y:5712,z:672,lifeState:'alive'};
+const actor={id:'host',label:'Explorer',x:5808,y:5520,z:672,lifeState:'alive'};
 const dig=(f:FriendsFrontier,x:number,y:number,pieces:FriendsBuildPiece[]=[])=>{
   const z=f.terrain.floor(x,y,6000,0)!;
   f.tool({...actor,x,y,z},3,{x,y,z:z+26,dx:0,dy:0,dz:-1},1000,pieces);
@@ -11,7 +11,7 @@ const dig=(f:FriendsFrontier,x:number,y:number,pieces:FriendsBuildPiece[]=[])=>{
 };
 describe('former spawn area terrain repair',()=>{
   it('allows excavation at arrival, the aircraft spawn and beneath their old reserve',()=>{
-    for(const [x,y] of [[5904,5712],[4704,5728],[5904,5648]]){
+    for(const [x,y] of [[5808,5520],[4704,5728],[5808,5488]]){
       const f=new FriendsFrontier(),z=dig(f,x,y);
       expect(f.terrain.floor(x,y,z,0)).toBe(z-32);
       expect(f.snapshot().feedback.host.message).toContain('+1 soil');
@@ -19,23 +19,23 @@ describe('former spawn area terrain repair',()=>{
     }
   });
   it('still protects a block supporting an actual saved build',()=>{
-    const f=new FriendsFrontier(),z=f.terrain.floor(5904,5712,6000,0)!;
-    const piece:FriendsBuildPiece={id:1,shape:'block',finish:'grass',author:'Host',revision:1,x:5904,y:5712,z,rotation:0};
-    dig(f,5904,5712,[piece]);expect(f.snapshot().mined).toBe(0);
+    const f=new FriendsFrontier(),z=f.terrain.floor(5808,5520,6000,0)!;
+    const piece:FriendsBuildPiece={id:1,shape:'block',finish:'grass',author:'Host',revision:1,x:5808,y:5520,z,rotation:0};
+    dig(f,5808,5520,[piece]);expect(f.snapshot().mined).toBe(0);
     expect(f.snapshot().feedback.host.message).toContain('saved build');
   });
   it('lets players dig beside a build and below its immediate foundation',()=>{
-    const f=new FriendsFrontier(),z=f.terrain.floor(5904,5712,6000,0)!;
-    const piece:FriendsBuildPiece={id:1,shape:'block',finish:'grass',author:'Host',revision:1,x:5904,y:5712,z,rotation:0};
-    dig(f,5968,5712,[piece]);expect(f.snapshot().mined).toBe(1);
-    const vx=Math.floor(5904/32),vy=Math.floor(5712/32),vz=z/32-2;
-    f.tool({...actor,z:z-32},3,{x:5904,y:5712,z:z-33,dx:0,dy:0,dz:-1},1400,[piece]);
+    const f=new FriendsFrontier(),z=f.terrain.floor(5808,5520,6000,0)!;
+    const piece:FriendsBuildPiece={id:1,shape:'block',finish:'grass',author:'Host',revision:1,x:5808,y:5520,z,rotation:0};
+    dig(f,5872,5520,[piece]);expect(f.snapshot().mined).toBe(1);
+    const vx=Math.floor(5808/32),vy=Math.floor(5520/32),vz=z/32-2;
+    f.tool({...actor,z:z-32},3,{x:5808,y:5520,z:z-33,dx:0,dy:0,dz:-1},1400,[piece]);
     expect(f.terrain.material(vx,vy,vz)).toBe(0);expect(f.snapshot().mined).toBe(2);
   });
   it('permits free earthwork inside the former spawn reserve',()=>{
-    const f=new FriendsFrontier(),z=dig(f,5904,5712);
-    f.tool(actor,4,{x:5904,y:5712,z:z+26,dx:0,dy:0,dz:-1},1400,[]);
-    expect(f.terrain.floor(5904,5712,z,0)).toBe(z);expect(f.pack(actor).soil).toBe(1);
+    const f=new FriendsFrontier(),z=dig(f,5808,5520);
+    f.tool({...actor,z},4,{x:5808,y:5520,z:z+26,dx:0,dy:0,dz:-1},1400,[]);
+    expect(f.terrain.floor(5808,5520,z,0)).toBe(z);expect(f.pack(actor).soil).toBe(1);
   });
   it('treats the former lake and the ground below it as dry terrain',()=>{
     for(const [x,y] of [[7440,6520],[6800,6300],[8000,6800]]){

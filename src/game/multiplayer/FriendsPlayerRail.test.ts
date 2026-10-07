@@ -1,4 +1,5 @@
 import { FriendsFrontier } from './FriendsFrontier';
+import { SCENIC_WAGONS } from '../world/FriendsTrainLayout';
 import { describe,expect,it } from 'vitest';
 import { railEndpoints,railJoined,snapRailPose,railOverlapError,playerRailRoute,samplePlayerRail } from '../world/FriendsPlayerRail';
 import { friendsPlacementError,type FriendsBuildPiece } from './FriendsBuilding';
@@ -14,9 +15,9 @@ const seeds=[{id:'host',label:'Host',color:'#8de6ce'}];
 const track=(extra:Partial<FriendsBuildPiece>={}):FriendsBuildPiece=>({id:1,x:8000,y:10000,z:0,rotation:0,shape:'rail_straight',finish:'timber',author:'Host',revision:1,...extra});
 const aircraft=(e:FriendsExpedition)=>e.vehicles().find(v=>v.kind==='aircraft')!;
 describe('player-built railway and spawn transport',()=>{
-  it('starts with only a grounded helicopter and no authored collision structures',()=>{
+  it('starts with a grounded helicopter and sightseeing service, without player builds',()=>{
     const s=new FriendsSimulation(seeds),f=s.createSnapshot().friends!;
-    expect(f.vehicles.map(v=>v.kind)).toEqual(['aircraft']);expect(f.building!.pieces).toEqual([]);expect(friendsRegionObstacles()).toEqual([]);
+    expect(f.vehicles.filter(v=>!v.scenic).map(v=>v.kind)).toEqual(['aircraft']);expect(f.vehicles.filter(v=>v.scenic)).toHaveLength(SCENIC_WAGONS.length+1);expect(f.building!.pieces).toEqual([]);expect(friendsRegionObstacles()).toEqual([]);
     expect(aircraft(s['friends']!)).toMatchObject({...FRIENDS_AIRPAD,z:FRIENDS_AIRFIELD_HEIGHT+14});
   });
   it('removes invisible station platform floors and roof ceilings too',()=>{
@@ -26,17 +27,17 @@ describe('player-built railway and spawn transport',()=>{
   });
   it('rejects guest train assembly without spending materials when the host disables editing',()=>{
     const fixture=railFixture(),s=new FriendsSimulation([...seeds,{id:'guest',label:'Guest',color:'#fff'}],1,undefined,fixture.building,undefined,fixture.frontier),p=s['players'].get('guest')!;
-    Object.assign(p,{x:4000,y:9700,z:0});const pack=s['friendsFrontier']!.pack(p);Object.assign(pack,{planks:12,ingots:4});const before={...pack};s.setFriendsGuestAccess(false);
-    expect(s.friendsAction('guest',{requestId:1,action:'train_place'}).ok).toBe(false);expect(pack).toEqual(before);expect(s.createSnapshot().friends!.vehicles).toHaveLength(1);
+    Object.assign(p,{x:4000,y:fixture.building.pieces[0].y-100,z:0});const pack=s['friendsFrontier']!.pack(p);Object.assign(pack,{planks:12,ingots:4});const before={...pack};s.setFriendsGuestAccess(false);
+    expect(s.friendsAction('guest',{requestId:1,action:'train_place'}).ok).toBe(false);expect(pack).toEqual(before);expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(1);
   });
   it('replicates train creation and dismantling through snapshot deltas without stale vehicles',()=>{
-    const fixture=railFixture(),s=new FriendsSimulation(seeds,1,undefined,fixture.building,undefined,fixture.frontier),p=s['players'].get('host')!;Object.assign(p,{x:4000,y:9600,z:0});Object.assign(s['friendsFrontier']!.pack(p),{planks:12,ingots:4});
+    const fixture=railFixture(),s=new FriendsSimulation(seeds,1,undefined,fixture.building,undefined,fixture.frontier),p=s['players'].get('host')!;Object.assign(p,{x:4000,y:fixture.building.pieces[0].y-200,z:0});Object.assign(s['friendsFrontier']!.pack(p),{planks:12,ingots:4});
     const before=s.createSnapshot(),decoder=new SnapshotDecoder();decoder.decode(compactSnapshotWirePayload(before),1);
     expect(s.friendsAction('host',{requestId:1,action:'train_place'}).ok).toBe(true);const built=s.createSnapshot();
-    expect(decoder.decode(compactSnapshotWirePayload(createSnapshotDelta(before,built,1)),2)!.friends!.vehicles).toHaveLength(5);
+    expect(decoder.decode(compactSnapshotWirePayload(createSnapshotDelta(before,built,1)),2)!.friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(5);
     // Deltas reference retained keyframes, rather than earlier deltas.
     decoder.decode(compactSnapshotWirePayload(built),2);
-    expect(s.friendsAction('host',{requestId:2,action:'train_remove'}).ok).toBe(true);const removed=s.createSnapshot();expect(decoder.decode(compactSnapshotWirePayload(createSnapshotDelta(built,removed,2)),3)!.friends!.vehicles).toHaveLength(1);
+    expect(s.friendsAction('host',{requestId:2,action:'train_remove'}).ok).toBe(true);const removed=s.createSnapshot();expect(decoder.decode(compactSnapshotWirePayload(createSnapshotDelta(built,removed,2)),3)!.friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(1);
   });
   it('snaps a straight and quarter turn with matching position, elevation and tangent',()=>{
     for(let rotation=0;rotation<4;rotation++){
@@ -68,13 +69,14 @@ describe('player-built railway and spawn transport',()=>{
   });
   it('builds tracks and assembles a valid train for free during testing',()=>{
     const clean=railFixture(),s=new FriendsSimulation(seeds,1,undefined,undefined,undefined,clean.frontier),p=s['players'].get('host')!,f=s['friendsFrontier']!;Object.assign(p,{x:8000,y:9800,z:0});
+    f.terrain.addGrade([8000,10000,0,512]);
     const pose={x:8000,y:10000,z:0,rotation:0};expect(s.friendsBuild('host',{requestId:1,action:'place',shape:'rail_straight',finish:'stone',pose}).ok).toBe(true);expect(f.pack(p).wood).toBe(18);expect(f.pack(p).stone).toBe(12);
     p.x=10000;expect(s.friendsAction('host',{requestId:1,action:'train_place'}).ok).toBe(false);p.x=8000;expect(f.pack(p).wood).toBe(18);
     Object.assign(f.pack(p),{planks:12,ingots:4});expect(s.friendsAction('host',{requestId:2,action:'train_place'}).ok).toBe(true);expect(f.pack(p).wood).toBe(18);expect(f.pack(p).planks).toBe(12);
-    expect(s.createSnapshot().friends!.vehicles.filter(v=>v.kind==='train')).toHaveLength(1);
-    const copy={...f.pack(p)};expect(s.friendsAction('host',{requestId:2,action:'train_place'}).ok).toBe(false);expect(s.friendsAction('host',{requestId:3,action:'train_place'}).ok).toBe(false);expect(f.pack(p)).toEqual(copy);
+    expect(s.createSnapshot().friends!.vehicles.filter(v=>v.kind==='train'&&!v.scenic)).toHaveLength(1);
+    const copy={...f.pack(p)};expect(s.friendsAction('host',{requestId:2,action:'train_place'}).ok).toBe(true);expect(s.friendsAction('host',{requestId:3,action:'train_place'}).ok).toBe(false);expect(f.pack(p)).toEqual(copy);
     expect(s.friendsBuild('host',{requestId:2,action:'remove',pieceId:1,expectedRevision:s.createSnapshot().friends!.building!.pieces[0].revision}).ok).toBe(false);
-    expect(s.friendsAction('host',{requestId:4,action:'train_remove'}).ok).toBe(true);expect(f.snapshot().stock).toMatchObject({wood:0,planks:0,ingots:0});expect(s.createSnapshot().friends!.vehicles).toHaveLength(1);
+    expect(s.friendsAction('host',{requestId:4,action:'train_remove'}).ok).toBe(true);expect(f.snapshot().stock).toMatchObject({wood:0,planks:0,ingots:0});expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(1);
   });
   it('shuttles on an open line without running beyond the track or dropping idle passengers',()=>{
     const e=railExpedition(),car=e.vehicles()[0],p={id:'host',x:car.x,y:car.y,z:car.z,lifeState:'alive'};
@@ -94,14 +96,14 @@ describe('player-built railway and spawn transport',()=>{
     Object.assign(e['aircraft'],{x:20000,y:15000,z:3000,pilotId:'host'});const snap=s.createSnapshot().friends!;
     const parsed=parseFriendsWorldImport(exportFriendsWorld({progress:snap.progress,building:snap.building!,frontier:snap.frontier,transport:snap.transport}));
     const next=new FriendsSimulation(seeds,1,parsed.progress,parsed.building,parsed.projects,parsed.frontier,parsed.transport),loaded=next.createSnapshot();
-    expect(loaded.friends!.building!.pieces).toHaveLength(20);expect(loaded.friends!.vehicles.filter(v=>v.kind==='train')).toHaveLength(4);expect(aircraft(next['friends']!)).toMatchObject({...FRIENDS_AIRPAD,z:FRIENDS_AIRFIELD_HEIGHT+14});
+    expect(loaded.friends!.building!.pieces).toHaveLength(20);expect(loaded.friends!.vehicles.filter(v=>v.kind==='train'&&!v.scenic)).toHaveLength(4);expect(aircraft(next['friends']!)).toMatchObject({...FRIENDS_AIRPAD,z:FRIENDS_AIRFIELD_HEIGHT+14});
     const decoded=new SnapshotDecoder().decode(compactSnapshotWirePayload(loaded),1)!;expect(decoded.friends!.transport!.railTrain).toEqual(loaded.friends!.transport!.railTrain);
   });
-  it('resets aircraft on a new player spawn and recovery, carrying existing crew back safely',()=>{
+  it('preserves the active aircraft and crew on a new player spawn and releases only the recovered pilot',()=>{
     const s=new FriendsSimulation(seeds),e=s['friends']!,p=s['players'].get('host')!;
     Object.assign(e['aircraft'],{x:20000,y:18000,z:2400,pilotId:'host'});Object.assign(p,{x:20100,y:18000,z:2400,platformVelocityX:400});
-    s.addPlayer({id:'guest',label:'Guest',color:'#fff'});expect(aircraft(e)).toMatchObject({...FRIENDS_AIRPAD,z:FRIENDS_AIRFIELD_HEIGHT+14});expect(aircraft(e).pilotId).toBeUndefined();expect(p.z).toBe(FRIENDS_AIRFIELD_HEIGHT+14);expect(p.platformVelocityX).toBe(0);
-    Object.assign(e['aircraft'],{x:12000,y:18000,z:2400});s['recoverFriend'](p);expect(aircraft(e)).toMatchObject({...FRIENDS_AIRPAD,z:FRIENDS_AIRFIELD_HEIGHT+14});expect(p.z).toBe(FRIENDS_ARRIVAL_HEIGHT);
+    s.addPlayer({id:'guest',label:'Guest',color:'#fff'});expect(aircraft(e)).toMatchObject({x:20000,y:18000,z:2400,pilotId:'host'});expect(p.z).toBe(2400);expect(p.platformVelocityX).toBe(400);
+    s['recoverFriend'](p);expect(aircraft(e)).toMatchObject({x:20000,y:18000,z:2400});expect(aircraft(e).pilotId).toBeUndefined();expect(p.z).toBe(FRIENDS_ARRIVAL_HEIGHT);expect(p.platformVelocityX).toBe(0);
   });
   it('finds the actual ground at the designated aircraft spawn even in an imported terrain save',()=>{
     const terrain=new FriendsTerrain();terrain.set(Math.floor(FRIENDS_AIRPAD.x/32),Math.floor(FRIENDS_AIRPAD.y/32),FRIENDS_AIRFIELD_HEIGHT/32,1);
@@ -110,7 +112,8 @@ describe('player-built railway and spawn transport',()=>{
   it('requires a player-built workshop before crafting, then uses its real materials',()=>{
     const s=new FriendsSimulation(seeds),p=s['players'].get('host')!;
     expect(s.friendsAction('host',{requestId:1,action:'planks'}).ok).toBe(false);
-    expect(s.friendsBuild('host',{requestId:1,action:'place',shape:'workbench',finish:'timber',pose:{x:6132,y:5712,z:FRIENDS_ARRIVAL_HEIGHT,rotation:0}}).ok).toBe(true);
+    const workshopHeight=s['friendsFrontier']!.terrain.floor(6132,5500,6000,0)!;
+    Object.assign(p,{x:6292,y:5500,z:workshopHeight});expect(s.friendsBuild('host',{requestId:1,action:'place',shape:'workbench',finish:'timber',pose:{x:6132,y:5500,z:workshopHeight,rotation:0}}).ok).toBe(true);
     expect(s.friendsAction('host',{requestId:2,action:'planks'}).ok).toBe(true);
     expect(s['friendsFrontier']!.pack(p)).toMatchObject({wood:16,stone:12,planks:4});
   });

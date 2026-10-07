@@ -1,17 +1,23 @@
+import { scenicCargoWagon, SCENIC_TAIL_DISTANCE, type ScenicWagonKind } from '../world/FriendsTrainLayout';
+import { scenicRailway } from '../world/FriendsScenicRailway';
+import { sampleRailAlignment } from '../world/FriendsRailAlignment';
+import { FriendsScenicService, type ScenicServiceSave, type ScenicServiceSnapshot, type ScenicSeat } from './FriendsScenicService';
+import { vehicleWorldPoint, vehicleLocalPoint, vehiclePlaneHeight } from './FriendsVehiclePose';
 import { CAVE_TREASURES, nearbyCaveTreasure } from '../world/FriendsCave';
 import { isPlayerRail, playerRailRoute, samplePlayerRail, nearestRailDistance, type PlayerRailRoute } from '../world/FriendsPlayerRail';
 import { FRONTIER_SIZE, FRIENDS_AIRFIELD_HEIGHT, type FriendsTerrain } from '../world/FriendsTerrain';
 import type { FrontierSnapshot } from './FriendsFrontier';
-import { resolveFriendsBuildCollisions, worldBox, friendsShapeBoxes, type FriendsBuildPiece, type FriendsBuildingSnapshot } from './FriendsBuilding';
+import { friendsBuildFloor, resolveFriendsBuildCollisions, worldBox, friendsShapeBoxes, type FriendsBuildPiece, type FriendsBuildingSnapshot } from './FriendsBuilding';
 import type { FriendsProjectSnapshot } from './FriendsProjects';
 import { getNearbyWorldObstacles, resolveWorldCollisions } from '../world/WorldLayout';
 import { FRIENDS_AIRPAD, FRIENDS_PLACES, FRIENDS_SIGNALS, insideFriendsCombat } from '../world/FriendsRegion';
 import type { MultiplayerInputFrame } from './protocol';
+import { FriendsHauling, type HaulingSave, type HaulingSnapshot } from './FriendsHauling';
 
-export type FriendsVehicle = { id: string; kind: 'train' | 'aircraft'; x: number; y: number; z: number; angle: number; length: number; width: number; pilotId?: string; closed?: boolean };
+export type FriendsVehicle = { id: string; kind: 'train' | 'aircraft'; x: number; y: number; z: number; angle: number; length: number; width: number; pilotId?: string; closed?: boolean; pitch?: number; scenic?:boolean; wagonKind?:ScenicWagonKind; routeDistance?:number };
 export type FriendsProgress = { version: 1; discovered: string[]; signals: string[]; salvageCleared: boolean; restored: boolean; openedTreasures?: string[]; caveGold?: number };
-export type FriendsTransportSave = { trainDistance: number; trainStoppedMs: number; lastStop: number; held: boolean; aircraft: FriendsVehicle; railTrain?: { anchor: number; distance: number; direction: 1 | -1; held: boolean } };
-export type FriendsSnapshot = { transport?: FriendsTransportSave; frontier?: FrontierSnapshot; building?: FriendsBuildingSnapshot; projects?: FriendsProjectSnapshot; vehicles: FriendsVehicle[]; trainDistance: number; trainStoppedMs: number; progress: FriendsProgress; salvageState: 'idle' | 'active' | 'cleared'; notice: string; noticeUntilMs: number };
+export type FriendsTransportSave = { scenicRailway?:ScenicServiceSave | boolean; hauling?: HaulingSave; trainDistance: number; trainStoppedMs: number; lastStop: number; held: boolean; aircraft: FriendsVehicle; railTrain?: { anchor: number; distance: number; direction: 1 | -1; held: boolean } };
+export type FriendsSnapshot = { scenicRailway?:ScenicServiceSnapshot; hauling?: HaulingSnapshot; transport?: FriendsTransportSave; frontier?: FrontierSnapshot; building?: FriendsBuildingSnapshot; projects?: FriendsProjectSnapshot; vehicles: FriendsVehicle[]; trainDistance: number; trainStoppedMs: number; progress: FriendsProgress; salvageState: 'idle' | 'active' | 'cleared'; notice: string; noticeUntilMs: number };
 export const FRIENDS_SAVE_KEY = 'killsync.friends.expedition.v1';
 export const TRAIN_SPEED = 180;
 export const FRIENDS_FLIGHT_CEILING = 6000;
@@ -56,23 +62,32 @@ export function friendsCockpitInteraction(vehicles: readonly FriendsVehicle[], p
 export function friendsVehicleFloor(vehicles: readonly FriendsVehicle[], x: number, y: number, z: number) {
   let floor: number | undefined;
   for (const v of vehicles) {
-    const canStepAboard = !v.closed && z >= v.z - 18;
-    if (!vehicleContains(v, x, y, 0) || (z < v.z - 1 && !canStepAboard)) continue;
-    if (!v.closed) floor = Math.max(floor ?? 0, v.z);
+    const deck = vehiclePlaneHeight(v,x,y);
+    const canStepAboard = !v.closed && z >= deck - 18;
+    if (!vehicleContains(v, x, y, 0) || (z < deck - 1 && !canStepAboard)) continue;
+    if (!v.closed) floor = Math.max(floor ?? -Infinity, deck);
     const local = vehicleLocal(v, x, y);
-    const roof = v.z + (v.kind === 'train' ? 115 : local.x < 67 ? 109 : 106.5);
-    if (z >= roof - 1 && (v.kind === 'train' || local.x > -123)) floor = Math.max(floor ?? 0, roof);
+    const roof = vehiclePlaneHeight(v,x,y,v.kind === 'train' ? 115 : local.x < 67 ? 109 : 106.5);
+    if (!scenicCargoWagon(v) && z >= roof - 1 && (v.kind === 'train' || local.x > -123)) floor = Math.max(floor ?? 0, roof);
   }
-  for (const link of trainGangways(vehicles)) if (z >= link.z - 18 && pointOnGangway(link, x, y)) floor = Math.max(floor ?? 0, link.z);
+  for (const link of trainGangways(vehicles)) if (z >= gangwayHeight(link,x,y) - 18 && pointOnGangway(link, x, y)) floor = Math.max(floor ?? -Infinity, gangwayHeight(link,x,y));
   return floor;
 }
-export type TrainGangway = { from: FriendsVehicle; to: FriendsVehicle; ax: number; ay: number; bx: number; by: number; z: number; width: number };
+export type TrainGangway = { from: FriendsVehicle; to: FriendsVehicle; ax: number; ay: number; az:number; bx: number; by: number; bz:number; z: number; width: number };
 export function trainGangways(vehicles: readonly FriendsVehicle[]): TrainGangway[] {
-  const cars = vehicles.filter(v => v.kind === 'train' && !v.closed).sort((a, b) => a.id.localeCompare(b.id));
-  return cars.slice(1).map((rear, i) => {
-    const front = cars[i];
-    return { from: front, to: rear, ax: front.x - Math.cos(front.angle) * (front.length / 2 - 12), ay: front.y - Math.sin(front.angle) * (front.length / 2 - 12), bx: rear.x + Math.cos(rear.angle) * (rear.length / 2 - 12), by: rear.y + Math.sin(rear.angle) * (rear.length / 2 - 12), z: Math.max(front.z, rear.z), width: Math.min(front.width, rear.width) + 8 };
-  });
+  const links:TrainGangway[]=[];
+  for(const scenic of [false,true]) {
+    const cars=vehicles.filter(v=>v.kind==='train'&&!v.closed&&Boolean(v.scenic)===scenic).sort((a,b)=>a.id.localeCompare(b.id, undefined, {numeric:true}));
+    for(let i=1;i<cars.length;i++) {
+      const front=cars[i-1],rear=cars[i],a=vehicleWorldPoint(front,{x:-front.length/2+12,y:0,z:0}),b=vehicleWorldPoint(rear,{x:rear.length/2-12,y:0,z:0});
+      links.push({from:front,to:rear,ax:a.x,ay:a.y,az:a.z,bx:b.x,by:b.y,bz:b.z,z:(a.z+b.z)/2,width:Math.min(front.width,rear.width)+8});
+    }
+  }
+  return links;
+}
+export function gangwayHeight(link:TrainGangway,x:number,y:number){
+  const dx=link.bx-link.ax,dy=link.by-link.ay,t=Math.max(0,Math.min(1,((x-link.ax)*dx+(y-link.ay)*dy)/(dx*dx+dy*dy||1)));
+  return link.az+(link.bz-link.az)*t;
 }
 export function pointOnGangway(link: TrainGangway, x: number, y: number) {
   const dx = link.bx - link.ax, dy = link.by - link.ay, lengthSq = dx * dx + dy * dy;
@@ -82,8 +97,7 @@ export function pointOnGangway(link: TrainGangway, x: number, y: number) {
 export function carryOnVehicle(actor: { x: number; y: number; z: number }, before: FriendsVehicle, after: FriendsVehicle) {
   const floor = friendsVehicleFloor([before], actor.x, actor.y, actor.z);
   if (floor === undefined || Math.abs(actor.z - floor) > 1) return false;
-  const local = vehicleLocal(before, actor.x, actor.y), c = Math.cos(after.angle), s = Math.sin(after.angle);
-  actor.x = after.x + local.x * c - local.y * s; actor.y = after.y + local.x * s + local.y * c; actor.z += after.z - before.z;
+  Object.assign(actor,vehicleWorldPoint(after,vehicleLocalPoint(before,actor)));
   return true;
 }
 /** Solid locomotive hull; open passenger decks deliberately have no invisible
@@ -112,18 +126,45 @@ export function friendsWorldFloor(vehicles: readonly FriendsVehicle[], x: number
 export function friendsVehicleCeiling(vehicles: readonly FriendsVehicle[], x: number, y: number, z: number) {
   let ceiling: number | undefined;
   for (const v of vehicles) {
-    if (v.closed || !vehicleContains(v, x, y, 2) || z < v.z - 1) continue;
+    if (v.closed || scenicCargoWagon(v) || !vehicleContains(v, x, y, 2) || z < vehiclePlaneHeight(v,x,y) - 1) continue;
     const local = vehicleLocal(v, x, y);
     if (v.kind === 'aircraft' && local.x < -123) continue;
-    const underside = v.z + (v.kind === 'train' ? 109 : local.x < 67 ? 101 : 99.5);
+    const underside = vehiclePlaneHeight(v,x,y,v.kind === 'train' ? 109 : local.x < 67 ? 101 : 99.5);
     if (z < underside) ceiling = Math.min(ceiling ?? Infinity, underside);
   }
   return ceiling;
 }
 
-type Actor = { id: string; x: number; y: number; z: number; lifeState: string; platformVelocityX?: number; platformVelocityY?: number; platformVelocityZ?: number };
+type Actor = { id: string; x: number; y: number; z: number; lifeState: string; friendsDevFlight?: boolean; friendsSeat?:ScenicSeat; verticalVelocity?:number; crouching?:boolean; platformVelocityX?: number; platformVelocityY?: number; platformVelocityZ?: number };
 
 export class FriendsExpedition {
+  readonly hauling: FriendsHauling;
+  readonly scenic?:FriendsScenicService;
+  private actors:readonly Actor[]=[];
+  private obstructionStamp='';
+  private obstructions=new Map<string,{x:number;y:number;z:number;w:number;d:number;h:number}[]>();
+  private prepareObstructions(pieces:readonly FriendsBuildPiece[],terrain?:FriendsTerrain){
+    const stamp=`${this.railRevision}:${terrain?.revision}:${pieces.length}`;if(stamp===this.obstructionStamp)return;this.obstructionStamp=stamp;this.obstructions.clear();
+    const add=(b:{x:number;y:number;z:number;w:number;d:number;h:number})=>{
+      for(let x=Math.floor((b.x-b.w/2)/512);x<=Math.floor((b.x+b.w/2)/512);x++)for(let y=Math.floor((b.y-b.d/2)/512);y<=Math.floor((b.y+b.d/2)/512);y++){
+        const key=`${x},${y}`,list=this.obstructions.get(key)||[];list.push(b);this.obstructions.set(key,list);
+      }
+    };
+    for(const piece of pieces)if(!piece.attachment)for(const box of friendsShapeBoxes(piece.shape))add(worldBox(piece,box));
+    for(const [x,y,z,m]of terrain?.snapshot().edits||[])if(m)add({x:(x+.5)*32,y:(y+.5)*32,z:z*32,w:32,d:32,h:32});
+  }
+  private scenicBlocked(distance:number){
+    if(!this.obstructions.size)return false;
+    const horizon=Math.max(512,(this.scenic?.brakingDistance()||0)+768),route=scenicRailway();
+    for(let d=-SCENIC_TAIL_DISTANCE-128;d<=horizon;d+=64){
+      const p=sampleRailAlignment(route,distance+d);
+      for(let x=Math.floor((p.x-96)/512);x<=Math.floor((p.x+96)/512);x++)for(let y=Math.floor((p.y-96)/512);y<=Math.floor((p.y+96)/512);y++)for(const b of this.obstructions.get(`${x},${y}`)||[]){
+        const nx=Math.max(b.x-b.w/2,Math.min(b.x+b.w/2,p.x)),ny=Math.max(b.y-b.d/2,Math.min(b.y+b.d/2,p.y));
+        if(Math.hypot(p.x-nx,p.y-ny)<88&&b.z<p.z+170&&b.z+b.h>p.z-16)return true;
+      }
+    }
+    return false;
+  }
   readonly progress: FriendsProgress;
   private trainDistance = 0;
   private route?: PlayerRailRoute;
@@ -134,12 +175,14 @@ export class FriendsExpedition {
   private held = true;
   private aircraft: FriendsVehicle = { id: 'sunskiff', kind: 'aircraft', ...FRIENDS_AIRPAD, z: 14, angle: 0, length: 280, width: 160 };
   private salvageState: FriendsSnapshot['salvageState'];
-  private notice = 'An open frontier. B builds your tracks and workshop; G assembles a train beside your track. The helicopter waits at its ground spawn.';
+  private notice = 'Sunline Grand Traverse: walk south from arrival to the level Sunline Commons platform. Board the sightseeing train and F to sit. B builds your own railway; M opens the atlas.';
   private noticeUntilMs = 18000;
   constructor(progress?: FriendsProgress, transport?: FriendsTransportSave, private terrain?: FriendsTerrain) {
+    this.hauling = new FriendsHauling(transport?.hauling, undefined, true);
     this.progress = normalizeFriendsProgress(progress); this.salvageState = 'idle';
     const saved=transport?.railTrain;
     if(saved && Number.isSafeInteger(saved.anchor) && saved.anchor>0 && Number.isFinite(saved.distance) && saved.distance>=0 && (saved.direction===1 || saved.direction===-1)) { this.railTrain={...saved}; this.held=saved.held===true; this.trainDistance=saved.distance; }
+    this.scenic=terrain&&transport?.scenicRailway!==false?new FriendsScenicService():undefined;
     this.resetAircraft(terrain);
   }
   resetAircraft(terrain?: FriendsTerrain, players: readonly Actor[] = []) {
@@ -180,26 +223,32 @@ export class FriendsExpedition {
     const placement=this.trainPlacement(pieces,actor); if(placement.error)return placement.error;
     this.route=placement.route; this.railTrain={anchor:placement.anchor!,distance:placement.distance!,direction:1,held:true}; this.held=true; this.trainDistance=this.clampTrainDistance(placement.distance!);
   }
+  releasePlayer(id:string) { if(this.aircraft.pilotId===id)this.aircraft.pilotId=undefined;this.hauling.detach(id); }
   removeTrain(players: readonly Actor[]) {
     if(!this.held)return 'Hold the train before dismantling it.';
-    if(players.some(p=>p.lifeState==='alive' && friendsVehicleFloor(this.vehicles().filter(v=>v.kind==='train'),p.x,p.y,p.z)!==undefined))return 'Everyone must step off the train before dismantling it.';
+    if(this.hauling.hasSecuredTrainCargo())return 'Unload the salvage core before dismantling the train.';
+    if(players.some(p=>p.lifeState==='alive' && friendsVehicleFloor(this.vehicles().filter(v=>v.kind==='train'&&!v.scenic),p.x,p.y,p.z)!==undefined))return 'Everyone must step off the train before dismantling it.';
     this.railTrain=undefined;this.route=undefined;this.trainDistance=0;
   }
   private carCount() {return this.route ? Math.min(3,Math.max(0,Math.floor((this.route.length-(this.route.closed?180:256))/195))) : 0;}
   private clampTrainDistance(d:number) { if(!this.route)return 0;return this.route.closed ? (d%this.route.length+this.route.length)%this.route.length : Math.max(90+this.carCount()*195,Math.min(this.route.length-90,d)); }
   vehicles(): FriendsVehicle[] {
-    if(!this.route || !this.railTrain)return [{...this.aircraft}];
+    if(!this.route || !this.railTrain)return [{...this.aircraft},...(this.scenic?.vehicles()||[])];
     const train=(id:string,distance:number,closed=false):FriendsVehicle=>{const p=samplePlayerRail(this.route!,distance);return {id,kind:'train',...p,z:p.z+14,length:180,width:112,closed};};
-    return [...Array.from({length:this.carCount()},(_,i)=>train(`sunline-${i}`,this.trainDistance-(i+1)*195)),{...this.aircraft},train('sunline-engine',this.trainDistance,true)];
+    return [...Array.from({length:this.carCount()},(_,i)=>train(`sunline-${i}`,this.trainDistance-(i+1)*195)),{...this.aircraft},train('sunline-engine',this.trainDistance,true),...(this.scenic?.vehicles()||[])];
   }
   update(dt: number, elapsed: number, players: readonly Actor[], inputs: ReadonlyMap<string, MultiplayerInputFrame>, pieces: readonly FriendsBuildPiece[] = [], terrain?: FriendsTerrain) {
     const before=this.vehicles();
+    this.actors=players;
+    this.prepareObstructions(pieces,terrain);
+    this.scenic?.update(dt,players,new Set([...inputs].filter(([,i])=>i.jumpPressed).map(([id])=>id)),distance=>this.scenicBlocked(distance));
     if(this.route && this.railTrain && !this.held) {
       const travel=TRAIN_SPEED*dt/1000,lo=90+this.carCount()*195,hi=this.route.length-90;
       if(this.route.closed)this.trainDistance=this.clampTrainDistance(this.trainDistance+travel);
       else {this.trainDistance+=travel*this.railTrain.direction; if(this.trainDistance>=hi){this.trainDistance=hi;this.railTrain.direction=-1;} else if(this.trainDistance<=lo){this.trainDistance=lo;this.railTrain.direction=1;} }
     }
-    const pilot = players.find(p => p.id === this.aircraft.pilotId && p.lifeState === 'alive');
+    const pilot = players.find(p => p.id === this.aircraft.pilotId && p.lifeState === 'alive'
+      && !(inputs.get(p.id)?.friendsDevFlight ?? p.friendsDevFlight));
     if (!pilot) this.aircraft.pilotId = undefined;
     const input = pilot && inputs.get(pilot.id);
     if (input) {
@@ -231,7 +280,7 @@ export class FriendsExpedition {
     }
     const after = this.vehicles();
     for (const p of players) {
-      if (p.lifeState !== 'alive') continue;
+      if (p.friendsSeat || p.lifeState !== 'alive' || (inputs.get(p.id)?.friendsDevFlight ?? p.friendsDevFlight)) continue;
       const oldPosition = { x: p.x, y: p.y, z: p.z };
       let carried = false;
       for (let i = 0; i < before.length; i++) {
@@ -239,11 +288,12 @@ export class FriendsExpedition {
         if (!next || !carryOnVehicle(p, before[i], next)) continue;
         carried = true; break;
       }
+      if(!carried){const load=pieces.find(piece=>piece.attachment&&Math.abs((friendsBuildFloor([piece],p.x,p.y,p.z,0)??Infinity)-p.z)<=1),old=load&&before.find(v=>v.id===load.attachment!.vehicleId),next=old&&after.find(v=>v.id===old.id);if(old&&next){Object.assign(p,vehicleWorldPoint(next,vehicleLocalPoint(old,p)));carried=true;}}
       if (!carried) {
-        const link = trainGangways(before).find(link => Math.abs(p.z - link.z) <= 1 && pointOnGangway(link, p.x, p.y));
+        const link = trainGangways(before).find(link => Math.abs(p.z - gangwayHeight(link,p.x,p.y)) <= 1 && pointOnGangway(link, p.x, p.y));
         if (link) {
-          const index = before.findIndex(v => v.id === link.from.id), local = vehicleLocal(before[index], p.x, p.y), next = after.find(v=>v.id===before[index].id)!;
-          p.x = next.x + local.x * Math.cos(next.angle) - local.y * Math.sin(next.angle); p.y = next.y + local.x * Math.sin(next.angle) + local.y * Math.cos(next.angle); carried = true;
+          const index = before.findIndex(v => v.id === link.from.id), local = vehicleLocalPoint(before[index], p), next = after.find(v=>v.id===before[index].id)!;
+          Object.assign(p,vehicleWorldPoint(next,local)); carried = true;
         }
       }
       if (carried) { const seconds = Math.max(.001, dt / 1000); p.platformVelocityX = (p.x - oldPosition.x) / seconds; p.platformVelocityY = (p.y - oldPosition.y) / seconds; p.platformVelocityZ = (p.z - oldPosition.z) / seconds; }
@@ -251,8 +301,9 @@ export class FriendsExpedition {
     }
     if (pilot) { const v = this.aircraft; pilot.x = v.x + Math.cos(v.angle) * 100; pilot.y = v.y + Math.sin(v.angle) * 100; pilot.z = v.z; }
   }
-  interact(player: Actor, elapsed: number): 'salvage' | 'signal' | 'pilot' | 'restore' | 'treasure' | undefined {
+  interact(player: Actor, elapsed: number): 'salvage' | 'signal' | 'pilot' | 'restore' | 'treasure' | 'seat' | undefined {
     if(player.lifeState!=='alive')return;
+    if(this.scenic?.interact(player,this.actors))return 'seat';
     const v = this.aircraft;
     if (v.pilotId === player.id) { v.pilotId = undefined; player.x = v.x + Math.cos(v.angle) * 40; player.y = v.y + Math.sin(v.angle) * 40; this.say('Pilot controls released. The Sunskiff holds its position.', elapsed); return 'pilot'; }
     if (friendsCockpitInteraction([v], player)) { v.pilotId = player.id; this.say('Sunskiff: move to fly · jump to ascend · crouch to descend · interact to release controls.', elapsed); return 'pilot'; }
@@ -268,5 +319,5 @@ export class FriendsExpedition {
   resetSalvage(elapsed: number) { if (this.salvageState === 'active') { this.salvageState = 'idle'; this.say('Rustwater has reset. The safe valley is yours; return when you want another try.', elapsed); } }
   finishSalvage(elapsed: number) { if (this.salvageState !== 'active') return false; this.salvageState = 'cleared'; this.progress.salvageCleared = true; this.say('Rustwater cleared. Everyone receives 600 credits. The wreck is yours to explore.', elapsed); return true; }
   private say(message: string, elapsed: number) { this.notice = message; this.noticeUntilMs = elapsed + 16000; }
-  snapshot(): FriendsSnapshot { return { transport: { trainDistance: this.trainDistance, trainStoppedMs: this.trainStoppedMs, lastStop: this.lastStop, held: this.held, aircraft: { ...this.aircraft, pilotId: undefined }, railTrain: this.railTrain ? {...this.railTrain,distance:this.trainDistance,held:this.held} : undefined }, vehicles: this.vehicles(), trainDistance: this.trainDistance, trainStoppedMs: this.trainStoppedMs, progress: normalizeFriendsProgress(this.progress), salvageState: this.salvageState, notice: this.notice, noticeUntilMs: this.noticeUntilMs }; }
+  snapshot(): FriendsSnapshot { return { scenicRailway:this.scenic?.snapshot(this.actors), hauling: this.hauling.snapshot(), transport: { scenicRailway:Boolean(this.scenic), hauling: this.hauling.save(), trainDistance: this.trainDistance, trainStoppedMs: this.trainStoppedMs, lastStop: this.lastStop, held: this.held, aircraft: { ...this.aircraft, pilotId: undefined }, railTrain: this.railTrain ? {...this.railTrain,distance:this.trainDistance,held:this.held} : undefined }, vehicles: this.vehicles(), trainDistance: this.trainDistance, trainStoppedMs: this.trainStoppedMs, progress: normalizeFriendsProgress(this.progress), salvageState: this.salvageState, notice: this.notice, noticeUntilMs: this.noticeUntilMs }; }
 }

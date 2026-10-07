@@ -3,6 +3,12 @@ import { clampInputFrame, MULTIPLAYER_PROTOCOL_VERSION } from './protocol';
 import { decodeSignal, encodeSignal, ManualWebRTCSession } from './ManualWebRTCSession';
 
 describe('manual WebRTC signaling codes', () => {
+  it('rejects mixed-mode or obsolete Friends offers before allocating a connection', async () => {
+    const signal={version:MULTIPLAYER_PROTOCOL_VERSION,kind:'offer' as const,sessionId:'session',peerId:'peer',description:{type:'offer' as const,sdp:'v=0'}};
+    await expect(new ManualWebRTCSession({role:'guest',friends:true}).acceptOffer(encodeSignal(signal))).rejects.toThrow('Both friends should reload');
+    await expect(new ManualWebRTCSession({role:'guest'}).acceptOffer(encodeSignal({...signal,friendsProtocol:1}))).rejects.toThrow('belongs to Friends mode');
+    await expect(new ManualWebRTCSession({role:'guest',friends:true}).acceptOffer(encodeSignal({...signal,friendsProtocol:99}))).rejects.toThrow('Both friends should reload');
+  });
   it('round trips a URL-safe offer code', () => {
     const encoded = encodeSignal({
       version: MULTIPLAYER_PROTOCOL_VERSION,
