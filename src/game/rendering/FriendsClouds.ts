@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { FriendsDayNightCycle } from './FriendsDayNightCycle';
 import { createFrontierCloudField, CLOUD_FIELD_MARGIN, CLOUD_FIELD_SPAN, type FrontierCloud } from '../world/FriendsCloudField';
 import { CLOUD_SAMPLE_GLSL, CLOUD_VOLUME_SIZE, CLOUD_WIND, createCloudVolume } from './FriendsCloudVolume';
+import { cullInactiveFriendsLights } from './FriendsDirectLighting';
 
 /** Prebaked billowy density, distance-adaptive volume sampling, and one small
  * GPU shadow atlas. Both passes share the exact wind, shapes and cloud heights. */
@@ -137,7 +138,7 @@ export class FriendsClouds extends THREE.InstancedMesh<THREE.BoxGeometry,THREE.S
         cloudSurface=(modelMatrix*cloudVertex).xyz;`);
       // Only the celestial directional light is blocked by clouds. Point/spot
       // lights (including torches and the flashlight) keep their own lighting.
-      const lighting=THREE.ShaderChunk.lights_fragment_begin.replace('getDirectionalLightInfo( directionalLight, directLight );',`getDirectionalLightInfo( directionalLight, directLight );
+      const lighting=cullInactiveFriendsLights(THREE.ShaderChunk.lights_fragment_begin).replace('getDirectionalLightInfo( directionalLight, directLight );',`getDirectionalLightInfo( directionalLight, directLight );
         {float cloudAlignment=smoothstep(.9999,.99999,dot(directLight.direction,frontierCloudViewDirection));
         directLight.color*=mix(1.,cloudSun,cloudAlignment);}`)
         .replace('directionalLightShadow = directionalLightShadows[ i ];',`directionalLightShadow = directionalLightShadows[ i ];
@@ -150,7 +151,7 @@ export class FriendsClouds extends THREE.InstancedMesh<THREE.BoxGeometry,THREE.S
         float cloudShadow=texture2D(frontierCloudShadow,cloudUV).r;
         float cloudSun=1.-cloudShadow*.62*smoothstep(.05,.25,frontierCloudDirection.y);
         IncidentLight directLight;`);
-    };material.customProgramCacheKey=()=>key+':cloud-optical-shadow-v3';material.needsUpdate=true;
+    };material.customProgramCacheKey=()=>key+':cloud-optical-shadow-v4';material.needsUpdate=true;
   }
   private packVisible(camera:THREE.PerspectiveCamera){
     camera.updateMatrixWorld();this.frustum.setFromProjectionMatrix(this.projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));

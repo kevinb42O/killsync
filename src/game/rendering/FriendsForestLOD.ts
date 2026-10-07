@@ -10,7 +10,7 @@ const ASSETS: FriendsAssetId[] = ['frontierPine', 'frontierBirch', 'frontierMapl
 const SHADOW_RADIUS = 1400;
 const TILE = 2048;
 interface BarkLevels { sourceIndices: number; sourceVertices: number; levels: { error: number; indices: number[] }[] }
-interface Part { geometry: THREE.BufferGeometry[]; errors: number[]; material: THREE.Material; transform: THREE.Matrix4; bark: boolean }
+interface Part { geometry: THREE.BufferGeometry[]; errors: number[]; material: THREE.Material; transform: THREE.Matrix4; bark: boolean; buckets: (Bucket | undefined)[][] }
 interface Species { parts: Part[]; bounds: THREE.Sphere }
 interface Entry { tree: FrontierTree; species: number; sphere: THREE.Sphere; matrices: Float32Array[]; levels: number[]; supported: boolean }
 interface Bucket { mesh: THREE.InstancedMesh; slots: string[]; entries: Entry[]; part: number }
@@ -46,6 +46,12 @@ export class FriendsForestLOD {
   private projection = new THREE.Matrix4();
   private viewport = new THREE.Vector2();
   private visibleCount = 0;
+  private packedView = new THREE.Matrix4();
+  private packedProjection = new THREE.Matrix4();
+  private packedPosition = new THREE.Vector3();
+  private packedHeight = 0;
+  private packingValid = false;
+  private speciesCounts: number[] = [];
   constructor(scene: THREE.Scene, private renderer: THREE.WebGLRenderer, private shade: (m: THREE.Material) => void = () => {}) {
     this.group.name = 'frontier-instanced-3d-forests'; scene.add(this.group);
     try {
@@ -98,13 +104,15 @@ export class FriendsForestLOD {
           geometry.push(reduced); errors.push(level.error * scale);
         }
       }
-      parts.push({ geometry, errors, material, transform: child.matrixWorld.clone(), bark });
+      parts.push({ geometry, errors, material, transform: child.matrixWorld.clone(), bark, buckets: geometry.map(() => []) });
     });
     return { parts, bounds };
   }
   private rebuild(trees: FrontierTree[], ground: (tree: FrontierTree) => boolean) {
+    this.speciesCounts = this.species.map(() => 0);
     this.entries = trees.map(tree => {
       const species = KINDS.indexOf(tree.kind), model = this.species[species];
+      this.speciesCounts[species]++;
       const root = new THREE.Matrix4().compose(new THREE.Vector3(tree.x, tree.z, tree.y), new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, terrainHash(tree.x, tree.y) * Math.PI * 2), new THREE.Vector3().setScalar(tree.scale));
       return { tree, species, sphere: model.bounds.clone().applyMatrix4(root), supported: ground(tree), levels: model.parts.map(() => 0), matrices: model.parts.map(p => new Float32Array(new THREE.Matrix4().multiplyMatrices(root, p.transform).elements)) };
     });
@@ -131,43 +139,54 @@ export class FriendsForestLOD {
     this.gradeStamp = grades;
     // Snapshot revision includes harvest/regrowth, while support is invalidated
     // only by terrain edits. No terrain sampling or matrix rebuilding per frame.
-    if (f.revision !== this.stateRevision || rebuild) {
+    const revisionChanged = f.revision !== this.stateRevision;
+    if (revisionChanged || rebuild) {
       this.removed = new Set(f.harvested); this.stateRevision = f.revision;
     }
-    this.visibleCount = 0;
-    if (!enabled) return;
+    if (!enabled) { this.visibleCount = 0; this.packingValid = false; return; }
     camera.updateMatrixWorld();
+    const height = this.renderer.getDrawingBufferSize(this.viewport).y;
+    // Reuse only identical inputs, without quantising motion or delaying LOD.
+    // Light animation changes shading uniforms, not the forest's visibility.
+    if (this.packingValid && !rebuild && !revisionChanged && !gradesChanged && !dirty.size
+      && this.packedView.equals(camera.matrixWorldInverse) && this.packedProjection.equals(camera.projectionMatrix)
+      && this.packedPosition.equals(camera.position) && this.packedHeight === height) return;
+    this.visibleCount = 0;
     this.frustum.setFromProjectionMatrix(this.projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-    const pixels = this.renderer.getDrawingBufferSize(this.viewport).y * .5 * camera.projectionMatrix.elements[5];
+    const pixels = height * .5 * camera.projectionMatrix.elements[5];
     const view = camera.matrixWorldInverse.elements;
     for (const bucket of this.buckets.values()) bucket.entries.length = 0;
     for (const tile of this.tiles) {
-      const nearTile = Math.hypot(tile.bounds.center.x - camera.position.x, tile.bounds.center.z - camera.position.z) < tile.bounds.radius + SHADOW_RADIUS;
+      const dx = tile.bounds.center.x - camera.position.x, dz = tile.bounds.center.z - camera.position.z;
+      const nearTile = dx * dx + dz * dz < (tile.bounds.radius + SHADOW_RADIUS) ** 2;
       if (!nearTile && !this.frustum.intersectsSphere(tile.bounds)) continue;
       for (const entry of tile.entries) {
         if (!entry.supported || this.removed.has(entry.tree.id)) continue;
-        const shadow = entry.sphere.center.distanceTo(camera.position) - entry.sphere.radius < SHADOW_RADIUS;
+        const shadow = entry.sphere.center.distanceToSquared(camera.position) < (SHADOW_RADIUS + entry.sphere.radius) ** 2;
         // Nearby offscreen trees remain in the shadow pass when turning around.
         if (!shadow && !this.frustum.intersectsSphere(entry.sphere)) continue;
         this.visibleCount++;
         const p = entry.sphere.center;
         const depth = Math.max(1, -(view[2] * p.x + view[6] * p.y + view[10] * p.z + view[14]) - entry.sphere.radius);
         const model = this.species[entry.species];
-        model.parts.forEach((part, index) => {
+        for (let index = 0; index < model.parts.length; index++) {
+          const part = model.parts[index];
           const level = part.bark ? forestWoodLevel(part.errors, entry.tree.scale, pixels / depth, entry.levels[index]) : 0;
           entry.levels[index] = level;
-          const key = `${entry.species}:${index}:${level}:${Number(shadow)}`;
-          let bucket = this.buckets.get(key);
+          const shadowIndex = Number(shadow);
+          let bucket = part.buckets[level][shadowIndex];
           if (!bucket) {
-            const capacity = this.entries.filter(e => e.species === entry.species).length;
+            const key = `${entry.species}:${index}:${level}:${shadowIndex}`;
+            const capacity = this.speciesCounts[entry.species];
             const mesh = new THREE.InstancedMesh(part.geometry[level], part.material, Math.max(1, capacity));
             mesh.name = `forest-${KINDS[entry.species]}-${part.bark ? 'wood' : 'leaves'}-${level}-${shadow ? 'shadow' : 'far'}`;
             mesh.frustumCulled = false; mesh.castShadow = shadow; mesh.receiveShadow = true; mesh.count = 0;
             mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.group.add(mesh);
             bucket = { mesh, slots: [], entries: [], part: index }; this.buckets.set(key, bucket);
+            part.buckets[level][shadowIndex] = bucket;
           }
           bucket.entries.push(entry);
-        });
+        }
       }
     }
     for (const bucket of this.buckets.values()) {
@@ -187,6 +206,8 @@ export class FriendsForestLOD {
       bucket.mesh.count = bucket.entries.length; bucket.mesh.visible = bucket.mesh.count > 0;
       if (changed) bucket.mesh.instanceMatrix.needsUpdate = true;
     }
+    this.packedView.copy(camera.matrixWorldInverse); this.packedProjection.copy(camera.projectionMatrix);
+    this.packedPosition.copy(camera.position); this.packedHeight = height; this.packingValid = true;
   }
   private removed = new Set<string>();
   get arrivalReady(){return this.species.length>0 && this.natural!==undefined;}

@@ -2,6 +2,35 @@
 
 Investigated 7 October 2026 against `9314c24`; graphics preparation was added in `c229a93` and removed on 8 October after a reported world-loading regression.
 
+## Further rendering optimisation — 8 October
+
+This pass starts from `ed8d623`, which already fixes the day/night shader-compilation freeze. It removes unnecessary rendering work without changing resolution, render distance, forest LOD thresholds, geometry, materials, cloud detail, active lighting or shadow settings.
+
+`FriendsDirectLighting` keeps the existing point/spot light uniforms and shadow samplers in every shader. It adds a uniform branch around a light whose colour is exactly zero, and a per-fragment branch around contributions that Three.js already marks invisible. The stock shader still executes its direct-light BRDF after computing a zero contribution. Twelve inactive cave/railway lamps commonly occupy the exterior shader configuration, so avoiding that work saves GPU time over millions of fragments. Nonzero contributions execute the original lighting, cookies and shadows. Cloud-shaded exterior materials and cave materials share this helper; the global Three.js shader chunks remain unchanged.
+
+`FriendsForestLOD` reuses packed instances only when the camera view matrix, projection matrix, position, drawing-buffer height and world inputs are exactly identical. Even a 0.0000001-unit camera change invalidates the cache. Harvest/regrowth revisions, planted-tree transforms, terrain grades/support edits, and disabling/re-enabling forests also invalidate it. During movement, indexed bucket arrays replace repeated string construction and map lookup, precomputed species capacities replace full-array filtering, indexed loops avoid per-tree closures, and equivalent squared-distance checks avoid square roots. The same trees, wood LODs and nearby offscreen shadow casters remain eligible immediately.
+
+| Measured path (mean per frame) | Before | After | Work reduction |
+| --- | ---: | ---: | ---: |
+| island — GPU world pass | 35.045 ms | 21.440 ms | 38.8% |
+| island — Forest CPU update | 2.926 ms | 0.007 ms | 99.8% |
+| high-dpi — GPU world pass | 74.851 ms | 40.551 ms | 45.8% |
+| high-dpi — Forest CPU update | 3.691 ms | 0.006 ms | 99.8% |
+| pan — GPU world pass | 34.470 ms | 21.289 ms | 38.2% |
+| pan — Forest CPU update | 3.353 ms | 2.229 ms | 33.5% |
+
+Forest counts and triangle totals match exactly at the end of every phase: stationary island 3,967 trees / 4,097,656 forest triangles; DPR 2 island 3,967 / 4,140,420; camera pan 4,013 / 4,152,286. These totals include the existing nearby offscreen trees retained for shadows. The train draw path is unchanged.
+
+Method: fresh independent Chromium contexts on Apple M1 Metal; the actual Friends host arena at a 1600 × 900 viewport, with a 3200 × 1800 drawing buffer in the DPR 2 phase. Clock paused at 09:00 and wind paused to compare the same lighting. Each phase has five seconds of settling followed by twelve seconds of measurement, after a twelve-second startup wait. GPU timings use asynchronous WebGL timer queries, with disjoint timings rejected. The menu is omitted to isolate the arena. The camera pan follows the same continuous ±0.2-radian path. This measures these scenes on this Mac, not FPS on either affected PC.
+
+The reproducible benchmark is `tools/profile-friends-rendering.mjs`; run the baseline with `FRIENDS_PROFILE_REV=ed8d623` and omit that variable for the working tree. Both runs require a local Vite server with HMR disabled (`DISABLE_HMR=true npm run dev`). Raw reports are in `artifacts/friends-render-optimisation/before.json` and `after.json`.
+
+Visual validation: `tools/test-friends-render-equivalence.mjs` renders old/new real WebGL fixtures for standard, cloud and cave shading under six lamp configurations each: all off, active point light, active spotlight, all active, outside attenuation range, and a mixture of active/inactive lights. It includes point/spot shadows. All 18 cases pass with a maximum difference of one 8-bit colour step; the worst RMS difference is below 0.0014/255 across all channels. No GL or runtime errors occurred. See `artifacts/friends-render-optimisation/equivalence.json`. Forest regression coverage checks exact cache invalidation for motion, projection, resolution, harvest and terrain edits, plus the existing foliage, LOD, planting, support and shadow cases.
+
+Production validation passed against the built app on Apple M1 Metal: visible world in fresh storage and with delayed textures / readiness forced false; camera movement and repeat arrival; all six tools in both scroll directions with wraparound; normal dialog scrolling; no GL, runtime or shader errors. Every tested clock transition compiled zero shaders. A 30-second run at 120× covered 2.5 full cycles, compiled zero shaders, drew 1,312 frames, and recorded 34.1 ms at the 95th percentile / 35.4 ms maximum, with zero stalls over 500 ms. Reports are `artifacts/friends-render-optimisation/world/browser.json` and `cycle/browser.json`; representative island, noon and midnight screenshots accompany them. The existing headless pointer-capture shim emulates only OS capture; the production handlers and renderer are real.
+
+The complete unit suite passed **868 tests / 139 files**, TypeScript passed, and the production build passed with its existing bundle-size advisory.
+
 ## Confirmed day/night transition stall — 8 October
 
 The user reported that pausing the day/night clock stops the freezes on both affected PCs. A fresh browser reproduction on the actual Friends host arena then measured an **8,024.9 ms synchronous world-render call at 18:03**, with **64 shader compilations / 32 additional programs in that frame**. At 18:39, another eight shader compilations accompanied a 131.4 ms render call. The clock was accelerated to 120× to reach both transitions quickly. This reproduces the reported freeze mechanism locally; the timings are from Apple M1 Metal, not either affected PC.

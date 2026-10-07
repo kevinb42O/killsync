@@ -4,6 +4,7 @@ import { FriendsClouds } from './FriendsClouds';
 import { createCloudVolume, CLOUD_VOLUME_SIZE, CLOUD_WIND } from './FriendsCloudVolume';
 import { createFrontierCloudField, CLOUD_FIELD_MARGIN, CLOUD_FIELD_SPAN } from '../world/FriendsCloudField';
 import { applyFriendsCaveLighting } from './FriendsCaveLighting';
+import { cullInactiveFriendsLights } from './FriendsDirectLighting';
 import type { FriendsDayNightCycle } from './FriendsDayNightCycle';
 describe('moving billowy cloud volumes and optical shadows',()=>{
   it('keeps menu shadow footprints with the same wind when accelerated sunlight moves',()=>{
@@ -69,7 +70,7 @@ describe('moving billowy cloud volumes and optical shadows',()=>{
       const fragment=shader.fragmentShader;
       expect(fragment).not.toContain('reflectedLight.directDiffuse*=');
       expect(fragment).not.toContain('reflectedLight.directSpecular*=');
-      const point=THREE.ShaderChunk.lights_fragment_begin.split('#if ( NUM_POINT_LIGHTS')[1].split('#if ( NUM_DIR_LIGHTS')[0];
+      const point=cullInactiveFriendsLights(THREE.ShaderChunk.lights_fragment_begin).split('#if ( NUM_POINT_LIGHTS')[1].split('#if ( NUM_DIR_LIGHTS')[0];
       expect(fragment).toContain(point); // Point/spot light accumulation is intact.
       if(cave)expect(fragment).not.toContain('frontierCloudShadow');
       else expect(fragment).toContain('cloudSurface.xz-frontierCloudWind-frontierCloudSlope*cloudSurface.y');

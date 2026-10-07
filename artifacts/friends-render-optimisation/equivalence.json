@@ -1,0 +1,152 @@
+{
+  "date": "2026-10-07T23:42:19.018Z",
+  "origin": "http://localhost:3000",
+  "revision": "ed8d623",
+  "lighting": [
+    {
+      "mode": "standard",
+      "lighting": "off",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "lighting": "point-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "lighting": "spot-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "lighting": "outside-range",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "lighting": "mixed",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "lighting": "off",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "lighting": "point-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "lighting": "spot-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "lighting": "outside-range",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "lighting": "mixed",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "lighting": "off",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "lighting": "point-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "lighting": "all-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0013762047064079508,
+      "changedChannels": 2,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "lighting": "outside-range",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "lighting": "mixed",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0013762047064079508,
+      "changedChannels": 2,
+      "totalChannels": 1056000
+    }
+  ],
+  "errors": []
+}

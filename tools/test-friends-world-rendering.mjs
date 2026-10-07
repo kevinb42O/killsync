@@ -7,7 +7,7 @@ const require=createRequire(import.meta.url);
 let playwright;try{playwright=require('playwright');}catch{playwright=require(process.env.PLAYWRIGHT_MODULE||join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
 const sharp=require('sharp');
 const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3011';
-const directory='artifacts/friends-world-loading';
+const directory=process.env.FRIENDS_TEST_ARTIFACT_DIR||'artifacts/friends-world-loading';
 const report={date:new Date().toISOString(),origin,checks:[],errors:[],frames:[]};
 await mkdir(directory,{recursive:true});
 const browser=await playwright.chromium.launch({headless:true,args:[...(process.env.FRIENDS_TEST_ANGLE?[`--use-angle=${process.env.FRIENDS_TEST_ANGLE}`]:['--enable-unsafe-swiftshader']),'--disable-background-timer-throttling','--disable-renderer-backgrounding']});

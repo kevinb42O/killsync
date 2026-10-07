@@ -31,7 +31,7 @@ async function fixture() {
   const ground = vi.fn(() => true);
   camera.position.set(1000, 200, 2000); camera.lookAt(1000, 150, 1000); camera.updateMatrixWorld();
   await vi.waitFor(() => { forest.update(snapshot, ground, new Set(), camera); expect(forest.stats.trees).toBe(1); });
-  return { scene, forest, snapshot, camera, ground };
+  return { scene, forest, snapshot, camera, ground, renderer };
 }
 function leaves(scene: THREE.Scene) {
   const list: THREE.InstancedMesh[] = [];
@@ -39,6 +39,24 @@ function leaves(scene: THREE.Scene) {
   return list;
 }
 describe('persistent 3D forest', () => {
+  it('reuses only identical visibility inputs and refreshes immediately for motion, optics and world edits', async () => {
+    const { forest, camera, snapshot, ground, renderer } = await fixture();
+    const pack = vi.spyOn(forest['frustum'], 'setFromProjectionMatrix');
+    for(let i=0;i<10;i++)forest.update(snapshot,ground,new Set(),camera);
+    expect(pack).not.toHaveBeenCalled();expect(forest.stats.trees).toBe(1);
+    camera.position.x+=1e-7;forest.update(snapshot,ground,new Set(),camera);expect(pack).toHaveBeenCalledTimes(1);
+    camera.rotation.y+=1e-7;forest.update(snapshot,ground,new Set(),camera);expect(pack).toHaveBeenCalledTimes(2);
+    camera.fov+=1e-7;camera.updateProjectionMatrix();forest.update(snapshot,ground,new Set(),camera);expect(pack).toHaveBeenCalledTimes(3);
+    vi.spyOn(renderer,'getDrawingBufferSize').mockImplementation(v=>v.set(3200,1800));
+    forest.update(snapshot,ground,new Set(),camera);expect(pack).toHaveBeenCalledTimes(4);
+    ground.mockReturnValue(false);forest.update(snapshot,ground,new Set(['1,1']),camera);expect(forest.stats.trees).toBe(0);
+    ground.mockReturnValue(true);forest.update(snapshot,ground,new Set(['1,1']),camera);expect(forest.stats.trees).toBe(1);
+    snapshot.harvested.push(tree.id);snapshot.revision++;forest.update(snapshot,ground,new Set(),camera);expect(forest.stats.trees).toBe(0);
+    snapshot.harvested=[];snapshot.revision++;forest.update(snapshot,ground,new Set(),camera);expect(forest.stats.trees).toBe(1);
+    forest.update(snapshot,ground,new Set(),camera,false);expect(forest.stats.draws).toBe(0);
+    forest.update(snapshot,ground,new Set(),camera,true);expect(forest.stats.trees).toBe(1);expect(forest.stats.draws).toBe(2);
+    forest.dispose();
+  });
   it('selects opaque wood by projected error while retaining full detail within a pixel', () => {
     expect(forestWoodLevel([0, .5, 2], 1, 2)).toBe(0);
     expect(forestWoodLevel([0, .5, 2], 1, .5)).toBe(1);
