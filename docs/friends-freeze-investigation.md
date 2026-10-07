@@ -2,6 +2,24 @@
 
 Investigated 7 October 2026 against `9314c24`; graphics preparation was added in `c229a93` and removed on 8 October after a reported world-loading regression.
 
+## Confirmed day/night transition stall — 8 October
+
+The user reported that pausing the day/night clock stops the freezes on both affected PCs. A fresh browser reproduction on the actual Friends host arena then measured an **8,024.9 ms synchronous world-render call at 18:03**, with **64 shader compilations / 32 additional programs in that frame**. At 18:39, another eight shader compilations accompanied a 131.4 ms render call. The clock was accelerated to 120× to reach both transitions quickly. This reproduces the reported freeze mechanism locally; the timings are from Apple M1 Metal, not either affected PC.
+
+The old cycle enabled and disabled `castShadow` on the sun and moon as their intensities crossed `.01`. At the horizon this changed the directional shadow-light count from one to zero, then back to one. Three.js includes `numDirLightShadows` in its program cache key (`node_modules/three/src/renderers/webgl/WebGLPrograms.js`). Every lit material encountering the zero-shadow configuration could therefore build another shader program synchronously during gameplay. The renderer could stop completely while waiting for those programs.
+
+`FriendsDayNightCycle` now keeps one celestial shadow slot and reuses the same directional light and shadow map for whichever body is dominant. The secondary directional light preserves the other body's intensity, colour and direction through twilight. When neither body is strong enough to cast a shadow, the primary light's shadow intensity becomes zero without removing its shader slot. The sun and moon in the sky still follow their original orbits.
+
+**Rendering quality settings are unchanged:** 2048 × 2048 celestial shadow map, camera coverage, bias, PCF filtering, 10 Hz refresh, 1024 × 1024 cloud atlas, 12 cloud-shadow samples, visible cloud detail and continuous wind. No new graphics readiness gate or visibility gate was added. The cloud atlas was measured separately using asynchronous GPU timer queries: its maximum pass time before the fix was 2.50 ms during the accelerated cycle, versus the multi-second shader stall. Its rendering was therefore left intact.
+
+The same fresh-browser accelerated-cycle reproduction after the fix compiled **zero** new shaders, retained 90 programs instead of growing to 126, and reduced the maximum world-render call to **12.7 ms**. The CPU render-call duration is not the complete displayed frame time. Measurements, startup camera compilation, and the before/after methods are recorded in `artifacts/friends-day-night/profile.json`.
+
+Validation: **867 tests / 139 files passed**, TypeScript passed, and the production build passed with its existing bundle-size advisory. The orbit regression checks every minute of a full day: stable shadow slot and map, full shadow resolution, both bodies' original intensity/colour/direction, and correct dominant-body shadows. `tools/test-friends-day-night.mjs` runs the production app through its real developer controls, checking pixels and GL errors at noon, sunset, the dusk gap, moonrise, midnight, the dawn gap and sunrise. All transitions compiled zero shaders. A further 30 seconds at 120× covered 2.5 full cycles, compiled zero shaders and recorded 1,052 frames, a 34.2 ms 95th percentile and a 49.4 ms maximum, with zero runtime/shader/GL errors. See `artifacts/friends-day-night/browser.json` and the phase screenshots. Headless pointer capture uses the same platform-contract shim as the existing production world-rendering check.
+
+The existing production world-rendering check also passed: visible terrain, camera movement, every tool in both wheel directions, wraparound, menu scrolling, repeat arrival, delayed textures and a parallel-shader readiness signal forced to remain false. Its report for this change is `artifacts/friends-day-night/world-rendering.json`; the earlier loading-regression captures remain under `artifacts/friends-world-loading`.
+
+A separate real-WebGL quality comparison rendered the old and new cycle against identical sky, geometry, materials, camera and 2048 × 2048 PCF shadows at 20 clock positions, including both horizon gaps. All RGBA pixels were **identical** at every position (420 × 300 fixture; `artifacts/friends-day-night/quality-comparison.json`). This fixture verifies the unchanged celestial lighting and shadows; the production phase screenshots additionally cover actual world rendering.
+
 ## Implemented fixes and validation
 
 - Railway and cave point lights retain a fixed shader configuration. Their intensity becomes zero outside their useful range, preserving darkness without compiling different light counts while exploring.

@@ -1,0 +1,125 @@
+{
+  "method": "Real Three.js/WebGL: before and after on identical geometry, sky, lights and shadow settings; RGBA readPixels compared at 20 clock positions, including horizon gaps. ANGLE Apple M1 Metal, ACES tone mapping, 2048×2048 PCF map.",
+  "phases": [
+    {
+      "hour": 0,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 3,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 5.5,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 5.95,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 6,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 6.05,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 6.2,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 6.65,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 7,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 9,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 12,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 15,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 17.5,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 18,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 18.05,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 18.2,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 18.65,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 19,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 21,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    },
+    {
+      "hour": 23,
+      "maxChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 504000
+    }
+  ]
+}

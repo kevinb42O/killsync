@@ -1,0 +1,180 @@
+{
+  "date": "2026-10-07T22:56:17.055Z",
+  "environment": "Headless Chromium, ANGLE Apple M1 Metal, local Vite, 1100×700 at DPR 1",
+  "method": "Fresh browser per build. Real React host arena and WebGL scene; menu scenery omitted. Nine-second startup, then fixed camera. CPU call time for renderer.render and asynchronous EXT_disjoint_timer_query_webgl2 GPU timings. Fourteen seconds each paused, normal and 120×; startup camera variants are recorded separately.",
+  "before": {
+    "paused": {
+      "world": {
+        "frames": 826,
+        "shaderCompilations": 52,
+        "programsAfter": 90,
+        "meanCpuMs": 4.308837772714601,
+        "p95CpuMs": 8.700000047683716,
+        "maxCpuMs": 385.60000002384186,
+        "meanGpuMs": 13.691369951573837,
+        "maxGpuMs": 174.974624,
+        "slowCalls": [
+          {
+            "ms": 385.60000002384186,
+            "clock": "09:00",
+            "compiles": 52,
+            "programs": 90
+          }
+        ]
+      },
+      "cloud": {
+        "frames": 1,
+        "shaderCompilations": 0,
+        "programsAfter": 90,
+        "meanCpuMs": 0.10000002384185791,
+        "p95CpuMs": 0.10000002384185791,
+        "maxCpuMs": 0.10000002384185791,
+        "meanGpuMs": 0.872,
+        "maxGpuMs": 0.872,
+        "slowCalls": []
+      }
+    },
+    "normal": {
+      "world": {
+        "frames": 834,
+        "shaderCompilations": 0,
+        "programsAfter": 90,
+        "meanCpuMs": 3.9904076742897217,
+        "p95CpuMs": 9,
+        "maxCpuMs": 12.800000071525574,
+        "meanGpuMs": 13.61571757194244,
+        "maxGpuMs": 32.174333,
+        "slowCalls": []
+      },
+      "cloud": {
+        "frames": 17,
+        "shaderCompilations": 0,
+        "programsAfter": 90,
+        "meanCpuMs": 0.07647058543036966,
+        "p95CpuMs": 0.20000004768371582,
+        "maxCpuMs": 0.20000004768371582,
+        "meanGpuMs": 0.8544185294117645,
+        "maxGpuMs": 1.46275,
+        "slowCalls": []
+      }
+    },
+    "fast": {
+      "world": {
+        "frames": 346,
+        "shaderCompilations": 72,
+        "programsAfter": 126,
+        "meanCpuMs": 27.970809247107866,
+        "p95CpuMs": 9.399999976158142,
+        "maxCpuMs": 8024.899999976158,
+        "meanGpuMs": 14.134347303468205,
+        "maxGpuMs": 113.198374,
+        "slowCalls": [
+          {
+            "ms": 8024.899999976158,
+            "clock": "18:03",
+            "compiles": 64,
+            "programs": 122
+          },
+          {
+            "ms": 131.39999997615814,
+            "clock": "18:39",
+            "compiles": 8,
+            "programs": 126
+          }
+        ]
+      },
+      "cloud": {
+        "frames": 54,
+        "shaderCompilations": 0,
+        "programsAfter": 126,
+        "meanCpuMs": 0.06481481481481481,
+        "p95CpuMs": 0.10000002384185791,
+        "maxCpuMs": 0.10000002384185791,
+        "meanGpuMs": 0.9181675555555553,
+        "maxGpuMs": 2.495125,
+        "slowCalls": []
+      }
+    }
+  },
+  "after": {
+    "paused": {
+      "world": {
+        "frames": 830,
+        "shaderCompilations": 52,
+        "programsAfter": 90,
+        "meanCpuMs": 4.277469879747874,
+        "p95CpuMs": 8.600000023841858,
+        "maxCpuMs": 373.5,
+        "meanGpuMs": 13.55364614337351,
+        "maxGpuMs": 142.084917,
+        "slowCalls": [
+          {
+            "ms": 373.5,
+            "clock": "09:00",
+            "compiles": 52,
+            "programs": 90
+          }
+        ]
+      },
+      "cloud": {
+        "frames": 1,
+        "shaderCompilations": 0,
+        "programsAfter": 90,
+        "meanCpuMs": 0.19999992847442627,
+        "p95CpuMs": 0.19999992847442627,
+        "maxCpuMs": 0.19999992847442627,
+        "meanGpuMs": 0.602375,
+        "maxGpuMs": 0.602375,
+        "slowCalls": []
+      }
+    },
+    "normal": {
+      "world": {
+        "frames": 844,
+        "shaderCompilations": 0,
+        "programsAfter": 90,
+        "meanCpuMs": 3.861492889611077,
+        "p95CpuMs": 8.600000023841858,
+        "maxCpuMs": 11.5,
+        "meanGpuMs": 13.431860110189568,
+        "maxGpuMs": 29.422583,
+        "slowCalls": []
+      },
+      "cloud": {
+        "frames": 17,
+        "shaderCompilations": 0,
+        "programsAfter": 90,
+        "meanCpuMs": 0.06470589076771456,
+        "p95CpuMs": 0.20000004768371582,
+        "maxCpuMs": 0.20000004768371582,
+        "meanGpuMs": 0.8134873529411766,
+        "maxGpuMs": 0.897249,
+        "slowCalls": []
+      }
+    },
+    "fast": {
+      "world": {
+        "frames": 834,
+        "shaderCompilations": 0,
+        "programsAfter": 90,
+        "meanCpuMs": 4.3498800964378335,
+        "p95CpuMs": 9.199999928474426,
+        "maxCpuMs": 12.700000047683716,
+        "meanGpuMs": 13.592117354916063,
+        "maxGpuMs": 30.357499,
+        "slowCalls": []
+      },
+      "cloud": {
+        "frames": 129,
+        "shaderCompilations": 0,
+        "programsAfter": 90,
+        "meanCpuMs": 0.04651162975518278,
+        "p95CpuMs": 0.10000002384185791,
+        "maxCpuMs": 0.19999992847442627,
+        "meanGpuMs": 0.9378412093023256,
+        "maxGpuMs": 2.937291,
+        "slowCalls": []
+      }
+    }
+  }
+}

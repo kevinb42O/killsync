@@ -41,16 +41,17 @@ export class FriendsDayNightCycle {
   private focus = new THREE.Vector3();
   private sunDirection = new THREE.Vector3();
   private moonDirection = new THREE.Vector3();
+  private moonColor = color(0xa3c6ff);
   private shadowDirection = new THREE.Vector3();
   private shadowFocus = new THREE.Vector3();
   constructor(private scene: THREE.Scene, private renderer: THREE.WebGLRenderer,
     private camera: THREE.PerspectiveCamera, private lights: FrontierCelestialLighting) {
     this.originalBackground = scene.background; scene.background = this.background;
     this.moon.name = 'frontier-moonlight';
-    this.moon.shadow.mapSize.copy(lights.sun.shadow.mapSize);
-    this.moon.shadow.camera.copy(lights.sun.shadow.camera);
-    this.moon.shadow.normalBias = lights.sun.shadow.normalBias;
-    this.moon.shadow.bias = lights.sun.shadow.bias;
+    // Keep one shadow slot and one map for the entire orbit. Changing the
+    // number of shadow lights at the horizon recompiles every lit material.
+    lights.sun.castShadow = true;
+    this.moon.castShadow = false;
     scene.add(this.moon, this.moon.target);
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(80000, 48, 24), new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, depthTest: false,
@@ -123,8 +124,6 @@ export class FriendsDayNightCycle {
     u.sunColor.value.copy(palette.sun[0]).lerp(palette.sun[1], THREE.MathUtils.smoothstep(this.sunDirection.y, 0, .55));
     u.twilight.value = t; u.stars.value = state.stars; u.time.value = frameMs / 1000;
     this.daylight.value = d;
-    this.lights.sun.color.copy(u.sunColor.value); this.lights.sun.intensity = state.sunIntensity;
-    this.moon.intensity = state.moonIntensity;
     this.lights.ambient.color.copy(palette.ambient[0]).lerp(palette.ambient[1], d);
     this.lights.ambient.intensity = state.ambientIntensity;
     this.lights.fill.color.copy(palette.ambient[0]).lerp(palette.zenith[1], d);
@@ -138,13 +137,20 @@ export class FriendsDayNightCycle {
     this.cloudColor.value.copy(palette.clouds[0]).lerp(palette.clouds[1], d).lerp(palette.clouds[2], t * .65);
     const moonDominant = state.moonIntensity > state.sunIntensity;
     this.lightDirection.value.copy(moonDominant ? this.moonDirection : this.sunDirection);
-    this.lightColor.value.copy(moonDominant ? this.moon.color : this.lights.sun.color);
+    this.lightColor.value.copy(moonDominant ? this.moonColor : u.sunColor.value);
     this.directStrength.value = moonDominant ? state.moonIntensity / 1.85 : state.sunIntensity / 1.85;
     this.focus.copy(this.camera.position); this.focus.y -= 30;
-    updateFrontierSunShadow(this.lights.sun, this.focus, this.sunDirection);
-    updateFrontierSunShadow(this.moon, this.focus, this.moonDirection);
-    this.lights.sun.castShadow = !moonDominant && state.sunIntensity > .01;
-    this.moon.castShadow = moonDominant && state.moonIntensity > .01;
+    // The primary slot follows the dominant body; the unshadowed secondary
+    // preserves the other body's contribution through twilight. Directions,
+    // colours and intensities are uniforms, so this needs no shader variants
+    // or second shadow-map allocation at sunset.
+    this.lights.sun.color.copy(this.lightColor.value);
+    this.lights.sun.intensity = moonDominant ? state.moonIntensity : state.sunIntensity;
+    this.moon.color.copy(moonDominant ? u.sunColor.value : this.moonColor);
+    this.moon.intensity = moonDominant ? state.sunIntensity : state.moonIntensity;
+    this.lights.sun.shadow.intensity = this.lights.sun.intensity > .01 ? 1 : 0;
+    updateFrontierSunShadow(this.lights.sun, this.focus, this.lightDirection.value);
+    updateFrontierSunShadow(this.moon, this.focus, moonDominant ? this.sunDirection : this.moonDirection);
     // One map updates at the existing 10 Hz cadence, independent of frame rate.
     if (frameMs - this.lastShadowMs >= 100 || frameMs < this.lastShadowMs || moonDominant !== this.previousMoonShadow
       || this.shadowDirection.distanceToSquared(this.lightDirection.value) > .0001 || this.shadowFocus.distanceToSquared(this.focus) > 256 * 256) {
