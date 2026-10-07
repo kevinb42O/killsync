@@ -1,3 +1,4 @@
+import { applyFriendsCaveLighting } from './FriendsCaveLighting';
 import * as THREE from 'three';
 import { CAVE_TREASURES } from '../world/FriendsCave';
 
@@ -7,14 +8,9 @@ export class FriendsTreasureVisuals extends THREE.Group {
     super(); this.name = 'cave-treasures';
     const wood = new THREE.MeshStandardMaterial({ color: 0x593522, roughness: .8 });
     const brass = new THREE.MeshStandardMaterial({ color: 0xcba24e, metalness: .7, roughness: .35 });
-    const gold = new THREE.MeshStandardMaterial({ color: 0xffca40, metalness: .75, roughness: .27, emissive: 0xb57109, emissiveIntensity: .35 });
-    const beacon = new THREE.MeshStandardMaterial({ color: 0xffd575, emissive: 0xffb837, emissiveIntensity: 1.6 });
-    for (const material of [wood, brass, gold]) {
-      material.onBeforeCompile = shader => {
-        shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin.replace('getDirectionalLightInfo( directionalLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= 0.;'));
-      };
-      material.customProgramCacheKey = () => 'cave-treasure';
-    }
+    const gold = new THREE.MeshStandardMaterial({ color: 0xffca40, metalness: .75, roughness: .27, emissive: 0xb57109, emissiveIntensity: .025 });
+    const beacon = new THREE.MeshStandardMaterial({ color: 0xffd575, emissive: 0xffb837, emissiveIntensity: .035 });
+    for (const material of [wood, brass, gold, beacon]) applyFriendsCaveLighting(material);
     const box = new THREE.BoxGeometry(1, 1, 1), coin = new THREE.CylinderGeometry(4, 4, 1.5, 10);
     const addBox = (parent: THREE.Group, x: number, y: number, z: number, sx: number, sy: number, sz: number, material: THREE.Material) => {
       const mesh = new THREE.Mesh(box, material); mesh.position.set(x, y, z); mesh.scale.set(sx, sy, sz); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh);
@@ -43,7 +39,7 @@ export class FriendsTreasureVisuals extends THREE.Group {
   update(opened: readonly string[], camera: THREE.Camera, time: number) {
     const ids = new Set(opened);
     for (const c of this.chests) {
-      c.root.visible = c.root.position.distanceTo(camera.position) < 2000;
+      c.root.visible = c.root.position.distanceTo(camera.position) < 2800;
       c.opened = ids.has(c.id);
       c.amount += ((c.opened ? 1 : 0) - c.amount) * .14;
       c.lid.rotation.x = -c.amount * 1.85;

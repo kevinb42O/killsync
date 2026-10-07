@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest';
-import { CAVE_ENTRANCE,CAVE_ROOMS,CAVE_ROUTES,CAVE_TORCHES,CAVE_TREASURES,caveColumn } from './FriendsCave';
+import { CAVE_ENTRANCE,CAVE_ROOMS,CAVE_ROUTES,CAVE_TORCHES,CAVE_TREASURES,caveColumn,caveGlow } from './FriendsCave';
 import { FriendsTerrain,baseTerrainHeight } from './FriendsTerrain';
 import { meshTerrainChunk } from './FriendsTerrainMesh';
 
@@ -26,10 +26,17 @@ describe('Lantern Descent exploration cave',()=>{
     for(const treasure of CAVE_TREASURES)expect(seen.has(`${Math.floor(treasure.x/32)},${Math.floor(treasure.y/32)},${treasure.z}`),treasure.id).toBe(true);
     for(const room of CAVE_ROOMS)expect([...seen].some(k=>{const [vx,vy,z]=k.split(',').map(Number);return Math.hypot(vx*32+16-room.x,vy*32+16-room.y)<96&&Math.abs(z-room.floor)<=32;}),room.name).toBe(true);
   },20000);
-  it('grounds every route torch and preserves edited cave floors through saves',()=>{
-    const t=new FriendsTerrain();expect(CAVE_TORCHES.length).toBeGreaterThan(25);expect(CAVE_ROUTES.length).toBeGreaterThan(5);
+  it('grounds every landmark torch and preserves edited cave floors through saves',()=>{
+    const t=new FriendsTerrain();expect(CAVE_TORCHES.length).toBeGreaterThan(10);expect(CAVE_TORCHES.length).toBeLessThan(25);expect(CAVE_ROUTES.length).toBeGreaterThan(5);
     for(const p of CAVE_TORCHES){expect(t.supports(p.x,p.y,p.z),`${p.x},${p.y},${p.z}`).toBe(true);expect((t.ceiling(p.x,p.y,p.z)??10000)-p.z).toBeGreaterThanOrEqual(96);}
     t.set(269,152,-14,0);const restored=new FriendsTerrain(t.snapshot());expect(restored.material(269,152,-14)).toBe(0);
+  });
+  it('leaves remote hoards and long connecting tunnels without baked illumination',()=>{
+    const hoards=CAVE_TREASURES.filter(t=>t.id.startsWith('reliquary'));
+    for(const t of hoards)expect(caveGlow(t.x,t.y,t.z+28),t.id).toEqual([0,0,0]);
+    const room=CAVE_ROOMS.find(r=>r.id==='deep-3-1')!;
+    expect(CAVE_TORCHES.every(t=>Math.hypot(t.x-room.x,t.y-room.y)>500)).toBe(true);
+    expect(caveGlow(room.x,room.y,room.floor+64)).toEqual([0,0,0]);
   });
   it('meshes underground walls and ceilings with correct winding and merged planar faces',()=>{
     const t=new FriendsTerrain(),m=meshTerrainChunk(t,16,9);expect(m.positions.length).toBeGreaterThan(0);expect(m.glow.some(value=>value>0)).toBe(true);expect(m.groups.some(g=>g.materialIndex>=5)).toBe(true);

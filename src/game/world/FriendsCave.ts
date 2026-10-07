@@ -117,13 +117,13 @@ export function caveAt(x:number,y:number,z:number){
 }
 export type CaveTorch=CavePoint&{cool?:boolean};
 export const CAVE_TORCHES:CaveTorch[]=[];
-// A repeated warm light rhythm marks the complete return loop and the lower branch.
-for(const route of CAVE_ROUTES)for(let i=1;i<route.length;i++){
-  const a=route[i-1],b=route[i],steps=Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/(a.x>=9664?420:180));
-  for(let j=0;j<steps;j++){const t=j/steps,dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);const x=a.x+dx*t-dy/length*24,y=a.y+dy*t+dx/length*24,expected=a.z+(b.z-a.z)*t;
-    const floor=caveColumn(x,y).filter(r=>r[0]<=expected+32).at(-1)?.[0];
-    if(floor!==undefined&&!CAVE_TORCHES.some(p=>Math.hypot(p.x-x,p.y-y)<96))CAVE_TORCHES.push({x,y,z:floor,cool:x>9050});
-  }
+// Lamps mark occasional landmarks, leaving routes and remote hoards dark.
+// Do not regenerate a continuous torch trail along every connecting tunnel.
+const torchRooms=new Set(['vestibule','echo','cathedral','blue','roots','well','deep-0-2','deep-0-4','deep-2-2','deep-2-4','deep-4-2','deep-4-4']);
+for(const room of CAVE_ROOMS)if(torchRooms.has(room.id)){
+  const x=room.x-room.rx*.48,y=room.y-room.ry*.30;
+  const range=caveColumn(x,y).find(([floor,roof])=>Math.abs(floor-room.floor)<=32&&roof-floor>=96);
+  if(range)CAVE_TORCHES.push({x,y,z:range[0],cool:room.id==='blue'});
 }
 for(const [x,y]of [[6256,5104],[6352,5024],[6456,5024],[6496,5136]]){const z=caveEntranceFloor(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16);if(z!==undefined)CAVE_TORCHES.push({x,y,z});}
 
@@ -132,10 +132,14 @@ CAVE_TORCHES.push({x:8624,y:4944,z:-416},{x:8512,y:4864,z:-416});
 /** Static soft bounce, sampled only when a chunk is meshed. Dynamic flames and
  * the nearest direct lights sit on top of this inexpensive distant illumination. */
 const glowTiles=new Map<string,CaveTorch[]>();
-for(const t of CAVE_TORCHES)indexTiles(glowTiles,t,t.x-360,t.x+360,t.y-360,t.y+360);
+for(const t of CAVE_TORCHES)indexTiles(glowTiles,t,t.x-160,t.x+160,t.y-160,t.y+160);
 export function caveGlow(x:number,y:number,z:number):[number,number,number]{
   let r=0,g=0,b=0;
-  for(const t of glowTiles.get(`${Math.floor(x/512)},${Math.floor(y/512)}`)||[]){const d=(x-t.x)**2+(y-t.y)**2+(z-t.z-78)**2;if(d>360**2)continue;const a=(1-d/360**2)**2*.25;r+=a*(t.cool?.28:1);g+=a*(t.cool?.65:.38);b+=a*(t.cool?1:.08);}
+  for(const t of glowTiles.get(`${Math.floor(x/512)},${Math.floor(y/512)}`)||[]){const d=(x-t.x)**2+(y-t.y)**2+(z-t.z-78)**2;if(d>160**2)continue;
+    // Keep baked bounce local and stop it crossing a wall or a stone ledge.
+    const steps=Math.ceil(Math.sqrt(d)/24);let blocked=false;
+    for(let i=1;i<steps;i++){const f=i/steps;if(!explorationCave(x+(t.x-x)*f,y+(t.y-y)*f,z+(t.z+78-z)*f)){blocked=true;break;}}
+    if(blocked)continue;const a=(1-d/160**2)**2*.035;r+=a*(t.cool?.28:1);g+=a*(t.cool?.65:.38);b+=a*(t.cool?1:.08);}
   return [Math.min(.8,r),Math.min(.6,g),Math.min(.6,b)];
 }
 

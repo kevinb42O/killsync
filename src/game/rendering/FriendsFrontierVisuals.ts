@@ -1,4 +1,5 @@
-import { FriendsFlashlight } from './FriendsFlashlight';
+import { applyFriendsCaveLighting } from './FriendsCaveLighting';
+import { FriendsFlashlight, FRIENDS_FLASHLIGHT_RANGE } from './FriendsFlashlight';
 import { FriendsTreasureVisuals } from './FriendsTreasureVisuals';
 import { CAVE_BOUNDS, CAVE_ENTRANCE, caveAt } from '../world/FriendsCave';
 import { FriendsCaveVisuals } from './FriendsCaveVisuals';
@@ -86,7 +87,7 @@ export class FriendsFrontierVisuals {
     this.group.name = 'frontier-streamed-world'; scene.add(this.group); (viewmodel.getObjectByProperty('type', 'PerspectiveCamera') || viewmodel).add(this.tool);
     this.cave=new FriendsCaveVisuals(scene,camera,this.terrain,renderer);this.group.add(this.cave,this.treasures);
     this.flashlight=new FriendsFlashlight(scene,viewmodel,camera,renderer);
-    for(const source of this.materials.slice()){const m=source.clone(),decorate=source.onBeforeCompile;m.customProgramCacheKey=()=> 'frontier-underground';m.color.set('#909b99');m.roughness=.68;m.onBeforeCompile=(shader,renderer)=>{decorate(shader,renderer);shader.vertexShader='attribute vec3 caveGlow;varying vec3 caveRadiance;\n'+shader.vertexShader.replace('#include <color_vertex>','#include <color_vertex>\ncaveRadiance=caveGlow;');shader.fragmentShader='varying vec3 caveRadiance;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=caveRadiance*diffuseColor.rgb;');shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_begin>',THREE.ShaderChunk.lights_fragment_begin.replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= 0.;'));shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse*=.10;reflectedLight.indirectSpecular*=.15;');};this.materials.push(m);}
+    for(const source of this.materials.slice()){const m=source.clone(),decorate=source.onBeforeCompile;m.customProgramCacheKey=()=> 'frontier-underground';m.color.set('#909b99');m.roughness=.68;m.onBeforeCompile=(shader,renderer)=>{decorate(shader,renderer);shader.vertexShader='attribute vec3 caveGlow;varying vec3 caveRadiance;\n'+shader.vertexShader.replace('#include <color_vertex>','#include <color_vertex>\ncaveRadiance=caveGlow;');shader.fragmentShader='varying vec3 caveRadiance;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=caveRadiance*diffuseColor.rgb;');};applyFriendsCaveLighting(m);this.materials.push(m);}
     this.forestLOD = new FriendsForestLOD(scene, renderer);
     this.fineCoverage.magFilter = this.fineCoverage.minFilter = THREE.NearestFilter; this.fineCoverage.needsUpdate = true;
     configureTerrainCoverage(this.farMaterial,this.fineCoverage,this.fineGrid,'horizon');
@@ -129,7 +130,7 @@ export class FriendsFrontierVisuals {
     if (!f) return;
     this.treasures.update(openedTreasures,this.camera,elapsed/1000);
     this.far.update(); this.clouds.update(elapsed / 1000);
-    const underground=this.cave.update(elapsed/1000);this.sky.visible=!underground;this.clouds.visible=!underground;
+    const underground=this.cave.update(elapsed/1000);this.sky.visible=!underground;this.clouds.visible=!underground;this.coast.visible=!underground;this.far.visible=!underground;
     (this.coast.material as THREE.ShaderMaterial).uniforms.time.value = elapsed / 1000; (this.sky.material as THREE.ShaderMaterial).uniforms.time.value = elapsed / 1000;
     if (f.terrain.revision !== this.revision) {
       const gradeStamp=JSON.stringify(f.terrain.grades || []);if(gradeStamp!==this.gradeStamp){this.far.setGrades(f.terrain.grades);this.gradeStamp=gradeStamp;for(const key of this.chunks.keys())this.dirty.add(key);for(const key of this.groves.keys())this.vegetationDirty.add(key);
@@ -149,9 +150,11 @@ export class FriendsFrontierVisuals {
     const todo: [number, number][] = [];
     for (let a = cx - radius; a <= cx + radius; a++) for (let b = cy - radius; b <= cy + radius; b++) if (a >= 0 && b >= 0 && a < FRONTIER_SIZE / 512 && b < FRONTIER_SIZE / 512) { this.desired.add(`${a},${b}`); if (!this.chunks.has(`${a},${b}`) || this.dirty.has(`${a},${b}`)) todo.push([a, b]); }
     const caveReady=Boolean(caveAt(x,y,this.camera.position.y))||Math.hypot(x-CAVE_ENTRANCE.x,y-CAVE_ENTRANCE.y)<1200;
+    // Match the underground streaming distance to the flashlight reach.
+    const caveRadius=Math.ceil(FRIENDS_FLASHLIGHT_RANGE/512)+1;
     // A local extra ring keeps tunnels ahead ready without preloading the whole
     // labyrinth (hundreds of chunks) when someone approaches its entrance.
-    if(caveReady)for(let a=Math.max(cx-4,Math.floor(CAVE_BOUNDS.minX/512));a<=Math.min(cx+4,Math.floor(CAVE_BOUNDS.maxX/512));a++)for(let b=Math.max(cy-4,Math.floor(CAVE_BOUNDS.minY/512));b<=Math.min(cy+4,Math.floor(CAVE_BOUNDS.maxY/512));b++){const key=`${a},${b}`;if(!this.desired.has(key)){this.desired.add(key);if(!this.chunks.has(key)||this.dirty.has(key))todo.push([a,b]);}}
+    if(caveReady)for(let a=Math.max(cx-caveRadius,Math.floor(CAVE_BOUNDS.minX/512));a<=Math.min(cx+caveRadius,Math.floor(CAVE_BOUNDS.maxX/512));a++)for(let b=Math.max(cy-caveRadius,Math.floor(CAVE_BOUNDS.minY/512));b<=Math.min(cy+caveRadius,Math.floor(CAVE_BOUNDS.maxY/512));b++){const key=`${a},${b}`;if(!this.desired.has(key)){this.desired.add(key);if(!this.chunks.has(key)||this.dirty.has(key))todo.push([a,b]);}}
     todo.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
     for (const [a, b] of todo.slice(0, this.worker ? 6 : 1)) { const k = `${a},${b}:${this.epoch}`; if (this.pending.has(k)) continue; if (this.worker) { this.pending.add(k); this.worker.postMessage({ cx: a, cy: b, epoch: this.epoch }); } else this.install(a, b, meshTerrainChunk(this.terrain, a, b)); }
     for (const [k, mesh] of this.chunks) { const [a,b]=k.split(',').map(Number);if(!this.desired.has(k)&&(Math.abs(a-cx)>radius+1||Math.abs(b-cy)>radius+1)){ mesh.removeFromParent(); mesh.geometry.dispose(); this.chunks.delete(k);this.fineData[b*this.fineGrid+a]=0;this.fineCoverage.needsUpdate=true; }}
