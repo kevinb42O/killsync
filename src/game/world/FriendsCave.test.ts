@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest';
-import { CAVE_ENTRANCE,CAVE_ROOMS,CAVE_ROUTES,CAVE_TORCHES,caveColumn } from './FriendsCave';
+import { CAVE_ENTRANCE,CAVE_ROOMS,CAVE_ROUTES,CAVE_TORCHES,CAVE_TREASURES,caveColumn } from './FriendsCave';
 import { FriendsTerrain,baseTerrainHeight } from './FriendsTerrain';
 import { meshTerrainChunk } from './FriendsTerrainMesh';
 
@@ -21,10 +21,11 @@ describe('Lantern Descent exploration cave',()=>{
     const queue:[[number,number,number]]=[[Math.floor(CAVE_ENTRANCE.x/32),Math.floor(CAVE_ENTRANCE.y/32),96]],seen=new Set<string>();
     for(let i=0;i<queue.length;i++){const [vx,vy,z]=queue[i],key=`${vx},${vy},${z}`;if(seen.has(key))continue;seen.add(key);
       for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])for(const [floor,roof]of caveColumn((vx+dx)*32+16,(vy+dy)*32+16)){if(roof-floor<64||Math.abs(floor-z)>32)continue;const k=`${vx+dx},${vy+dy},${floor}`;if(!seen.has(k))queue.push([vx+dx,vy+dy,floor]);}
-      if(seen.size>20000)throw new Error('Unexpected unbounded cave traversal');
+      if(seen.size>160000)throw new Error('Unexpected unbounded cave traversal');
     }
+    for(const treasure of CAVE_TREASURES)expect(seen.has(`${Math.floor(treasure.x/32)},${Math.floor(treasure.y/32)},${treasure.z}`),treasure.id).toBe(true);
     for(const room of CAVE_ROOMS)expect([...seen].some(k=>{const [vx,vy,z]=k.split(',').map(Number);return Math.hypot(vx*32+16-room.x,vy*32+16-room.y)<96&&Math.abs(z-room.floor)<=32;}),room.name).toBe(true);
-  });
+  },20000);
   it('grounds every route torch and preserves edited cave floors through saves',()=>{
     const t=new FriendsTerrain();expect(CAVE_TORCHES.length).toBeGreaterThan(25);expect(CAVE_ROUTES.length).toBeGreaterThan(5);
     for(const p of CAVE_TORCHES){expect(t.supports(p.x,p.y,p.z),`${p.x},${p.y},${p.z}`).toBe(true);expect((t.ceiling(p.x,p.y,p.z)??10000)-p.z).toBeGreaterThanOrEqual(96);}

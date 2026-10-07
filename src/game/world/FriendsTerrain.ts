@@ -75,6 +75,9 @@ export function terrainProtected(x: number, y: number) {
 }
 export function naturalCave(x: number, y: number, z: number, roofLimit=Infinity) {
   if(z<roofLimit&&explorationCave(x,y,z))return true;
+  // Preserve authored floors and ramp ledges where random mining seams cross
+  // the labyrinth. Player edits still take precedence in material().
+  if(caveColumn(x,y).length)return false;
   if (x > 5990 && x < 6820 && Math.abs(y - 6192) < 66 && z >= FRIENDS_CAVE_HEIGHT && z < FRIENDS_CAVE_HEIGHT+96) return true;
   if (((x - 6790) / 185) ** 2 + ((y - 6210) / 150) ** 2 < 1 && z > FRIENDS_CAVE_HEIGHT-64 && z < FRIENDS_CAVE_HEIGHT+128) return true;
   // Deep horizontal seams invite player-made access tunnels throughout the frontier.

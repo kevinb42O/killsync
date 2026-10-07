@@ -1709,6 +1709,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         }
         return;
       }
+      if (launch.gameMode === 'friends' && event.code === 'KeyL' && !typingTarget && !isSpectator && !backpackOpenRef.current) {
+        event.preventDefault(); if (!event.repeat) renderer.toggleFriendsFlashlight(); return;
+      }
       if (event.key === 'Tab' && launch.gameMode === 'friends' && buildModeRef.current) {
         event.preventDefault(); if (!event.repeat) { keys.clear(); firing = false; expandFriendsPalette(true); updateInput(); } return;
       }

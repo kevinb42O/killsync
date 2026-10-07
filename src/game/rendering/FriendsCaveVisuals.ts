@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TORCHES, caveAt, caveColumn } from '../world/FriendsCave';
+import { CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TORCHES, CAVE_TREASURES, caveAt, caveColumn } from '../world/FriendsCave';
 import type { FriendsTerrain } from '../world/FriendsTerrain';
 
 /** Permanent flames establish distance cues. Only the nearest six torches use
@@ -31,6 +31,7 @@ export class FriendsCaveVisuals extends THREE.Group {
     const crystals:THREE.Matrix4[]=[];
     for(const room of CAVE_ROOMS)for(let i=0;i<14;i++){const angle=i*2.399,r=.68+.12*Math.sin(i*7.1),x=room.x+Math.cos(angle)*room.rx*r,y=room.y+Math.sin(angle)*room.ry*r;
       const floor=caveColumn(x,y).find(([a,b])=>a<=room.floor+32&&b>=room.floor+80)?.[0];if(floor===undefined)continue;
+      if(CAVE_TREASURES.some(t=>Math.hypot(t.x-x,t.y-y)<90))continue;
       const h=room.id==='blue'?50+(i%4)*18:18+(i%4)*10;
       crystals.push(new THREE.Matrix4().compose(new THREE.Vector3(x,floor+h/2,y),new THREE.Quaternion().setFromEuler(new THREE.Euler(.1*Math.sin(i),angle,.1*Math.cos(i))),new THREE.Vector3(9+i%4*3,h,9+i%3*4)));
     }

@@ -243,6 +243,7 @@ export class MultiplayerRendererBridge {
     return getFriendsBuildPose(snapshot?.friends?.building?.pieces || [], this.creativeRay(), shape, rotationOffset / (Math.PI / 2), snapshot?.friends?.frontier ? this.frontierVisuals?.terrain : undefined);
   }
   getFriendsTerrain() { return this.frontierVisuals?.terrain; }
+  toggleFriendsFlashlight() { this.frontierVisuals?.toggleFlashlight(); }
   setFriendsTool(tool: FrontierTool, firing: boolean) { this.friendsTool = tool; this.friendsToolFiring = firing; }
   getFriendsBuildTarget(snapshot: CoopSnapshot | null) { return raycastFriendsBuild(snapshot?.friends?.building?.pieces || [], this.creativeRay()); }
   setFriendsBuildPreview(shape?: FriendsBuildShape, pose?: FriendsBuildPose, valid = true, finish: FriendsBuildFinish = 'stone') { this.friendsBuildVisuals.preview(shape, pose, valid, finish); }
@@ -691,7 +692,7 @@ export class MultiplayerRendererBridge {
     this.structureVisuals.update(snapshot.structures || [], snapshot.elapsedMs);
     this.friendsVehicleVisuals.update(snapshot.friends, snapshot.elapsedMs);
     this.friendsBuildVisuals.update(snapshot.friends?.building);
-    this.frontierVisuals?.update(snapshot.friends?.frontier, local.x, local.y, snapshot.elapsedMs, pilotedVehicle || isSpectating ? 0 : this.friendsTool, this.friendsToolFiring);
+    this.frontierVisuals?.update(snapshot.friends?.frontier, local.x, local.y, snapshot.elapsedMs, pilotedVehicle || isSpectating ? 0 : this.friendsTool, this.friendsToolFiring, snapshot.friends?.progress.openedTreasures);
     const harvest = snapshot.friends?.frontier?.damage, harvestStamp = harvest && `${harvest.id}:${harvest.value}:${harvest.until}`;
     if (harvest?.by === localPlayerId && harvest.kind && (harvest.until || 0) > snapshot.elapsedMs && harvestStamp !== this.lastFrontierHit) { soundManager.playFrontierHit(harvest.kind); this.lastFrontierHit = harvestStamp!; }
     this.renderer.frontierToolActive = Boolean(snapshot.friends?.frontier && this.friendsTool);

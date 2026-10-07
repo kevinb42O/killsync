@@ -1,3 +1,5 @@
+import { FriendsFlashlight } from './FriendsFlashlight';
+import { FriendsTreasureVisuals } from './FriendsTreasureVisuals';
 import { CAVE_BOUNDS, CAVE_ENTRANCE, caveAt } from '../world/FriendsCave';
 import { FriendsCaveVisuals } from './FriendsCaveVisuals';
 import * as THREE from 'three';
@@ -75,12 +77,15 @@ export class FriendsFrontierVisuals {
   private far: FriendsBlockHorizon;
   private clouds: FriendsClouds;
   private cave: FriendsCaveVisuals;
+  private flashlight: FriendsFlashlight;
+  private treasures = new FriendsTreasureVisuals();
   private tool = new THREE.Group();
   private toolId = -1;
   private sky: THREE.Mesh;
   constructor(private scene: THREE.Scene, private viewmodel: THREE.Scene, renderer: THREE.WebGLRenderer, private camera: THREE.PerspectiveCamera) {
     this.group.name = 'frontier-streamed-world'; scene.add(this.group); (viewmodel.getObjectByProperty('type', 'PerspectiveCamera') || viewmodel).add(this.tool);
-    this.cave=new FriendsCaveVisuals(scene,camera,this.terrain,renderer);this.group.add(this.cave);
+    this.cave=new FriendsCaveVisuals(scene,camera,this.terrain,renderer);this.group.add(this.cave,this.treasures);
+    this.flashlight=new FriendsFlashlight(scene,viewmodel,camera,renderer);
     for(const source of this.materials.slice()){const m=source.clone(),decorate=source.onBeforeCompile;m.customProgramCacheKey=()=> 'frontier-underground';m.color.set('#909b99');m.roughness=.68;m.onBeforeCompile=(shader,renderer)=>{decorate(shader,renderer);shader.vertexShader='attribute vec3 caveGlow;varying vec3 caveRadiance;\n'+shader.vertexShader.replace('#include <color_vertex>','#include <color_vertex>\ncaveRadiance=caveGlow;');shader.fragmentShader='varying vec3 caveRadiance;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=caveRadiance*diffuseColor.rgb;');shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_begin>',THREE.ShaderChunk.lights_fragment_begin.replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= 0.;'));shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse*=.10;reflectedLight.indirectSpecular*=.15;');};this.materials.push(m);}
     this.forestLOD = new FriendsForestLOD(scene, renderer);
     this.fineCoverage.magFilter = this.fineCoverage.minFilter = THREE.NearestFilter; this.fineCoverage.needsUpdate = true;
@@ -118,9 +123,11 @@ export class FriendsFrontierVisuals {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3)); g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3)); g.setAttribute('uv', new THREE.BufferAttribute(data.uv, 2)); g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));g.setAttribute('caveGlow',new THREE.BufferAttribute(data.glow,3)); for (const group of data.groups) g.addGroup(group.start, group.count, group.materialIndex);
     g.computeBoundingSphere(); const mesh = new THREE.Mesh(g, this.materials); mesh.position.set(cx * 512, 0, cy * 512); mesh.receiveShadow = true; mesh.castShadow = true; this.group.add(mesh); this.chunks.set(key, mesh); this.dirty.delete(key); this.fineData[cy*this.fineGrid+cx]=255; this.fineCoverage.needsUpdate=true;
   }
-  update(f: FrontierSnapshot | undefined, x: number, y: number, elapsed: number, tool: FrontierTool, firing = false) {
+  update(f: FrontierSnapshot | undefined, x: number, y: number, elapsed: number, tool: FrontierTool, firing = false, openedTreasures: readonly string[] = []) {
     this.group.visible = Boolean(f); this.tool.visible = Boolean(f && tool);
+    this.flashlight.update(elapsed/1000,Boolean(f && tool));
     if (!f) return;
+    this.treasures.update(openedTreasures,this.camera,elapsed/1000);
     this.far.update(); this.clouds.update(elapsed / 1000);
     const underground=this.cave.update(elapsed/1000);this.sky.visible=!underground;this.clouds.visible=!underground;
     (this.coast.material as THREE.ShaderMaterial).uniforms.time.value = elapsed / 1000; (this.sky.material as THREE.ShaderMaterial).uniforms.time.value = elapsed / 1000;
@@ -142,7 +149,9 @@ export class FriendsFrontierVisuals {
     const todo: [number, number][] = [];
     for (let a = cx - radius; a <= cx + radius; a++) for (let b = cy - radius; b <= cy + radius; b++) if (a >= 0 && b >= 0 && a < FRONTIER_SIZE / 512 && b < FRONTIER_SIZE / 512) { this.desired.add(`${a},${b}`); if (!this.chunks.has(`${a},${b}`) || this.dirty.has(`${a},${b}`)) todo.push([a, b]); }
     const caveReady=Boolean(caveAt(x,y,this.camera.position.y))||Math.hypot(x-CAVE_ENTRANCE.x,y-CAVE_ENTRANCE.y)<1200;
-    if(caveReady)for(let a=Math.floor(CAVE_BOUNDS.minX/512);a<=Math.floor(CAVE_BOUNDS.maxX/512);a++)for(let b=Math.floor(CAVE_BOUNDS.minY/512);b<=Math.floor(CAVE_BOUNDS.maxY/512);b++){const key=`${a},${b}`;if(!this.desired.has(key)){this.desired.add(key);if(!this.chunks.has(key)||this.dirty.has(key))todo.push([a,b]);}}
+    // A local extra ring keeps tunnels ahead ready without preloading the whole
+    // labyrinth (hundreds of chunks) when someone approaches its entrance.
+    if(caveReady)for(let a=Math.max(cx-4,Math.floor(CAVE_BOUNDS.minX/512));a<=Math.min(cx+4,Math.floor(CAVE_BOUNDS.maxX/512));a++)for(let b=Math.max(cy-4,Math.floor(CAVE_BOUNDS.minY/512));b<=Math.min(cy+4,Math.floor(CAVE_BOUNDS.maxY/512));b++){const key=`${a},${b}`;if(!this.desired.has(key)){this.desired.add(key);if(!this.chunks.has(key)||this.dirty.has(key))todo.push([a,b]);}}
     todo.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
     for (const [a, b] of todo.slice(0, this.worker ? 6 : 1)) { const k = `${a},${b}:${this.epoch}`; if (this.pending.has(k)) continue; if (this.worker) { this.pending.add(k); this.worker.postMessage({ cx: a, cy: b, epoch: this.epoch }); } else this.install(a, b, meshTerrainChunk(this.terrain, a, b)); }
     for (const [k, mesh] of this.chunks) { const [a,b]=k.split(',').map(Number);if(!this.desired.has(k)&&(Math.abs(a-cx)>radius+1||Math.abs(b-cy)>radius+1)){ mesh.removeFromParent(); mesh.geometry.dispose(); this.chunks.delete(k);this.fineData[b*this.fineGrid+a]=0;this.fineCoverage.needsUpdate=true; }}
@@ -183,6 +192,7 @@ export class FriendsFrontierVisuals {
     }
     this.updateTool(tool, elapsed, firing, f.upgrades>0);
   }
+  toggleFlashlight() { this.flashlight.toggle(); }
   private updateTool(id: FrontierTool, elapsed: number, firing: boolean, upgraded: boolean) {
     const variant=id+(upgraded?10:0);
     if (variant !== this.toolId) {
@@ -202,7 +212,7 @@ export class FriendsFrontierVisuals {
   dispose() {
     this.worker?.terminate(); this.forestLOD.dispose();this.fineCoverage.dispose(); for (const mesh of this.chunks.values()) mesh.geometry.dispose(); for (const grove of this.groves.values()) disposeGroup(grove);
     for (const landmark of [...this.group.children].filter(o => o.userData.landmark)) disposeGroup(landmark as THREE.Group);
-    this.group.removeFromParent(); this.tool.removeFromParent(); this.far.dispose(); this.clouds.release();this.cave.dispose();
+    this.group.removeFromParent(); this.tool.removeFromParent(); this.far.dispose(); this.clouds.release();this.cave.dispose();this.flashlight.dispose();this.treasures.dispose();
     for (const m of [...this.materials, this.farMaterial]) { m.map?.dispose(); m.normalMap?.dispose(); m.roughnessMap?.dispose(); m.dispose(); }
     this.coast.geometry.dispose(); (this.coast.material as THREE.Material).dispose(); this.sky.geometry.dispose(); (this.sky.material as THREE.Material).dispose();
     for(const child of [...this.tool.children])if(child instanceof THREE.Group)disposeGroup(child);

@@ -1,3 +1,4 @@
+import { CAVE_TREASURES, nearbyCaveTreasure } from '../world/FriendsCave';
 import { isPlayerRail, playerRailRoute, samplePlayerRail, nearestRailDistance, type PlayerRailRoute } from '../world/FriendsPlayerRail';
 import { FRONTIER_SIZE, FRIENDS_AIRFIELD_HEIGHT, type FriendsTerrain } from '../world/FriendsTerrain';
 import type { FrontierSnapshot } from './FriendsFrontier';
@@ -8,7 +9,7 @@ import { FRIENDS_AIRPAD, FRIENDS_PLACES, FRIENDS_SIGNALS, insideFriendsCombat } 
 import type { MultiplayerInputFrame } from './protocol';
 
 export type FriendsVehicle = { id: string; kind: 'train' | 'aircraft'; x: number; y: number; z: number; angle: number; length: number; width: number; pilotId?: string; closed?: boolean };
-export type FriendsProgress = { version: 1; discovered: string[]; signals: string[]; salvageCleared: boolean; restored: boolean };
+export type FriendsProgress = { version: 1; discovered: string[]; signals: string[]; salvageCleared: boolean; restored: boolean; openedTreasures?: string[]; caveGold?: number };
 export type FriendsTransportSave = { trainDistance: number; trainStoppedMs: number; lastStop: number; held: boolean; aircraft: FriendsVehicle; railTrain?: { anchor: number; distance: number; direction: 1 | -1; held: boolean } };
 export type FriendsSnapshot = { transport?: FriendsTransportSave; frontier?: FrontierSnapshot; building?: FriendsBuildingSnapshot; projects?: FriendsProjectSnapshot; vehicles: FriendsVehicle[]; trainDistance: number; trainStoppedMs: number; progress: FriendsProgress; salvageState: 'idle' | 'active' | 'cleared'; notice: string; noticeUntilMs: number };
 export const FRIENDS_SAVE_KEY = 'killsync.friends.expedition.v1';
@@ -23,6 +24,9 @@ export function normalizeFriendsProgress(value: unknown): FriendsProgress {
   return { version: 1,
     discovered: FRIENDS_PLACES.filter(place => discovered.includes(place.id)).map(place => place.id),
     signals: FRIENDS_SIGNALS.filter(signal => signals.includes(signal.id)).map(signal => signal.id),
+    openedTreasures: CAVE_TREASURES.filter(t=>Array.isArray(p.openedTreasures)&&p.openedTreasures.includes(t.id)).map(t=>t.id),
+    // Derive the wallet from the fixed rewards so malformed saves cannot mint gold.
+    caveGold: CAVE_TREASURES.reduce((sum,t)=>sum+(Array.isArray(p.openedTreasures)&&p.openedTreasures.includes(t.id)?t.gold:0),0),
     salvageCleared: p.salvageCleared === true, restored: p.restored === true && FRIENDS_SIGNALS.every(signal => signals.includes(signal.id)),
   };
 }
@@ -132,7 +136,7 @@ export class FriendsExpedition {
   private salvageState: FriendsSnapshot['salvageState'];
   private notice = 'An open frontier. B builds your tracks and workshop; G assembles a train beside your track. The helicopter waits at its ground spawn.';
   private noticeUntilMs = 18000;
-  constructor(progress?: FriendsProgress, transport?: FriendsTransportSave, terrain?: FriendsTerrain) {
+  constructor(progress?: FriendsProgress, transport?: FriendsTransportSave, private terrain?: FriendsTerrain) {
     this.progress = normalizeFriendsProgress(progress); this.salvageState = 'idle';
     const saved=transport?.railTrain;
     if(saved && Number.isSafeInteger(saved.anchor) && saved.anchor>0 && Number.isFinite(saved.distance) && saved.distance>=0 && (saved.direction===1 || saved.direction===-1)) { this.railTrain={...saved}; this.held=saved.held===true; this.trainDistance=saved.distance; }
@@ -247,10 +251,18 @@ export class FriendsExpedition {
     }
     if (pilot) { const v = this.aircraft; pilot.x = v.x + Math.cos(v.angle) * 100; pilot.y = v.y + Math.sin(v.angle) * 100; pilot.z = v.z; }
   }
-  interact(player: Actor, elapsed: number): 'salvage' | 'signal' | 'pilot' | 'restore' | undefined {
+  interact(player: Actor, elapsed: number): 'salvage' | 'signal' | 'pilot' | 'restore' | 'treasure' | undefined {
+    if(player.lifeState!=='alive')return;
     const v = this.aircraft;
     if (v.pilotId === player.id) { v.pilotId = undefined; player.x = v.x + Math.cos(v.angle) * 40; player.y = v.y + Math.sin(v.angle) * 40; this.say('Pilot controls released. The Sunskiff holds its position.', elapsed); return 'pilot'; }
     if (friendsCockpitInteraction([v], player)) { v.pilotId = player.id; this.say('Sunskiff: move to fly · jump to ascend · crouch to descend · interact to release controls.', elapsed); return 'pilot'; }
+    const treasure=nearbyCaveTreasure(player,this.progress.openedTreasures,this.terrain?(x,y,z)=>!this.terrain!.material(Math.floor(x/32),Math.floor(y/32),Math.floor(z/32)):undefined);
+    if(treasure){
+      this.progress.openedTreasures=[...(this.progress.openedTreasures||[]),treasure.id];
+      this.progress.caveGold=(this.progress.caveGold||0)+treasure.gold;
+      this.say(`${treasure.name} opened · +${treasure.gold.toLocaleString('en-US')} gold! Crew treasury: ${this.progress.caveGold.toLocaleString('en-US')} gold.`,elapsed);
+      return 'treasure';
+    }
   }
   controlTrain(action: 'train_hold' | 'train_depart') { this.held = action === 'train_hold'; this.trainStoppedMs=this.held?1:0; }
   resetSalvage(elapsed: number) { if (this.salvageState === 'active') { this.salvageState = 'idle'; this.say('Rustwater has reset. The safe valley is yours; return when you want another try.', elapsed); } }
