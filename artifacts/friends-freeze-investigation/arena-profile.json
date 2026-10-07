@@ -1,0 +1,266 @@
+{
+  "slow": [
+    {
+      "label": "longtask",
+      "ms": 370,
+      "at": 871.5
+    },
+    {
+      "label": "longtask",
+      "ms": 103,
+      "at": 1272
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 230,
+      "at": 4171.399999976158
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 295.10000002384186,
+      "at": 4106.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 2143,
+      "at": 1952.7999999523163
+    },
+    {
+      "label": "longtask",
+      "ms": 3251,
+      "at": 4104.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 647,
+      "at": 7383.199999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 377,
+      "at": 8059.099999904633
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 422.2999999523163,
+      "at": 8695.899999976158
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 426.60000002384186,
+      "at": 8691.599999904633
+    },
+    {
+      "label": "longtask",
+      "ms": 192,
+      "at": 8445.199999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 2861,
+      "at": 8689.699999928474
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 101.69999992847443,
+      "at": 11587
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 108.69999992847443,
+      "at": 11580
+    },
+    {
+      "label": "longtask",
+      "ms": 966,
+      "at": 11578.799999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 726,
+      "at": 12559.599999904633
+    },
+    {
+      "label": "longtask",
+      "ms": 332,
+      "at": 13305
+    },
+    {
+      "label": "longtask",
+      "ms": 783,
+      "at": 13651.399999976158
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 156.30000007152557,
+      "at": 14856.199999928474
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 201,
+      "at": 14811.5
+    },
+    {
+      "label": "longtask",
+      "ms": 341,
+      "at": 14455.599999904633
+    },
+    {
+      "label": "longtask",
+      "ms": 3065,
+      "at": 14811.399999976158
+    }
+  ],
+  "errors": [],
+  "frames": [
+    {
+      "ms": 133.30000000000018,
+      "at": 1917.4
+    },
+    {
+      "ms": 5383.299999999999,
+      "at": 7350.7
+    },
+    {
+      "ms": 666.6999999999998,
+      "at": 8017.4
+    },
+    {
+      "ms": 416.60000000000036,
+      "at": 8434
+    },
+    {
+      "ms": 200.10000000000036,
+      "at": 8634.1
+    },
+    {
+      "ms": 2899.8999999999996,
+      "at": 11534
+    },
+    {
+      "ms": 1000,
+      "at": 12534
+    },
+    {
+      "ms": 750,
+      "at": 13284
+    },
+    {
+      "ms": 350,
+      "at": 13634
+    },
+    {
+      "ms": 800,
+      "at": 14434
+    },
+    {
+      "ms": 350,
+      "at": 14784
+    },
+    {
+      "ms": 3083.2999999999993,
+      "at": 17867.3
+    }
+  ],
+  "workers": [
+    "http://localhost:3000/src/game/rendering/frontierVegetation.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsSurface.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsHorizon.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsTerrain.worker.ts?worker_file&type=module",
+    "/src/game/multiplayer/hostClock.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/frontierVegetation.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsSurface.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsHorizon.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsTerrain.worker.ts?worker_file&type=module",
+    "/src/game/multiplayer/hostClock.worker.ts?worker_file&type=module"
+  ],
+  "counts": {
+    "GL texImage2D": 33,
+    "FriendsSimulation.createSnapshot": 78,
+    "FriendsBlockHorizon.update": 12,
+    "FriendsIslandVisuals.update": 12,
+    "GL bufferData": 624,
+    "GL compileShader": 78,
+    "GL linkProgram": 39,
+    "GL getProgramInfoLog": 39,
+    "GL getShaderInfoLog": 78,
+    "GL getProgramParameter": 117,
+    "FriendsBlockSurface.update": 12,
+    "FriendsForestLOD.update": 12,
+    "FriendsFrontierVisuals.update": 12,
+    "GL texSubImage2D": 51,
+    "Renderer3D.render": 12,
+    "MultiplayerRendererBridge.render": 12,
+    "FriendsSimulation.tick": 72,
+    "FriendsBlockSurface.install": 16,
+    "FriendsFrontierVisuals.install": 9,
+    "FriendsForestLOD.rebuild": 1
+  },
+  "totals": {
+    "GL texImage2D": 0.7999999523162842,
+    "FriendsSimulation.createSnapshot": 4.09999942779541,
+    "FriendsBlockHorizon.update": 8.00000011920929,
+    "FriendsIslandVisuals.update": 0.3999999761581421,
+    "GL bufferData": 2.700000047683716,
+    "GL compileShader": 0.10000002384185791,
+    "GL linkProgram": 0.20000004768371582,
+    "GL getProgramInfoLog": 375.89999997615814,
+    "GL getShaderInfoLog": 5.5,
+    "GL getProgramParameter": 3.199999690055847,
+    "FriendsBlockSurface.update": 5.1000001430511475,
+    "FriendsForestLOD.update": 42.90000009536743,
+    "FriendsFrontierVisuals.update": 98.29999995231628,
+    "GL texSubImage2D": 371.599999666214,
+    "Renderer3D.render": 1005.2000000476837,
+    "MultiplayerRendererBridge.render": 1156.0000002384186,
+    "FriendsSimulation.tick": 65.60000050067902,
+    "FriendsBlockSurface.install": 3.5999999046325684,
+    "FriendsFrontierVisuals.install": 0.8999998569488525,
+    "FriendsForestLOD.rebuild": 40
+  },
+  "max": {
+    "GL texImage2D": 0.7999999523162842,
+    "FriendsSimulation.createSnapshot": 0.5,
+    "FriendsBlockHorizon.update": 2.100000023841858,
+    "FriendsIslandVisuals.update": 0.10000002384185791,
+    "GL bufferData": 0.10000002384185791,
+    "GL compileShader": 0.10000002384185791,
+    "GL linkProgram": 0.20000004768371582,
+    "GL getProgramInfoLog": 43.10000002384186,
+    "GL getShaderInfoLog": 0.20000004768371582,
+    "GL getProgramParameter": 0.20000004768371582,
+    "FriendsBlockSurface.update": 2.3000000715255737,
+    "FriendsForestLOD.update": 42.60000002384186,
+    "FriendsFrontierVisuals.update": 44.200000047683716,
+    "GL texSubImage2D": 27.90000009536743,
+    "Renderer3D.render": 422.2999999523163,
+    "MultiplayerRendererBridge.render": 426.60000002384186,
+    "FriendsSimulation.tick": 17.600000023841858,
+    "FriendsBlockSurface.install": 1.3000000715255737,
+    "FriendsFrontierVisuals.install": 0.19999992847442627,
+    "FriendsForestLOD.rebuild": 40
+  },
+  "stats": {
+    "drawCalls": 532,
+    "triangles": 308297,
+    "geometries": 107,
+    "textures": 50,
+    "batchedEnemies": 0,
+    "enemyBatches": 0,
+    "enemyCount": 0
+  },
+  "terrain": {
+    "surfaceTiles": 16,
+    "surfaceBytes": 1948128,
+    "surfaceJobs": 2,
+    "volumeChunks": 9,
+    "volumeActive": 9,
+    "volumeJobs": 0
+  },
+  "forest": {
+    "trees": 54,
+    "draws": 15,
+    "triangles": 74712
+  },
+  "text": "OPERATOR LINK / SUNLINE COMMONS\nMATERIALIZING\nCLICK TO RESUME CONTROL\nGBACKPACK\nLV 1\n1 LIVE\n100\n¤ 750\n 50 ARMOR"
+}

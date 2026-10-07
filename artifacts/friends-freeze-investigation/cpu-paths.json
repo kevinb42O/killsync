@@ -1,0 +1,55 @@
+{
+  "ready": true,
+  "loadMs": 305.5,
+  "trees": 4081,
+  "samples": [
+    {
+      "name": "forest initial whole-island rebuild",
+      "ms": 89
+    },
+    {
+      "name": "forest unchanged frame",
+      "ms": 0
+    },
+    {
+      "name": "forest unchanged frame",
+      "ms": 0.19999992847442627
+    },
+    {
+      "name": "forest unchanged frame",
+      "ms": 0
+    },
+    {
+      "name": "forest plant one tree",
+      "ms": 12
+    },
+    {
+      "name": "forest remove one planted tree",
+      "ms": 11.600000023841858
+    },
+    {
+      "name": "forest terrain grade changes",
+      "ms": 8.800000071525574
+    },
+    {
+      "name": "simulation tick",
+      "ms": 20.100000023841858
+    },
+    {
+      "name": "simulation tick",
+      "ms": 3.200000047683716
+    },
+    {
+      "name": "simulation tick",
+      "ms": 0.7999999523162842
+    },
+    {
+      "name": "empty world synchronous save",
+      "ms": 1.399999976158142
+    },
+    {
+      "name": "6000 edits synchronous save",
+      "ms": 1
+    }
+  ]
+}

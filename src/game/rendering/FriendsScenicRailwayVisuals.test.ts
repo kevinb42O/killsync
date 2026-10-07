@@ -19,6 +19,18 @@ vi.mock('../world/FriendsScenicRailway', () => ({
 vi.mock('../world/FriendsTerrain', () => ({ baseTerrainHeight: () => 0 }));
 
 describe('railway visibility in the aerial menu', () => {
+  it('keeps the shader light count constant while entering and leaving lamp range', () => {
+    const scene = new THREE.Scene(), railway = new FriendsScenicRailwayVisuals(scene), camera = new THREE.PerspectiveCamera();
+    const lights = railway['lights'];
+    // Use one local lamp independently of the route fixture's lamp spacing.
+    railway['lamps'] = [new THREE.Vector3(24000, 3000, 24000)];
+    camera.position.set(24000, 3000, 24000); railway.update(camera, true);
+    expect(lights).toHaveLength(6); expect(lights.every(light => light.visible)).toBe(true);
+    expect(lights.filter(light => light.intensity > 0)).toHaveLength(1);
+    camera.position.set(60000, 12000, 24000); railway.update(camera, true);
+    expect(lights.every(light => light.visible && light.intensity === 0)).toBe(true);
+    railway.dispose();
+  });
   it('shows distant infrastructure for overview cameras while preserving the gameplay range', () => {
     const scene = new THREE.Scene(), railway = new FriendsScenicRailwayVisuals(scene);
     const camera = new THREE.PerspectiveCamera(); camera.position.set(60000, 12000, 24000);

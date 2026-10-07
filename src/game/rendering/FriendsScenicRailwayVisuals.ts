@@ -245,14 +245,16 @@ export class FriendsScenicRailwayVisuals {
       }
       this.group.add(chunk);this.chunks.push({group:chunk,x:(x+.5)*BLOCK,y:(y+.5)*BLOCK});
     }
-    for(let i=0;i<6;i++){const light=new THREE.PointLight(0xffd1a0,26000,this.pointLightRange,2);light.visible=false;this.group.add(light);this.lights.push(light);}
+    // Keep the shader's point-light count fixed as lamps enter/leave range.
+    // Zero intensity disables illumination without compiling another program.
+    for(let i=0;i<6;i++){const light=new THREE.PointLight(0xffd1a0,0,this.pointLightRange,2);this.group.add(light);this.lights.push(light);}
   }
   update(camera:THREE.Camera,enabled:boolean,viewDistance=11000){
     this.group.visible=enabled;if(!enabled)return;
     const p=camera.position;
     for(const c of this.chunks){const d=Math.hypot(c.x-p.x,c.y-p.z);c.group.visible=d<viewDistance;if(c.group.visible)for(const mesh of c.group.children)mesh.castShadow=d<2400;}
     const nearest=this.lamps.map(p=>({p,d:p.distanceTo(camera.position)})).filter(l=>l.d<this.pointLightRange).sort((a,b)=>a.d-b.d);
-    this.lights.forEach((light,i)=>{light.visible=Boolean(nearest[i]);if(nearest[i])light.position.copy(nearest[i].p);});
+    this.lights.forEach((light,i)=>{light.intensity=nearest[i]?26000:0;if(nearest[i])light.position.copy(nearest[i].p);});
   }
   dispose(){
     this.group.removeFromParent();const geometries=new Set<THREE.BufferGeometry>(this.primitives),textures=new Set<THREE.Texture>();

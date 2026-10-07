@@ -12,8 +12,12 @@ describe('cave entrances retain the exterior sky', () => {
     const terrain = { floor: () => 640, revision: 0 } as unknown as FriendsTerrain;
     const renderer = { shadowMap: { needsUpdate: false } } as THREE.WebGLRenderer;
     const cave = new FriendsCaveVisuals(scene, camera, terrain, renderer);
+    const lights: THREE.PointLight[] = [];
+    cave.traverse(object => { if (object instanceof THREE.PointLight) lights.push(object); });
     const room = CAVE_ROOMS[1]; camera.position.set(room.x, room.floor + 40, room.y);
     expect(cave.update(0)).toBe(true);
+    expect(lights.every(light => light.visible)).toBe(true);
+    expect(lights.some(light => light.intensity > 0)).toBe(true);
     expect(scene.background).toBe(sky);
     camera.position.set(24000, 500, 24000);
     expect(cave.update(1, true)).toBe(true);
@@ -21,6 +25,7 @@ describe('cave entrances retain the exterior sky', () => {
     // A new exterior (e.g. sunset) must never be replaced by a cached daylight sky.
     const sunset = new THREE.Color(0xcb7755); scene.background = sunset;
     expect(cave.update(2)).toBe(false);
+    expect(lights.every(light => light.visible && light.intensity === 0)).toBe(true);
     expect(scene.background).toBe(sunset);
     cave.dispose(); expect(scene.background).toBe(sunset);
   });

@@ -34,6 +34,19 @@ function setup(){
   return {arrival,scene,camera,renderer,resize:()=>{size.set(1920,1080);}};
 }
 describe('world materialization rendering',()=>{
+  it('precompiles the HDR, wire, and final passes once and restores the target before awaiting shaders',async()=>{
+    const {arrival,scene,camera,renderer}=setup();
+    const original=new THREE.WebGLRenderTarget(100,100);renderer.setRenderTarget(original);
+    const targets:(THREE.WebGLRenderTarget|null)[]=[];
+    Object.assign(renderer,{info:{programs:[]},extensions:{get:()=>null}});
+    renderer.compile=vi.fn(()=>{targets.push(renderer.getRenderTarget());return new Set<THREE.Material>();});
+    const ready=arrival.prepare(renderer,scene,camera);
+    expect(renderer.getRenderTarget()).toBe(original);
+    await ready;await arrival.prepare(renderer,scene,camera);
+    expect(renderer.compile).toHaveBeenCalledTimes(3);
+    expect(targets[0]).toBe(arrival['image']);expect(targets.slice(1)).toEqual([original,original]);
+    arrival.dispose();original.dispose();
+  });
   it('preserves scene and renderer state, resizes captures, and releases them on completion',()=>{
     const {arrival,scene,camera,renderer,resize}=setup();
     const originalTarget=new THREE.WebGLRenderTarget(100,100),background=new THREE.Color('#aacbbc'),fog=new THREE.FogExp2('#aacbbc',.00001);

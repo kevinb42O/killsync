@@ -1,4 +1,5 @@
 import { PLAYER_TRAIN_COST } from '../game/world/FriendsPlayerRail';
+import { FRIENDS_TOOL_ORDER } from '../game/multiplayer/FriendsToolControls';
 import { useState } from 'react';
 import { Axe, Pickaxe, Shovel, Sprout, Crosshair, X, Package, TrainFront, Hammer, Compass, ArrowRight, Cable } from 'lucide-react';
 import { FRONTIER_TOOLS, MATERIAL_NAMES, PACK_CAPACITY, emptyMaterials, packKey, packWeight, canAfford, frontierContract, type FrontierSnapshot, type FrontierRequest, type FrontierTool, type Resource } from '../game/multiplayer/FriendsFrontier';
@@ -13,7 +14,7 @@ export function FriendsToolbelt({ frontier, player, tool, onTool, onPack, elapse
     {frontier.damage && (frontier.damage.until || 0) > elapsed && <div className="frontier-harvest-progress"><span>{frontier.damage.value >= frontier.damage.total ? 'HARVESTED' : tool === 1 ? 'CUTTING' : 'EXCAVATING'}</span><progress value={frontier.damage.value} max={frontier.damage.total} /><small>{frontier.damage.value}/{frontier.damage.total}</small></div>}
     <section className="frontier-toolbelt" data-visible={visible} aria-hidden={!visible} inert={!visible} aria-label="Frontier tools" onMouseDown={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
       <div className="frontier-toolbelt__stock"><span><Package size={13} /> {packWeight(pack)}/{frontier.testing ? '∞' : PACK_CAPACITY}</span><span>{pack.wood} timber</span><span>{pack.stone} stone</span><span>{pack.copper + pack.iron} ore</span></div>
-      <div className="frontier-toolbelt__slots">{([1, 2, 3, 4, 0, 5] as FrontierTool[]).map((id, i) => { const Icon = icons[id]; return <button key={id} type="button" aria-pressed={tool === id} onClick={() => onTool(id)} title={id === 4 ? 'Place harvested soil' : FRONTIER_TOOLS[id]}><kbd>{i + 1}</kbd><Icon size={23} /><span>{FRONTIER_TOOLS[id]}</span></button>; })}<button type="button" onClick={onPack}><kbd>G</kbd><Package size={23} /><span>Field pack</span></button></div>
+      <div className="frontier-toolbelt__slots">{FRIENDS_TOOL_ORDER.map((id, i) => { const Icon = icons[id]; return <button key={id} type="button" aria-pressed={tool === id} onClick={() => onTool(id)} title={id === 4 ? 'Place harvested soil' : FRONTIER_TOOLS[id]}><kbd>{i + 1}</kbd><Icon size={23} /><span>{FRONTIER_TOOLS[id]}</span></button>; })}<button type="button" onClick={onPack}><kbd>G</kbd><Package size={23} /><span>Field pack</span></button></div>
       <small>{tool === 5 ? 'Click attach / release · hold aim to reel · crouch + aim feeds rope · R release · F secure / unload' : `${frontier.testing ? 'FREE BUILDING · UNLIMITED PACK · ' : ''}Hold click to ${tool === 1 ? 'cut a tree trunk' : tool === 2 ? 'mine stone and ore' : tool === 3 ? 'excavate earth' : tool === 4 ? 'place soil' : 'fire'} · B build · M atlas`}</small>
     </section>
   </>;

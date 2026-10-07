@@ -1,0 +1,12 @@
+
+> react-example@0.1.0 test
+> vitest run --maxWorkers=2
+
+
+ RUN  v4.1.11 /Users/kevin/PROJECTS/vampire-survivors-2026
+
+
+ Test Files  141 passed (141)
+      Tests  875 passed (875)
+   Start at  23:40:25
+   Duration  31.63s (transform 2.45s, setup 0ms, import 16.19s, tests 35.84s, environment 8ms)

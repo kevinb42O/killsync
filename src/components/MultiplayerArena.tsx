@@ -5,6 +5,7 @@ import { FriendsCommandOutbox, nextFriendsRequestId, validFriendsCommand } from 
 import { physicalCargoBuildBodies } from '../game/multiplayer/FriendsHauling';
 import { FriendsFieldPack, FriendsToolbelt } from './FriendsFieldPack';
 import { useFriendsToolbelt } from './useFriendsToolbelt';
+import { cycleFriendsTool, FRIENDS_TOOL_ORDER, FriendsToolWheel } from '../game/multiplayer/FriendsToolControls';
 import { buildCost, canAfford, packKey, MATERIAL_NAMES, type FrontierRequest, type FrontierResult, type FrontierTool } from '../game/multiplayer/FriendsFrontier';
 import './frontier.css';
 import { assignBuildSlot, BuildWheelGesture, readBuildToolbar, saveBuildToolbar } from '../game/multiplayer/FriendsBuildControls';
@@ -1980,7 +1981,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           selectBuildType(COOP_BUILD_TYPES[Number(key) - 1]);
           return;
         }
-        if (launch.gameMode === 'friends' && Number(key) <= 6) { if(!event.repeat)selectFrontierTool(([1, 2, 3, 4, 0, 5] as FrontierTool[])[Number(key) - 1]); return; }
+        if (launch.gameMode === 'friends' && Number(key) <= 6) { if(!event.repeat)selectFrontierTool(FRIENDS_TOOL_ORDER[Number(key) - 1]); return; }
         inputRef.current = { ...inputRef.current, selectedSlot: Number(key) - 1 };
         setHud(current => ({ ...current, selectedSlot: Number(key) - 1 }));
         return;
@@ -2093,13 +2094,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       firing = false;
       updateInput();
     };
+    const friendsToolWheel = new FriendsToolWheel();
     const onWheel = (event: WheelEvent) => {
       if(trainControlsOpenRef.current || friendsDevOpenRef.current)return;
       if (buildLibraryOpenRef.current) return;
       if (deploymentBlockedRef.current) { event.preventDefault(); return; }
       // The station owns wheel input completely; it must never leak into
       // weapon selection or scroll the game page behind the modal.
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) { event.preventDefault(); return; }
+      if (trainControlsOpenRef.current || friendsDevOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current) return;
       if (isSpectator) return;
       event.preventDefault();
       const direction = event.deltaY > 0 ? 1 : -1;
@@ -2112,6 +2114,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         if (event.shiftKey) {
           cycleBuildPiece(direction);
         } else buildRotationRef.current += direction * (launch.gameMode === 'friends' ? Math.PI / 2 : Math.PI / 12);
+        return;
+      }
+      if (launch.gameMode === 'friends') {
+        const step = friendsToolWheel.push(event, performance.now());
+        if (step) { firing = false; selectFrontierTool(cycleFriendsTool(inputRef.current.friendsTool || 0, step)); updateInput(); }
         return;
       }
       changeSelectedWeapon(direction);
@@ -2276,7 +2283,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     }) : undefined;
     hostClock?.start();
     const frame = (now: number) => {
-      const elapsed = Math.min(100, now - lastTime);
+      const frameElapsed = now - lastTime;
+      const elapsed = Math.min(100, frameElapsed);
       lastTime = now;
       accumulator += elapsed;
       inputAccumulator += elapsed;
@@ -2368,7 +2376,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const renderStartedAt = performance.now();
       renderer.setFriendsTool(buildModeRef.current ? 0 : inputRef.current.friendsTool || 0, inputRef.current.firing);
       renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId, latestLifeState === 'alive', buildModeRef.current && launch.gameMode === 'friends');
-      performanceMonitor?.recordFrame(elapsed, performance.now() - renderStartedAt, renderer.getPerformanceStats());
+      performanceMonitor?.recordFrame(frameElapsed, performance.now() - renderStartedAt, renderer.getPerformanceStats());
       if (damageFlashExpiresAtRef.current > 0 && now > damageFlashExpiresAtRef.current + 40) {
         damageFlashExpiresAtRef.current = 0;
         if (damageFlashTimerRef.current !== null) {

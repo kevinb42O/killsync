@@ -1,0 +1,835 @@
+{
+  "slow": [
+    {
+      "label": "longtask",
+      "ms": 373,
+      "at": 669
+    },
+    {
+      "label": "longtask",
+      "ms": 90,
+      "at": 1074.6999999284744
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 84.89999997615814,
+      "at": 3712.100000023842
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 137.30000007152557,
+      "at": 3659.6999999284744
+    },
+    {
+      "label": "longtask",
+      "ms": 2047,
+      "at": 1605.7999999523163
+    },
+    {
+      "label": "longtask",
+      "ms": 1262,
+      "at": 3658.6999999284744
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 54.39999997615814,
+      "at": 5470.399999976158
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 55.5,
+      "at": 5469.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 56,
+      "at": 5469.299999952316
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 58.10000002384186,
+      "at": 5527.699999928474
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 59.10000002384186,
+      "at": 5526.699999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 60,
+      "at": 5526.699999928474
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 51.299999952316284,
+      "at": 5621.100000023842
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 54.5,
+      "at": 5617.899999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 57,
+      "at": 5617.799999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 51,
+      "at": 5775.5
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 60.89999997615814,
+      "at": 5830.100000023842
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 62,
+      "at": 5829
+    },
+    {
+      "label": "longtask",
+      "ms": 63,
+      "at": 5828.899999976158
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 104,
+      "at": 6169.100000023842
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 105.20000004768372,
+      "at": 6167.899999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 106,
+      "at": 6167.5
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 60.90000009536743,
+      "at": 6286.199999928474
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 63.5,
+      "at": 6283.600000023842
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 64.20000004768372,
+      "at": 6389.699999928474
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 97.89999997615814,
+      "at": 6356
+    },
+    {
+      "label": "longtask",
+      "ms": 65,
+      "at": 6283.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 99,
+      "at": 6355.699999928474
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 50.89999997615814,
+      "at": 6464.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 52,
+      "at": 6464
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 204.89999997615814,
+      "at": 7302.399999976158
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 206.39999997615814,
+      "at": 7300.899999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 2935,
+      "at": 7300.5
+    },
+    {
+      "label": "longtask",
+      "ms": 314,
+      "at": 10249.5
+    },
+    {
+      "label": "longtask",
+      "ms": 206,
+      "at": 10579.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 226,
+      "at": 10787.199999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 200,
+      "at": 11013.899999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 224,
+      "at": 11225
+    },
+    {
+      "label": "longtask",
+      "ms": 214,
+      "at": 11460.799999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 226,
+      "at": 11685.199999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 247,
+      "at": 11920.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 220,
+      "at": 12177.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 210,
+      "at": 12408.5
+    },
+    {
+      "label": "longtask",
+      "ms": 211,
+      "at": 12628.799999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 219,
+      "at": 12843.100000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 210,
+      "at": 13071.899999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 202,
+      "at": 13291
+    },
+    {
+      "label": "longtask",
+      "ms": 191,
+      "at": 13501.799999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 254,
+      "at": 13702
+    },
+    {
+      "label": "longtask",
+      "ms": 202,
+      "at": 13970.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 609,
+      "at": 14186.600000023842
+    },
+    {
+      "label": "Renderer3D.render",
+      "ms": 81.80000007152557,
+      "at": 15422.299999952316
+    },
+    {
+      "label": "MultiplayerRendererBridge.render",
+      "ms": 83.80000007152557,
+      "at": 15420.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 597,
+      "at": 14809.399999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 1231,
+      "at": 15420
+    },
+    {
+      "label": "longtask",
+      "ms": 403,
+      "at": 16661.199999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 145,
+      "at": 17073.5
+    },
+    {
+      "label": "longtask",
+      "ms": 144,
+      "at": 17227.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 150,
+      "at": 17380.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 144,
+      "at": 17539.399999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 248,
+      "at": 17691.799999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 137,
+      "at": 17949.199999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 137,
+      "at": 18094.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 156,
+      "at": 18240.199999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 134,
+      "at": 18405.100000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 141,
+      "at": 18548
+    },
+    {
+      "label": "longtask",
+      "ms": 320,
+      "at": 18697
+    },
+    {
+      "label": "longtask",
+      "ms": 242,
+      "at": 19030.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 151,
+      "at": 19286.100000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 137,
+      "at": 19449.799999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 140,
+      "at": 19600
+    },
+    {
+      "label": "longtask",
+      "ms": 138,
+      "at": 19749.299999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 223,
+      "at": 19896
+    },
+    {
+      "label": "longtask",
+      "ms": 152,
+      "at": 20121.399999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 142,
+      "at": 20281.899999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 150,
+      "at": 20433.5
+    },
+    {
+      "label": "longtask",
+      "ms": 258,
+      "at": 20591.699999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 149,
+      "at": 20858.699999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 153,
+      "at": 21010.699999928474
+    },
+    {
+      "label": "longtask",
+      "ms": 151,
+      "at": 21171.100000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 227,
+      "at": 21330.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 137,
+      "at": 21565.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 135,
+      "at": 21704.899999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 155,
+      "at": 21848.399999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 220,
+      "at": 22011.5
+    },
+    {
+      "label": "longtask",
+      "ms": 146,
+      "at": 22241.5
+    },
+    {
+      "label": "longtask",
+      "ms": 140,
+      "at": 22397.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 135,
+      "at": 22546.600000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 136,
+      "at": 22684.100000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 151,
+      "at": 22828
+    },
+    {
+      "label": "longtask",
+      "ms": 139,
+      "at": 22987.100000023842
+    },
+    {
+      "label": "longtask",
+      "ms": 140,
+      "at": 23128.5
+    },
+    {
+      "label": "longtask",
+      "ms": 138,
+      "at": 23277.399999976158
+    },
+    {
+      "label": "longtask",
+      "ms": 137,
+      "at": 23424.799999952316
+    },
+    {
+      "label": "longtask",
+      "ms": 143,
+      "at": 23571.399999976158
+    }
+  ],
+  "errors": [],
+  "frames": [
+    {
+      "ms": 3300.1,
+      "at": 4917
+    },
+    {
+      "ms": 116.60000000000036,
+      "at": 6450.3
+    },
+    {
+      "ms": 2933.4000000000005,
+      "at": 10233.7
+    },
+    {
+      "ms": 316.6999999999989,
+      "at": 10550.4
+    },
+    {
+      "ms": 216.70000000000073,
+      "at": 10767.1
+    },
+    {
+      "ms": 233.29999999999927,
+      "at": 11000.4
+    },
+    {
+      "ms": 200,
+      "at": 11200.4
+    },
+    {
+      "ms": 233.3000000000011,
+      "at": 11433.7
+    },
+    {
+      "ms": 233.39999999999964,
+      "at": 11667.1
+    },
+    {
+      "ms": 233.29999999999927,
+      "at": 11900.4
+    },
+    {
+      "ms": 266.7000000000007,
+      "at": 12167.1
+    },
+    {
+      "ms": 216.6999999999989,
+      "at": 12383.8
+    },
+    {
+      "ms": 233.3000000000011,
+      "at": 12617.1
+    },
+    {
+      "ms": 216.60000000000036,
+      "at": 12833.7
+    },
+    {
+      "ms": 216.6999999999989,
+      "at": 13050.4
+    },
+    {
+      "ms": 216.70000000000073,
+      "at": 13267.1
+    },
+    {
+      "ms": 216.60000000000036,
+      "at": 13483.7
+    },
+    {
+      "ms": 200,
+      "at": 13683.7
+    },
+    {
+      "ms": 266.6999999999989,
+      "at": 13950.4
+    },
+    {
+      "ms": 216.70000000000073,
+      "at": 14167.1
+    },
+    {
+      "ms": 616.6000000000004,
+      "at": 14783.7
+    },
+    {
+      "ms": 616.6999999999989,
+      "at": 15400.4
+    },
+    {
+      "ms": 1250.0000000000018,
+      "at": 16650.4
+    },
+    {
+      "ms": 400,
+      "at": 17050.4
+    },
+    {
+      "ms": 164.79999999999927,
+      "at": 17215.2
+    },
+    {
+      "ms": 151.89999999999782,
+      "at": 17367.1
+    },
+    {
+      "ms": 150,
+      "at": 17517.1
+    },
+    {
+      "ms": 150,
+      "at": 17667.1
+    },
+    {
+      "ms": 266.7000000000007,
+      "at": 17933.8
+    },
+    {
+      "ms": 150,
+      "at": 18083.8
+    },
+    {
+      "ms": 133.29999999999927,
+      "at": 18217.1
+    },
+    {
+      "ms": 165,
+      "at": 18382.1
+    },
+    {
+      "ms": 150.90000000000146,
+      "at": 18533
+    },
+    {
+      "ms": 150.79999999999927,
+      "at": 18683.8
+    },
+    {
+      "ms": 316.6000000000022,
+      "at": 19000.4
+    },
+    {
+      "ms": 266.6999999999971,
+      "at": 19267.1
+    },
+    {
+      "ms": 166.3000000000029,
+      "at": 19433.4
+    },
+    {
+      "ms": 150.39999999999782,
+      "at": 19583.8
+    },
+    {
+      "ms": 150,
+      "at": 19733.8
+    },
+    {
+      "ms": 149.90000000000146,
+      "at": 19883.7
+    },
+    {
+      "ms": 233.39999999999782,
+      "at": 20117.1
+    },
+    {
+      "ms": 149.5,
+      "at": 20266.6
+    },
+    {
+      "ms": 150.60000000000218,
+      "at": 20417.2
+    },
+    {
+      "ms": 150,
+      "at": 20567.2
+    },
+    {
+      "ms": 266.5,
+      "at": 20833.7
+    },
+    {
+      "ms": 166.79999999999927,
+      "at": 21000.5
+    },
+    {
+      "ms": 150,
+      "at": 21150.5
+    },
+    {
+      "ms": 164.70000000000073,
+      "at": 21315.2
+    },
+    {
+      "ms": 235.29999999999927,
+      "at": 21550.5
+    },
+    {
+      "ms": 149.90000000000146,
+      "at": 21700.4
+    },
+    {
+      "ms": 133.39999999999782,
+      "at": 21833.8
+    },
+    {
+      "ms": 164.70000000000073,
+      "at": 21998.5
+    },
+    {
+      "ms": 218.59999999999854,
+      "at": 22217.1
+    },
+    {
+      "ms": 166.40000000000146,
+      "at": 22383.5
+    },
+    {
+      "ms": 150.29999999999927,
+      "at": 22533.8
+    },
+    {
+      "ms": 133.29999999999927,
+      "at": 22667.1
+    },
+    {
+      "ms": 149.8000000000029,
+      "at": 22816.9
+    },
+    {
+      "ms": 150.1999999999971,
+      "at": 22967.1
+    },
+    {
+      "ms": 150,
+      "at": 23117.1
+    },
+    {
+      "ms": 150,
+      "at": 23267.1
+    },
+    {
+      "ms": 133.3000000000029,
+      "at": 23400.4
+    },
+    {
+      "ms": 150.09999999999854,
+      "at": 23550.5
+    },
+    {
+      "ms": 148.90000000000146,
+      "at": 23699.4
+    }
+  ],
+  "workers": [
+    "http://localhost:3000/src/game/rendering/frontierVegetation.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsSurface.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsHorizon.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsTerrain.worker.ts?worker_file&type=module",
+    "/src/game/multiplayer/hostClock.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/frontierVegetation.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsSurface.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsHorizon.worker.ts?worker_file&type=module",
+    "http://localhost:3000/src/game/rendering/friendsTerrain.worker.ts?worker_file&type=module",
+    "/src/game/multiplayer/hostClock.worker.ts?worker_file&type=module"
+  ],
+  "counts": {
+    "GL texImage2D": 33,
+    "FriendsSimulation.createSnapshot": 404,
+    "FriendsBlockHorizon.update": 138,
+    "FriendsIslandVisuals.update": 138,
+    "GL bufferData": 966,
+    "GL compileShader": 340,
+    "GL linkProgram": 170,
+    "GL getProgramInfoLog": 76,
+    "GL getShaderInfoLog": 152,
+    "GL getProgramParameter": 228,
+    "FriendsBlockSurface.update": 138,
+    "FriendsForestLOD.update": 138,
+    "FriendsFrontierVisuals.update": 138,
+    "GL texSubImage2D": 100,
+    "Renderer3D.render": 138,
+    "MultiplayerRendererBridge.render": 138,
+    "FriendsSimulation.tick": 396,
+    "FriendsBlockSurface.install": 58,
+    "FriendsFrontierVisuals.install": 9,
+    "FriendsForestLOD.rebuild": 1
+  },
+  "totals": {
+    "GL texImage2D": 0.7999999523162842,
+    "FriendsSimulation.createSnapshot": 13.300000309944153,
+    "FriendsBlockHorizon.update": 10.399999856948853,
+    "FriendsIslandVisuals.update": 3.3999998569488525,
+    "GL bufferData": 3.700000286102295,
+    "GL compileShader": 0,
+    "GL linkProgram": 0.39999985694885254,
+    "GL getProgramInfoLog": 189.89999997615814,
+    "GL getShaderInfoLog": 9.400000214576721,
+    "GL getProgramParameter": 8.699999690055847,
+    "FriendsBlockSurface.update": 18.100001335144043,
+    "FriendsForestLOD.update": 41.09999966621399,
+    "FriendsFrontierVisuals.update": 173.50000035762787,
+    "GL texSubImage2D": 487.7000004053116,
+    "Renderer3D.render": 4127.400000214577,
+    "MultiplayerRendererBridge.render": 4411.000000357628,
+    "FriendsSimulation.tick": 100.29999959468842,
+    "FriendsBlockSurface.install": 10.000000715255737,
+    "FriendsFrontierVisuals.install": 0.6000000238418579,
+    "FriendsForestLOD.rebuild": 29.399999976158142
+  },
+  "max": {
+    "GL texImage2D": 0.6999999284744263,
+    "FriendsSimulation.createSnapshot": 0.5999999046325684,
+    "FriendsBlockHorizon.update": 1,
+    "FriendsIslandVisuals.update": 0.20000004768371582,
+    "GL bufferData": 0.3999999761581421,
+    "GL compileShader": 0,
+    "GL linkProgram": 0.19999992847442627,
+    "GL getProgramInfoLog": 19.800000071525574,
+    "GL getShaderInfoLog": 0.20000004768371582,
+    "GL getProgramParameter": 0.3999999761581421,
+    "FriendsBlockSurface.update": 1.3000000715255737,
+    "FriendsForestLOD.update": 31.899999976158142,
+    "FriendsFrontierVisuals.update": 33,
+    "GL texSubImage2D": 24.399999976158142,
+    "Renderer3D.render": 204.89999997615814,
+    "MultiplayerRendererBridge.render": 206.39999997615814,
+    "FriendsSimulation.tick": 13.300000071525574,
+    "FriendsBlockSurface.install": 0.9000000953674316,
+    "FriendsFrontierVisuals.install": 0.20000004768371582,
+    "FriendsForestLOD.rebuild": 29.399999976158142
+  },
+  "stats": {
+    "drawCalls": 442,
+    "triangles": 363834,
+    "geometries": 175,
+    "textures": 87,
+    "batchedEnemies": 0,
+    "enemyBatches": 0,
+    "enemyCount": 0
+  },
+  "terrain": {
+    "surfaceTiles": 58,
+    "surfaceBytes": 10511384,
+    "surfaceJobs": 0,
+    "volumeChunks": 9,
+    "volumeActive": 9,
+    "volumeJobs": 0
+  },
+  "forest": {
+    "trees": 54,
+    "draws": 15,
+    "triangles": 74712
+  },
+  "text": "CLICK TO RESUME CONTROL\nGBACKPACK\nLV 1\n1 LIVE\n100\n¤ 750\n 50 ARMOR\n33/∞\n18 timber\n12 stone\n0 ore\n1\nAxe\n2\nPickaxe\n3\nShovel\n4\nEarthwork\n5\nCombat\n6\nRope\nG\nField pack\nFREE BUILDING · UNLIMITED PACK · Hold click to cut a tree trunk · B build · M atlas"
+}

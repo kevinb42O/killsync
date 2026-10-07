@@ -29,7 +29,7 @@ export class FriendsCaveVisuals extends THREE.Group {
     flameGeo.setAttribute('phase',new THREE.InstancedBufferAttribute(phase,1));const flames=new THREE.InstancedMesh(flameGeo,this.flame,torches.length);
     torches.forEach((t,i)=>{const position=new THREE.Vector3(t.x,t.z,t.y),matrix=new THREE.Matrix4();posts.setMatrixAt(i,matrix.makeTranslation(position.x,position.y+33,position.z));bowls.setMatrixAt(i,matrix.makeTranslation(position.x,position.y+66,position.z));flames.setMatrixAt(i,matrix.makeTranslation(position.x,position.y+86,position.z));phase[i]=i*2.399;this.torchPositions.push(position.clone().add(new THREE.Vector3(0,78,0)));this.torchCool.push(Boolean('cool' in t && t.cool));});
     for(const mesh of [posts,bowls,flames]){mesh.computeBoundingSphere();this.add(mesh);}
-    for(let i=0;i<3;i++){const light=new THREE.PointLight(0xffac53,18000,260,2);light.visible=false;light.castShadow=i===0;light.shadow.mapSize.set(512,512);light.shadow.camera.near=4;light.shadow.camera.far=260;light.shadow.bias=-.0005;light.shadow.normalBias=1.2;light.shadow.autoUpdate=false;this.lights.push(light);this.add(light);}
+    for(let i=0;i<3;i++){const light=new THREE.PointLight(0xffac53,0,260,2);light.castShadow=i===0;light.shadow.mapSize.set(512,512);light.shadow.camera.near=4;light.shadow.camera.far=260;light.shadow.bias=-.0005;light.shadow.normalBias=1.2;light.shadow.autoUpdate=false;this.lights.push(light);this.add(light);}
     // Crystalline veins contrast with amber firelight in the deepest chamber.
     const crystals:THREE.Matrix4[]=[];
     for(const room of CAVE_ROOMS)for(let i=0;i<14;i++){const angle=i*2.399,r=.68+.12*Math.sin(i*7.1),x=room.x+Math.cos(angle)*room.rx*r,y=room.y+Math.sin(angle)*room.ry*r;
@@ -53,7 +53,7 @@ export class FriendsCaveVisuals extends THREE.Group {
     this.mist+=(Number(underground)-this.mist)*(1-Math.exp(-dt*5));
     if(this.scene.fog instanceof THREE.FogExp2){this.scene.fog.color.copy(exteriorFog).lerp(this.caveFog,this.mist);this.scene.fog.density=.000009+this.mist*.00020;}
     const nearest=this.torchPositions.map((p,i)=>({p,i,d:p.distanceTo(this.camera.position)})).sort((a,b)=>a.d-b.d);
-    this.lights.forEach((light,i)=>{const t=nearest[i];light.visible=Boolean(t&&underground&&t.d<400);if(!t)return;light.position.copy(t.p);light.color.setHex(this.torchCool[t.i]?0x7dc6d1:0xffac53);light.intensity=(this.torchCool[t.i]?14000:18000)*(1+.055*Math.sin(time*8.1+t.i)+.025*Math.sin(time*17.3+t.i*3));});
+    this.lights.forEach((light,i)=>{const t=nearest[i];if(!t){light.intensity=0;return;}light.position.copy(t.p);light.color.setHex(this.torchCool[t.i]?0x7dc6d1:0xffac53);light.intensity=underground&&t.d<400?(this.torchCool[t.i]?14000:18000)*(1+.055*Math.sin(time*8.1+t.i)+.025*Math.sin(time*17.3+t.i*3)):0;});
     const shadowStamp=`${nearest[0]?.i}:${this.terrain.revision}`;if(underground&&shadowStamp!==this.shadowStamp){this.shadowStamp=shadowStamp;this.lights[0].shadow.needsUpdate=true;this.renderer.shadowMap.needsUpdate=true;}
     return underground;
   }
