@@ -1,0 +1,10 @@
+{
+  "before": {
+    "map": false,
+    "error": 1282
+  },
+  "after": {
+    "map": true,
+    "error": 0
+  }
+}

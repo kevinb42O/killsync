@@ -29,7 +29,16 @@ export class FriendsCaveVisuals extends THREE.Group {
     flameGeo.setAttribute('phase',new THREE.InstancedBufferAttribute(phase,1));const flames=new THREE.InstancedMesh(flameGeo,this.flame,torches.length);
     torches.forEach((t,i)=>{const position=new THREE.Vector3(t.x,t.z,t.y),matrix=new THREE.Matrix4();posts.setMatrixAt(i,matrix.makeTranslation(position.x,position.y+33,position.z));bowls.setMatrixAt(i,matrix.makeTranslation(position.x,position.y+66,position.z));flames.setMatrixAt(i,matrix.makeTranslation(position.x,position.y+86,position.z));phase[i]=i*2.399;this.torchPositions.push(position.clone().add(new THREE.Vector3(0,78,0)));this.torchCool.push(Boolean('cool' in t && t.cool));});
     for(const mesh of [posts,bowls,flames]){mesh.computeBoundingSphere();this.add(mesh);}
-    for(let i=0;i<3;i++){const light=new THREE.PointLight(0xffac53,0,260,2);light.castShadow=i===0;light.shadow.mapSize.set(512,512);light.shadow.camera.near=4;light.shadow.camera.far=260;light.shadow.bias=-.0005;light.shadow.normalBias=1.2;light.shadow.autoUpdate=false;this.lights.push(light);this.add(light);}
+    for(let i=0;i<3;i++){
+      const light=new THREE.PointLight(0xffac53,0,260,2);light.castShadow=i===0;
+      light.shadow.mapSize.set(512,512);light.shadow.camera.near=4;light.shadow.camera.far=260;
+      light.shadow.bias=-.0005;light.shadow.normalBias=1.2;light.shadow.autoUpdate=false;
+      // This light stays visible at zero intensity to keep shader light counts
+      // stable. Its cube shadow sampler still needs a valid depth texture on
+      // the first exterior frame, before the player ever enters the cave.
+      if(light.castShadow){light.shadow.needsUpdate=true;renderer.shadowMap.needsUpdate=true;}
+      this.lights.push(light);this.add(light);
+    }
     // Crystalline veins contrast with amber firelight in the deepest chamber.
     const crystals:THREE.Matrix4[]=[];
     for(const room of CAVE_ROOMS)for(let i=0;i<14;i++){const angle=i*2.399,r=.68+.12*Math.sin(i*7.1),x=room.x+Math.cos(angle)*room.rx*r,y=room.y+Math.sin(angle)*room.ry*r;

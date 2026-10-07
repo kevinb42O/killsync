@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { FriendsShaderCompiler } from './FriendsShaderCompiler';
 
 /** Hold the hologram until actual local streaming is ready; the camera and
  * simulation continue normally throughout. A failed asset cannot trap arrival. */
@@ -95,35 +94,8 @@ export class FriendsWorldArrival {
   private title?:HTMLElement;
   private bar?:HTMLElement;
   private previousStage='';
-  private prepared?: Promise<unknown>;
-  private disposed=false;
-  private compiler?:FriendsShaderCompiler;
 
   constructor(){this.quad.frustumCulled=false;this.pass.add(this.quad);}
-  prepare(renderer:THREE.WebGLRenderer,scene?:THREE.Scene,camera?:THREE.PerspectiveCamera){
-    if(this.disposed)return Promise.resolve();
-    if(this.prepared)return this.prepared;
-    const compiler=this.compiler ||= new FriendsShaderCompiler(renderer);
-    this.buffers(renderer);
-    const wire=new THREE.Scene(),geometry=new THREE.BufferGeometry();
-    wire.add(new THREE.Mesh(geometry,this.wireMaterial),new THREE.InstancedMesh(geometry,this.wireMaterial,1));
-    this.prepared=(async()=>{
-      // Material programs differ between the HDR capture and the screen.
-      const original=renderer.getRenderTarget();
-      let pending:Promise<unknown>;
-      try{renderer.setRenderTarget(this.image!);pending=compiler.compile(scene || wire,camera || this.camera);}
-      finally{renderer.setRenderTarget(original);}
-      await pending;
-      if(this.disposed)return;
-      await compiler.compile(wire,this.camera);
-      if(this.disposed)return;
-      await compiler.compile(this.pass,this.camera);
-    })().finally(()=>{
-      for(const object of wire.children)if(object instanceof THREE.InstancedMesh)object.dispose();
-      geometry.dispose();
-    });
-    return this.prepared;
-  }
   mount(container:HTMLElement){
     this.status=document.createElement('div');this.status.setAttribute('role','status');
     this.status.style.cssText='position:fixed;z-index:8;left:50%;bottom:18%;transform:translateX(-50%);width:min(360px,78vw);pointer-events:none;text-align:center;color:#b5ffe0;font:11px monospace;letter-spacing:3px;text-shadow:0 0 18px #49efaa;display:none';
@@ -188,5 +160,5 @@ export class FriendsWorldArrival {
     return true;
   }
   private releaseBuffers(){this.image?.dispose();this.image=undefined;this.wire?.dispose();this.wire=undefined;this.atlas?.dispose();this.atlas=undefined;}
-  dispose(){this.disposed=true;this.compiler?.dispose();this.releaseBuffers();this.quad.geometry.dispose();this.material.dispose();this.wireMaterial.dispose();this.status?.remove();}
+  dispose(){this.releaseBuffers();this.quad.geometry.dispose();this.material.dispose();this.wireMaterial.dispose();this.status?.remove();}
 }

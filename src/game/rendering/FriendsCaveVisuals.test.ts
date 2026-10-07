@@ -5,6 +5,21 @@ import { CAVE_ROOMS } from '../world/FriendsCave';
 import type { FriendsTerrain } from '../world/FriendsTerrain';
 
 describe('cave entrances retain the exterior sky', () => {
+  it('initializes the persistent shadow sampler before the first exterior draw', () => {
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
+    camera.position.set(5904, 762, 5712);
+    const terrain = { floor: () => 640, revision: 0 } as unknown as FriendsTerrain;
+    const renderer = { shadowMap: { needsUpdate: false } } as THREE.WebGLRenderer;
+    const cave = new FriendsCaveVisuals(scene, camera, terrain, renderer);
+    const lights: THREE.PointLight[] = [];
+    cave.traverse(object => { if (object instanceof THREE.PointLight) lights.push(object); });
+    expect(cave.update(0)).toBe(false);
+    expect(lights.every(light => light.visible && light.intensity === 0)).toBe(true);
+    expect(lights.filter(light => light.castShadow)).toHaveLength(1);
+    expect(lights.find(light => light.castShadow)!.shadow.needsUpdate).toBe(true);
+    expect(renderer.shadowMap.needsUpdate).toBe(true);
+    cave.dispose();
+  });
   it('preserves the live background when entering authored caves and mined tunnels', () => {
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
     const sky = new THREE.Texture(); scene.background = sky;

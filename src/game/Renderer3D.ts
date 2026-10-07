@@ -136,8 +136,6 @@ export class Renderer3D {
   presentationVehicle?: FriendsVehicle;
   presentationGrounded = false;
   presentationWorldRender?: (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) => boolean;
-  presentationPrepareRender?: () => boolean;
-  presentationFinishRender?: () => void;
   presentationViewmodelVisible = true;
   private readonly friendsVehicleCamera = new FriendsVehicleCamera();
   presentationSprinting: boolean = false;
@@ -451,7 +449,6 @@ export class Renderer3D {
       antialias: !this.mobilePerformance,
       alpha: false
     });
-    if (this.worldId === 'friends_frontier') this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     // A frame may contain world, viewmodel, and speed-line passes. Accumulate
     // renderer statistics across all of them and reset exactly once below.
     this.renderer.info.autoReset = false;
@@ -3032,23 +3029,19 @@ export class Renderer3D {
     // World and viewmodel use separate projections. clearDepth keeps the gun
     // readable without allowing world geometry to cut through the hand.
     beforeSceneRender?.();
-    const previousTarget = this.renderer.getRenderTarget();
     const nightVisionPass = this.nightVision?.beginFrame(this.renderer, this.camera, deltaTime,
       this.worldId === 'friends_frontier' && viewMode === 'FIRST_PERSON' && !this.presentationSpectating);
-    if (this.presentationPrepareRender && !this.presentationPrepareRender()) {
-      this.renderer.setRenderTarget(previousTarget);
-      return;
+    // Streaming and shader initialization must never gate world drawing.
+    // The arrival pass already reveals the scene while assets are loading.
+    if (!this.presentationWorldRender?.(this.renderer,this.scene,this.camera)) this.renderer.render(this.scene, this.camera);
+    if (viewMode === 'FIRST_PERSON' && this.presentationViewmodelVisible) {
+      this.renderer.autoClear = false;
+      this.renderer.clearDepth();
+      this.renderer.render(this.viewmodelScene, this.viewmodelCamera);
+      this.renderer.autoClear = true;
     }
-    try {
-      if (!this.presentationWorldRender?.(this.renderer,this.scene,this.camera)) this.renderer.render(this.scene, this.camera);
-      if (viewMode === 'FIRST_PERSON' && this.presentationViewmodelVisible) {
-        this.renderer.autoClear = false;
-        this.renderer.clearDepth();
-        this.renderer.render(this.viewmodelScene, this.viewmodelCamera);
-        this.renderer.autoClear = true;
-      }
-      if (nightVisionPass) this.nightVision?.endFrame(this.renderer);
-    } finally { this.presentationFinishRender?.(); }
+
+    if (nightVisionPass) this.nightVision?.endFrame(this.renderer);
 
     // Ease both edges of the effect so tapping sprint never produces a flash.
     // ADS suppresses the streaks to preserve a clean sight picture.

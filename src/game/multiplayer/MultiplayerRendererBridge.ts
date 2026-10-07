@@ -42,7 +42,6 @@ import { ProjectileImpactVisuals } from '../rendering/ProjectileImpactVisuals';
 import type { WorldId } from '../world/WorldDefinitions';
 import { FriendsSpawnVisuals } from '../rendering/FriendsSpawnVisuals';
 import { FriendsWorldArrival } from '../rendering/FriendsWorldArrival';
-import { FriendsGraphicsWarmup } from '../rendering/FriendsGraphicsWarmup';
 import { friendsSpawnPlatformContains, FRIENDS_SPAWN_PLATFORM } from '../world/FriendsTerrain';
 
 type PresentationParticle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; z?: number; vz?: number; gravity?: number };
@@ -97,7 +96,6 @@ export class MultiplayerRendererBridge {
   private readonly frontierVisuals?: FriendsFrontierVisuals;
   private readonly friendsSpawnVisuals?: FriendsSpawnVisuals;
   private readonly friendsWorldArrival?: FriendsWorldArrival;
-  private readonly friendsGraphicsWarmup?: FriendsGraphicsWarmup;
   private lastFrontierHit = '';
   private friendsTool: FrontierTool = 1;
   private friendsToolFiring = false;
@@ -167,12 +165,6 @@ export class MultiplayerRendererBridge {
     if (worldId === 'friends_frontier') { this.friendsSpawnVisuals = new FriendsSpawnVisuals(); this.renderer.scene.add(this.friendsSpawnVisuals); }
     if(worldId==='friends_frontier'){
       this.friendsWorldArrival=new FriendsWorldArrival();
-      this.friendsGraphicsWarmup=new FriendsGraphicsWarmup(this.renderer.renderer);
-      this.renderer.presentationFinishRender=()=>this.friendsGraphicsWarmup!.finishFrame();
-      this.renderer.presentationPrepareRender=()=>this.friendsGraphicsWarmup!.prepare([
-        {scene:this.renderer.scene,camera:this.renderer.camera},
-        {scene:this.renderer.viewmodelScene,camera:this.renderer.viewmodelCamera},
-      ],()=>this.friendsWorldArrival!.prepare(this.renderer.renderer,this.renderer.scene,this.renderer.camera));
       this.renderer.presentationWorldRender=(renderer,scene,camera)=>this.friendsWorldArrival!.render(renderer,scene,camera);
     }
     this.friendsHaulingVisuals = new FriendsHaulingVisuals(this.renderer.scene,this.renderer.viewmodelScene);
@@ -206,7 +198,6 @@ export class MultiplayerRendererBridge {
   mount(container: HTMLElement) {
     this.renderer.mount(container);
     this.friendsWorldArrival?.mount(container);
-    this.friendsGraphicsWarmup?.mount(container);
     // Fetch and decode before the player opens fire. `activate()` is still
     // called on the first click to resume the AudioContext in browsers that
     // gate audio behind a trusted user gesture.
@@ -832,7 +823,6 @@ export class MultiplayerRendererBridge {
     this.frontierVisuals?.dispose();
     this.friendsSpawnVisuals?.dispose();
     this.friendsWorldArrival?.dispose();
-    this.friendsGraphicsWarmup?.dispose();
     this.tacticalVisuals.dispose();
     this.realityBreachVisuals.dispose();
     this.structureVisuals.dispose();
