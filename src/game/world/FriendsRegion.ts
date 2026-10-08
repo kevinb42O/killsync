@@ -2,6 +2,8 @@ import type { WorldObstacle } from './WorldLayout';
 
 // Arrival, transport and construction are separate places connected by paths.
 export const FRIENDS_HUB = { x: 5900, y: 5620 };
+/** A short walk east of arrival, clear of the station and mine entrances. */
+export const FRIENDS_CAMPFIRE = { id: 'commons-campfire', x: 6608, y: 5552, z: 704, radius: 180 } as const;
 // A naturally level shoulder fits the cabin without flattening the hillside.
 export const FRIENDS_AIRPAD = { x: 5140, y: 6416 };
 export const FRIENDS_BUILD_MEADOW = { x: 6260, y: 6100, radius: 540 };

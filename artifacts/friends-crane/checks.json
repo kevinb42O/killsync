@@ -1,0 +1,271 @@
+{
+  "checks": [
+    "crane builds on a high player platform through host validation"
+  ],
+  "errors": [],
+  "failure": "TimeoutError: locator.click: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Open construction library', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"build-icon-button\" aria-label=\"Open construction library\" title=\"Build library · Tab · Drag pieces into slots\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"app-shell relative w-full bg-[#0a0a0a] overflow-hidden text-white font-sans\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is not visible\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    7 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n",
+  "text": "GBACKPACK\nAHEAD\n17 m\nF\nFreight crane controls",
+  "state": {
+    "p": {
+      "id": "friend-12aeec5c92aaf52d2e8226436ff48811",
+      "label": "Crane review",
+      "color": "#22d3ee",
+      "skinId": "solar_guard",
+      "operatorId": "solar_guard",
+      "imprint": {
+        "operatorId": "solar_guard",
+        "generation": 1,
+        "ranks": {
+          "power": 0,
+          "vitality": 0,
+          "mobility": 0,
+          "handling": 0,
+          "reach": 0
+        }
+      },
+      "x": 7840,
+      "y": 8088,
+      "angle": 4.712365011569144,
+      "health": 100,
+      "maxHealth": 100,
+      "movementMultiplier": 1,
+      "selectedSlot": 0,
+      "z": 1072,
+      "sprinting": false,
+      "sliding": false,
+      "crouching": false,
+      "level": 1,
+      "experience": 0,
+      "experienceToNextLevel": 120,
+      "coins": 750,
+      "pendingDataCores": 0,
+      "grenades": 2,
+      "grenadeRechargeRemainingMs": 0,
+      "weaponStates": [
+        {
+          "weaponId": "plasma_gun",
+          "level": 1,
+          "magazineAmmo": 12,
+          "reserveAmmo": 72,
+          "nextFireAtMs": 0,
+          "state": "ready"
+        },
+        {
+          "weaponId": "assault_rifle",
+          "level": 1,
+          "magazineAmmo": 60,
+          "reserveAmmo": 240,
+          "nextFireAtMs": 0,
+          "state": "ready"
+        },
+        {
+          "weaponId": "combat_shotgun",
+          "level": 1,
+          "magazineAmmo": 8,
+          "reserveAmmo": 40,
+          "nextFireAtMs": 0,
+          "state": "ready"
+        },
+        {
+          "weaponId": "dawnwall_cannon",
+          "level": 1,
+          "magazineAmmo": 18,
+          "reserveAmmo": 72,
+          "nextFireAtMs": 0,
+          "state": "ready"
+        },
+        {
+          "weaponId": "smg",
+          "level": 1,
+          "magazineAmmo": 60,
+          "reserveAmmo": 240,
+          "nextFireAtMs": 0,
+          "state": "ready"
+        }
+      ],
+      "weaponLevels": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "selectedWeaponLevel": 1,
+      "selectedWeaponId": "plasma_gun",
+      "isAiming": false,
+      "isReloading": false,
+      "isSwitching": false,
+      "lifeState": "alive",
+      "downedRemainingMs": 0,
+      "reviveProgressMs": 0,
+      "invulnerableRemainingMs": 0,
+      "selfRevives": 0,
+      "selfReviveProgressMs": 0,
+      "armorTier": 1,
+      "armorHp": 50,
+      "gasMaskHp": 0,
+      "gasMaskMaxHp": 150,
+      "passiveModules": [],
+      "fabricatorCharges": 2,
+      "artifactResource": 0,
+      "artifactResourceMax": 5,
+      "artifactResourceKind": "conviction",
+      "artifactBarrier": 0,
+      "jetFuel": 100,
+      "jetActive": false,
+      "verticalVelocity": 0,
+      "lastJumpSequence": -1,
+      "lastWallJumpSequence": -1,
+      "lastDoubleJumpSequence": -1,
+      "wallJumpDirectionX": 0,
+      "wallJumpDirectionY": 0,
+      "airActionConsumedSinceGrounded": false,
+      "jetIgnitedThisAirTime": false,
+      "airborneMs": 0,
+      "groundedMs": 20566.666666666635,
+      "lastReloadSequence": -1,
+      "lastFireActionId": 0,
+      "lastAltFireActionId": 0,
+      "lastGrenadeActionId": 0,
+      "grenadeRechargeAtMs": 0,
+      "lastInteractActionId": 0,
+      "slideAngle": 0,
+      "aimPitch": -0.1399913053242572,
+      "previousFiring": false,
+      "shotSequence": 0,
+      "lastDamageEventAtMs": null,
+      "passiveRuntime": [],
+      "lastArmorDamageAtMs": null,
+      "lastGasNoticeAtMs": null,
+      "fabricatorRechargeAtMs": 40000,
+      "artifactHitCount": 0,
+      "artifactLastActionAtMs": null,
+      "artifactBarrierExpiresAtMs": 0,
+      "artifactProcExpiresAtMs": 0,
+      "lastArtifactX": 7840,
+      "lastArtifactY": 8088,
+      "slipstreamReadyAtMs": 0,
+      "echoPositions": [
+        {
+          "x": 5965,
+          "y": 5710
+        },
+        {
+          "x": 7840,
+          "y": 8088
+        }
+      ],
+      "lastProcessedInput": 617,
+      "friendsDevFlight": false,
+      "jetLaunchFloor": 1072,
+      "coyoteMs": 100,
+      "jumpBufferMs": 0,
+      "slideHeld": false,
+      "slideMs": 0,
+      "velocityX": 0,
+      "velocityY": 0,
+      "platformVelocityX": 0,
+      "platformVelocityY": 0,
+      "platformVelocityZ": 0,
+      "lastProcessedFireAction": 0
+    },
+    "cargo": [
+      {
+        "id": "lantern-core",
+        "x": 8023.999977999002,
+        "y": 8000.000018608676,
+        "z": -0.00047718411788011394,
+        "angle": -6.216953851262861e-14,
+        "vx": 0,
+        "vy": 0,
+        "vz": 0,
+        "spin": 0,
+        "angularVelocityX": 0,
+        "angularVelocityY": 0,
+        "orientation": [
+          -4.234892341027991e-9,
+          4.014347342219401e-8,
+          -3.091476596817632e-14,
+          0.9999999999999993
+        ]
+      },
+      {
+        "id": "ridge-core",
+        "x": 20783.999917593075,
+        "y": 18544.000054671662,
+        "z": 1183.9995377651464,
+        "angle": 9.081726243353749e-7,
+        "vx": 0,
+        "vy": 0,
+        "vz": 0,
+        "spin": 0,
+        "angularVelocityX": 0,
+        "angularVelocityY": 0,
+        "orientation": [
+          7.813642838275768e-7,
+          2.851524524388602e-7,
+          4.5408608935981336e-7,
+          0.9999999999995511
+        ]
+      },
+      {
+        "id": "sanctum-core",
+        "x": 6863.9999570545615,
+        "y": 8016.000036331158,
+        "z": 799.999522815882,
+        "angle": -6.0015596739164e-14,
+        "vx": 0,
+        "vy": 0,
+        "vz": 0,
+        "spin": 0,
+        "angularVelocityX": 0,
+        "angularVelocityY": 0,
+        "orientation": [
+          -4.234892038197329e-9,
+          4.014347338586369e-8,
+          -2.983779509375455e-14,
+          0.9999999999999993
+        ]
+      }
+    ],
+    "cranes": [
+      {
+        "pieceId": 401,
+        "x": 7904,
+        "y": 8000,
+        "z": 1072,
+        "rotation": 0,
+        "length": 1174,
+        "mode": "hold",
+        "blocked": false,
+        "winchId": 401,
+        "hasWinch": true,
+        "memberCount": 0
+      }
+    ],
+    "pieces": [
+      {
+        "id": 400,
+        "shape": "landing_pad",
+        "finish": "stone",
+        "author": "Review",
+        "revision": 1,
+        "x": 7840,
+        "y": 8000,
+        "z": 1064,
+        "rotation": 0
+      },
+      {
+        "x": 7904,
+        "y": 8000,
+        "z": 1072,
+        "rotation": 0,
+        "id": 401,
+        "shape": "crane",
+        "finish": "teal",
+        "author": "Crane review",
+        "revision": 3
+      }
+    ]
+  }
+}

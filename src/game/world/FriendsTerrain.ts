@@ -1,7 +1,7 @@
 import { scenicTransitAir, scenicRailColumns, scenicTransitProtected, scenicTransitSurface, scenicStructureRanges, scenicRailFloor, scenicRailCeiling } from './FriendsRailInfrastructure';
 import { ISLAND_SEA_LEVEL, ISLAND_ARCH, ISLAND_LANDMARK_SITES, islandCoastDistance, islandMountainHeight, islandSeaStackHeight, islandVolcanoHeight, ISLAND_LAKES, islandLakeRadius, islandSmooth, islandArchRange, createIslandRuins, type IslandStoneBox } from './FriendsIsland';
 import { caveColumn, caveEntranceFloor, explorationCave } from './FriendsCave';
-import { FRIENDS_AIRPAD } from './FriendsRegion';
+import { FRIENDS_AIRPAD, FRIENDS_CAMPFIRE } from './FriendsRegion';
 import { castleTerrainHeight, HIGHFALL_CASTLE } from './FriendsCastle';
 import { createCastleStairs, type CastleStairs } from './FriendsCastleStairs';
 let castleStairsField:CastleStairs|undefined;
@@ -106,7 +106,11 @@ export function baseTerrainHeight(x: number, y: number) {
   if(entrance===undefined)for(const [,roof] of caveColumn(x,y))h=Math.max(h,roof+64);
   else h=Math.min(h,entrance);
   const mountain=castleTerrainHeight(x,y,Math.min(5856,Math.max(h,islandSeaStackHeight(x,y))));
-  return gridHeight(castleStairsField?.terrainHeight(x,y,mountain)??mountain);
+  let ground=castleStairsField?.terrainHeight(x,y,mountain)??mountain;
+  const camp=FRIENDS_CAMPFIRE;
+  if(Math.abs(x-camp.x)<camp.radius+160&&Math.abs(y-camp.y)<camp.radius+160)
+    ground=grade(ground,x,y,camp.x,camp.y,camp.z,camp.radius,160);
+  return gridHeight(ground);
 }
 // Vehicles and arrivals follow their individual terrain cells, without grading.
 export const FRIENDS_AIRFIELD_HEIGHT=baseTerrainHeight(FRIENDS_AIRPAD.x,FRIENDS_AIRPAD.y);
@@ -117,18 +121,29 @@ export const FRIENDS_SPAWN_PLATFORM = {
     baseTerrainHeight(5776 + (i % 9) * 32, 5584 + Math.floor(i / 9) * 32))) + 32,
 } as const;
 export const FRIENDS_ARRIVAL_HEIGHT=FRIENDS_SPAWN_PLATFORM.top;
-/** Salvage pickup in a surveyed clearing about 750m east-northeast of arrival. */
-export const FRIENDS_HAULING_PLATFORM = {
-  x: 14800, y: 4464, size: 288, thickness: 64, clearance: 128,
+function haulingPlatform(x:number,y:number){return {
+  x,y,size:288,thickness:64,clearance:128,
   top: Math.max(...Array.from({ length: 81 }, (_, i) =>
-    baseTerrainHeight(14672 + (i % 9) * 32, 4336 + Math.floor(i / 9) * 32))) + 32,
-} as const;
-export const FRIENDS_FIXED_PLATFORMS = [FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORM] as const;
+    baseTerrainHeight(x-128+(i%9)*32,y-128+Math.floor(i/9)*32)))+32,
+} as const;}
+/** Separate surveyed staging areas for the three hauling missions. */
+export const FRIENDS_HAULING_PLATFORMS = [
+  haulingPlatform(14800,4464), // Lantern clearing, east-northeast of arrival.
+  haulingPlatform(20784,18544), // Eastern ridge beside the castle approach.
+  haulingPlatform(6864,8016), // Freight yard south of Sunline Commons.
+] as const;
+export const FRIENDS_HAULING_PLATFORM=FRIENDS_HAULING_PLATFORMS[0];
+export const FRIENDS_FIXED_PLATFORMS = [FRIENDS_SPAWN_PLATFORM,...FRIENDS_HAULING_PLATFORMS] as const;
 export function friendsFixedPlatformAt(x:number,y:number){
   return FRIENDS_FIXED_PLATFORMS.find(p=>x>=p.x-p.size/2&&x<p.x+p.size/2&&y>=p.y-p.size/2&&y<p.y+p.size/2);
 }
 export function friendsFixedPlatformProtected(x:number,y:number,z:number){
+  if(friendsCampfireContains(x,y)&&z>=FRIENDS_CAMPFIRE.z-64&&z<FRIENDS_CAMPFIRE.z+128)return true;
   const p=friendsFixedPlatformAt(x,y);return Boolean(p&&z>=p.top-p.thickness&&z<p.top+p.clearance);
+}
+export function friendsCampfireContains(x:number,y:number){
+  const dx=x-FRIENDS_CAMPFIRE.x,dy=y-FRIENDS_CAMPFIRE.y,r=FRIENDS_CAMPFIRE.radius;
+  return Math.abs(dx)<r&&Math.abs(dy)<r&&dx*dx+dy*dy<r*r;
 }
 export function friendsSpawnPlatformContains(x: number, y: number) {
   const p = FRIENDS_SPAWN_PLATFORM;
@@ -161,7 +176,7 @@ export function islandRuinsAt(x:number,y:number){
 export function terrainProtected(x: number, y: number) {
   // Vegetation clearance around arrival and the aircraft. This is not an
   // excavation reserve: players may reshape this ground.
-  return Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
+  return friendsCampfireContains(x,y) || Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
 }
 export function naturalCave(x: number, y: number, z: number, roofLimit=Infinity) {
   const arch=islandArchRange(x,y);if(arch&&z>=arch[0]&&z<arch[1])return true;
@@ -195,6 +210,7 @@ export class FriendsTerrain {
   snapshot(): TerrainSnapshot { return { generation:TERRAIN_GENERATION, grades:this.grades.map(g=>[...g] as TerrainGrade), revision: this.revision, edits: [...this.edits].map(([k, m]) => [...k.split(',').map(Number), m] as TerrainEdit) }; }
   height(vx: number, vy: number) { const k = `${vx},${vy}`; let h = this.heights.get(k); if (h === undefined) { h = this.surfaceHeight((vx + .5) * VOXEL_SIZE, (vy + .5) * VOXEL_SIZE); if (this.heights.size > 100000) this.heights.clear(); this.heights.set(k, h); } return h; }
   surfaceHeight(x: number,y: number) {
+    if(friendsCampfireContains(x,y))return FRIENDS_CAMPFIRE.z;
     const platform=friendsFixedPlatformAt(x,y);if(platform)return platform.top;
     const natural=baseTerrainHeight(x,y);let h=natural;
     for(const g of this.gradeTiles.get(`${Math.floor(x/512)},${Math.floor(y/512)}`) || []){const adjusted=grade(natural,x,y,g[0],g[1],g[2],g[3],320);h=natural<g[2]?Math.max(h,adjusted):Math.min(h,adjusted);}
@@ -210,6 +226,7 @@ export class FriendsTerrain {
   }
   material(vx: number, vy: number, vz: number): TerrainMaterial {
     const x=(vx+.5)*32,y=(vy+.5)*32,z=(vz+.5)*32;
+    if(friendsCampfireContains(x,y)&&z>=FRIENDS_CAMPFIRE.z-64&&z<FRIENDS_CAMPFIRE.z+128)return z<FRIENDS_CAMPFIRE.z?2:0;
     if (friendsFixedPlatformProtected(x,y,z)) return z < friendsFixedPlatformAt(x,y)!.top ? 2 : 0;
     const edit = this.edits.get(key(vx, vy, vz));
     if(edit!==undefined)return edit;
@@ -292,23 +309,28 @@ export class FriendsTerrain {
     for (let vz = Math.floor((z + .1) / VOXEL_SIZE); vz <= max; vz++) if (vz * VOXEL_SIZE > z + .1 && this.exposedMaterial(vx, vy, vz)) return Math.min(deck??Infinity,vz*VOXEL_SIZE);
     return deck;
   }
-  collide(p: { x: number; y: number }, z: number, radius: number, bodyHeight = 50, step = FRIENDS_STEP_HEIGHT) {
+  collide(p: { x: number; y: number }, z: number, radius: number, bodyHeight = 50, step = FRIENDS_STEP_HEIGHT, inclineConnection?: (x:number,y:number,top:number)=>boolean) {
     let collided = false;
     for (let pass = 0; pass < 2; pass++) {
       const xmin = Math.floor((p.x - radius) / VOXEL_SIZE), xmax = Math.floor((p.x + radius) / VOXEL_SIZE), ymin = Math.floor((p.y - radius) / VOXEL_SIZE), ymax = Math.floor((p.y + radius) / VOXEL_SIZE);
       for (let vx = xmin; vx <= xmax; vx++) for (let vy = ymin; vy <= ymax; vy++) {
-        let solid = false;
+        let solid = false, top:number|undefined;
         for (let vz = Math.floor((z + step + .1) / VOXEL_SIZE); vz * VOXEL_SIZE < z + bodyHeight - .1; vz++) if (this.material(vx, vy, vz)) {
           const owner=islandRuinsAt((vx+.5)*32,(vy+.5)*32).find(b=>(vz+.5)*32>=b.z&&(vz+.5)*32<b.z+b.h);
           // Only the recessed stair core yields to the exact fan surface.
           // A wall sharing its cell must retain ordinary solid collision.
           if(owner?.detail==='stair-core')continue;
-          solid = true; break;
+          solid = true;
+          if(!this.material(vx,vy,vz+1))top=(vz+1)*VOXEL_SIZE;
+          break;
         }
         if (!solid) continue;
         const cx = (vx + .5) * VOXEL_SIZE, cy = (vy + .5) * VOXEL_SIZE, nearX = Math.max(cx - 16, Math.min(cx + 16, p.x)), nearY = Math.max(cy - 16, Math.min(cy + 16, p.y));
         const dx = p.x - nearX, dy = p.y - nearY, distance = Math.hypot(dx, dy);
         if (distance >= radius) continue;
+        // A ramp meeting this exposed top has no entrance wall. Keep every
+        // other voxel face solid, including higher blocks beside the ramp.
+        if(distance>.001&&top!==undefined&&inclineConnection?.(nearX,nearY,top))continue;
         if (distance > .001) { p.x += dx / distance * (radius - distance); p.y += dy / distance * (radius - distance); }
         else if (Math.abs(p.x - cx) > Math.abs(p.y - cy)) p.x = cx + (p.x < cx ? -1 : 1) * (16 + radius);
         else p.y = cy + (p.y < cy ? -1 : 1) * (16 + radius);
@@ -329,7 +351,7 @@ export class FriendsTerrain {
     const next = dirs.map((v, i) => v === 0 ? Infinity : (((cell[i] + (v > 0 ? 1 : 0)) * VOXEL_SIZE) - origin[i]) / v);
     let distance = 0, normal = [0, 0, 1];
     while (distance <= maxDistance) {
-      const m = this.material(cell[0], cell[1], cell[2]);
+      const m = this.exposedMaterial(cell[0], cell[1], cell[2]);
       if (m) return { x: ray.x + ray.dx * distance, y: ray.y + ray.dy * distance, z: ray.z + ray.dz * distance, vx: cell[0], vy: cell[1], vz: cell[2], nx: normal[0], ny: normal[1], nz: normal[2], distance, material: m };
       const axis = next[0] < next[1] ? next[0] < next[2] ? 0 : 2 : next[1] < next[2] ? 1 : 2;
       distance = next[axis]; if (!Number.isFinite(distance)) break;

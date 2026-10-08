@@ -1,0 +1,87 @@
+{
+  "origin": "http://localhost:3000",
+  "checks": [
+    "the exterior view has real cave floors and walls at all formerly missing surfaces",
+    "the closer exterior rim renders without WebGL errors",
+    "the deeper cave still renders with the held flashlight",
+    "looking back up through the shaft keeps the exterior sky visible",
+    "no runtime, shader, or WebGL errors"
+  ],
+  "errors": [],
+  "views": [
+    {
+      "name": "outside",
+      "camera": [
+        6090,
+        900,
+        5500
+      ],
+      "glError": 0,
+      "volumes": 80
+    },
+    {
+      "name": "rim",
+      "camera": [
+        6384,
+        734,
+        5352
+      ],
+      "glError": 0,
+      "volumes": 90
+    },
+    {
+      "name": "cathedral",
+      "camera": [
+        8160,
+        280,
+        4880
+      ],
+      "glError": 0,
+      "volumes": 129
+    },
+    {
+      "name": "sky-from-shaft",
+      "camera": [
+        6383.999999999988,
+        160,
+        5152
+      ],
+      "glError": 0,
+      "volumes": 90
+    }
+  ],
+  "rays": [
+    {
+      "pixel": [
+        650,
+        250
+      ],
+      "meshDistance": 1063.2206446369291,
+      "solidDistance": 1063.2206446369294
+    },
+    {
+      "pixel": [
+        700,
+        300
+      ],
+      "meshDistance": 952.0877245558603,
+      "solidDistance": 952.0877245558605
+    },
+    {
+      "pixel": [
+        800,
+        330
+      ],
+      "meshDistance": 404.4902534897546,
+      "solidDistance": 404.4902534897544
+    },
+    {
+      "pixel": [
+        600,
+        380
+      ],
+      "meshDistance": 657.2932842712163,
+      "solidDistance": 657.2932842712164
+    }
+  ]
+}

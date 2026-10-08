@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest';
-import { CAVE_ENTRANCE,CAVE_ROOMS,CAVE_ROUTES,CAVE_TORCHES,CAVE_TREASURES,caveColumn,caveGlow } from './FriendsCave';
+import { CAVE_ENTRANCE,CAVE_ROOMS,CAVE_ROUTES,CAVE_TORCHES,CAVE_TREASURES,caveColumn,caveGlow,caveOpenToSky } from './FriendsCave';
 import { FriendsTerrain,baseTerrainHeight } from './FriendsTerrain';
 import { meshTerrainChunk } from './FriendsTerrainMesh';
 
@@ -42,5 +42,23 @@ describe('Lantern Descent exploration cave',()=>{
     const t=new FriendsTerrain(),m=meshTerrainChunk(t,16,9);expect(m.positions.length).toBeGreaterThan(0);expect(m.glow.some(value=>value>0)).toBe(true);expect(m.groups.some(g=>g.materialIndex>=5)).toBe(true);
     for(let i=0;i<m.positions.length;i+=9){const p=m.positions,n=m.normals,a=[p[i+3]-p[i],p[i+4]-p[i+1],p[i+5]-p[i+2]],b=[p[i+6]-p[i],p[i+7]-p[i+1],p[i+8]-p[i+2]];expect((a[1]*b[2]-a[2]*b[1])*n[i]+(a[2]*b[0]-a[0]*b[2])*n[i+1]+(a[0]*b[1]-a[1]*b[0])*n[i+2]).toBeGreaterThan(0);}
     expect(m.positions.length/9).toBeLessThan(6000);
+  });
+  it('uses daylight on shaft faces and cave lighting on enclosed passages',()=>{
+    expect(caveOpenToSky(6384,5248,400)).toBe(true);
+    expect(caveOpenToSky(6384,5248,128)).toBe(false);
+    const terrain=new FriendsTerrain();let openFaces=0,enclosedFaces=0;
+    for(const [cx,cy]of [[12,9],[12,10],[13,9],[13,10]]){
+      const mesh=meshTerrainChunk(terrain,cx,cy);
+      for(const group of mesh.groups)for(let vertex=group.start;vertex<group.start+group.count;vertex+=3){
+        const center=[0,0,0];
+        for(let corner=0;corner<3;corner++)for(let axis=0;axis<3;axis++)center[axis]+=mesh.positions[(vertex+corner)*3+axis]/3;
+        // Sample the neighbouring air, where the face's light comes from.
+        for(let axis=0;axis<3;axis++)center[axis]+=mesh.normals[vertex*3+axis]/127*16;
+        const [x,z,y]=[center[0]+cx*512,center[1],center[2]+cy*512];
+        if(caveOpenToSky(x,y,z)){expect(group.materialIndex).toBeLessThan(5);openFaces++;}
+        if(group.materialIndex>=5&&group.materialIndex<10){expect(caveOpenToSky(x,y,z)).toBe(false);enclosedFaces++;}
+      }
+    }
+    expect(openFaces).toBeGreaterThan(0);expect(enclosedFaces).toBeGreaterThan(0);
   });
 });

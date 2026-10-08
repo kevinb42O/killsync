@@ -9,7 +9,7 @@ import { MULTIPLAYER_PROTOCOL_VERSION, type MultiplayerInputFrame } from './prot
 const cargo=(extra:Partial<PhysicalCargo>={}):PhysicalCargo=>({id:'lantern-core',x:960,y:960,z:0,angle:0,vx:0,vy:0,vz:0,spin:0,...extra});
 const input=(aiming=false):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:0,aimAngle:0,aimPitch:0,friendsTool:5,selectedSlot:0,firing:false,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,aiming});
 function world(solid:(x:number,y:number,z:number)=>boolean):HaulingEnvironment{
-  const field={material:(x:number,y:number,z:number)=>solid(x,y,z)?2:0} as unknown as FriendsTerrain;
+  const field={material:(x:number,y:number,z:number)=>solid(x,y,z)?2:0,exposedMaterial:(x:number,y:number,z:number)=>solid(x,y,z)?2:0} as unknown as FriendsTerrain;
   const ray=(a:{x:number;y:number;z:number},b:typeof a)=>{const d=Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z);return d<1?undefined:FriendsTerrain.prototype.raycast.call(field,{...a,dx:(b.x-a.x)/d,dy:(b.y-a.y)/d,dz:(b.z-a.z)/d},d-.5);};
   const env:HaulingEnvironment={revision:'1',solid,floor:(x,y,z,step)=>{for(let vz=Math.floor((z+step)/32)-1;vz>=-16;vz--)if(solid(Math.floor(x/32),Math.floor(y/32),vz)&&!solid(Math.floor(x/32),Math.floor(y/32),vz+1))return(vz+1)*32;},collide:()=>false,blocked:(a,b)=>Boolean(ray(a,b)),vehicles:[]};
   env.routeRope=(a,b,old)=>routeHaulingRope(a,b,env.blocked,(r,d)=>FriendsTerrain.prototype.raycast.call(field,r,d),old);return env;

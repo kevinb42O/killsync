@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { sampleFrontierDayNight, type FrontierDayNightSample } from '../world/FriendsDayNight';
 import { updateFrontierSunShadow } from './FriendsSunShadow';
+import { FriendsSunShadowCache } from './FriendsSunShadowCache';
 
 export type FrontierCelestialLighting = {
   sun: THREE.DirectionalLight;
@@ -44,6 +45,7 @@ export class FriendsDayNightCycle {
   private moonColor = color(0xa3c6ff);
   private shadowDirection = new THREE.Vector3();
   private shadowFocus = new THREE.Vector3();
+  private shadowCache: FriendsSunShadowCache;
   constructor(private scene: THREE.Scene, private renderer: THREE.WebGLRenderer,
     private camera: THREE.PerspectiveCamera, private lights: FrontierCelestialLighting) {
     this.originalBackground = scene.background; scene.background = this.background;
@@ -51,6 +53,7 @@ export class FriendsDayNightCycle {
     // Keep one shadow slot and one map for the entire orbit. Changing the
     // number of shadow lights at the horizon recompiles every lit material.
     lights.sun.castShadow = true;
+    this.shadowCache = new FriendsSunShadowCache(scene,renderer,lights.sun);
     this.moon.castShadow = false;
     scene.add(this.moon, this.moon.target);
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(80000, 48, 24), new THREE.ShaderMaterial({
@@ -160,6 +163,7 @@ export class FriendsDayNightCycle {
     this.previousMoonShadow = moonDominant;
   }
   dispose() {
+    this.shadowCache.dispose();
     this.sky.geometry.dispose(); this.sky.material.dispose(); this.sky.removeFromParent();
     this.moon.shadow.dispose(); this.moon.removeFromParent(); this.moon.target.removeFromParent();
     if (this.scene.background === this.background) this.scene.background = this.originalBackground;

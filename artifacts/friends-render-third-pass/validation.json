@@ -1,0 +1,28 @@
+{
+  "tests": {
+    "passed": 975,
+    "files": 155,
+    "workers": 2
+  },
+  "focusedTests": 18,
+  "typecheck": "passed",
+  "build": "passed (existing chunk-size warning)",
+  "forestPixelCases": 62,
+  "fullWorldPixelCases": 16,
+  "changedPixels": 0,
+  "cacheOnlyPixelCases": 8,
+  "existingHistoricalLightingTolerance": {
+    "cases": 18,
+    "maxChannelDifference": 1
+  },
+  "logs": {
+    "tests": "accepted-tests.log",
+    "focused-tests": "accepted-focused-tests.log",
+    "lint": "accepted-lint.log",
+    "build": "accepted-build.log",
+    "forest-pixels": "accepted-forest-pixels.log",
+    "existing-lighting": "accepted-existing-lighting.log",
+    "initial-test-timeouts": "accepted-initial-test-timeouts.log"
+  },
+  "performance": "Focused cached falling-tree CPU/upload savings and exact sun shadow reuse verified. No substantial repeatable whole-scene FPS gain established."
+}

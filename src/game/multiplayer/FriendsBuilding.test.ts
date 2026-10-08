@@ -29,7 +29,7 @@ describe('permanent Friends building', () => {
     expect(friendsPlacementError([], 'cube', { ...pose, z: 64 })).toMatch(/Attach/);
     expect(friendsPlacementError([], 'cube', { ...pose, x: FRIENDS_AIRPAD.x, y: FRIENDS_AIRPAD.y })).toMatch(/bay/);
     const station = RAIL_STATIONS[0]; expect(friendsPlacementError([], 'cube', { ...pose, x: Math.round(station.x/4)*4, y: Math.round(station.y/4)*4 })).toBeUndefined();
-    expect(friendsPlacementError([], 'cube', pose, actor, [{ ...actor, x: pose.x, y: pose.y }])).toMatch(/friend/);
+    expect(friendsPlacementError([], 'cube', pose, actor, [{ ...actor, x: pose.x, y: pose.y }])).toMatch(/operator/);
   });
   it('protects a later edit from undo and enforces host-owned permissions', () => {
     const b = new FriendsBuilding(); b.request(actor, { requestId: 1, action: 'place', shape: 'cube', finish: 'stone', pose }, 'host', [actor]);

@@ -1,0 +1,134 @@
+{
+  "inventory": [
+    {
+      "id": "grand-engine",
+      "kind": "engine",
+      "meshes": 18,
+      "shadowMeshes": 13,
+      "triangles": 2844,
+      "shadowTriangles": 2600,
+      "instances": 113
+    },
+    {
+      "id": "grand-0",
+      "kind": "touring",
+      "meshes": 19,
+      "shadowMeshes": 15,
+      "triangles": 4664,
+      "shadowTriangles": 4420,
+      "instances": 173
+    },
+    {
+      "id": "grand-1",
+      "kind": "touring",
+      "meshes": 16,
+      "shadowMeshes": 13,
+      "triangles": 4516,
+      "shadowTriangles": 4296,
+      "instances": 166
+    },
+    {
+      "id": "grand-2",
+      "kind": "touring",
+      "meshes": 16,
+      "shadowMeshes": 13,
+      "triangles": 4516,
+      "shadowTriangles": 4296,
+      "instances": 166
+    },
+    {
+      "id": "grand-3",
+      "kind": "flatbed",
+      "meshes": 19,
+      "shadowMeshes": 8,
+      "triangles": 3184,
+      "shadowTriangles": 2004,
+      "instances": 91
+    },
+    {
+      "id": "grand-4",
+      "kind": "stake",
+      "meshes": 19,
+      "shadowMeshes": 8,
+      "triangles": 3424,
+      "shadowTriangles": 2244,
+      "instances": 111
+    },
+    {
+      "id": "grand-5",
+      "kind": "gondola",
+      "meshes": 19,
+      "shadowMeshes": 8,
+      "triangles": 3400,
+      "shadowTriangles": 2220,
+      "instances": 109
+    },
+    {
+      "id": "grand-6",
+      "kind": "flatbed",
+      "meshes": 19,
+      "shadowMeshes": 8,
+      "triangles": 3184,
+      "shadowTriangles": 2004,
+      "instances": 91
+    },
+    {
+      "id": "grand-7",
+      "kind": "stake",
+      "meshes": 19,
+      "shadowMeshes": 8,
+      "triangles": 3424,
+      "shadowTriangles": 2244,
+      "instances": 111
+    },
+    {
+      "id": "grand-8",
+      "kind": "gondola",
+      "meshes": 19,
+      "shadowMeshes": 8,
+      "triangles": 3400,
+      "shadowTriangles": 2220,
+      "instances": 109
+    },
+    {
+      "id": "grand-9",
+      "kind": "flatbed",
+      "meshes": 19,
+      "shadowMeshes": 8,
+      "triangles": 3184,
+      "shadowTriangles": 2004,
+      "instances": 91
+    }
+  ],
+  "cases": {
+    "all": {
+      "carriages": 10,
+      "meshDraws": 229,
+      "triangles": 40064,
+      "shadowMeshes": 110,
+      "shadowTriangles": 30552
+    },
+    "first4": {
+      "carriages": 4,
+      "meshDraws": 97,
+      "triangles": 19832,
+      "shadowMeshes": 62,
+      "shadowTriangles": 17616
+    },
+    "mixed4": {
+      "carriages": 4,
+      "meshDraws": 103,
+      "triangles": 17624,
+      "shadowMeshes": 52,
+      "shadowTriangles": 13488
+    },
+    "two": {
+      "carriages": 2,
+      "meshDraws": 59,
+      "triangles": 10728,
+      "shadowMeshes": 36,
+      "shadowTriangles": 9024
+    }
+  },
+  "method": "Traverse current train meshes, count index triangles times instance counts, add three BoxGeometry gangway meshes per connection between open wagons. Gangways do not cast shadows. Counts are potential main-pass draws if all meshes are visible; actual frustum and shadow draws depend on camera. Mixed compositions assume retained cars would be rearranged into a connected consist."
+}

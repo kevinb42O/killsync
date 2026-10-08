@@ -1,0 +1,1383 @@
+{
+  "date": "2026-10-08T16:28:35.877Z",
+  "origin": "http://localhost:3001",
+  "snapshot": "artifacts/friends-render-third-pass/source",
+  "errors": [],
+  "hardware": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "samples": 4
+  },
+  "naturalTrees": 4081,
+  "cases": [
+    {
+      "name": "valley",
+      "dpr": 1,
+      "hour": 9,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 804214
+        },
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 804214
+        }
+      ]
+    },
+    {
+      "name": "valley",
+      "dpr": 1,
+      "hour": 18,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 804214
+        },
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 804214
+        }
+      ]
+    },
+    {
+      "name": "valley",
+      "dpr": 1,
+      "hour": 23,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 804214
+        },
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 804214
+        }
+      ]
+    },
+    {
+      "name": "cedar",
+      "dpr": 1,
+      "hour": 9,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 2,
+      "changedChannels": 3,
+      "maxChannelDifference": 34,
+      "rmsChannelDifference": 0.025543852996874335,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 13,
+          "triangles": 108558
+        },
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 13,
+          "triangles": 108558
+        }
+      ]
+    },
+    {
+      "name": "cedar",
+      "dpr": 1,
+      "hour": 18,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 2,
+      "changedChannels": 4,
+      "maxChannelDifference": 34,
+      "rmsChannelDifference": 0.025553290962464028,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 13,
+          "triangles": 108558
+        },
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 13,
+          "triangles": 108558
+        }
+      ]
+    },
+    {
+      "name": "cedar",
+      "dpr": 1,
+      "hour": 23,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 2,
+      "changedChannels": 8,
+      "maxChannelDifference": 34,
+      "rmsChannelDifference": 0.03817550035245765,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 13,
+          "triangles": 108558
+        },
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 13,
+          "triangles": 108558
+        }
+      ]
+    },
+    {
+      "name": "ridge",
+      "dpr": 1,
+      "hour": 9,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 2,
+      "changedChannels": 2,
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009820927516479827,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 6,
+          "triangles": 904868
+        },
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 6,
+          "triangles": 904868
+        }
+      ]
+    },
+    {
+      "name": "ridge",
+      "dpr": 1,
+      "hour": 18,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 2,
+      "changedChannels": 4,
+      "maxChannelDifference": 2,
+      "rmsChannelDifference": 0.0018373272993504103,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 6,
+          "triangles": 904868
+        },
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 6,
+          "triangles": 904868
+        }
+      ]
+    },
+    {
+      "name": "ridge",
+      "dpr": 1,
+      "hour": 23,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 4,
+      "changedChannels": 8,
+      "maxChannelDifference": 5,
+      "rmsChannelDifference": 0.005933335934248286,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 6,
+          "triangles": 904868
+        },
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 6,
+          "triangles": 904868
+        }
+      ]
+    },
+    {
+      "name": "reverse",
+      "dpr": 1,
+      "hour": 9,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 4,
+      "changedChannels": 9,
+      "maxChannelDifference": 2,
+      "rmsChannelDifference": 0.002689571768199595,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        },
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        }
+      ]
+    },
+    {
+      "name": "reverse",
+      "dpr": 1,
+      "hour": 18,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 5,
+      "changedChannels": 10,
+      "maxChannelDifference": 2,
+      "rmsChannelDifference": 0.002777777777777778,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        },
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        }
+      ]
+    },
+    {
+      "name": "reverse",
+      "dpr": 1,
+      "hour": 23,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 518400
+      },
+      "changedPixels": 11,
+      "changedChannels": 26,
+      "maxChannelDifference": 27,
+      "rmsChannelDifference": 0.025373369314507097,
+      "pixels": 518400,
+      "forest": [
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        },
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        }
+      ]
+    },
+    {
+      "name": "valley",
+      "dpr": 2,
+      "hour": 9,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 11,
+      "changedChannels": 25,
+      "maxChannelDifference": 47,
+      "rmsChannelDifference": 0.029923626421439573,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 815484
+        },
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 815484
+        }
+      ]
+    },
+    {
+      "name": "valley",
+      "dpr": 2,
+      "hour": 18,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 15,
+      "changedChannels": 41,
+      "maxChannelDifference": 47,
+      "rmsChannelDifference": 0.03003020598672174,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 815484
+        },
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 815484
+        }
+      ]
+    },
+    {
+      "name": "valley",
+      "dpr": 2,
+      "hour": 23,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 28,
+      "changedChannels": 81,
+      "maxChannelDifference": 47,
+      "rmsChannelDifference": 0.0350384901894058,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 815484
+        },
+        {
+          "trees": 852,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 815484
+        }
+      ]
+    },
+    {
+      "name": "cedar",
+      "dpr": 2,
+      "hour": 9,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 8,
+      "changedChannels": 16,
+      "maxChannelDifference": 37,
+      "rmsChannelDifference": 0.0175304243907838,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 122284
+        },
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 122284
+        }
+      ]
+    },
+    {
+      "name": "cedar",
+      "dpr": 2,
+      "hour": 18,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 9,
+      "changedChannels": 19,
+      "maxChannelDifference": 37,
+      "rmsChannelDifference": 0.017564777597141305,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 122284
+        },
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 122284
+        }
+      ]
+    },
+    {
+      "name": "cedar",
+      "dpr": 2,
+      "hour": 23,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 10,
+      "changedChannels": 34,
+      "maxChannelDifference": 37,
+      "rmsChannelDifference": 0.02600460325465664,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 122284
+        },
+        {
+          "trees": 83,
+          "fallingTrees": 0,
+          "draws": 16,
+          "triangles": 122284
+        }
+      ]
+    },
+    {
+      "name": "ridge",
+      "dpr": 2,
+      "hour": 9,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 30,
+      "changedChannels": 50,
+      "maxChannelDifference": 52,
+      "rmsChannelDifference": 0.037945845000181215,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 7,
+          "triangles": 905464
+        },
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 7,
+          "triangles": 905464
+        }
+      ]
+    },
+    {
+      "name": "ridge",
+      "dpr": 2,
+      "hour": 18,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 34,
+      "changedChannels": 80,
+      "maxChannelDifference": 52,
+      "rmsChannelDifference": 0.03813600326948762,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 7,
+          "triangles": 905464
+        },
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 7,
+          "triangles": 905464
+        }
+      ]
+    },
+    {
+      "name": "ridge",
+      "dpr": 2,
+      "hour": 23,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 37,
+      "changedChannels": 121,
+      "maxChannelDifference": 52,
+      "rmsChannelDifference": 0.043873832684693095,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 7,
+          "triangles": 905464
+        },
+        {
+          "trees": 699,
+          "fallingTrees": 0,
+          "draws": 7,
+          "triangles": 905464
+        }
+      ]
+    },
+    {
+      "name": "reverse",
+      "dpr": 2,
+      "hour": 9,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 31,
+      "changedChannels": 60,
+      "maxChannelDifference": 48,
+      "rmsChannelDifference": 0.02947505615236696,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        },
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        }
+      ]
+    },
+    {
+      "name": "reverse",
+      "dpr": 2,
+      "hour": 18,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 32,
+      "changedChannels": 71,
+      "maxChannelDifference": 48,
+      "rmsChannelDifference": 0.029786324307318295,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        },
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        }
+      ]
+    },
+    {
+      "name": "reverse",
+      "dpr": 2,
+      "hour": 23,
+      "repeat": {
+        "changedPixels": 0,
+        "changedChannels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 2073600
+      },
+      "changedPixels": 49,
+      "changedChannels": 147,
+      "maxChannelDifference": 48,
+      "rmsChannelDifference": 0.03633411377857005,
+      "pixels": 2073600,
+      "forest": [
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        },
+        {
+          "trees": 3849,
+          "fallingTrees": 0,
+          "draws": 12,
+          "triangles": 3989172
+        }
+      ]
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 0,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 1,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 2,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 3,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 4,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 5,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 6,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 7,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 8,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 9,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 10,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 1,
+      "frame": 11,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "plant",
+      "dpr": 1,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "harvest",
+      "dpr": 1,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "support-edit",
+      "dpr": 1,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "fall",
+      "dpr": 1,
+      "elapsed": 5000,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "fall",
+      "dpr": 1,
+      "elapsed": 5300,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "fall",
+      "dpr": 1,
+      "elapsed": 5700,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "fall",
+      "dpr": 1,
+      "elapsed": 6000,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 518400
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 0,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 1,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 2,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 3,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 4,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 5,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 6,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 7,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 8,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 9,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 10,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "overlap-motion",
+      "dpr": 2,
+      "frame": 11,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "plant",
+      "dpr": 2,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "harvest",
+      "dpr": 2,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "support-edit",
+      "dpr": 2,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "fall",
+      "dpr": 2,
+      "elapsed": 5000,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "fall",
+      "dpr": 2,
+      "elapsed": 5300,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "fall",
+      "dpr": 2,
+      "elapsed": 5700,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    },
+    {
+      "name": "fall",
+      "dpr": 2,
+      "elapsed": 6000,
+      "changedPixels": 0,
+      "changedChannels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 2073600
+    }
+  ],
+  "timings": [
+    {
+      "dpr": 1,
+      "motion": false,
+      "sides": [
+        {
+          "frames": 100,
+          "gpu": {
+            "mean": 12.392859900000001,
+            "p50": 12.227791,
+            "p95": 14.999125
+          },
+          "cpu": {
+            "mean": 0.5400000095367432,
+            "p50": 0.5,
+            "p95": 0.8999999761581421
+          },
+          "update": {
+            "mean": 0.01600000023841858,
+            "p50": 0,
+            "p95": 0.10000002384185791
+          },
+          "triangles": {
+            "mean": 2179466,
+            "p50": 2179466,
+            "p95": 2179466
+          },
+          "calls": {
+            "mean": 17,
+            "p50": 17,
+            "p95": 17
+          }
+        },
+        {
+          "frames": 100,
+          "gpu": {
+            "mean": 12.299551569999995,
+            "p50": 12.319375,
+            "p95": 14.788
+          },
+          "cpu": {
+            "mean": 0.5130000019073486,
+            "p50": 0.5,
+            "p95": 0.7999999523162842
+          },
+          "update": {
+            "mean": 0.017999998331069945,
+            "p50": 0,
+            "p95": 0.10000002384185791
+          },
+          "triangles": {
+            "mean": 2179466,
+            "p50": 2179466,
+            "p95": 2179466
+          },
+          "calls": {
+            "mean": 17,
+            "p50": 17,
+            "p95": 17
+          }
+        }
+      ]
+    },
+    {
+      "dpr": 1,
+      "motion": true,
+      "sides": [
+        {
+          "frames": 100,
+          "gpu": {
+            "mean": 13.507375830000003,
+            "p50": 15.051458,
+            "p95": 18.175874
+          },
+          "cpu": {
+            "mean": 0.7089999914169312,
+            "p50": 0.6000000238418579,
+            "p95": 1.1999999284744263
+          },
+          "update": {
+            "mean": 1.258000009059906,
+            "p50": 1.100000023841858,
+            "p95": 2.399999976158142
+          },
+          "triangles": {
+            "mean": 2005724.78,
+            "p50": 2390450,
+            "p95": 2625988
+          },
+          "calls": {
+            "mean": 16.95,
+            "p50": 17,
+            "p95": 17
+          }
+        },
+        {
+          "frames": 100,
+          "gpu": {
+            "mean": 13.823226239999999,
+            "p50": 15.369208,
+            "p95": 19.911958
+          },
+          "cpu": {
+            "mean": 0.6989999997615814,
+            "p50": 0.6999999284744263,
+            "p95": 1
+          },
+          "update": {
+            "mean": 3.3629999923706055,
+            "p50": 3.600000023841858,
+            "p95": 5.800000071525574
+          },
+          "triangles": {
+            "mean": 2005724.78,
+            "p50": 2390450,
+            "p95": 2625988
+          },
+          "calls": {
+            "mean": 16.95,
+            "p50": 17,
+            "p95": 17
+          }
+        }
+      ]
+    },
+    {
+      "dpr": 2,
+      "motion": false,
+      "sides": [
+        {
+          "frames": 100,
+          "gpu": {
+            "mean": 25.746506210000003,
+            "p50": 24.964249,
+            "p95": 33.198125
+          },
+          "cpu": {
+            "mean": 0.633000009059906,
+            "p50": 0.6000000238418579,
+            "p95": 1.100000023841858
+          },
+          "update": {
+            "mean": 0.013000001907348633,
+            "p50": 0,
+            "p95": 0.10000002384185791
+          },
+          "triangles": {
+            "mean": 2205996,
+            "p50": 2205996,
+            "p95": 2205996
+          },
+          "calls": {
+            "mean": 17,
+            "p50": 17,
+            "p95": 17
+          }
+        },
+        {
+          "frames": 100,
+          "gpu": {
+            "mean": 25.56655527000001,
+            "p50": 25.176374,
+            "p95": 29.800791
+          },
+          "cpu": {
+            "mean": 0.6380000066757202,
+            "p50": 0.6000000238418579,
+            "p95": 1.2999999523162842
+          },
+          "update": {
+            "mean": 0.01699999928474426,
+            "p50": 0,
+            "p95": 0.10000002384185791
+          },
+          "triangles": {
+            "mean": 2205996,
+            "p50": 2205996,
+            "p95": 2205996
+          },
+          "calls": {
+            "mean": 17,
+            "p50": 17,
+            "p95": 17
+          }
+        }
+      ]
+    },
+    {
+      "dpr": 2,
+      "motion": true,
+      "sides": [
+        {
+          "frames": 100,
+          "gpu": {
+            "mean": 31.719346950000016,
+            "p50": 30.350374,
+            "p95": 39.533874
+          },
+          "cpu": {
+            "mean": 0.6729999995231628,
+            "p50": 0.6999999284744263,
+            "p95": 1.1999999284744263
+          },
+          "update": {
+            "mean": 1.4299999940395356,
+            "p50": 1.399999976158142,
+            "p95": 2.899999976158142
+          },
+          "triangles": {
+            "mean": 2049005.04,
+            "p50": 2430614,
+            "p95": 2675324
+          },
+          "calls": {
+            "mean": 17,
+            "p50": 17,
+            "p95": 17
+          }
+        },
+        {
+          "frames": 100,
+          "gpu": {
+            "mean": 30.757659930000003,
+            "p50": 29.074291,
+            "p95": 39.404583
+          },
+          "cpu": {
+            "mean": 0.71,
+            "p50": 0.6000000238418579,
+            "p95": 1.2000000476837158
+          },
+          "update": {
+            "mean": 4.068999999761582,
+            "p50": 4.100000023841858,
+            "p95": 7.799999952316284
+          },
+          "triangles": {
+            "mean": 2049005.04,
+            "p50": 2430614,
+            "p95": 2675324
+          },
+          "calls": {
+            "mean": 17,
+            "p50": 17,
+            "p95": 17
+          }
+        }
+      ]
+    }
+  ],
+  "failure": "AssertionError [ERR_ASSERTION]: Forest changed pixels"
+}

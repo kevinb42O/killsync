@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Recorded audio verification</title>
+<style>body{background:#172b27;color:#ebeee2;font:15px system-ui;margin:32px}button{padding:12px}pre{white-space:pre-wrap;font:12px monospace;line-height:1.8}</style>
+<h1>Recorded audio verification</h1><p>Checks every newly bundled recording in the browser's actual audio decoder, including file hashes, non-silent samples, and decoded memory.</p>
+<button id="check">Validate recordings</button><pre id="result">Ready</pre>
+<script type="module">
+const button=document.querySelector('#check'), result=document.querySelector('#result');
+button.onclick=async()=>{
+ button.disabled=true; const context=new AudioContext(), lines=[];let bytes=0;
+ try{
+  const manifest=await (await fetch('/audio/friends/sources.json')).json();
+  const assets=manifest.assets.slice(35);
+  for(const asset of assets){
+   const response=await fetch('/audio/friends/'+asset.file);if(!response.ok)throw Error(asset.file+' failed to download');
+   const raw=await response.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',raw);
+   const hash=[...new Uint8Array(digest)].map(n=>n.toString(16).padStart(2,'0')).join('');
+   if(hash!==asset.sha256)throw Error(asset.file+' hash mismatch');
+   const audio=await context.decodeAudioData(raw);let peak=0,sum=0;
+   for(let c=0;c<audio.numberOfChannels;c++)for(const n of audio.getChannelData(c)){if(!Number.isFinite(n))throw Error('Invalid samples');peak=Math.max(peak,Math.abs(n));sum+=n*n;}
+   if(peak===0)throw Error(asset.file+' is silent');
+   bytes+=audio.length*audio.numberOfChannels*4;
+   lines.push(`${asset.file}: ${audio.duration.toFixed(2)}s, ${audio.numberOfChannels} channel(s), peak ${peak.toFixed(3)}, RMS ${Math.sqrt(sum/(audio.length*audio.numberOfChannels)).toFixed(4)}, SHA-256 OK`);
+   result.textContent=lines.join('\n');
+  }
+  result.textContent+='\n\nPASS: '+assets.length+' recordings decoded and verified.\nDecoded memory before loop trimming: '+(bytes/1024/1024).toFixed(2)+' MiB at '+context.sampleRate+' Hz.';
+ }catch(error){result.textContent+='\nFAIL: '+error.message;}finally{await context.close();button.disabled=false;}
+};
+</script>

@@ -1,0 +1,122 @@
+{
+  "date": "2026-10-08T17:35:15.827Z",
+  "origin": "http://localhost:3001",
+  "errors": [],
+  "method": "One real Friends arena, frozen world/animation state, identical frame-indexed camera poses; alternate A/B and B/A each pair. Native drawing buffer, MSAA, geometry/materials and shadow scheduling retained. GPU queries drained asynchronously. Readback runs separate from timed renders. Timings are the world pass and forest update, not gameplay FPS.",
+  "comparisons": [
+    {
+      "dpr": 1,
+      "yaw": -2.3,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": -2.1,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": -2.5,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": 0.8,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.3,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.1,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.5,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": 0.8,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    }
+  ],
+  "sameForest": false,
+  "baselineControl": false
+}

@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { cycleFriendsTool, FRIENDS_TOOL_ORDER, FriendsToolWheel } from './FriendsToolControls';
+import { cycleFriendsTool, friendsToolInput, FRIENDS_TOOL_ORDER, FriendsToolWheel } from './FriendsToolControls';
 
 describe('Friends wheel tools', () => {
   it('cycles the displayed belt in either direction, including firearm and rope, with wraparound', () => {
     for (let i = 0; i < FRIENDS_TOOL_ORDER.length; i++) {
       expect(cycleFriendsTool(FRIENDS_TOOL_ORDER[i], 1)).toBe(FRIENDS_TOOL_ORDER[(i + 1) % FRIENDS_TOOL_ORDER.length]);
       expect(cycleFriendsTool(FRIENDS_TOOL_ORDER[i], -1)).toBe(FRIENDS_TOOL_ORDER[(i + FRIENDS_TOOL_ORDER.length - 1) % FRIENDS_TOOL_ORDER.length]);
+    }
+  });
+  it('keeps one shovel slot and maps secondary input to filling only for that tool', () => {
+    expect(FRIENDS_TOOL_ORDER).toEqual([1, 2, 3, 0, 5]);
+    expect(friendsToolInput(3, false, true)).toEqual({ fill: true, held: true });
+    expect(friendsToolInput(3, true, true)).toEqual({ fill: true, held: true });
+    expect(friendsToolInput(3, true, false)).toEqual({ fill: false, held: true });
+    expect(friendsToolInput(3, false, false)).toEqual({ fill: false, held: false });
+    for (const tool of [0, 1, 2, 5] as const) {
+      expect(friendsToolInput(tool, false, true)).toEqual({ fill: false, held: false });
     }
   });
   it('accepts consecutive mouse notches and immediate reversal', () => {

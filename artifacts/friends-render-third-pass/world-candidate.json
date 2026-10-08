@@ -1,0 +1,345 @@
+{
+  "date": "2026-10-08T16:43:03.761Z",
+  "origin": "http://localhost:3001",
+  "revision": "working-tree",
+  "errors": [],
+  "method": "Real Friends arena, Chromium Apple M1 Metal, 1600×900. Stationary island, DPR 2 island (3200×1800 drawing buffer), continuous ±0.2 radian camera pan; baseline selected by FRIENDS_PROFILE_REV. Same paused 9 AM clock and wind, camera and startup/settling per phase. Twelve seconds per phase; CPU submissions and asynchronous GPU timing. Menu omitted to isolate the arena.",
+  "phases": [
+    {
+      "phase": "island",
+      "frames": 167,
+      "cpu": {
+        "FriendsSimulation.tick": {
+          "mean": 2.7274261637579036,
+          "p50": 1.2999999523162842,
+          "p95": 8.300000071525574,
+          "max": 127.20000004768372
+        },
+        "FriendsVehicleVisuals.update": {
+          "mean": 0.920359282436485,
+          "p50": 0.5,
+          "p95": 2.100000023841858,
+          "max": 23.40000009536743
+        },
+        "FriendsScenicRailwayVisuals.update": {
+          "mean": 0.4688622744497425,
+          "p50": 0.20000004768371582,
+          "p95": 2.200000047683716,
+          "max": 7.599999904632568
+        },
+        "FriendsIslandVisuals.update": {
+          "mean": 0.07544910265300088,
+          "p50": 0,
+          "p95": 0.20000004768371582,
+          "max": 1.7000000476837158
+        },
+        "FriendsForestLOD.update": {
+          "mean": 0.019161676218409737,
+          "p50": 0,
+          "p95": 0.10000002384185791,
+          "max": 0.10000002384185791
+        },
+        "FriendsFrontierVisuals.update": {
+          "mean": 3.9838323314746695,
+          "p50": 2.5999999046325684,
+          "p95": 11.5,
+          "max": 20.700000047683716
+        },
+        "MultiplayerRendererBridge.render": {
+          "mean": 49.82634730253391,
+          "p50": 45.59999990463257,
+          "p95": 83.30000007152557,
+          "max": 143.19999992847443
+        }
+      },
+      "worldRenderCpu": {
+        "mean": 42.36706586726412,
+        "p50": 37.10000002384186,
+        "p95": 74.69999992847443,
+        "max": 114
+      },
+      "gpu": {
+        "mean": 58.44310680606061,
+        "p50": 61.064,
+        "p95": 74.244083,
+        "max": 82.178041
+      },
+      "drawCalls": {
+        "mean": 1047.3952095808384,
+        "p50": 1022,
+        "p95": 1229,
+        "max": 1447
+      },
+      "triangles": {
+        "mean": 5019526.239520958,
+        "p50": 4966950,
+        "p95": 5267380,
+        "max": 5363501
+      },
+      "stats": {
+        "drawCalls": 1026,
+        "triangles": 5018890,
+        "geometries": 550,
+        "textures": 95,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 1,
+          "terrain": {
+            "surfaceTiles": 58,
+            "surfaceBytes": 10511384,
+            "surfaceJobs": 0,
+            "volumeChunks": 79,
+            "volumeActive": 79,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "terrain": {
+        "surfaceTiles": 58,
+        "surfaceBytes": 10511384,
+        "surfaceJobs": 0,
+        "volumeChunks": 79,
+        "volumeActive": 79,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "forest": {
+        "trees": 3962,
+        "fallingTrees": 0,
+        "draws": 15,
+        "triangles": 4088226
+      }
+    },
+    {
+      "phase": "high-dpi",
+      "frames": 100,
+      "cpu": {
+        "FriendsVehicleVisuals.update": {
+          "mean": 2.4370000064373016,
+          "p50": 1.5,
+          "p95": 6.700000047683716,
+          "max": 13.700000047683716
+        },
+        "FriendsScenicRailwayVisuals.update": {
+          "mean": 0.4639999949932098,
+          "p50": 0.20000004768371582,
+          "p95": 2.1999999284744263,
+          "max": 5.299999952316284
+        },
+        "FriendsIslandVisuals.update": {
+          "mean": 0.11199999928474426,
+          "p50": 0.10000002384185791,
+          "p95": 0.20000004768371582,
+          "max": 2.299999952316284
+        },
+        "FriendsForestLOD.update": {
+          "mean": 0.028999998569488525,
+          "p50": 0,
+          "p95": 0.10000002384185791,
+          "max": 0.20000004768371582
+        },
+        "FriendsFrontierVisuals.update": {
+          "mean": 5.227000007629394,
+          "p50": 3.200000047683716,
+          "p95": 19.200000047683716,
+          "max": 41.60000002384186
+        },
+        "MultiplayerRendererBridge.render": {
+          "mean": 56.903999996185306,
+          "p50": 52.800000071525574,
+          "p95": 86.10000002384186,
+          "max": 260.60000002384186
+        },
+        "FriendsSimulation.tick": {
+          "mean": 2.2688524630226072,
+          "p50": 1.5,
+          "p95": 5.100000023841858,
+          "max": 67.79999995231628
+        }
+      },
+      "worldRenderCpu": {
+        "mean": 46.05400000095367,
+        "p50": 42.60000002384186,
+        "p95": 73.20000004768372,
+        "max": 196.70000004768372
+      },
+      "gpu": {
+        "mean": 119.55956212371136,
+        "p50": 117.480125,
+        "p95": 140.805499,
+        "max": 184.393375
+      },
+      "drawCalls": {
+        "mean": 1259.39,
+        "p50": 1265,
+        "p95": 1272,
+        "max": 1273
+      },
+      "triangles": {
+        "mean": 5308394.41,
+        "p50": 5310387,
+        "p95": 5353955,
+        "max": 5359649
+      },
+      "stats": {
+        "drawCalls": 1267,
+        "triangles": 5359733,
+        "geometries": 581,
+        "textures": 95,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 1,
+          "terrain": {
+            "surfaceTiles": 58,
+            "surfaceBytes": 10511384,
+            "surfaceJobs": 0,
+            "volumeChunks": 79,
+            "volumeActive": 79,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "terrain": {
+        "surfaceTiles": 58,
+        "surfaceBytes": 10511384,
+        "surfaceJobs": 0,
+        "volumeChunks": 79,
+        "volumeActive": 79,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "forest": {
+        "trees": 3962,
+        "fallingTrees": 0,
+        "draws": 15,
+        "triangles": 4129334
+      }
+    },
+    {
+      "phase": "pan",
+      "frames": 108,
+      "cpu": {
+        "FriendsVehicleVisuals.update": {
+          "mean": 2.2638888877850993,
+          "p50": 1.100000023841858,
+          "p95": 8.300000071525574,
+          "max": 17.40000009536743
+        },
+        "FriendsScenicRailwayVisuals.update": {
+          "mean": 0.33888889683617485,
+          "p50": 0.19999992847442627,
+          "p95": 0.8999999761581421,
+          "max": 5.800000071525574
+        },
+        "FriendsIslandVisuals.update": {
+          "mean": 0.06388888977192066,
+          "p50": 0.09999990463256836,
+          "p95": 0.19999992847442627,
+          "max": 0.3999999761581421
+        },
+        "FriendsForestLOD.update": {
+          "mean": 7.137962964949785,
+          "p50": 6.300000071525574,
+          "p95": 13.700000047683716,
+          "max": 30.700000047683716
+        },
+        "FriendsFrontierVisuals.update": {
+          "mean": 11.22592591908243,
+          "p50": 9.899999976158142,
+          "p95": 19.899999976158142,
+          "max": 43.59999990463257
+        },
+        "MultiplayerRendererBridge.render": {
+          "mean": 56.27592592327683,
+          "p50": 51.299999952316284,
+          "p95": 81.60000002384186,
+          "max": 241
+        },
+        "FriendsSimulation.tick": {
+          "mean": 2.4205479478182856,
+          "p50": 1.3000000715255737,
+          "p95": 6,
+          "max": 119.20000004768372
+        }
+      },
+      "worldRenderCpu": {
+        "mean": 40.50092592835426,
+        "p50": 37.39999997615814,
+        "p95": 68.39999997615814,
+        "max": 142
+      },
+      "gpu": {
+        "mean": 77.29227386792448,
+        "p50": 76.428041,
+        "p95": 90.199499,
+        "max": 96.178791
+      },
+      "drawCalls": {
+        "mean": 1239.7685185185185,
+        "p50": 1258,
+        "p95": 1309,
+        "max": 1310
+      },
+      "triangles": {
+        "mean": 5355106.824074074,
+        "p50": 5378079,
+        "p95": 5475229,
+        "max": 5483883
+      },
+      "stats": {
+        "drawCalls": 1259,
+        "triangles": 5433339,
+        "geometries": 617,
+        "textures": 95,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 1,
+          "terrain": {
+            "surfaceTiles": 58,
+            "surfaceBytes": 10511384,
+            "surfaceJobs": 0,
+            "volumeChunks": 79,
+            "volumeActive": 79,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "terrain": {
+        "surfaceTiles": 58,
+        "surfaceBytes": 10511384,
+        "surfaceJobs": 0,
+        "volumeChunks": 79,
+        "volumeActive": 79,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "forest": {
+        "trees": 3953,
+        "fallingTrees": 0,
+        "draws": 15,
+        "triangles": 4072072
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "origin": "http://localhost:3000",
+  "checks": [
+    "one Shovel slot; Earthwork removed",
+    "right mouse alone fills against stone with no zoom, including artifact slot selected",
+    "right mouse release stops placement",
+    "left mouse digs the filled soil once and awards one soil",
+    "opening the atlas cancels a held shovel fill before contact",
+    "Combat is 4, Rope is 5, wheel wraps to Axe",
+    "right mouse still zooms with Pickaxe",
+    "no browser runtime errors"
+  ],
+  "errors": []
+}

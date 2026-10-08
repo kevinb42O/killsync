@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { FriendsCaveVisuals } from './FriendsCaveVisuals';
-import { CAVE_ROOMS } from '../world/FriendsCave';
+import { CAVE_ROOMS, CAVE_TORCHES } from '../world/FriendsCave';
 import type { FriendsTerrain } from '../world/FriendsTerrain';
 
 describe('cave entrances retain the exterior sky', () => {
   it('initializes the persistent shadow sampler before the first exterior draw', () => {
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
-    camera.position.set(5904, 762, 5712);
+    camera.position.set(24000, 762, 24000);
     const terrain = { floor: () => 640, revision: 0 } as unknown as FriendsTerrain;
     const renderer = { shadowMap: { needsUpdate: false } } as THREE.WebGLRenderer;
     const cave = new FriendsCaveVisuals(scene, camera, terrain, renderer);
@@ -18,6 +18,36 @@ describe('cave entrances retain the exterior sky', () => {
     expect(lights.filter(light => light.castShadow)).toHaveLength(1);
     expect(lights.find(light => light.castShadow)!.shadow.needsUpdate).toBe(true);
     expect(renderer.shadowMap.needsUpdate).toBe(true);
+    cave.dispose();
+  });
+  it('lights nearby torches from outside and gives the open shaft daylight materials', () => {
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
+    const terrain={floor:()=>640,revision:0} as unknown as FriendsTerrain;
+    const renderer={shadowMap:{needsUpdate:false}} as THREE.WebGLRenderer;
+    const cave=new FriendsCaveVisuals(scene,camera,terrain,renderer);
+    const torch=CAVE_TORCHES.find(t=>t.x===6256)!;
+    camera.position.set(torch.x,torch.z+100,torch.y);
+    // Above the cave classification height, but close to a lit shaft torch.
+    camera.position.y=Math.max(600,camera.position.y);
+    const lights:THREE.PointLight[]=[];
+    cave.traverse(o=>{if(o instanceof THREE.PointLight)lights.push(o);});
+    expect(cave.update(0)).toBe(false);
+    expect(lights.some(light=>light.intensity>0)).toBe(true);
+    const shadow=lights.find(light=>light.castShadow)!.shadow;
+    shadow.needsUpdate=false;renderer.shadowMap.needsUpdate=false;
+    cave.update(.1);expect(shadow.needsUpdate).toBe(false);
+    // Newly streamed walls must enter the cached torch shadow as well.
+    cave.invalidateShadows();cave.update(.2);
+    expect(shadow.needsUpdate).toBe(true);expect(renderer.shadowMap.needsUpdate).toBe(true);
+    for(const part of ['posts','bowls']){
+      const open=cave.getObjectByName(`open-cave-torch-${part}`) as THREE.InstancedMesh;
+      const enclosed=cave.getObjectByName(`enclosed-cave-torch-${part}`) as THREE.InstancedMesh;
+      expect(open.count).toBeGreaterThan(0);expect(enclosed.count).toBeGreaterThan(0);
+      expect((open.material as THREE.Material).userData.frontierCaveLighting).toBeUndefined();
+      expect((enclosed.material as THREE.Material).userData.frontierCaveLighting).toBe(true);
+    }
+    camera.position.set(24000,600,24000);cave.update(1);
+    expect(lights.every(light=>light.visible&&light.intensity===0)).toBe(true);
     cave.dispose();
   });
   it('preserves the live background when entering authored caves and mined tunnels', () => {

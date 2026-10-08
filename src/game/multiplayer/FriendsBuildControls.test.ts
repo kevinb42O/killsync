@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assignBuildSlot, BUILD_TOOLBAR_KEY, BuildWheelGesture, DEFAULT_BUILD_TOOLBAR, filterBuildLibrary, readBuildToolbar, saveBuildToolbar } from './FriendsBuildControls';
+import { assignBuildSlot, BUILD_TOOLBAR_KEY, BuildWheelGesture, cycleBuildToolbar, DEFAULT_BUILD_TOOLBAR, filterBuildLibrary, readBuildToolbar, saveBuildToolbar } from './FriendsBuildControls';
 
 const wheel = (deltaY: number, extra = {}) => ({ deltaY, deltaX: 0, deltaMode: 0, ...extra });
 afterEach(() => vi.unstubAllGlobals());
@@ -35,6 +35,15 @@ describe('deliberate construction controls', () => {
     expect(toolbar[0]).toBe('rail_curve'); expect(toolbar[7]).toBe('block');
     expect(new Set(toolbar).size).toBe(8); expect(DEFAULT_BUILD_TOOLBAR[0]).toBe('block');
     expect(assignBuildSlot(toolbar, 8, 'bench')).toEqual(toolbar);
+  });
+  it('cycles the saved slot order, wraps both ways and rejoins from an unpinned library piece', () => {
+    const toolbar = assignBuildSlot(DEFAULT_BUILD_TOOLBAR, 4, 'bench');
+    expect(cycleBuildToolbar(toolbar, toolbar[7], 1)).toBe(toolbar[0]);
+    expect(cycleBuildToolbar(toolbar, toolbar[0], -1)).toBe(toolbar[7]);
+    expect(cycleBuildToolbar(toolbar, toolbar[3], 1)).toBe('bench');
+    expect(cycleBuildToolbar(toolbar, 'table', 1)).toBe(toolbar[0]);
+    expect(cycleBuildToolbar(toolbar, 'table', -1)).toBe(toolbar[7]);
+    expect(cycleBuildToolbar(toolbar, 'table', 0)).toBe('table');
   });
   it('remembers a customized toolbar and recovers from corrupt storage', () => {
     const values = new Map<string, string>();

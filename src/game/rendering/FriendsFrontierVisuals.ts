@@ -1,22 +1,29 @@
+import { FriendsTerrainEditFeedback } from './FriendsTerrainEditFeedback';
+import type { ToolAction } from '../multiplayer/FriendsToolActions';
+import { FriendsToolViewmodels } from './FriendsToolViewmodels';
 import { FriendsDayNightCycle, type FrontierCelestialLighting } from './FriendsDayNightCycle';
 import { FriendsEnvironmentPreview, type FriendsEnvironmentChange } from '../world/FriendsEnvironmentPreview';
 import { islandBiomeTexture, ISLAND_BIOME_GLSL } from './FriendsIslandBiomes';
 import { createIslandOcean, FriendsIslandOcean, createIslandRuinMaterials, FriendsIslandVisuals } from './FriendsIslandVisuals';
 import { applyFriendsCaveLighting } from './FriendsCaveLighting';
 import { FriendsFlashlight, FRIENDS_FLASHLIGHT_RANGE } from './FriendsFlashlight';
+import { FRIENDS_NIGHT_VISION_RANGE } from './FriendsVision';
 import { FriendsTreasureVisuals } from './FriendsTreasureVisuals';
 import { FriendsCaveVisuals } from './FriendsCaveVisuals';
 import * as THREE from 'three';
 import { FriendsTerrain, FRONTIER_SIZE, FRONTIER_SITES, frontierSiteElevation, terrainHash } from '../world/FriendsTerrain';
 import { meshTerrainChunk, type TerrainMeshData } from '../world/FriendsTerrainMesh';
 import { frontierTrees, type FrontierSnapshot, type FrontierTool } from '../multiplayer/FriendsFrontier';
-import { addFriendsAssetInstances, loadFriendsAsset, fitFriendsAsset, type FriendsAssetId } from './FriendsAssets';
+import { addFriendsAssetInstances } from './FriendsAssets';
 import { FOREST_DETAIL_END, FriendsForestLOD } from './FriendsForestLOD';
 import { FriendsBlockHorizon } from './FriendsBlockHorizon';
 import { FriendsBlockSurface } from './FriendsBlockSurface';
 import { islandArchRange } from '../world/FriendsIsland';
 import { VOLUME_RETAIN, distanceToTerrainTile, volumeChunksAround } from './FriendsTerrainStreaming';
 import { FriendsClouds } from './FriendsClouds';
+import { FriendsBirds } from './FriendsBirds';
+import { FriendsCampfire } from './FriendsCampfire';
+import type { CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
 import { configureTerrainCoverage } from './FriendsTerrainCoverage';
 import { FRIENDS_TERRAIN_SURFACES } from '../world/FriendsTerrainAppearance';
 
@@ -69,6 +76,9 @@ export class FriendsFrontierVisuals {
   private groves = new Map<string, THREE.Group>();
   private dirty = new Set<string>();
   private previousEdits = new Map<string, number>();
+  private editQueuedAt = new Map<string,number>();
+  private meshLatencies:number[]=[];
+  private editFeedback:FriendsTerrainEditFeedback;
   private editedTiles = new Set<string>();
   private desired = new Set<string>();
   private pending = new Set<string>();
@@ -100,10 +110,15 @@ export class FriendsFrontierVisuals {
   private cave: FriendsCaveVisuals;
   private flashlight: FriendsFlashlight;
   private treasures = new FriendsTreasureVisuals();
-  private tool = new THREE.Group();
-  private toolId = -1;
+  private tools: FriendsToolViewmodels;
+  private cosmeticFalls=true;
+  setEffects(profile:'full'|'subtle'|'off'){this.cosmeticFalls=profile!=='off';}
+  setToolAction(action: ToolAction | undefined, now: number) { this.tools.setAction(action,now); }
   private atmosphere: FriendsDayNightCycle;
   private environmentPreview=new FriendsEnvironmentPreview();
+  private audioUnderground=false;
+  private birds=new FriendsBirds();
+  private campfire:FriendsCampfire;
   constructor(private scene: THREE.Scene, private viewmodel: THREE.Scene, renderer: THREE.WebGLRenderer, private camera: THREE.PerspectiveCamera, lighting?: FrontierCelestialLighting) {
     const lights = lighting ?? {
       sun: scene.children.find(o=>o instanceof THREE.DirectionalLight) as THREE.DirectionalLight,
@@ -111,7 +126,9 @@ export class FriendsFrontierVisuals {
       fill: scene.children.find(o=>o instanceof THREE.HemisphereLight) as THREE.HemisphereLight,
     };
     this.atmosphere = new FriendsDayNightCycle(scene, renderer, camera, lights);
-    this.group.name = 'frontier-streamed-world'; scene.add(this.group); (viewmodel.getObjectByProperty('type', 'PerspectiveCamera') || viewmodel).add(this.tool);
+    this.campfire=new FriendsCampfire(scene);
+    this.group.name = 'frontier-streamed-world'; scene.add(this.group); this.tools = new FriendsToolViewmodels(viewmodel);
+    this.group.add(this.birds.mesh);
     this.cave=new FriendsCaveVisuals(scene,camera,this.terrain,renderer);this.group.add(this.cave,this.treasures);
     this.flashlight=new FriendsFlashlight(scene,viewmodel,camera,renderer);
     for(const source of this.materials.slice()){const m=source.clone(),decorate=source.onBeforeCompile;m.customProgramCacheKey=()=> 'frontier-underground';m.color.set('#909b99');m.roughness=.68;m.onBeforeCompile=(shader,renderer)=>{decorate(shader,renderer);shader.fragmentShader=shader.fragmentShader.replace(ISLAND_BIOME_GLSL.slice(ISLAND_BIOME_GLSL.indexOf('  vec4 islandClimate')),'');shader.vertexShader='attribute vec3 caveGlow;varying vec3 caveRadiance;\n'+shader.vertexShader.replace('#include <color_vertex>','#include <color_vertex>\ncaveRadiance=caveGlow;');shader.fragmentShader='varying vec3 caveRadiance;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=caveRadiance*diffuseColor.rgb;');};applyFriendsCaveLighting(m);this.materials.push(m);}
@@ -122,6 +139,7 @@ export class FriendsFrontierVisuals {
     this.fineCoverage.magFilter = this.fineCoverage.minFilter = THREE.NearestFilter; this.fineCoverage.needsUpdate = true;
     this.blockCoverage.magFilter=this.blockCoverage.minFilter=THREE.NearestFilter;this.blockCoverage.needsUpdate=true;
     this.blockMaterial=this.farMaterial.clone();this.blockMaterial.onBeforeCompile=this.farMaterial.onBeforeCompile;this.blockMaterial.customProgramCacheKey=this.farMaterial.customProgramCacheKey;
+    this.editFeedback=new FriendsTerrainEditFeedback(this.group,this.materials);
     const blockMask={texture:this.blockCoverage,altitude:this.blockAltitude};
     configureTerrainCoverage(this.farMaterial,this.fineCoverage,this.fineGrid,'horizon',blockMask);
     configureTerrainCoverage(this.blockMaterial,this.fineCoverage,this.fineGrid,'surface',blockMask);
@@ -129,7 +147,7 @@ export class FriendsFrontierVisuals {
     for(const material of this.materials)configureTerrainCoverage(material,this.fineCoverage,this.fineGrid,'near');
     this.far = new FriendsBlockHorizon(this.farMaterial, 5900, 5630); this.group.add(this.far);
     this.clouds = new FriendsClouds(renderer); this.group.add(this.clouds);
-    for(const material of [...this.materials,this.farMaterial,this.blockMaterial])this.clouds.shade(material);
+    for(const material of [...this.materials,this.farMaterial,this.blockMaterial]){this.clouds.shade(material);this.editFeedback.mask(material);}
     this.island.traverse(o=>{if(o instanceof THREE.Mesh)for(const m of Array.isArray(o.material)?o.material:[o.material])if(m instanceof THREE.MeshStandardMaterial)this.clouds.shade(m);});
     this.coast=createIslandOcean();this.group.add(this.coast);
     this.clouds.setAtmosphere(this.atmosphere);
@@ -157,27 +175,33 @@ export class FriendsFrontierVisuals {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3)); g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3,true)); g.setAttribute('uv', new THREE.BufferAttribute(data.uv, 2)); g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3,true));g.setAttribute('caveGlow',new THREE.BufferAttribute(data.glow,3)); for (const group of data.groups) g.addGroup(group.start, group.count, group.materialIndex);
     g.computeBoundingSphere(); const mesh = new THREE.Mesh(g, this.materials); mesh.position.set(cx * 512, 0, cy * 512); mesh.receiveShadow = true; mesh.castShadow = true; this.group.add(mesh); this.chunks.set(key, mesh); this.dirty.delete(key); this.fineData[cy*this.fineGrid+cx]=255; this.fineCoverage.needsUpdate=true;
     this.volumeBytes.set(key,data.positions.byteLength+data.normals.byteLength+data.uv.byteLength+data.colors.byteLength+data.glow.byteLength);
+    const queued=this.editQueuedAt.get(key);if(queued!==undefined){this.meshLatencies.push(performance.now()-queued);if(this.meshLatencies.length>128)this.meshLatencies.shift();this.editQueuedAt.delete(key);}
+    this.editFeedback.installed(cx,cy);this.editFeedback.refresh(this.terrain);
+    this.cave.invalidateShadows();
   }
-  update(f: FrontierSnapshot | undefined, x: number, y: number, elapsed: number, tool: FrontierTool, firing = false, openedTreasures: readonly string[] = [], worldElapsedMs = elapsed) {
-    this.group.visible = Boolean(f); this.tool.visible = Boolean(f && tool);
+  update(f: FrontierSnapshot | undefined, x: number, y: number, elapsed: number, tool: FrontierTool, firing = false, openedTreasures: readonly string[] = [], worldElapsedMs = elapsed, flashlightAvailable=true) {
+    this.group.visible = Boolean(f); this.tools.update(tool,elapsed,firing,Boolean(f && f.upgrades>0),Boolean(f));
     this.atmosphere.sky.visible = Boolean(f);
     this.atmosphere.moon.visible = Boolean(f);
-    this.flashlight.update(elapsed/1000,Boolean(f));
-    if (!f) return;
+    this.flashlight.update(elapsed/1000,Boolean(f)&&flashlightAvailable);
+    if (!f) {this.campfire.update(elapsed/1000,this.camera,this.atmosphere.state.daylight,false);return;}
     this.treasures.update(openedTreasures,this.camera,elapsed/1000);
     this.atmosphere.update(this.environmentPreview.time(worldElapsedMs,elapsed),elapsed);
+    this.campfire.update(elapsed/1000,this.camera,this.atmosphere.state.daylight);
     this.far.update(); this.island.update(elapsed/1000,this.camera.position);this.clouds.update(this.environmentPreview.windSeconds,elapsed/1000,this.camera);
     this.coast.update(elapsed/1000,this.camera.position);
     if (f.terrain.revision !== this.revision) {
       const gradeStamp=JSON.stringify(f.terrain.grades || []);if(gradeStamp!==this.gradeStamp){this.far.setGrades(f.terrain.grades);this.surface.setGrades(f.terrain.grades);this.gradeStamp=gradeStamp;for(const key of this.chunks.keys())this.dirty.add(key);for(const key of this.groves.keys())this.vegetationDirty.add(key);
         for(const g of [...this.terrain.snapshot().grades || [],...f.terrain.grades || []]){const r=g[3]+320;for(let a=Math.floor((g[0]-r)/512);a<=Math.floor((g[0]+r)/512);a++)for(let b=Math.floor((g[1]-r)/512);b<=Math.floor((g[1]+r)/512);b++)this.vegetationDirty.add(`${a},${b}`);}}
-      this.terrain.restore(f.terrain); this.revision = f.terrain.revision; this.epoch++;
+      if(this.revision>=0)for(const e of f.terrain.edits){const key=e.slice(0,3).join(',');if(e[3]===0&&this.previousEdits.get(key)!==0&&this.terrain.exposedMaterial(e[0],e[1],e[2]))this.editFeedback.add(e[0],e[1],e[2]);}
+      this.terrain.restore(f.terrain);this.editFeedback.refresh(this.terrain); this.revision = f.terrain.revision; this.epoch++;
       this.pending.clear();this.completed=[];
       this.worker?.postMessage({ snapshot: f.terrain, epoch: this.epoch });
       const nextEdits = new Map(f.terrain.edits.map(e => [e.slice(0, 3).join(','), e[3]]));
       for (const k of new Set([...nextEdits.keys(), ...this.previousEdits.keys()])) if (nextEdits.get(k) !== this.previousEdits.get(k)) {
         const [vx, vy] = k.split(',').map(Number), a = Math.floor(vx / 16), b = Math.floor(vy / 16);
-        for (const [dx, dy] of [[0,0],[-1,0],[1,0],[0,-1],[0,1]]) this.dirty.add(`${a+dx},${b+dy}`);
+        const neighbors=[[0,0]];if(vx%16===0)neighbors.push([-1,0]);if(vx%16===15)neighbors.push([1,0]);if(vy%16===0)neighbors.push([0,-1]);if(vy%16===15)neighbors.push([0,1]);
+        for (const [dx, dy] of neighbors) {const key=`${a+dx},${b+dy}`;this.dirty.add(key);if(this.previousEdits.size||this.chunks.has(key))this.editQueuedAt.set(key,performance.now());}
       }
       for (const k of this.dirty) this.vegetationDirty.add(k);
       this.editedTiles=new Set([...nextEdits.keys()].map(k=>{const [vx,vy]=k.split(',').map(Number);return `${Math.floor(vx/16)},${Math.floor(vy/16)}`;}));
@@ -189,6 +213,9 @@ export class FriendsFrontierVisuals {
     // Keep the exterior visible through entrances; solid cave/roof geometry
     // determines occlusion rather than the camera's underground classification.
     const underground=this.cave.update(elapsed/1000,minedUnderground,this.atmosphere.horizon);
+    this.audioUnderground=underground;
+    this.birds.update(f,this.camera.position,elapsed/1000,this.environmentPreview.state.daylight,underground,
+      tree=>this.terrain.supports(tree.x,tree.y,tree.z),tree=>this.forestLOD.canopyHeight(tree));
     const altitude=Math.max(0,this.camera.position.y-this.terrain.surfaceHeight(viewX,viewY));
     this.blockAltitude.value=1-THREE.MathUtils.smoothstep(altitude,4096,8192);
     this.surface.update(viewX,viewY,elapsed/1000,this.blockAltitude.value>0);
@@ -201,7 +228,7 @@ export class FriendsFrontierVisuals {
       if(hit)excavation={x:hit.x,y:hit.y};
     }
     const planStamp=`${Math.floor(viewX/256)},${Math.floor(viewY/256)}:${this.revision}:${underground}:${excavation?`${Math.floor(excavation.x/512)},${Math.floor(excavation.y/512)}`:''}`;
-    if(planStamp!==this.volumePlanStamp){this.volumePlanStamp=planStamp;this.desired=volumeChunksAround(viewX,viewY,this.editedTiles,underground,FRIENDS_FLASHLIGHT_RANGE,excavation);}
+    if(planStamp!==this.volumePlanStamp){this.volumePlanStamp=planStamp;this.desired=volumeChunksAround(viewX,viewY,this.editedTiles,underground,Math.max(FRIENDS_FLASHLIGHT_RANGE,FRIENDS_NIGHT_VISION_RANGE),excavation);}
     // Upload only current results. The exterior shell stays in place until a
     // complete authoritative volume is ready, so opening a pit creates no hole.
     for(let i=0;i<2&&this.completed.length;i++){
@@ -240,7 +267,7 @@ export class FriendsFrontierVisuals {
       for (const [key, grove] of this.groves) if (this.vegetationDirty.has(key) || (grove.userData.treeIds as string[]).some(id => harvested.has(id) || id.startsWith('planted:')&&!f.planted.some(t=>t.id===id))) { disposeGroup(grove); this.groves.delete(key); }
       this.knownPlanted = new Set(f.planted.map(t => t.id)); this.vegetationStamp = stamp;
     }
-    this.forestLOD.update(f, tree=>this.terrain.supports(tree.x,tree.y,tree.z),this.vegetationDirty,this.camera);
+    this.forestLOD.update(f, tree=>this.terrain.supports(tree.x,tree.y,tree.z),this.vegetationDirty,this.camera,true,elapsed,this.cosmeticFalls);
     this.vegetationDirty.clear();
     for(const [key,grove] of this.groves){
       const [a,b]=key.split(',').map(Number);
@@ -264,11 +291,10 @@ export class FriendsFrontierVisuals {
       grove.visible=distance<FOREST_DETAIL_END+500;
       grove.traverse(o=>{if(o instanceof THREE.InstancedMesh)o.castShadow=distance<1000;});
     }
-    this.updateTool(tool, elapsed, firing, f.upgrades>0);
   }
   get forestStats(){return this.forestLOD.stats;}
   get cloudStats(){return this.clouds.stats;}
-  get terrainStats(){return {...this.surface.stats,volumeChunks:this.chunks.size,volumeActive:[...this.chunks.values()].filter(m=>m.visible).length,volumeJobs:this.pending.size+this.completed.length};}
+  get terrainStats(){return {...this.surface.stats,...this.editFeedback.stats,volumeChunks:this.chunks.size,volumeActive:[...this.chunks.values()].filter(m=>m.visible).length,volumeJobs:this.pending.size+this.completed.length,editMeshLatencyP95:this.meshLatencies.length?[...this.meshLatencies].sort((a,b)=>a-b)[Math.floor((this.meshLatencies.length-1)*.95)]:0,editMeshSamples:this.meshLatencies.length};}
   arrivalReadiness(x:number,y:number){
     const cx=Math.floor(x/512),cy=Math.floor(y/512);
     const ground=Boolean(this.fineData[cy*this.fineGrid+cx] || this.blockData[cy*this.fineGrid+cx]);
@@ -281,31 +307,24 @@ export class FriendsFrontierVisuals {
     return {ready:ground&&loaded===total&&this.forestLOD.arrivalReady,progress:(Number(ground)+loaded/Math.max(1,total)+Number(this.forestLOD.arrivalReady))/3};
   }
   get flashlightEquipped(){return this.flashlight.equipped;}
+  get flashlightShining(){return this.flashlight.shining;}
+  get flashlightAngle(){return this.flashlight.beamAngle;}
+  setCampfireState(state:CampfireSnapshot|undefined){this.campfire.setState(state);}
+  hideHeldTool(){this.tools.hide();}
+  setCraneCameraLight(enabled:boolean) {this.flashlight.setMonitor(enabled);}
+  syncFlashlightWithCamera() { this.flashlight.syncWithCamera(); }
   get environmentState(){return this.environmentPreview.state;}
+  get soundscapeEnvironment(){return { ...this.environmentPreview.state, windSeconds:this.environmentPreview.windSeconds, underground:this.audioUnderground };}
+  birdCallSource(yaw:number){return this.birds.closestCall(this.camera.position,yaw,this.environmentPreview.state.daylight);}
   setEnvironment(change:FriendsEnvironmentChange){this.environmentPreview.change(change);}
   toggleFlashlight() { this.flashlight.toggle(); }
-  private updateTool(id: FrontierTool, elapsed: number, firing: boolean, upgraded: boolean) {
-    const variant=id+(upgraded?10:0);
-    if (variant !== this.toolId) {
-      for(const child of [...this.tool.children]){if(child instanceof THREE.Group)disposeGroup(child);else child.removeFromParent();}
-      this.toolId = variant;
-      this.tool.add(new THREE.HemisphereLight(0xffeed0, 0x3d4b46, 2));
-      const owner=new THREE.Group();this.tool.add(owner);
-      const modelId:FriendsAssetId=id===1?(upgraded?'toolAxeUpgraded':'toolAxe'):id===2?(upgraded?'toolPickaxeUpgraded':'toolPickaxe'):(upgraded?'toolShovelUpgraded':'toolShovel');
-      if(id)void loadFriendsAsset(modelId).then(source=>{
-        if(owner.userData.disposed)return;
-        const model=fitFriendsAsset(source,{x:.46,y:.82,z:.22},0,'contain');model.rotation.y=-Math.PI/2;model.position.y=-.34;owner.add(model);
-      });
-    }
-    const swing = firing ? Math.sin(elapsed / 48) * .45 : Math.sin(elapsed / 1200) * .02;
-    this.tool.position.set(.28, -.25 - Math.max(0, swing) * .12, -.7); this.tool.rotation.set(-.2 + swing, .2, -.35 + swing * .4);
-  }
   dispose() {
-    this.worker?.terminate();this.completed=[];this.surface.dispose();this.blockMaterial.dispose();this.blockCoverage.dispose(); islandBiomeTexture().dispose(); this.forestLOD.dispose();this.fineCoverage.dispose(); for (const mesh of this.chunks.values()) mesh.geometry.dispose(); for (const grove of this.groves.values()) disposeGroup(grove);
+    this.campfire.dispose();
+    this.birds.dispose();
+    this.editFeedback.dispose();this.worker?.terminate();this.completed=[];this.surface.dispose();this.blockMaterial.dispose();this.blockCoverage.dispose(); islandBiomeTexture().dispose(); this.forestLOD.dispose();this.fineCoverage.dispose(); for (const mesh of this.chunks.values()) mesh.geometry.dispose(); for (const grove of this.groves.values()) disposeGroup(grove);
     for (const landmark of [...this.group.children].filter(o => o.userData.landmark)) disposeGroup(landmark as THREE.Group);
-    this.group.removeFromParent(); this.tool.removeFromParent(); this.far.dispose(); this.clouds.release();this.cave.dispose();this.flashlight.dispose();this.treasures.dispose();this.island.dispose();
+    this.group.removeFromParent(); this.tools.dispose(); this.far.dispose(); this.clouds.release();this.cave.dispose();this.flashlight.dispose();this.treasures.dispose();this.island.dispose();
     for (const m of [...this.materials, this.farMaterial]) { m.map?.dispose(); m.normalMap?.dispose(); m.roughnessMap?.dispose();if(m.userData.alpineRock instanceof THREE.Texture)m.userData.alpineRock.dispose(); m.dispose(); }
     this.coast.dispose(); this.atmosphere.dispose();
-    for(const child of [...this.tool.children])if(child instanceof THREE.Group)disposeGroup(child);
   }
 }

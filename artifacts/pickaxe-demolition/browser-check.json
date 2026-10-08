@@ -1,0 +1,114 @@
+{
+  "origin": "http://localhost:3000",
+  "errors": [],
+  "checks": [
+    "production mouse/keyboard input damages player-built timber cube",
+    "piece survives partial work and breaks at four contacts",
+    "no browser runtime or shader errors"
+  ],
+  "partial": {
+    "damage": {
+      "value": 1,
+      "total": 4
+    },
+    "pieceExists": true,
+    "effects": {
+      "fragments": 4,
+      "crackFaces": 1,
+      "draws": 3,
+      "terrain": {
+        "surfaceTiles": 1,
+        "surfaceBytes": 332800,
+        "surfaceJobs": 2,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 110,
+        "volumeActive": 22,
+        "volumeJobs": 2,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      }
+    }
+  },
+  "completed": {
+    "contacts": [
+      {
+        "id": "build:1",
+        "value": 1,
+        "total": 4,
+        "until": 8633.33333333331,
+        "by": "friend-a2c3937fd67d75aeef98c7e4df5689ce",
+        "kind": "stone",
+        "x": 8016,
+        "y": 8016,
+        "z": 26.001349923691734,
+        "nx": -1,
+        "ny": 0,
+        "nz": 0,
+        "pieceId": 1,
+        "pieceRevision": 2,
+        "at": 7533.333333333309,
+        "serial": 2,
+        "broken": false
+      },
+      {
+        "id": "build:1",
+        "value": 2,
+        "total": 4,
+        "until": 8899.999999999975,
+        "by": "friend-a2c3937fd67d75aeef98c7e4df5689ce",
+        "kind": "stone",
+        "x": 8016,
+        "y": 8016,
+        "z": 26.001349923691734,
+        "nx": -1,
+        "ny": 0,
+        "nz": 0,
+        "pieceId": 1,
+        "pieceRevision": 2,
+        "at": 7799.999999999974,
+        "serial": 3,
+        "broken": false
+      },
+      {
+        "id": "build:1",
+        "value": 3,
+        "total": 4,
+        "until": 9166.666666666639,
+        "by": "friend-a2c3937fd67d75aeef98c7e4df5689ce",
+        "kind": "stone",
+        "x": 8016,
+        "y": 8016,
+        "z": 26.001349923691734,
+        "nx": -1,
+        "ny": 0,
+        "nz": 0,
+        "pieceId": 1,
+        "pieceRevision": 2,
+        "at": 8066.666666666638,
+        "serial": 4,
+        "broken": false
+      },
+      {
+        "id": "build:1",
+        "value": 4,
+        "total": 4,
+        "until": 9433.333333333307,
+        "by": "friend-a2c3937fd67d75aeef98c7e4df5689ce",
+        "kind": "stone",
+        "x": 8016,
+        "y": 8016,
+        "z": 26.001349923691734,
+        "nx": -1,
+        "ny": 0,
+        "nz": 0,
+        "pieceId": 1,
+        "pieceRevision": 2,
+        "at": 8333.333333333307,
+        "serial": 5,
+        "broken": true
+      }
+    ],
+    "pieceExists": false
+  }
+}

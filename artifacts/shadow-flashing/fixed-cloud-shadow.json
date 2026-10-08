@@ -1,0 +1,334 @@
+{
+  "origin": "http://localhost:3000",
+  "baseline": false,
+  "errors": [],
+  "frames": [
+    {
+      "frame": 0,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 1,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 2,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 3,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 4,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 5,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 6,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 7,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 8,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 9,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 10,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 11,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 12,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 13,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 14,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 15,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 16,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 17,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 18,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 19,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 20,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 21,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 22,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 23,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 24,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 25,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 26,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 27,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 28,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 29,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 30,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 31,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 32,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 33,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 34,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 35,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 36,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 37,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 38,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 39,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 40,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 41,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 42,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 43,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 44,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 45,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 46,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 47,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 48,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 49,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 50,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 51,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 52,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 53,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 54,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 55,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 56,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 57,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 58,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 59,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 60,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 61,
+      "yaw": 0,
+      "brightness": 62
+    },
+    {
+      "frame": 62,
+      "yaw": 0.08,
+      "brightness": 62
+    },
+    {
+      "frame": 63,
+      "yaw": 0.08,
+      "brightness": 62
+    }
+  ],
+  "min": 62,
+  "max": 62,
+  "webglError": 0,
+  "range": 0,
+  "shaderErrors": 0,
+  "fillOnly": 33,
+  "fillWithoutCloud": 33
+}

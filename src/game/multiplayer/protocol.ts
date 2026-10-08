@@ -6,10 +6,10 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v45 adds Grand Traverse passenger seating and inclined train poses, alongside cargo orientation and rope bends. Incrementing this makes
+/** v50 merges Earthwork into Shovel secondary input and removes tool id 4. Incrementing this makes
  * a stale tab fail the handshake cleanly instead of silently misreading the
  * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 46;
+export const MULTIPLAYER_PROTOCOL_VERSION = 50;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
@@ -31,7 +31,12 @@ export interface MultiplayerInputFrame {
   aimAngle: number;
   /** Quantized camera pitch. Zero is the lowest valid look angle. */
   aimPitch: number;
-  friendsTool?: 0 | 1 | 2 | 3 | 4 | 5;
+  friendsTool?: 0 | 1 | 2 | 3 | 5;
+  /** Held state travels with normal input; no toggle edges can be lost. */
+  friendsFlashlight?: boolean;
+  /** Spotlight half-angle quantized over 0..PI/2, in one byte. */
+  friendsFlashlightCone?: number;
+  friendsWorkPlane?: {axis:0|1|2;value:number};
   /** Temporary C-toggle for unrestricted flight; only Friends accepts it. */
   friendsDevFlight?: boolean;
   friendsDevFlightDown?: boolean;
@@ -47,7 +52,7 @@ export interface MultiplayerInputFrame {
   grenadeActionId?: number;
   /** Edge-triggered reload request, consumed by the authoritative host. */
   reloadPressed?: boolean;
-  /** Held right-mouse aim state; spread is validated by the host. */
+  /** Held secondary input: Shovel fills soil; other tools aim. The host validates both. */
   aiming?: boolean;
   sprinting: boolean;
   sliding: boolean;
@@ -204,7 +209,10 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   movement: boundedInteger(frame.movement, 15),
   aimAngle: boundedInteger(frame.aimAngle, 65535),
   aimPitch: boundedInteger(frame.aimPitch, 65535),
-  friendsTool: boundedInteger(frame.friendsTool, 5) as 0 | 1 | 2 | 3 | 4 | 5,
+  friendsTool: (boundedInteger(frame.friendsTool, 5) === 4 ? 0 : boundedInteger(frame.friendsTool, 5)) as 0 | 1 | 2 | 3 | 5,
+  friendsFlashlight: frame.friendsFlashlight === true ? true : undefined,
+  friendsFlashlightCone: frame.friendsFlashlight === true ? boundedInteger(frame.friendsFlashlightCone, 255) : undefined,
+  friendsWorkPlane: frame.friendsWorkPlane && [0,1,2].includes(frame.friendsWorkPlane.axis) && Number.isFinite(frame.friendsWorkPlane.value) && frame.friendsWorkPlane.value>=-512 && frame.friendsWorkPlane.value<=48000 ? {axis:frame.friendsWorkPlane.axis,value:Math.round(frame.friendsWorkPlane.value/32)*32} : undefined,
   friendsDevFlight: Boolean(frame.friendsDevFlight),
   friendsDevFlightDown: Boolean(frame.friendsDevFlightDown),
   // The simulation clamps this against the real live weapon catalogue. Keep

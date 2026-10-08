@@ -1,0 +1,524 @@
+{
+  "date": "2026-10-08T17:02:41.149Z",
+  "origin": "http://localhost:3001",
+  "errors": [],
+  "method": "One real Friends arena, frozen world/animation state, identical frame-indexed camera poses; alternate A/B and B/A each pair. Native drawing buffer, MSAA, geometry/materials and shadow scheduling retained. GPU queries drained asynchronously. Readback runs separate from timed renders. Timings are the world pass and forest update, not gameplay FPS.",
+  "hardware": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "samples": 4
+  },
+  "position": [
+    5965,
+    762,
+    5710
+  ],
+  "clock": 0,
+  "comparisons": [
+    {
+      "dpr": 1,
+      "yaw": -2.3,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": -2.1,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": -2.5,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": 0.8,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.3,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.1,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.5,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": 0.8,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    }
+  ],
+  "phases": [
+    {
+      "dpr": 1,
+      "motion": false,
+      "sides": [
+        {
+          "frames": 120,
+          "gpu": {
+            "mean": 23.17580995833334,
+            "p50": 22.959166,
+            "p95": 25.381666
+          },
+          "cpu": {
+            "mean": 13.017500001192094,
+            "p50": 12.5,
+            "p95": 17.800000071525574
+          },
+          "update": {
+            "mean": 0.042499996225039166,
+            "p50": 0,
+            "p95": 0.10000002384185791
+          },
+          "calls": {
+            "mean": 1157.1666666666667,
+            "p50": 1115,
+            "p95": 1368
+          },
+          "triangles": {
+            "mean": 5509887.833333333,
+            "p50": 5485182,
+            "p95": 5633417
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 20,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4097962
+          }
+        },
+        {
+          "frames": 120,
+          "gpu": {
+            "mean": 23.06682314166667,
+            "p50": 22.82825,
+            "p95": 25.170291
+          },
+          "cpu": {
+            "mean": 13.076666664083799,
+            "p50": 12.5,
+            "p95": 17.600000023841858
+          },
+          "update": {
+            "mean": 0.04583333730697632,
+            "p50": 0,
+            "p95": 0.10000002384185791
+          },
+          "calls": {
+            "mean": 1119.1666666666667,
+            "p50": 1115,
+            "p95": 1140
+          },
+          "triangles": {
+            "mean": 5493824.666666667,
+            "p50": 5485182,
+            "p95": 5537038
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 20,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4097962
+          }
+        }
+      ],
+      "shadowReuses": 24,
+      "shadowRenders": 0,
+      "pairedGpuDifference": {
+        "mean": 0.10898681666666636,
+        "p50": 0.12199999999999989,
+        "p95": 1.7806250000000006
+      },
+      "pairedCpuDifference": {
+        "mean": -0.05916666289170583,
+        "p50": 0,
+        "p95": 3.6999999284744263
+      }
+    },
+    {
+      "dpr": 1,
+      "motion": true,
+      "sides": [
+        {
+          "frames": 120,
+          "gpu": {
+            "mean": 24.347675574999997,
+            "p50": 23.826125,
+            "p95": 27.924166
+          },
+          "cpu": {
+            "mean": 17.539166671037673,
+            "p50": 16.799999952316284,
+            "p95": 25.600000023841858
+          },
+          "update": {
+            "mean": 1.9033333331346511,
+            "p50": 1.7000000476837158,
+            "p95": 3.100000023841858
+          },
+          "calls": {
+            "mean": 1157.4333333333334,
+            "p50": 1131,
+            "p95": 1404
+          },
+          "triangles": {
+            "mean": 5473496.708333333,
+            "p50": 5502354,
+            "p95": 5679471
+          },
+          "uploadedBytes": {
+            "mean": 441748.26666666666,
+            "p50": 522368,
+            "p95": 754432
+          },
+          "shadowFrames": 20,
+          "forest": {
+            "trees": 3976,
+            "fallingTrees": 0,
+            "draws": 14,
+            "triangles": 4104540
+          }
+        },
+        {
+          "frames": 120,
+          "gpu": {
+            "mean": 24.125628991666666,
+            "p50": 23.695791,
+            "p95": 27.995666
+          },
+          "cpu": {
+            "mean": 17.016666664679846,
+            "p50": 16.600000023841858,
+            "p95": 24.799999952316284
+          },
+          "update": {
+            "mean": 2.832500010728836,
+            "p50": 2.399999976158142,
+            "p95": 5.300000071525574
+          },
+          "calls": {
+            "mean": 1119.4333333333334,
+            "p50": 1118,
+            "p95": 1176
+          },
+          "triangles": {
+            "mean": 5457433.541666667,
+            "p50": 5497324,
+            "p95": 5583092
+          },
+          "uploadedBytes": {
+            "mean": 314015.73333333334,
+            "p50": 371936,
+            "p95": 507264
+          },
+          "shadowFrames": 20,
+          "forest": {
+            "trees": 3976,
+            "fallingTrees": 0,
+            "draws": 14,
+            "triangles": 4104540
+          }
+        }
+      ],
+      "shadowReuses": 24,
+      "shadowRenders": 0,
+      "pairedGpuDifference": {
+        "mean": 0.2220465833333335,
+        "p50": 0.21916699999999878,
+        "p95": 3.741541999999999
+      },
+      "pairedCpuDifference": {
+        "mean": 0.5225000063578288,
+        "p50": 0.7000000476837158,
+        "p95": 6.200000047683716
+      }
+    },
+    {
+      "dpr": 2,
+      "motion": false,
+      "sides": [
+        {
+          "frames": 120,
+          "gpu": {
+            "mean": 41.80794606666667,
+            "p50": 40.782666,
+            "p95": 49.863749
+          },
+          "cpu": {
+            "mean": 16.448333329955737,
+            "p50": 16,
+            "p95": 23.799999952316284
+          },
+          "update": {
+            "mean": 0.05083333651224772,
+            "p50": 0,
+            "p95": 0.10000002384185791
+          },
+          "calls": {
+            "mean": 1157.1666666666667,
+            "p50": 1115,
+            "p95": 1368
+          },
+          "triangles": {
+            "mean": 5552345.833333333,
+            "p50": 5527640,
+            "p95": 5675875
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 20,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4140420
+          }
+        },
+        {
+          "frames": 120,
+          "gpu": {
+            "mean": 41.975128300000016,
+            "p50": 40.806,
+            "p95": 49.894999
+          },
+          "cpu": {
+            "mean": 16.38666666050752,
+            "p50": 16.5,
+            "p95": 22.700000047683716
+          },
+          "update": {
+            "mean": 0.039166670044263205,
+            "p50": 0,
+            "p95": 0.10000002384185791
+          },
+          "calls": {
+            "mean": 1119.1666666666667,
+            "p50": 1115,
+            "p95": 1140
+          },
+          "triangles": {
+            "mean": 5536282.666666667,
+            "p50": 5527640,
+            "p95": 5579496
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 20,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4140420
+          }
+        }
+      ],
+      "shadowReuses": 24,
+      "shadowRenders": 0,
+      "pairedGpuDifference": {
+        "mean": -0.16718223333333265,
+        "p50": 0.09587499999999949,
+        "p95": 1.7991250000000036
+      },
+      "pairedCpuDifference": {
+        "mean": 0.061666669448216756,
+        "p50": 0.19999992847442627,
+        "p95": 3.5
+      }
+    },
+    {
+      "dpr": 2,
+      "motion": true,
+      "sides": [
+        {
+          "frames": 120,
+          "gpu": {
+            "mean": 42.40042725833332,
+            "p50": 40.655125,
+            "p95": 53.588583
+          },
+          "cpu": {
+            "mean": 22.822499999403952,
+            "p50": 21.799999952316284,
+            "p95": 32
+          },
+          "update": {
+            "mean": 2.4591666648785275,
+            "p50": 2.200000047683716,
+            "p95": 4.100000023841858
+          },
+          "calls": {
+            "mean": 1157.925,
+            "p50": 1132,
+            "p95": 1405
+          },
+          "triangles": {
+            "mean": 5537395.775,
+            "p50": 5574854,
+            "p95": 5742613
+          },
+          "uploadedBytes": {
+            "mean": 529116.8,
+            "p50": 683904,
+            "p95": 789792
+          },
+          "shadowFrames": 20,
+          "forest": {
+            "trees": 3976,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4163112
+          }
+        },
+        {
+          "frames": 120,
+          "gpu": {
+            "mean": 42.22814949166665,
+            "p50": 40.568708,
+            "p95": 53.105583
+          },
+          "cpu": {
+            "mean": 22.0633333414793,
+            "p50": 21,
+            "p95": 31
+          },
+          "update": {
+            "mean": 3.422499993443489,
+            "p50": 2.899999976158142,
+            "p95": 6.5
+          },
+          "calls": {
+            "mean": 1119.925,
+            "p50": 1118,
+            "p95": 1177
+          },
+          "triangles": {
+            "mean": 5521332.608333333,
+            "p50": 5557854,
+            "p95": 5646234
+          },
+          "uploadedBytes": {
+            "mean": 300842.4,
+            "p50": 332128,
+            "p95": 506144
+          },
+          "shadowFrames": 20,
+          "forest": {
+            "trees": 3976,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4163112
+          }
+        }
+      ],
+      "shadowReuses": 24,
+      "shadowRenders": 0,
+      "pairedGpuDifference": {
+        "mean": 0.17227776666666655,
+        "p50": 0.035623999999998546,
+        "p95": 5.5518339999999995
+      },
+      "pairedCpuDifference": {
+        "mean": 0.7591666579246521,
+        "p50": 0.49999988079071045,
+        "p95": 7.900000095367432
+      }
+    }
+  ]
+}

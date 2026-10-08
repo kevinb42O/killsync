@@ -1,0 +1,46 @@
+{
+  "initial": {
+    "frame": 2,
+    "calls": 3,
+    "triangles": 1238,
+    "points": 0,
+    "lines": 0
+  },
+  "stages": {
+    "fresh": {
+      "frame": 3,
+      "calls": 3,
+      "triangles": 1238,
+      "points": 0,
+      "lines": 0
+    },
+    "golden": {
+      "frame": 4,
+      "calls": 3,
+      "triangles": 1238,
+      "points": 0,
+      "lines": 0
+    },
+    "dark": {
+      "frame": 5,
+      "calls": 3,
+      "triangles": 1238,
+      "points": 0,
+      "lines": 0
+    },
+    "charred": {
+      "frame": 6,
+      "calls": 3,
+      "triangles": 1238,
+      "points": 0,
+      "lines": 0
+    },
+    "burning": {
+      "frame": 7,
+      "calls": 4,
+      "triangles": 1256,
+      "points": 0,
+      "lines": 0
+    }
+  }
+}

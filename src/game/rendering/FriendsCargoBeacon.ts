@@ -40,11 +40,11 @@ export class FriendsCargoBeacon extends THREE.Group {
     this.column.scale.x=Math.max(32,Math.hypot(dx,dz)*apparentWidth);
     this.column.updateMatrixWorld(true);
   }
-  update(cargo:PhysicalCargo|undefined,elapsed:number,delivered=false){
+  update(cargo:PhysicalCargo|undefined,elapsed:number,delivered=false,color='#ffc36e'){
     this.visible=Boolean(cargo);if(!cargo)return;
     this.position.set(cargo.x,cargoBounds(cargo).maxZ+2,cargo.y);
     this.material.uniforms.seconds.value=elapsed/1000;
-    this.material.uniforms.tint.value.set(delivered?'#a5f279':'#ffc36e');
+    this.material.uniforms.tint.value.set(delivered?'#a5f279':color);
   }
   dispose(){this.removeFromParent();this.geometry.dispose();this.material.dispose();}
 }

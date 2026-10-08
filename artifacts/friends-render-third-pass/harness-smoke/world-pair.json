@@ -1,0 +1,600 @@
+{
+  "date": "2026-10-08T17:47:25.576Z",
+  "origin": "http://localhost:3001",
+  "errors": [],
+  "method": "One real Friends arena, frozen world/animation state, identical frame-indexed camera poses; alternate A/B and B/A each pair. Both forest controllers initialized fresh to match packing/LOD history and JIT exposure; original runtime forest hidden. Native drawing buffer, MSAA, geometry/materials and shadow scheduling retained. GPU queries drained asynchronously. Readback runs separate from timed renders. Timings are the world pass and forest update, not gameplay FPS.",
+  "hardware": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "samples": 4
+  },
+  "position": [
+    5965,
+    762,
+    5710
+  ],
+  "clock": 0,
+  "settings": {
+    "viewport": [
+      1600,
+      900
+    ],
+    "fov": 108,
+    "near": 2,
+    "far": 110000,
+    "shadowMapSize": [
+      2048,
+      2048
+    ],
+    "shadowType": 1,
+    "toneMapping": 4
+  },
+  "snapshot": {
+    "version": 1,
+    "revision": 2,
+    "terrain": {
+      "generation": 4,
+      "grades": [],
+      "revision": 0,
+      "edits": []
+    },
+    "packs": {
+      "crew:friend-f11ecfdeb42a43aab668bbd97e0095ba": {
+        "wood": 18,
+        "soil": 0,
+        "stone": 12,
+        "copper": 0,
+        "iron": 0,
+        "planks": 0,
+        "ingots": 0,
+        "saplings": 3
+      }
+    },
+    "stock": {
+      "wood": 0,
+      "soil": 0,
+      "stone": 0,
+      "copper": 0,
+      "iron": 0,
+      "planks": 0,
+      "ingots": 0,
+      "saplings": 0
+    },
+    "cargo": {
+      "wood": 0,
+      "soil": 0,
+      "stone": 0,
+      "copper": 0,
+      "iron": 0,
+      "planks": 0,
+      "ingots": 0,
+      "saplings": 0
+    },
+    "harvested": [],
+    "planted": [],
+    "upgrades": 0,
+    "contracts": 0,
+    "built": 0,
+    "mined": 0,
+    "chopped": 0,
+    "feedback": {},
+    "discovered": [],
+    "testing": true,
+    "interaction": {
+      "actions": {},
+      "damage": [],
+      "contacts": []
+    }
+  },
+  "comparisons": [
+    {
+      "dpr": 1,
+      "yaw": -2.3,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": -2.1,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": -2.5,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 1,
+      "yaw": 0.8,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 1440000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 1440000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.3,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.1,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": -2.5,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    },
+    {
+      "dpr": 2,
+      "yaw": 0.8,
+      "repeat": {
+        "changedPixels": 0,
+        "maxChannelDifference": 0,
+        "rmsChannelDifference": 0,
+        "pixels": 5760000
+      },
+      "changedPixels": 0,
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "pixels": 5760000
+    }
+  ],
+  "phases": [
+    {
+      "location": "spawn",
+      "dpr": 1,
+      "motion": false,
+      "sides": [
+        {
+          "frames": 1,
+          "gpu": {
+            "mean": 23.164749,
+            "p50": 23.164749,
+            "p95": 23.164749
+          },
+          "cpu": {
+            "mean": 8.199999928474426,
+            "p50": 8.199999928474426,
+            "p95": 8.199999928474426
+          },
+          "update": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "calls": {
+            "mean": 1392,
+            "p50": 1392,
+            "p95": 1392
+          },
+          "triangles": {
+            "mean": 5633463,
+            "p50": 5633463,
+            "p95": 5633463
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 1,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4097962
+          }
+        },
+        {
+          "frames": 1,
+          "gpu": {
+            "mean": 22.810749,
+            "p50": 22.810749,
+            "p95": 22.810749
+          },
+          "cpu": {
+            "mean": 9.200000047683716,
+            "p50": 9.200000047683716,
+            "p95": 9.200000047683716
+          },
+          "update": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "calls": {
+            "mean": 1164,
+            "p50": 1164,
+            "p95": 1164
+          },
+          "triangles": {
+            "mean": 5537086,
+            "p50": 5537086,
+            "p95": 5537086
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 1,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4097962
+          }
+        }
+      ],
+      "shadowReuses": 5,
+      "shadowRenders": 0,
+      "pairedGpuDifference": {
+        "mean": 0.3539999999999992,
+        "p50": 0.3539999999999992,
+        "p95": 0.3539999999999992
+      },
+      "pairedCpuDifference": {
+        "mean": -1.0000001192092896,
+        "p50": -1.0000001192092896,
+        "p95": -1.0000001192092896
+      }
+    },
+    {
+      "location": "spawn",
+      "dpr": 1,
+      "motion": true,
+      "sides": [
+        {
+          "frames": 1,
+          "gpu": {
+            "mean": 24.045708,
+            "p50": 24.045708,
+            "p95": 24.045708
+          },
+          "cpu": {
+            "mean": 7.799999952316284,
+            "p50": 7.799999952316284,
+            "p95": 7.799999952316284
+          },
+          "update": {
+            "mean": 0.10000002384185791,
+            "p50": 0.10000002384185791,
+            "p95": 0.10000002384185791
+          },
+          "calls": {
+            "mean": 1392,
+            "p50": 1392,
+            "p95": 1392
+          },
+          "triangles": {
+            "mean": 5633463,
+            "p50": 5633463,
+            "p95": 5633463
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 1,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4097962
+          }
+        },
+        {
+          "frames": 1,
+          "gpu": {
+            "mean": 22.946999,
+            "p50": 22.946999,
+            "p95": 22.946999
+          },
+          "cpu": {
+            "mean": 8,
+            "p50": 8,
+            "p95": 8
+          },
+          "update": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "calls": {
+            "mean": 1164,
+            "p50": 1164,
+            "p95": 1164
+          },
+          "triangles": {
+            "mean": 5537086,
+            "p50": 5537086,
+            "p95": 5537086
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 1,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4097962
+          }
+        }
+      ],
+      "shadowReuses": 5,
+      "shadowRenders": 0,
+      "pairedGpuDifference": {
+        "mean": 1.0987089999999995,
+        "p50": 1.0987089999999995,
+        "p95": 1.0987089999999995
+      },
+      "pairedCpuDifference": {
+        "mean": -0.20000004768371582,
+        "p50": -0.20000004768371582,
+        "p95": -0.20000004768371582
+      }
+    },
+    {
+      "location": "spawn",
+      "dpr": 2,
+      "motion": false,
+      "sides": [
+        {
+          "frames": 1,
+          "gpu": {
+            "mean": 43.812124,
+            "p50": 43.812124,
+            "p95": 43.812124
+          },
+          "cpu": {
+            "mean": 9.600000023841858,
+            "p50": 9.600000023841858,
+            "p95": 9.600000023841858
+          },
+          "update": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "calls": {
+            "mean": 1392,
+            "p50": 1392,
+            "p95": 1392
+          },
+          "triangles": {
+            "mean": 5675921,
+            "p50": 5675921,
+            "p95": 5675921
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 1,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4140420
+          }
+        },
+        {
+          "frames": 1,
+          "gpu": {
+            "mean": 42.875249,
+            "p50": 42.875249,
+            "p95": 42.875249
+          },
+          "cpu": {
+            "mean": 9.600000023841858,
+            "p50": 9.600000023841858,
+            "p95": 9.600000023841858
+          },
+          "update": {
+            "mean": 0.10000002384185791,
+            "p50": 0.10000002384185791,
+            "p95": 0.10000002384185791
+          },
+          "calls": {
+            "mean": 1164,
+            "p50": 1164,
+            "p95": 1164
+          },
+          "triangles": {
+            "mean": 5579544,
+            "p50": 5579544,
+            "p95": 5579544
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 1,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4140420
+          }
+        }
+      ],
+      "shadowReuses": 5,
+      "shadowRenders": 0,
+      "pairedGpuDifference": {
+        "mean": 0.9368750000000006,
+        "p50": 0.9368750000000006,
+        "p95": 0.9368750000000006
+      },
+      "pairedCpuDifference": {
+        "mean": 0,
+        "p50": 0,
+        "p95": 0
+      }
+    },
+    {
+      "location": "spawn",
+      "dpr": 2,
+      "motion": true,
+      "sides": [
+        {
+          "frames": 1,
+          "gpu": {
+            "mean": 44.115916,
+            "p50": 44.115916,
+            "p95": 44.115916
+          },
+          "cpu": {
+            "mean": 9.099999904632568,
+            "p50": 9.099999904632568,
+            "p95": 9.099999904632568
+          },
+          "update": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "calls": {
+            "mean": 1392,
+            "p50": 1392,
+            "p95": 1392
+          },
+          "triangles": {
+            "mean": 5675921,
+            "p50": 5675921,
+            "p95": 5675921
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 1,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4140420
+          }
+        },
+        {
+          "frames": 1,
+          "gpu": {
+            "mean": 44.5885,
+            "p50": 44.5885,
+            "p95": 44.5885
+          },
+          "cpu": {
+            "mean": 9.5,
+            "p50": 9.5,
+            "p95": 9.5
+          },
+          "update": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "calls": {
+            "mean": 1164,
+            "p50": 1164,
+            "p95": 1164
+          },
+          "triangles": {
+            "mean": 5579544,
+            "p50": 5579544,
+            "p95": 5579544
+          },
+          "uploadedBytes": {
+            "mean": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "shadowFrames": 1,
+          "forest": {
+            "trees": 3967,
+            "fallingTrees": 0,
+            "draws": 15,
+            "triangles": 4140420
+          }
+        }
+      ],
+      "shadowReuses": 5,
+      "shadowRenders": 0,
+      "pairedGpuDifference": {
+        "mean": -0.4725840000000048,
+        "p50": -0.4725840000000048,
+        "p95": -0.4725840000000048
+      },
+      "pairedCpuDifference": {
+        "mean": -0.40000009536743164,
+        "p50": -0.40000009536743164,
+        "p95": -0.40000009536743164
+      }
+    }
+  ]
+}

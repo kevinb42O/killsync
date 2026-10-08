@@ -18,6 +18,7 @@ export function FriendsTrainControls({service,onRequest,onClose,message}:{servic
       <div className="friends-train-controls__presets">{[40,120,240,360].map(n=><button key={n} className={speed===n?'selected':''} onClick={()=>apply(n)}>{n} km/h</button>)}</div>
       <label className="friends-train-controls__stops"><input type="checkbox" checked={service.autoStops!==false} onChange={e=>apply(speed,e.target.checked)} /><span>Stop at every station<small>Switch off for a continuous journey around the island.</small></span></label>
       <div className="friends-train-controls__buttons"><button onClick={()=>onRequest({action:'scenic_hold'})}>Hold train</button><button className="selected" disabled={service.blocked} onClick={()=>onRequest({action:'scenic_depart'})}>Resume / depart</button></div>
+      <div className="friends-train-controls__buttons"><button onClick={()=>onRequest({action:'train_horn'})}>Sound train horn · H</button></div>
       {message&&<p role="status">{message}</p>}
       <p>Target speeds ease in gradually. Curves and tunnels can limit actual speed. Ten wagons follow the locomotive; the seven freight decks are yours to fill.</p>
       <footer><span>Next · {service.nextStation}</span><button onClick={onClose}>Return to the journey · Esc</button></footer>

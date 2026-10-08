@@ -1,0 +1,156 @@
+{
+  "origin": "http://localhost:3000",
+  "errors": [],
+  "cases": [
+    {
+      "distance": 40,
+      "before": {
+        "mean": 255,
+        "whiteFraction": 1,
+        "min": 255,
+        "max": 255
+      },
+      "after": {
+        "mean": 197.33634353741206,
+        "whiteFraction": 0,
+        "min": 140.66666666666666,
+        "max": 232
+      },
+      "maxDifference": 239
+    },
+    {
+      "distance": 100,
+      "before": {
+        "mean": 255,
+        "whiteFraction": 1,
+        "min": 255,
+        "max": 255
+      },
+      "after": {
+        "mean": 203.25426870747143,
+        "whiteFraction": 0,
+        "min": 155.66666666666666,
+        "max": 231
+      },
+      "maxDifference": 201
+    },
+    {
+      "distance": 250,
+      "before": {
+        "mean": 253.4335204081656,
+        "whiteFraction": 1,
+        "min": 249.33333333333334,
+        "max": 255
+      },
+      "after": {
+        "mean": 203.33387755101168,
+        "whiteFraction": 0,
+        "min": 156,
+        "max": 231
+      },
+      "maxDifference": 139
+    },
+    {
+      "distance": 600,
+      "before": {
+        "mean": 235.480170068021,
+        "whiteFraction": 0.013775510204081633,
+        "min": 209.66666666666666,
+        "max": 247.33333333333334
+      },
+      "after": {
+        "mean": 196.836751700676,
+        "whiteFraction": 0,
+        "min": 146,
+        "max": 227
+      },
+      "maxDifference": 68
+    },
+    {
+      "distance": 900,
+      "before": {
+        "mean": 208.5075510204032,
+        "whiteFraction": 0,
+        "min": 160,
+        "max": 234
+      },
+      "after": {
+        "mean": 184.35299319728938,
+        "whiteFraction": 0,
+        "min": 128.66666666666666,
+        "max": 220
+      },
+      "maxDifference": 34
+    },
+    {
+      "distance": 1200,
+      "before": {
+        "mean": 176.01318027210598,
+        "whiteFraction": 0,
+        "min": 116,
+        "max": 215.33333333333334
+      },
+      "after": {
+        "mean": 165.0970238095128,
+        "whiteFraction": 0,
+        "min": 105.66666666666667,
+        "max": 207.33333333333334
+      },
+      "maxDifference": 14
+    },
+    {
+      "distance": 1600,
+      "before": {
+        "mean": 132.67804421769418,
+        "whiteFraction": 0,
+        "min": 74,
+        "max": 182
+      },
+      "after": {
+        "mean": 131.23882653061995,
+        "whiteFraction": 0,
+        "min": 73,
+        "max": 180.66666666666666
+      },
+      "maxDifference": 2
+    },
+    {
+      "distance": 2200,
+      "before": {
+        "mean": 75.67411564625854,
+        "whiteFraction": 0,
+        "min": 33.666666666666664,
+        "max": 121.33333333333333
+      },
+      "after": {
+        "mean": 75.67408163265311,
+        "whiteFraction": 0,
+        "min": 33.666666666666664,
+        "max": 121.33333333333333
+      },
+      "maxDifference": 1
+    },
+    {
+      "distance": 2800,
+      "before": {
+        "mean": 28.2704761904769,
+        "whiteFraction": 0,
+        "min": 7,
+        "max": 54.333333333333336
+      },
+      "after": {
+        "mean": 28.270459183674177,
+        "whiteFraction": 0,
+        "min": 7,
+        "max": 54.333333333333336
+      },
+      "maxDifference": 1
+    }
+  ],
+  "softDistance": 950,
+  "mixed": {
+    "farMaxDifference": 1,
+    "nearReduction": 55.35296296296296
+  },
+  "runningAlignment": 1
+}

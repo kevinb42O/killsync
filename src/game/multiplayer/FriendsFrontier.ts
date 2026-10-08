@@ -1,4 +1,7 @@
+import { friendsCampfireContains } from '../world/FriendsTerrain';
 import { scenicTransitProtected } from '../world/FriendsRailInfrastructure';
+import { FRIENDS_MINING_REACH, friendsTreeWithinReach, friendsInteractionTarget, FriendsBuildSpatialIndex, type MiningWorkPlane, type InteractionTarget } from './FriendsInteractionTargeting';
+import { FriendsToolActions, toolProfile, type ToolDamage, type ToolContact, type ToolFeedback } from './FriendsToolActions';
 import { FRIENDS_TREE_CANDIDATES } from '../world/FriendsVegetationAppearance';
 import { islandClimate, islandCoastDistance } from '../world/FriendsIsland';
 import { FriendsTerrain, VOXEL_SIZE, TERRAIN_CHUNK, terrainHash, terrainNoise, terrainProtected, friendsSpawnProtected, friendsFixedPlatformProtected, FRIENDS_SPAWN_PLATFORM, baseTerrainHeight, frontierSiteElevation, islandRuinsAt, FRONTIER_SIZE, FRONTIER_SITES, validTerrainEdit, validTerrainGrade, TERRAIN_GENERATION, type TerrainSnapshot, type TerrainRay } from '../world/FriendsTerrain';
@@ -10,21 +13,22 @@ import { FRIENDS_BUILD_CATALOG, friendsShapeBoxes, worldBox, type FriendsBuildPi
 export const MATERIAL_NAMES = { wood: 'Timber', soil: 'Soil', stone: 'Stone', copper: 'Copper ore', iron: 'Iron ore', planks: 'Planks', ingots: 'Ingots', saplings: 'Saplings' } as const;
 export type Resource = keyof typeof MATERIAL_NAMES;
 export type Materials = Record<Resource, number>;
-export type FrontierTool = 0 | 1 | 2 | 3 | 4 | 5;
-export const FRONTIER_TOOLS = ['Combat', 'Axe', 'Pickaxe', 'Shovel', 'Earthwork', 'Rope'] as const;
+export type FrontierTool = 0 | 1 | 2 | 3 | 5;
+export const FRONTIER_TOOLS = { 0: 'Combat', 1: 'Axe', 2: 'Pickaxe', 3: 'Shovel', 5: 'Rope' } as const;
 export const PACK_CAPACITY = 160;
 export const FRIENDS_TEST_MODE = true; // Temporary playtest rules: free construction and uncapped inventories.
 export const emptyMaterials = (): Materials => ({ wood: 0, soil: 0, stone: 0, copper: 0, iron: 0, planks: 0, ingots: 0, saplings: 0 });
 export type FrontierActor = { id: string; label?: string; x: number; y: number; z: number; lifeState: string };
 export type FrontierTree = { id: string; x: number; y: number; z: number; kind: 'pine' | 'oak' | 'autumnOak'; scale: number };
 export type FrontierSnapshot = {
+  interaction?: ToolFeedback;
   testing?: boolean;
   version: 1; revision: number; terrain: TerrainSnapshot; packs: Record<string, Materials>; stock: Materials; cargo: Materials;
   harvested: string[]; planted: FrontierTree[]; upgrades: number; contracts: number; built: number; mined: number; chopped: number;
   discovered?: string[]; feedback: Record<string, { message: string; until: number }>; damage?: { id: string; value: number; total: number; until?: number; by?: string; kind?: 'wood' | 'soil' | 'stone' | 'ore' };
 };
-export type FrontierRequest = { requestId: number; action: 'scenic_speed' | 'scenic_hold' | 'scenic_depart' | 'train_place' | 'train_remove' | 'train_hold' | 'train_depart' | 'planks' | 'smelt_copper' | 'smelt_iron' | 'upgrade' | 'deposit' | 'withdraw' | 'load' | 'unload' | 'contract' | 'plant' | 'home'; resource?: Resource;speedKmh?:number;stopAtStations?:boolean };
-export type FrontierResult = { playerId: string; requestId: number; ok: boolean; message: string };
+export type FrontierRequest = { requestId: number; action: import('./FriendsCampfireSimulation').CampfireAction | import('./FriendsCrane').CraneAction | 'train_horn' | 'scenic_speed' | 'scenic_hold' | 'scenic_depart' | 'train_place' | 'train_remove' | 'train_hold' | 'train_depart' | 'planks' | 'smelt_copper' | 'smelt_iron' | 'upgrade' | 'deposit' | 'withdraw' | 'load' | 'unload' | 'contract' | 'plant' | 'home'; pieceId?: number; resource?: Resource;speedKmh?:number;stopAtStations?:boolean };
+export type FrontierResult = { silent?:boolean; playerId: string; requestId: number; ok: boolean; message: string };
 /** Broad woodland regions with irregular edges; most land remains meadow. */
 export function frontierForestDensity(x: number, y: number) {
   const regional = terrainNoise(x / 3600 + 17, y / 3600 + 9);
@@ -57,6 +61,11 @@ export const packWeight = (pack: Partial<Materials>) => Object.values(pack).redu
 export function buildCost(shape: FriendsBuildShape, finish: FriendsBuildFinish): Partial<Materials> {
   if (shape === 'rail_straight') return {wood:2,stone:1};
   if (shape === 'rail_curve') return {wood:4,stone:2};
+  if(shape==='crane_joint')return {ingots:6,stone:8};
+  if(shape==='crane_boom')return {planks:4,ingots:2};
+  if(shape==='crane_winch')return {planks:6,ingots:4};
+  if(shape==='crane_console')return {planks:4,ingots:1};
+  if (shape === 'crane') return { planks: 12, ingots: 6 };
   if (shape === 'workbench') return { wood: 10, stone: 4 };
   if (shape === 'furnace') return { stone: 16, copper: 4 };
   if (shape === 'storage') return { planks: 8 };
@@ -72,17 +81,22 @@ export function frontierContract(index: number) {
 }
 export class FriendsFrontier {
   readonly terrain: FriendsTerrain;
+  demolishBuild?: (actor: FrontierActor, piece: FriendsBuildPiece) => string | undefined;
   private state: FrontierSnapshot;
   private handled = new Map<string, number>();
   private nextHit = new Map<string, number>();
-  private damage = new Map<string, number>();
+  private damage = new Map<string, ToolDamage>();
+  private actions = new FriendsToolActions();
+  private buildIndex = new FriendsBuildSpatialIndex();
+  private contacts: ToolContact[] = [];
+  private contactSerial = 0;
   private harvested = new Set<string>();
   private snapshotCache?: FrontierSnapshot;
   constructor(saved?: FrontierSnapshot, private readonly testing = FRIENDS_TEST_MODE) {
     this.terrain = new FriendsTerrain(saved && isFrontierSave(saved) ? saved.terrain : undefined);
     this.state = { version: 1, revision: 0, terrain: this.terrain.snapshot(), packs: {}, stock: emptyMaterials(), cargo: emptyMaterials(), harvested: [], planted: [], upgrades: 0, contracts: 0, built: 0, mined: 0, chopped: 0, feedback: {}, discovered: [] };
     if (saved && isFrontierSave(saved)) {
-      this.state = { ...this.state, ...structuredClone(saved), feedback: {}, damage: undefined };
+      this.state = { ...this.state, ...structuredClone(saved), feedback: {}, damage: undefined, interaction: undefined };
       this.harvested = new Set(saved.harvested);
     }
   }
@@ -108,62 +122,102 @@ export class FriendsFrontier {
   }
   private changed() { this.state.revision++; this.snapshotCache = undefined; }
   getRevision() { return this.state.revision; }
-  private tell(actor: FrontierActor, message: string, elapsed: number) { this.state.feedback[actor.id] = { message, until: elapsed + 4200 }; this.changed(); }
-  treesNear(x: number, y: number) {
+  private tell(actor: FrontierActor, message: string, elapsed: number) {
+    const previous = this.state.feedback[actor.id];
+    if (previous?.message === message && previous.until > elapsed + 3000) return;
+    this.state.feedback[actor.id] = { message, until: elapsed + 4200 };
+  }
+  treesNear(x: number, y: number, reach = Infinity) {
     const cx = Math.floor(x / TERRAIN_CHUNK), cy = Math.floor(y / TERRAIN_CHUNK);
     const result = this.state.planted.filter(p => Math.hypot(x - p.x, y - p.y) < 900);
     for (let a = cx - 1; a <= cx + 1; a++) for (let b = cy - 1; b <= cy + 1; b++) result.push(...frontierTrees(a, b));
-    return result.filter(t => !this.harvested.has(t.id) && this.terrain.supports(t.x,t.y,t.z));
+    return result.filter(t => !this.harvested.has(t.id) && friendsTreeWithinReach(t,x,y,reach) && this.terrain.supports(t.x,t.y,t.z));
   }
-  tool(actor: FrontierActor, tool: FrontierTool, ray: TerrainRay, elapsed: number, pieces: readonly FriendsBuildPiece[], canEdit = true, bodies: readonly FrontierActor[] = []) {
-    if (!tool || tool === 5 || actor.lifeState !== 'alive' || elapsed < (this.nextHit.get(actor.id) || 0)) return;
-    this.nextHit.set(actor.id, elapsed + (this.state.upgrades ? 190 : 330));
-    if (!canEdit) { this.tell(actor, 'The host needs to grant building access before you can harvest or dig.', elapsed); return; }
-    const pack = this.pack(actor), ground = this.terrain.raycast(ray, 240);
-    if (tool === 1) {
-      let target: FrontierTree | undefined, nearest = ground?.distance ?? 240;
-      for (const tree of this.treesNear(actor.x, actor.y)) {
-        const dx = tree.x - ray.x, dy = tree.y - ray.y, along = (dx * ray.dx + dy * ray.dy) / Math.max(.01, ray.dx ** 2 + ray.dy ** 2);
-        const z = ray.z + ray.dz * along;
-        if (along > 0 && along < nearest && z > tree.z && z < tree.z + 230 * tree.scale && Math.hypot(ray.x + ray.dx * along - tree.x, ray.y + ray.dy * along - tree.y) < 30 * tree.scale) { target = tree; nearest = along; }
+  target(actor: FrontierActor, tool: FrontierTool, ray: TerrainRay, pieces: readonly FriendsBuildPiece[], canEdit = true, buildRevision?: number, workPlane?: MiningWorkPlane, fill = false) {
+    if(buildRevision!==undefined){this.buildIndex.update(pieces,buildRevision);pieces=this.buildIndex.near(actor.x,actor.y,300);}
+    return friendsInteractionTarget(this.terrain, ray, tool, pieces, this.treesNear(ray.x, ray.y, FRIENDS_MINING_REACH), canEdit, workPlane, fill);
+  }
+  advanceTool(actor: FrontierActor, tool: FrontierTool, ray: TerrainRay, elapsed: number, pieces: readonly FriendsBuildPiece[], held: boolean, canEdit = true, bodies: readonly FrontierActor[] = [], buildRevision?: number, workPlane?: MiningWorkPlane, fill = false) {
+    held=held&&Boolean(tool)&&tool!==5&&actor.lifeState==='alive';
+    const target = held ? this.target(actor, tool, ray, pieces, canEdit, buildRevision, workPlane, fill) : undefined;
+    if (held && target && !target.valid) this.tell(actor, target.reason!, elapsed);
+    if (this.actions.update(actor.id, tool, target, held && actor.lifeState === 'alive', elapsed, Boolean(this.state.upgrades), fill))
+      this.tool(actor, tool, ray, elapsed, pieces, canEdit, bodies, target, fill);
+  }
+  tickTools(elapsed: number, players: ReadonlySet<string>, active: ReadonlySet<string> = players, pieces?: readonly FriendsBuildPiece[]) {
+    this.actions.clearInactive(active);
+    for (const [id, work] of this.damage) if (work.until <= elapsed || work.pieceId!==undefined&&pieces&&!pieces.some(p=>p.id===work.pieceId&&p.revision===work.pieceRevision) || work.vx!==undefined&&this.terrain.material(work.vx,work.vy!,work.vz!)!==work.material || work.tree&&(this.harvested.has(id)||id.startsWith('planted:')&&!this.state.planted.some(t=>t.id===id))) this.damage.delete(id);
+    this.contacts = this.contacts.filter(c => elapsed - c.at < 1600);
+    for (const id of this.nextHit.keys()) if (!players.has(id)) this.nextHit.delete(id);
+    for (const [id, value] of Object.entries(this.state.feedback)) if (value.until <= elapsed || !players.has(id)) delete this.state.feedback[id];
+  }
+  private strike(actor: FrontierActor, target: InteractionTarget, tool: FrontierTool, elapsed: number) {
+    const kind = target.kind === 'build' ? 'stone' : target.kind, total = toolProfile(kind, tool, Boolean(this.state.upgrades)).hits;
+    const old = this.damage.get(target.id);
+    const work: ToolDamage = { id: target.id, value: (old && old.until > elapsed && old.kind===kind && old.material===target.ground?.material && old.pieceRevision===target.piece?.revision ? old.value : 0) + 1, total,
+      until: elapsed + 1100, by: actor.id, kind, x: target.x, y: target.y, z: target.z, nx: target.nx, ny: target.ny, nz: target.nz,
+      material:target.ground?.material,vx: target.ground?.vx, vy: target.ground?.vy, vz: target.ground?.vz, tree: target.tree,
+      pieceId: target.piece?.id, pieceRevision: target.piece?.revision };
+    if (this.damage.size >= 128 && !this.damage.has(target.id)) this.damage.delete(this.damage.keys().next().value!);
+    this.damage.set(target.id, work); this.state.damage = work;
+    return work;
+  }
+  private contact(work: ToolDamage, elapsed: number, broken: boolean, resource?: string, amount?: number) {
+    this.contacts.push({ ...work, at: elapsed, serial: ++this.contactSerial, broken, resource, amount });
+    if (this.contacts.length > 64) this.contacts.shift();
+    if (broken) this.damage.delete(work.id);
+  }
+  /** Commit a contact; held-input timing is owned by advanceTool. */
+  tool(actor: FrontierActor, tool: FrontierTool, ray: TerrainRay, elapsed: number, pieces: readonly FriendsBuildPiece[], canEdit = true, bodies: readonly FrontierActor[] = [], knownTarget?: InteractionTarget, fill = false) {
+    fill = tool === 3 && fill;
+    if (!tool || tool === 5 || actor.lifeState !== 'alive' || !knownTarget && elapsed < (this.nextHit.get(actor.id) || 0)) return;
+    const target = knownTarget || this.target(actor, tool, ray, pieces, canEdit, undefined, undefined, fill);
+    if (!target || !target.valid) { this.tell(actor, target?.reason || 'Aim at a surface within reach.', elapsed); return; }
+    this.nextHit.set(actor.id, elapsed + toolProfile(fill ? 'soil' : target.kind === 'build' ? 'stone' : target.kind, tool, Boolean(this.state.upgrades)).cadence);
+    if (target.piece) {
+      if (!this.demolishBuild) { this.tell(actor, 'Building tools are unavailable.', elapsed); return; }
+      const work = this.strike(actor, target, tool, elapsed), broken = work.value >= work.total;
+      if (broken) {
+        const error = this.demolishBuild(actor, target.piece);
+        if (error) { this.damage.delete(target.id); this.tell(actor, error, elapsed); return; }
+        this.tell(actor, `${FRIENDS_BUILD_CATALOG[target.piece.shape].name} broken.`, elapsed);
       }
-      if (!target) { this.tell(actor, 'Aim at a tree trunk within reach.', elapsed); return; }
-      if (packWeight(pack) + 12 > this.capacity) { this.tell(actor, 'Pack full. Deposit at a workshop or load the train.', elapsed); return; }
-      const hits = (this.damage.get(target.id) || 0) + 1, total = this.state.upgrades ? 2 : 4;
-      this.damage.set(target.id, hits); this.state.damage = { id: target.id, value: hits, total, until: elapsed + 1400, by: actor.id, kind: 'wood' }; this.changed();
-      if (hits >= total && !target.id.startsWith('planted:') && this.harvested.size >= 12000) { this.tell(actor, 'This world has reached its forestry budget.', elapsed); return; }
-      if (hits >= total) { if (target.id.startsWith('planted:')) this.state.planted = this.state.planted.filter(t => t.id !== target!.id); else this.harvested.add(target.id); this.damage.delete(target.id); this.state.chopped++; pack.wood += 10; pack.saplings += 1; this.tell(actor, '+10 timber · +1 sapling. Replant from your field pack.', elapsed); }
-      return;
+      this.contact(work, elapsed, broken); return;
     }
-    if (!ground) { this.tell(actor, 'Aim at earth or an exposed rock face within reach.', elapsed); return; }
-    const { vx, vy, vz, material } = ground, x = (vx + .5) * 32, y = (vy + .5) * 32;
-    if (friendsFixedPlatformProtected(x, y, (vz+.5)*32) && tool !== 4) { this.tell(actor, friendsSpawnProtected(x,y,(vz+.5)*32)?'The player spawn platform is indestructible.':'The hauling platform is indestructible.', elapsed); return; }
-    const overlapsVoxel=(p:FriendsBuildPiece,nx:number,ny:number,nz:number,support:boolean)=>friendsShapeBoxes(p.shape).some(local=>{
-      const b=worldBox(p,local),cx=(nx+.5)*32,cy=(ny+.5)*32;
-      return Math.abs(cx-b.x)<b.w/2+16-.01&&Math.abs(cy-b.y)<b.d/2+16-.01&&
-        (support?Math.abs((nz+1)*32-b.z)<.1:nz*32<b.z+b.h&&(nz+1)*32>b.z);
-    });
-    if(scenicTransitProtected(x,y,(vz+.5)*32)){this.tell(actor,'The Grand Traverse rail corridor is protected. Excavate beside the line.',elapsed);return;}
-    if (tool!==4&&pieces.some(p=>overlapsVoxel(p,vx,vy,vz,true))) { this.tell(actor, 'This block supports a saved build. Remove or move the piece first.', elapsed); return; }
-    if (tool === 4) {
+    const pack = this.pack(actor);
+    if (target.tree) {
+      if (packWeight(pack) + 11 > this.capacity) { this.tell(actor, 'Pack full. Deposit at a workshop or load the train.', elapsed); return; }
+      const work = this.strike(actor, target, tool, elapsed), broken = work.value >= work.total;
+      if (broken && !target.tree.id.startsWith('planted:') && this.harvested.size >= 12000) { this.tell(actor, 'This world has reached its forestry budget.', elapsed); return; }
+      if (broken) {
+        if (target.tree.id.startsWith('planted:')) this.state.planted = this.state.planted.filter(t => t.id !== target.tree!.id);
+        else this.harvested.add(target.tree.id);
+        this.state.chopped++; pack.wood += 10; pack.saplings++; this.changed();
+      }
+      this.contact(work, elapsed, broken, broken ? 'Timber' : undefined, broken ? 10 : undefined); return;
+    }
+    const ground = target.ground!;
+    const { vx, vy, vz, material } = ground;
+    if (fill) {
       const nx = vx + ground.nx, ny = vy + ground.ny, nz = vz + ground.nz, tx = (nx + .5) * 32, ty = (ny + .5) * 32;
-      if (friendsFixedPlatformProtected(tx, ty, (nz+.5)*32)) { this.tell(actor, friendsSpawnProtected(tx,ty,(nz+.5)*32)?'Keep the player spawn platform clear.':'Keep the hauling platform clear.', elapsed); return; }
-      if(scenicTransitProtected(tx,ty,(nz+.5)*32)){this.tell(actor,'Keep the Grand Traverse railway clear.',elapsed);return;}
-      if (pieces.some(p=>overlapsVoxel(p,nx,ny,nz,false))) { this.tell(actor, 'Keep structures clear.', elapsed); return; }
+      if (friendsFixedPlatformProtected(tx, ty, (nz + .5) * 32)) { this.tell(actor, friendsSpawnProtected(tx, ty, (nz + .5) * 32) ? 'Keep the player spawn platform clear.' : friendsCampfireContains(tx,ty) ? 'Keep the campfire gathering spot clear.' : 'Keep the hauling platform clear.', elapsed); return; }
+      if (scenicTransitProtected(tx, ty, (nz + .5) * 32)) { this.tell(actor, 'Keep the Grand Traverse railway clear.', elapsed); return; }
+      if (pieces.some(p => friendsShapeBoxes(p.shape).some(local => { const b = worldBox(p, local); return Math.abs(tx - b.x) < b.w / 2 + 16 - .01 && Math.abs(ty - b.y) < b.d / 2 + 16 - .01 && nz * 32 < b.z + b.h && (nz + 1) * 32 > b.z; }))) { this.tell(actor, 'Keep structures clear.', elapsed); return; }
       if (!this.testing && !pack.soil) { this.tell(actor, 'Gather soil with the shovel first.', elapsed); return; }
-      if (nz < -16 || nz >= 192 || this.terrain.material(nx, ny, nz) || [actor, ...bodies].some(p => Math.hypot((nx + .5) * 32 - p.x, (ny + .5) * 32 - p.y) < 44 && nz * 32 < p.z + 50 && (nz + 1) * 32 > p.z)) { this.tell(actor, 'Leave space for your operator.', elapsed); return; }
-      if (!this.terrain.set(nx, ny, nz, 1)) { this.tell(actor, 'This world has reached its excavation budget. Export a backup before starting another frontier.', elapsed); return; } if(!this.testing)pack.soil--; this.tell(actor, 'Soil placed. Shape paths, steps and foundations.', elapsed); return;
+      if (nz < -16 || nz >= 192 || this.terrain.material(nx, ny, nz) || [actor, ...bodies].some(p => Math.hypot(tx - p.x, ty - p.y) < 44 && nz * 32 < p.z + 50 && (nz + 1) * 32 > p.z)) { this.tell(actor, 'Leave space for your operator.', elapsed); return; }
+      if (!this.terrain.set(nx, ny, nz, 1)) { this.tell(actor, 'This world has reached its excavation budget.', elapsed); return; }
+      this.damage.delete([nx, ny, nz].join(','));
+      if (!this.testing) pack.soil--; this.changed();
+      this.contact({id:[nx,ny,nz].join(','),value:1,total:1,until:elapsed,by:actor.id,kind:'soil',x:tx,y:ty,z:(nz+.5)*32,nx:ground.nx,ny:ground.ny,nz:ground.nz},elapsed,false);return;
     }
-    if (vz <= -16) { this.tell(actor, 'Bedrock. Explore sideways for another seam.', elapsed); return; }
-    if (tool === 3 && material !== 1) { this.tell(actor, 'Stone needs the pickaxe. Select 2.', elapsed); return; }
-    if (packWeight(pack) + 2 > this.capacity) { this.tell(actor, 'Pack full. Use shared storage or a cargo carriage.', elapsed); return; }
-    const id = `${vx},${vy},${vz}`, total = tool === 3 || material === 1 ? 1 : this.state.upgrades ? 1 : 2, hits = (this.damage.get(id) || 0) + 1;
-    this.damage.set(id, hits); this.state.damage = { id, value: hits, total, until: elapsed + 1400, by: actor.id, kind: material === 1 ? 'soil' : material > 2 ? 'ore' : 'stone' }; this.changed();
-    if (hits < total) return;
+    const amount = material === 1 ? 1 : 2;
+    if (packWeight(pack) + amount > this.capacity) { this.tell(actor, 'Pack full. Use shared storage or a cargo carriage.', elapsed); return; }
+    const work = this.strike(actor, target, tool, elapsed);
+    if (work.value < work.total) { this.contact(work, elapsed, false); return; }
+    if (!this.terrain.set(vx, vy, vz, 0)) { this.tell(actor, 'This world has reached its excavation budget.', elapsed); return; }
     const resource: Resource = material === 1 ? 'soil' : material === 3 ? 'copper' : material === 4 ? 'iron' : 'stone';
-    if (!this.terrain.set(vx, vy, vz, 0)) { this.tell(actor, 'This world has reached its excavation budget. Export a backup before starting another frontier.', elapsed); return; } pack[resource] += material === 1 ? 1 : 2; this.state.mined++;
-    this.damage.delete(id);
-    this.tell(actor, `+${material === 1 ? 1 : 2} ${MATERIAL_NAMES[resource].toLowerCase()}`, elapsed);
+    pack[resource] += amount; this.state.mined++; this.changed();
+    this.contact(work, elapsed, true, MATERIAL_NAMES[resource], amount);
   }
   collideTrees(position: { x: number; y: number }, z: number, radius: number) {
     let collided = false;
@@ -177,7 +231,7 @@ export class FriendsFrontier {
   explore(actor: FrontierActor, elapsed: number) {
     if (actor.lifeState !== 'alive') return;
     for (const site of FRONTIER_SITES) if (!this.state.discovered?.includes(site.id) && Math.hypot(actor.x-site.x, actor.y-site.y) < 200 && Math.abs(actor.z-frontierSiteElevation(site)) < 280) {
-      (this.state.discovered ||= []).push(site.id); this.state.stock.ingots += 2; this.state.stock.saplings += 2;
+      (this.state.discovered ||= []).push(site.id); this.state.stock.ingots += 2; this.state.stock.saplings += 2; this.changed();
       this.tell(actor, `${site.name} charted · supply cache: +2 ingots and +2 saplings in storage.`, elapsed);
     }
   }
@@ -187,7 +241,7 @@ export class FriendsFrontier {
     this.handled.set(actor.id, requestId); return true;
   }
   request(actor: FrontierActor, request: FrontierRequest, elapsed: number, pieces: readonly FriendsBuildPiece[], vehicles: readonly FriendsVehicle[], canEdit = true): FrontierResult {
-    const result = (ok: boolean, message: string) => { this.tell(actor, message, elapsed); return { playerId: actor.id, requestId: request.requestId, ok, message }; };
+    const result = (ok: boolean, message: string) => { if (ok) this.changed(); this.tell(actor, message, elapsed); return { playerId: actor.id, requestId: request.requestId, ok, message }; };
     if (!request || !this.acceptRequest(actor, request.requestId)) return { playerId: actor.id, requestId: request?.requestId || 0, ok: false, message: 'This operation was already handled.' };
     if (actor.lifeState !== 'alive') return result(false, 'Return to your expedition first.');
     if (request.action === 'home') { actor.x = FRIENDS_HUB.x; actor.y = FRIENDS_HUB.y + 90; actor.z = FRIENDS_SPAWN_PLATFORM.top; return result(true, 'Returned to the spawn platform.'); }
@@ -250,10 +304,28 @@ export class FriendsFrontier {
     this.spend(pack, charge); for (const [r, n] of Object.entries(refund)) this.state.stock[r as Resource] += n;
     if (!before && after) this.state.built++; this.changed(); return undefined;
   }
+  buildBatchTransition(actor: FrontierActor, edits: readonly {before?: FriendsBuildPiece;after?: Pick<FriendsBuildPiece,'shape'|'finish'>}[]) {
+    if (this.testing) {this.pack(actor);this.state.built+=edits.filter(e=>!e.before&&e.after).length;this.changed();return;}
+    const charge: Partial<Materials> = {}, refund: Partial<Materials> = {};
+    for (const edit of edits) {
+      const oldCost = edit.before ? buildCost(edit.before.shape,edit.before.finish) : {}, newCost = edit.after ? buildCost(edit.after.shape,edit.after.finish) : {};
+      for (const r of Object.keys(MATERIAL_NAMES) as Resource[]) {
+        const n = (newCost[r] || 0) - (oldCost[r] || 0);
+        if (n > 0) charge[r] = (charge[r] || 0) + n;
+        if (n < 0) refund[r] = (refund[r] || 0) - n;
+      }
+    }
+    const pack = this.pack(actor);
+    if (!canAfford(pack, charge)) return 'Gather enough materials for the entire group before building.';
+    this.spend(pack,charge);
+    for (const [r,n] of Object.entries(refund)) this.state.stock[r as Resource] += n;
+    this.state.built += edits.filter(e => !e.before && e.after).length; this.changed();
+  }
   snapshot(): FrontierSnapshot {
     if (this.snapshotCache?.terrain.revision !== this.terrain.revision) this.snapshotCache = undefined;
     if (!this.snapshotCache) this.snapshotCache = { ...this.state, testing:this.testing, terrain: this.terrain.snapshot(), harvested: [...this.harvested], packs: Object.fromEntries(Object.entries(this.state.packs).map(([k, p]) => [k, { ...p }])), discovered: [...(this.state.discovered || [])], stock: { ...this.state.stock }, cargo: { ...this.state.cargo }, planted: this.state.planted.map(p => ({ ...p })), feedback: { ...this.state.feedback } };
-    return this.snapshotCache;
+    return { ...this.snapshotCache, feedback: { ...this.state.feedback }, damage: this.state.damage&&this.damage.get(this.state.damage.id),
+      interaction: { actions: this.actions.snapshot(), damage: [...this.damage.values()], contacts: [...this.contacts] } };
   }
 }
 export function isFrontierSave(value: unknown): value is FrontierSnapshot {

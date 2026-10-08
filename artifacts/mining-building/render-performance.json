@@ -1,0 +1,67 @@
+{
+  "origin": "http://localhost:3014",
+  "errors": [],
+  "checks": [
+    "crack shader compiles and renders without WebGL errors",
+    "feedback uses at most three additional draws",
+    "effects off preserves selection and cracks",
+    "fragment pool stays bounded under five simultaneous miners",
+    "temporary excavation mask compiles and retires with the matching mesh"
+  ],
+  "render": {
+    "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "glError": 0,
+    "stats": {
+      "fragments": 0,
+      "crackFaces": 5,
+      "draws": 2
+    }
+  },
+  "performance": {
+    "method": "alternating frames after warmup; 120 samples per scene",
+    "fragmentPeak": 96,
+    "baseline": {
+      "cpuP50": 0,
+      "cpuP95": 0,
+      "cpuP99": 0,
+      "renderWallP95": 0.6000000238418579,
+      "gpuP50": 1.665499,
+      "gpuP95": 6.535375,
+      "draws": 9
+    },
+    "feedback": {
+      "cpuP50": 0.09999990463256836,
+      "cpuP95": 0.2999999523162842,
+      "cpuP99": 0.40000009536743164,
+      "renderWallP95": 0.7000000476837158,
+      "gpuP50": 1.6665,
+      "gpuP95": 5.329666,
+      "draws": 12,
+      "stats": {
+        "fragments": 96,
+        "crackFaces": 40,
+        "draws": 3
+      }
+    },
+    "cpuDeltaP95": 0.2999999523162842,
+    "gpuDeltaP95": -1.2057090000000006,
+    "drawDelta": 3,
+    "off": {
+      "fragments": 0,
+      "crackFaces": 5,
+      "draws": 2
+    },
+    "glError": 0
+  },
+  "excavation": {
+    "glError": 0,
+    "active": {
+      "pendingVoxels": 1,
+      "patchDraws": 1
+    },
+    "retired": {
+      "pendingVoxels": 0,
+      "patchDraws": 0
+    }
+  }
+}

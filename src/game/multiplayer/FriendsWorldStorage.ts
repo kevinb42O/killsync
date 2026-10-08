@@ -1,3 +1,4 @@
+import { durableBuildPieces } from './FriendsAssemblyPose';
 import { newFriendsCrew, validFriendsCrew, type FriendsCrewSave } from './FriendsCrewIdentity';
 import { isFrontierSave, type FrontierSnapshot } from './FriendsFrontier';
 import { FriendsTerrain, validTerrainEdit } from '../world/FriendsTerrain';
@@ -9,7 +10,9 @@ export type FriendsWorldSave = { crew?: FriendsCrewSave; version: 2; savedAt: nu
 export const FRIENDS_WORLD_KEY = 'killsync.friends.world.v2';
 /** The public train's journey is session-only. Older worlds can still contain
  * it, but disk saves and exports retain only whether the service is enabled. */
-function persistentWorld<T extends {transport?:FriendsTransportSave}>(world:T):T{
+function persistentWorld<T extends {transport?:FriendsTransportSave;frontier?:FrontierSnapshot;building?:FriendsBuildingSnapshot}>(world:T):T{
+  if(world.building)world={...world,building:{...world.building,pieces:durableBuildPieces(world.building.pieces)}};
+  if(world.frontier){const {interaction:_interaction,damage:_damage,feedback:_feedback,...frontier}=world.frontier;world={...world,frontier:{...frontier,feedback:{}}};}
   return world.transport?{...world,transport:{...world.transport,scenicRailway:world.transport.scenicRailway===undefined?undefined:world.transport.scenicRailway!==false}}:world;
 }
 // A bounded synchronous mirror lets simulation boot without losing edits to an

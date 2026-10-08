@@ -1,0 +1,107 @@
+{
+  "status": "Preliminary natural-terrain design survey; no saved builds or terrain edits inspected",
+  "unitsPerMetre": 12,
+  "lower": {
+    "x": 3520,
+    "y": 21632,
+    "ground": 32,
+    "deck": 192
+  },
+  "upper": {
+    "x": 6816,
+    "y": 18080,
+    "ground": 4576,
+    "deck": 4672
+  },
+  "horizontalMetres": 403.8041329379601,
+  "verticalRiseMetres": 373.3333333333333,
+  "cablePathMetres": 567.972932775661,
+  "cruiseSecondsAt5MetresPerSecond": 113.5945865551322,
+  "minimumRailCentrelineDistanceMetres": 167.23658186633904,
+  "minimumLakeRadiusAcrossSweep": 1.1131093507043832,
+  "minimumAuthoredRuinDistanceMetres": 877.3333333333334,
+  "minimumHullGroundClearanceMetres": 6.067220052083333,
+  "straightRouteMaximumTerrainPenetrationMetres": 44.354166666666664,
+  "supports": [
+    {
+      "kind": "terminal",
+      "x": 3520,
+      "y": 21632,
+      "cableElevationMetres": 30,
+      "groundElevationMetres": 2.6666666666666665,
+      "heightMetres": 27.333333333333332
+    },
+    {
+      "kind": "terminal approach gantry",
+      "x": 3651.84,
+      "y": 21489.92,
+      "cableElevationMetres": 30,
+      "groundElevationMetres": 2.6666666666666665,
+      "heightMetres": 27.333333333333332
+    },
+    {
+      "kind": "line tower",
+      "x": 4344,
+      "y": 20744,
+      "cableElevationMetres": 112.20263671875,
+      "groundElevationMetres": 56,
+      "heightMetres": 56.20263671875
+    },
+    {
+      "kind": "line tower",
+      "x": 5168,
+      "y": 19856,
+      "cableElevationMetres": 210.86930338541666,
+      "groundElevationMetres": 162.66666666666666,
+      "heightMetres": 48.20263671875
+    },
+    {
+      "kind": "line tower",
+      "x": 5992,
+      "y": 18968,
+      "cableElevationMetres": 362.5410965107854,
+      "groundElevationMetres": 304,
+      "heightMetres": 58.541096510785415
+    },
+    {
+      "kind": "terminal approach gantry",
+      "x": 6684.16,
+      "y": 18222.08,
+      "cableElevationMetres": 403.3333333333333,
+      "groundElevationMetres": 360,
+      "heightMetres": 43.333333333333336
+    },
+    {
+      "kind": "terminal",
+      "x": 6816,
+      "y": 18080,
+      "cableElevationMetres": 403.3333333333333,
+      "groundElevationMetres": 381.3333333333333,
+      "heightMetres": 22
+    }
+  ],
+  "sunrise": {
+    "terrainHorizonDegrees": -4.838990792091987,
+    "blocker": {
+      "x": 17705.874247872,
+      "y": 10820.083834752,
+      "z": 3584,
+      "distance": 13088
+    }
+  },
+  "sunset": {
+    "terrainHorizonDegrees": -7.187063660972281,
+    "blocker": {
+      "x": -26466.01176,
+      "y": 40268.00784,
+      "z": -352,
+      "distance": 40000
+    }
+  },
+  "caveats": [
+    "Profile requires smooth saddle transitions and a new full sweep before implementation.",
+    "Terrain scan excludes vegetation, saves, station footprints, access roads and foundations.",
+    "Horizon scan covers terrain along the exact horizon sun bearings, not trees or all solar elevations.",
+    "The shore-to-rail access route remains an unsurveyed design proposal."
+  ]
+}

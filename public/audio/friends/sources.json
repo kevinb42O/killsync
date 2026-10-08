@@ -1,0 +1,446 @@
+{
+  "downloaded": "2026-10-08",
+  "license": "CC0-1.0",
+  "sources": {
+    "impact": "https://kenney.nl/assets/impact-sounds",
+    "rpg": "https://kenney.nl/assets/rpg-audio",
+    "interface": "https://kenney.nl/assets/interface-sounds",
+    "music": "https://opengameart.org/content/calm-piano-1-vaporware",
+    "park": "https://opengameart.org/content/park-ambiences",
+    "natureFoley": "https://opengameart.org/content/random-sounds-samples",
+    "shovel": "https://opengameart.org/content/shovel-sound",
+    "landing": "https://opengameart.org/content/jump-landing-sound",
+    "surf": "https://freesound.org/people/transitking/sounds/11505/",
+    "trainEngine": "https://freesound.org/people/xo9rh11o3w/sounds/199828/",
+    "trainRail": "https://freesound.org/people/MeijstroAudio/sounds/402074/",
+    "trainRailOriginal": "https://freesound.org/people/jordir/sounds/372873/",
+    "trainDeparture": "https://freesound.org/people/keithpeter/sounds/125211/",
+    "trainBrakes": "https://freesound.org/people/craigsmith/sounds/438765/",
+    "trainWhistle": "https://freesound.org/people/Bidone/sounds/71778/",
+    "jump": "https://opengameart.org/content/jump-and-run-and-stand",
+    "wind": "https://opengameart.org/content/wind1",
+    "eat": "https://freesound.org/people/R1nkata/sounds/723600/"
+  },
+  "assets": [
+    {
+      "file": "footstep_grass_000.ogg",
+      "pack": "impact",
+      "original": "footstep_grass_000.ogg",
+      "sha256": "9d49497777405d78d7cf7f2888e28277f3a23192300cfd1d79d54876b20f479f"
+    },
+    {
+      "file": "footstep_grass_001.ogg",
+      "pack": "impact",
+      "original": "footstep_grass_001.ogg",
+      "sha256": "fb28781bd22b2eefdc14077f1adf5c94d7fe9c3a130194633b55f3e0d39d9f04"
+    },
+    {
+      "file": "footstep_grass_002.ogg",
+      "pack": "impact",
+      "original": "footstep_grass_002.ogg",
+      "sha256": "73a520139f5be716a403bfe9c80e0e94d1e61d8e9de04a354b336392164b53dc"
+    },
+    {
+      "file": "footstep_wood_000.ogg",
+      "pack": "impact",
+      "original": "footstep_wood_000.ogg",
+      "sha256": "5f1c252942a220d658121bd9417448cd19649ded9fff2ff15f6e50899373ce8e"
+    },
+    {
+      "file": "footstep_wood_001.ogg",
+      "pack": "impact",
+      "original": "footstep_wood_001.ogg",
+      "sha256": "e4f68e1c9fd55b4dc8ca89ed2bbab6f200171bc54bdc18aa96b80d8e7336f462"
+    },
+    {
+      "file": "footstep_wood_002.ogg",
+      "pack": "impact",
+      "original": "footstep_wood_002.ogg",
+      "sha256": "9ff095b05cee5eec40b081defe3f0eef7232bb16d4865ce03b9f6dbab875cfdd"
+    },
+    {
+      "file": "footstep_concrete_000.ogg",
+      "pack": "impact",
+      "original": "footstep_concrete_000.ogg",
+      "sha256": "d7267e183067757c92c169de2a379abea592cfca6b39bb2e8feea15221ad79fe"
+    },
+    {
+      "file": "footstep_concrete_001.ogg",
+      "pack": "impact",
+      "original": "footstep_concrete_001.ogg",
+      "sha256": "507a75eb19b897087855a3be3cf11a12d7fa37d143ad535eeebe0b8031c7325d"
+    },
+    {
+      "file": "footstep_concrete_002.ogg",
+      "pack": "impact",
+      "original": "footstep_concrete_002.ogg",
+      "sha256": "b21fa546d74941196b25da8a20b7010abd8c05c4fcf93545d1f344e66a664e13"
+    },
+    {
+      "file": "footstep_snow_000.ogg",
+      "pack": "impact",
+      "original": "footstep_snow_000.ogg",
+      "sha256": "c05fa4a9dc9a7aabc04996466fb589537e49af76de9998d8f9e6270ec92dcef7"
+    },
+    {
+      "file": "footstep_snow_001.ogg",
+      "pack": "impact",
+      "original": "footstep_snow_001.ogg",
+      "sha256": "980fb9a1c9227aed7995067b0357f373053337f2416316db8ea0438418542fb4"
+    },
+    {
+      "file": "footstep_snow_002.ogg",
+      "pack": "impact",
+      "original": "footstep_snow_002.ogg",
+      "sha256": "db52bafdc66304f3b999f2c29227826c65993916e630ac2ffbca17d07b263178"
+    },
+    {
+      "file": "impactWood_medium_000.ogg",
+      "pack": "impact",
+      "original": "impactWood_medium_000.ogg",
+      "sha256": "1723a9fd25103ed41af06054814e84e65f4a772bac86ab2dc927da93d9592ff5"
+    },
+    {
+      "file": "impactWood_medium_001.ogg",
+      "pack": "impact",
+      "original": "impactWood_medium_001.ogg",
+      "sha256": "15271dbe8e2872dbb0ff1aeb7b12b2d2b92b7c1951c88532b9ab9158c36dfc73"
+    },
+    {
+      "file": "impactWood_medium_002.ogg",
+      "pack": "impact",
+      "original": "impactWood_medium_002.ogg",
+      "sha256": "3f3f1917428b828f733a963167833c707bf88296ff158e1559c57c5cb813d799"
+    },
+    {
+      "file": "impactMining_000.ogg",
+      "pack": "impact",
+      "original": "impactMining_000.ogg",
+      "sha256": "36b4ea107222d073c67ca64dde26944975609202d5090b2f2021213c1a7e35cd"
+    },
+    {
+      "file": "impactMining_001.ogg",
+      "pack": "impact",
+      "original": "impactMining_001.ogg",
+      "sha256": "61235a18de3f3d92118235398222dbf51d448f1be70b1c8bc962b10b86f2d9c6"
+    },
+    {
+      "file": "impactMining_002.ogg",
+      "pack": "impact",
+      "original": "impactMining_002.ogg",
+      "sha256": "059558ec751115ca6b1441e00f0adc837c1a3eeb0a066b109e0fd879fc5d0b0c"
+    },
+    {
+      "file": "impactSoft_medium_000.ogg",
+      "pack": "impact",
+      "original": "impactSoft_medium_000.ogg",
+      "sha256": "7d3ba0bb5e60a11b5d3e558c141303dcf494256675fbf753c0d252d2cf0481e3"
+    },
+    {
+      "file": "impactSoft_medium_001.ogg",
+      "pack": "impact",
+      "original": "impactSoft_medium_001.ogg",
+      "sha256": "7642a4fd43e547afe4f7adfadb3dabb681c0ff512f52c1674bae30a726841faf"
+    },
+    {
+      "file": "impactSoft_medium_002.ogg",
+      "pack": "impact",
+      "original": "impactSoft_medium_002.ogg",
+      "sha256": "5069e3571a77d7f7aae9ef71d0364aa245fb7d64a7c8cc9956f221d03088c089"
+    },
+    {
+      "file": "impactMetal_light_000.ogg",
+      "pack": "impact",
+      "original": "impactMetal_light_000.ogg",
+      "sha256": "33b5e6e37c6e9d54e07bf5a89b12c76e879f40c1ea83cdd82714df1d6f9fec6d"
+    },
+    {
+      "file": "impactMetal_light_001.ogg",
+      "pack": "impact",
+      "original": "impactMetal_light_001.ogg",
+      "sha256": "fba69c467ddd85da7b1d82e259f936b876d9ba6a3d6f1b24bdd10468e46bfe08"
+    },
+    {
+      "file": "impactMetal_light_002.ogg",
+      "pack": "impact",
+      "original": "impactMetal_light_002.ogg",
+      "sha256": "25a96f90a9a1f88a531e824e126f0519504625e5635e65a72e4f31611428db29"
+    },
+    {
+      "file": "handleCoins.ogg",
+      "pack": "rpg",
+      "original": "handleCoins.ogg",
+      "sha256": "8a91f969e932df709df80ee124d86a51389eed9b67f22e5e716bc2bbf60d8dab"
+    },
+    {
+      "file": "handleSmallLeather.ogg",
+      "pack": "rpg",
+      "original": "handleSmallLeather.ogg",
+      "sha256": "ae3cbf695aa0a8b98b5a80a835be5a3ccbd5446a24db2235cd4c3cd6fc92ed96"
+    },
+    {
+      "file": "cloth1.ogg",
+      "pack": "rpg",
+      "original": "cloth1.ogg",
+      "sha256": "ddb93a3671233f95da0e0b10367f082f7eb42fa6caaddcf776410aa8833c747d"
+    },
+    {
+      "file": "knifeSlice.ogg",
+      "pack": "rpg",
+      "original": "knifeSlice.ogg",
+      "sha256": "4cd96dc630bed9840c15f1dd2306da2cc56a4da26a5d3f1a03c5a7265ac5e54f"
+    },
+    {
+      "file": "bookOpen.ogg",
+      "pack": "rpg",
+      "original": "bookOpen.ogg",
+      "sha256": "953390534377222bee89ac8cd9e60a58fdc037c71a4d7c18c43cd647c7f34ba8"
+    },
+    {
+      "file": "click_001.ogg",
+      "pack": "interface",
+      "original": "click_001.ogg",
+      "sha256": "ccfb7fa0cccdd9faec0eb16033c732b1e308d139d80f799161495d58f7adcdb9"
+    },
+    {
+      "file": "select_001.ogg",
+      "pack": "interface",
+      "original": "select_001.ogg",
+      "sha256": "aec0c31ea934a35936ae0d2ab8fac8123c93aa5647f935853a58dbaf90278b7a"
+    },
+    {
+      "file": "confirmation_001.ogg",
+      "pack": "interface",
+      "original": "confirmation_001.ogg",
+      "sha256": "063564703b6094d70718a3e787a55cc9141611e4ecd6b6637f8828f79b4a8c3a"
+    },
+    {
+      "file": "error_001.ogg",
+      "pack": "interface",
+      "original": "error_001.ogg",
+      "sha256": "46e67425d16339772e8d328fb36a49426c9467418686e11beeb71ff84b0f6433"
+    },
+    {
+      "file": "glass_001.ogg",
+      "pack": "interface",
+      "original": "glass_001.ogg",
+      "sha256": "183eebee20eb0a532b0b85104d139cbf2673eb66d95c3cc733ac9ea98362e7e8"
+    },
+    {
+      "file": "vaporware.mp3",
+      "author": "The Cynic Project",
+      "source": "https://opengameart.org/sites/default/files/003_Vaporware_2.mp3",
+      "sha256": "1697fa1b7ed6f3fe1eca4daa4f9d1a2eb3db8fe40a0f3c283529ab47e57b5b38"
+    },
+    {
+      "file": "wind_clean.ogg",
+      "author": "Luke.RUSTLTD",
+      "published": "2010-10-01",
+      "license": "CC0-1.0",
+      "sourcePage": "https://opengameart.org/content/wind1",
+      "source": "https://opengameart.org/sites/default/files/wind1.wav",
+      "sha256": "01fb3f5cf2136ced5691073b60f36968c7203c1a8d00f6d425e2ec6bfddacadb",
+      "originalSha256": "a2856f794fbf77e05f8241dc4adeade7f62fa21c3c9dc49f7725b6c6218060c3",
+      "edit": "12\u201348s excerpt; mono 32 kHz Vorbis quality 3; highpass=f=80,lowpass=f=4000,loudnorm=I=-24:TP=-3:LRA=8. Playback crossfades the loop seam. Originally made with conventional PureData synthesis in 2010; no AI, wildlife, or runtime synthesis."
+    },
+    {
+      "file": "crickets.ogg",
+      "author": "Augmentality (Brandon Morris)",
+      "sourcePage": "https://opengameart.org/content/random-sounds-samples",
+      "source": "https://opengameart.org/sites/default/files/cricket%20ambienc276.ogg",
+      "sha256": "31c93d0c6d7d73a9ed002a7f4434d0adee198e51c0d318b48ce1eeb4dea5a811",
+      "originalSha256": "0d672c93843afc5785cbf4eeb6df696a73188016724ff59bcbd9c623b8d223bf",
+      "edit": "0\u201312.27s excerpt; mono 32 kHz Vorbis quality 3; highpass=f=150,loudnorm=I=-24:TP=-3:LRA=8. Playback crossfades the loop seam."
+    },
+    {
+      "file": "shovel.ogg",
+      "author": "RavenWolfProds; edited by themightyglider",
+      "sourcePage": "https://opengameart.org/content/shovel-sound",
+      "source": "https://opengameart.org/sites/default/files/shovel_0.ogg",
+      "sha256": "1ad178afa5d959ecd4454c3d8388abb23451a1f43a028f476aa37aa3a944d195"
+    },
+    {
+      "file": "leaves.ogg",
+      "author": "Augmentality (Brandon Morris)",
+      "sourcePage": "https://opengameart.org/content/random-sounds-samples",
+      "source": "https://opengameart.org/sites/default/files/moving%20leaves%20stereo.ogg",
+      "sha256": "678c0da00ef1092f4be7c2d8c7b22c1c91c5fc8ca1f3f9570ce59de995c0138c"
+    },
+    {
+      "file": "landing.wav",
+      "author": "MentalSanityOff; submitted by qubodup",
+      "sourcePage": "https://opengameart.org/content/jump-landing-sound",
+      "source": "https://opengameart.org/sites/default/files/jumpland.wav",
+      "sha256": "b4d262eb5c048167cceca9f5d790f6ad9310c14588ce87f5466c0a978228a4ca"
+    },
+    {
+      "file": "cloth2.ogg",
+      "pack": "rpg",
+      "original": "cloth2.ogg",
+      "sha256": "8a7451193c38bc05483aec25dd193e163a15d44cf7fff04ac7912573231b0201"
+    },
+    {
+      "file": "cloth3.ogg",
+      "pack": "rpg",
+      "original": "cloth3.ogg",
+      "sha256": "a48632d17a4f1416541d261a32a31612e01267144c407fa3ecab3ff410f0085b"
+    },
+    {
+      "file": "cloth4.ogg",
+      "pack": "rpg",
+      "original": "cloth4.ogg",
+      "sha256": "e7ab9a6c4466dea874196c61f59bf1da05cfe58748f42fadd695d441a154a99b"
+    },
+    {
+      "file": "impactMining_003.ogg",
+      "pack": "impact",
+      "original": "impactMining_003.ogg",
+      "sha256": "4237fa2cd80364ad81cd0af44f67d7497f1c5edcc7bdb02cd22be2ba4580c83d"
+    },
+    {
+      "file": "impactMining_004.ogg",
+      "pack": "impact",
+      "original": "impactMining_004.ogg",
+      "sha256": "8ca3a99d85d845751ad8ce7b40509da58263a62e48cde70e5a30b5ccef4c9a3b"
+    },
+    {
+      "file": "impactWood_heavy_000.ogg",
+      "pack": "impact",
+      "original": "impactWood_heavy_000.ogg",
+      "sha256": "15ff82332f342c30e469215539e1cc57e11b221aa2cf7e11e811d313a9927f3d"
+    },
+    {
+      "file": "impactWood_heavy_001.ogg",
+      "pack": "impact",
+      "original": "impactWood_heavy_001.ogg",
+      "sha256": "f1b07a53ac10c615fff9ba470511fdeb722b5902e1a8520759fc20ad6f546015"
+    },
+    {
+      "file": "impactWood_heavy_002.ogg",
+      "pack": "impact",
+      "original": "impactWood_heavy_002.ogg",
+      "sha256": "ce1e06f2a05f2634c645cb72f6a1623e64bc2d92be34917430a61031fb6597d4"
+    },
+    {
+      "file": "surf.ogg",
+      "author": "transitking",
+      "sourcePage": "https://freesound.org/people/transitking/sounds/11505/",
+      "source": "https://cdn.freesound.org/previews/11/11505_31028-hq.mp3",
+      "originalSha256": "ea2a900f500c32330b6ecafcf7fe283d854048f5f7364ec115f267b7faf7b29f",
+      "edit": "36\u201376s excerpt of the publisher's high-quality MP3 preview of wavesound.wav; highpass 80 Hz, lowpass 8 kHz; -24 LUFS / -3 dBTP / LRA 8 normalization; stereo 32 kHz Vorbis quality 3. Playback crossfades the loop seam.",
+      "sha256": "44495445e0b7e270f327be14cef172ec2e97a7ac50ee9bd62a3f3b4f0d863870"
+    },
+    {
+      "file": "bird_call_000.ogg",
+      "author": "Thimras",
+      "sourcePage": "https://opengameart.org/content/park-ambiences",
+      "source": "https://opengameart.org/sites/default/files/park_ambience_birds.wav",
+      "originalSha256": "dc1a5ac34b89cab7f8f261b53a23da7c1c5e3cc895aae4cb6fb4a1a04001b2af",
+      "edit": "22.05\u201323.85s recorded bird-call excerpt; mono 32 kHz Vorbis quality 4; highpass=f=1000,lowpass=f=7500,loudnorm=I=-20:TP=-3:LRA=8,afade=t=in:d=0.04,afade=t=out:st=1.65:d=0.15. No looping or pitch changes.",
+      "sha256": "496efed03f60a11a6da94705b8e8df028d01db2dfb34b0bd7256f805efb53487"
+    },
+    {
+      "file": "bird_call_001.ogg",
+      "author": "Thimras",
+      "sourcePage": "https://opengameart.org/content/park-ambiences",
+      "source": "https://opengameart.org/sites/default/files/park_ambience_birds.wav",
+      "originalSha256": "dc1a5ac34b89cab7f8f261b53a23da7c1c5e3cc895aae4cb6fb4a1a04001b2af",
+      "edit": "29.25\u201331.05s recorded bird-call excerpt; mono 32 kHz Vorbis quality 4; highpass=f=1000,lowpass=f=7500,loudnorm=I=-20:TP=-3:LRA=8,afade=t=in:d=0.04,afade=t=out:st=1.65:d=0.15. No looping or pitch changes.",
+      "sha256": "e6a102160e51eb2fd9fedc3e4861a77d24b00323556066a04f85ec4a43aabb80"
+    },
+    {
+      "file": "bird_call_002.ogg",
+      "author": "Thimras",
+      "sourcePage": "https://opengameart.org/content/park-ambiences",
+      "source": "https://opengameart.org/sites/default/files/park_ambience_birds.wav",
+      "originalSha256": "dc1a5ac34b89cab7f8f261b53a23da7c1c5e3cc895aae4cb6fb4a1a04001b2af",
+      "edit": "72.55\u201374.35s recorded bird-call excerpt; mono 32 kHz Vorbis quality 4; highpass=f=1000,lowpass=f=7500,loudnorm=I=-20:TP=-3:LRA=8,afade=t=in:d=0.04,afade=t=out:st=1.65:d=0.15. No looping or pitch changes.",
+      "sha256": "9b5896fdd81fc8bd74784e46e051b18b950a8ddd63de4035848380a9e0a5907e"
+    },
+    {
+      "file": "bird_call_003.ogg",
+      "author": "Thimras",
+      "sourcePage": "https://opengameart.org/content/park-ambiences",
+      "source": "https://opengameart.org/sites/default/files/park_ambience_birds.wav",
+      "originalSha256": "dc1a5ac34b89cab7f8f261b53a23da7c1c5e3cc895aae4cb6fb4a1a04001b2af",
+      "edit": "85.15\u201386.95s recorded bird-call excerpt; mono 32 kHz Vorbis quality 4; highpass=f=1000,lowpass=f=7500,loudnorm=I=-20:TP=-3:LRA=8,afade=t=in:d=0.04,afade=t=out:st=1.65:d=0.15. No looping or pitch changes.",
+      "sha256": "d99b2a2427bc6b447f1283d2d08625dc34e489ef4dc479f180ea25cee4d0fc3f"
+    },
+    {
+      "file": "train_drive.ogg",
+      "author": "xo9rh11o3w",
+      "sourcePage": "https://freesound.org/people/xo9rh11o3w/sounds/199828/",
+      "source": "https://cdn.freesound.org/previews/199/199828_2814100-hq.mp3",
+      "originalSha256": "c2b224ab9e3969a5289eb46813ed46867090cd55bd709f79ae6f837ad7077e73",
+      "edit": "0\u201319.076s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8. Recorded source; no generation.",
+      "sha256": "5d45c6407f7d51c2989e3008b72c770e70f844f9dc530b27a1913d7d414426c3"
+    },
+    {
+      "file": "train_rail.ogg",
+      "author": "MeijstroAudio / jordir",
+      "sourcePage": "https://freesound.org/people/MeijstroAudio/sounds/402074/",
+      "source": "https://cdn.freesound.org/previews/402/402074_3513022-hq.mp3",
+      "originalSha256": "72b0997c7dcc2b39933c987b6f5496c55cbc216a83c3e33df6fcfc68f15f8205",
+      "edit": "0\u20135.75s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8. Recorded source; no generation.",
+      "sha256": "5abd6a2f7e916a10c1ece2ea1909247e06e52c9930507fc94235a0fdc2322bb5"
+    },
+    {
+      "file": "train_depart.ogg",
+      "author": "keithpeter",
+      "sourcePage": "https://freesound.org/people/keithpeter/sounds/125211/",
+      "source": "https://cdn.freesound.org/previews/125/125211_1848966-hq.mp3",
+      "originalSha256": "39850849b3234e8ba3400ad51285a0d8a4df569bdd1cec84e71088c9d9a0bbe4",
+      "edit": "24\u201328s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
+      "sha256": "a700a46792aa683671996ec0a4c2e60889d7a7fd2133776493372589683728cc"
+    },
+    {
+      "file": "train_brake.ogg",
+      "author": "craigsmith / USC Cinema",
+      "sourcePage": "https://freesound.org/people/craigsmith/sounds/438765/",
+      "source": "https://cdn.freesound.org/previews/438/438765_2524442-hq.mp3",
+      "originalSha256": "4044e2ccefc6b04ca934e466b9280cec675bf6ccd7064ebeb095bec778033667",
+      "edit": "34\u201338s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
+      "sha256": "10a234912b3dad8924245b9c406f1bcf2d1b154899254ea7bc241036e7ff09b6"
+    },
+    {
+      "file": "train_stop.ogg",
+      "author": "craigsmith / USC Cinema",
+      "sourcePage": "https://freesound.org/people/craigsmith/sounds/438765/",
+      "source": "https://cdn.freesound.org/previews/438/438765_2524442-hq.mp3",
+      "originalSha256": "4044e2ccefc6b04ca934e466b9280cec675bf6ccd7064ebeb095bec778033667",
+      "edit": "81\u201385s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
+      "sha256": "4678d85d3632cfe140635813890cbe305a778c6ef43af7e29dbe8d71d9e05345"
+    },
+    {
+      "file": "train_horn.ogg",
+      "author": "Bidone",
+      "sourcePage": "https://freesound.org/people/Bidone/sounds/71778/",
+      "source": "https://cdn.freesound.org/previews/71/71778_706955-hq.mp3",
+      "originalSha256": "42c528eda2c2038fa3dce9ae32c430acce64dec23bc58886307a333c597d8d8c",
+      "edit": "0\u20133.201s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=2.801:d=0.4. Recorded source; no generation.",
+      "sha256": "4ef8d74de0124c996d0d016e87e6d04e637eeaab5133d5fc80db20a5701e7053"
+    },
+    {
+      "file": "jump.ogg",
+      "pack": "jump",
+      "author": "mieki256",
+      "published": "2013-09-18",
+      "license": "CC0-1.0",
+      "original": "https://opengameart.org/sites/default/files/jump.flac",
+      "originalSha256": "abdb4e59452a15557fbac3660626619a783e8da59b757f464a052ff74c7e7870",
+      "sha256": "a4226b8dd0774823f5f946da3a5a187d852df76c32929129a04b5b9a834c222c",
+      "processing": "Full dedicated jump clip; mono 32 kHz Vorbis quality 4; high-pass 100 Hz, low-pass 3200 Hz; -10 dB gain; 3 ms opening fade and 16 ms closing fade from 0.052 s. Runtime takeoff gain 0.12, air-jump gain 0.1."
+    },
+    {
+      "file": "eat.ogg",
+      "pack": "eat",
+      "author": "R1nkata",
+      "license": "CC0-1.0",
+      "sourcePage": "https://freesound.org/people/R1nkata/sounds/723600/",
+      "source": "https://cdn.freesound.org/previews/723/723600_15636637-lq.ogg",
+      "original": "Soft Chicken Chomp 3",
+      "processing": "Full 1.439-second public Vorbis preview, unchanged. Runtime gain 0.22.",
+      "sha256": "842c076049f9ba2c2730385b318946427c1f10a362792468bf5f92f3ba6faa27"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { scenicTransitAir } from './FriendsRailInfrastructure';
 import { baseTerrainHeight } from './FriendsTerrain';
 import { FriendsTerrain, TERRAIN_CHUNK, VOXEL_SIZE, islandRuinsAt } from './FriendsTerrain';
-import { CAVE_BOUNDS, explorationCave, caveGlow } from './FriendsCave';
+import { CAVE_BOUNDS, explorationCave, caveGlow, caveOpenToSky } from './FriendsCave';
 export type TerrainMeshData = { positions: Int16Array; normals: Int8Array; uv: Float32Array; colors: Uint8Array; glow:Float32Array; groups: { start: number; count: number; materialIndex: number }[] };
 /** Greedy volumetric meshing preserves every simulation voxel while merging
  * coplanar faces. Large vaulted rooms need only a fraction of the old triangles. */
@@ -31,7 +31,7 @@ export function meshTerrainChunk(terrain: FriendsTerrain, cx: number, cy: number
         // Separate underground materials suppress daylight fill without affecting
         // surface grass or the full-map horizon. Point lights still light the rock.
         if(!surface){const px=(cx*16+q[0]+.5)*32,py=(cy*16+q[1]+.5)*32,pz=(bottom+q[2]+.5)*32;
-          if(caveRegion&&(bottom+p[2])*32<608&&explorationCave(px,py,pz)||baseTerrainHeight(px,py)>pz+128&&scenicTransitAir(px,py,pz))group+=5;
+          if(caveRegion&&(bottom+p[2])*32<608&&explorationCave(px,py,pz)&&!caveOpenToSky(px,py,pz)||baseTerrainHeight(px,py)>pz+128&&scenicTransitAir(px,py,pz))group+=5;
         }
         const ruin=ruins[p[1]*16+p[0]].find(b=>(bottom+p[2]+.5)*32>=b.z&&(bottom+p[2]+.5)*32<b.z+b.h);
         if(ruin?.detail==='stair-core')continue;

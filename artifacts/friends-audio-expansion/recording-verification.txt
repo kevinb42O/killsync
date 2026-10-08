@@ -1,0 +1,32 @@
+Recorded audio verification
+
+Checks every newly bundled recording in the browser's actual audio decoder, including file hashes, non-silent samples, and decoded memory.
+
+Validate recordings
+wind.ogg: 36.00s, 1 channel(s), peak 0.377, RMS 0.0492, SHA-256 OK
+crickets.ogg: 12.24s, 1 channel(s), peak 0.240, RMS 0.0320, SHA-256 OK
+shovel.ogg: 0.91s, 2 channel(s), peak 1.033, RMS 0.0692, SHA-256 OK
+leaves.ogg: 1.40s, 2 channel(s), peak 0.376, RMS 0.0309, SHA-256 OK
+landing.wav: 0.41s, 1 channel(s), peak 0.986, RMS 0.1113, SHA-256 OK
+cloth2.ogg: 0.42s, 2 channel(s), peak 0.401, RMS 0.0367, SHA-256 OK
+cloth3.ogg: 0.48s, 2 channel(s), peak 0.313, RMS 0.0344, SHA-256 OK
+cloth4.ogg: 0.38s, 2 channel(s), peak 0.183, RMS 0.0186, SHA-256 OK
+impactMining_003.ogg: 0.99s, 2 channel(s), peak 0.889, RMS 0.0675, SHA-256 OK
+impactMining_004.ogg: 0.83s, 2 channel(s), peak 0.901, RMS 0.1028, SHA-256 OK
+impactWood_heavy_000.ogg: 0.31s, 2 channel(s), peak 0.897, RMS 0.1047, SHA-256 OK
+impactWood_heavy_001.ogg: 0.31s, 2 channel(s), peak 0.898, RMS 0.1034, SHA-256 OK
+impactWood_heavy_002.ogg: 0.31s, 2 channel(s), peak 0.894, RMS 0.1134, SHA-256 OK
+surf.ogg: 40.00s, 2 channel(s), peak 0.685, RMS 0.0435, SHA-256 OK
+bird_call_000.ogg: 1.80s, 1 channel(s), peak 0.429, RMS 0.0675, SHA-256 OK
+bird_call_001.ogg: 1.80s, 1 channel(s), peak 0.376, RMS 0.0594, SHA-256 OK
+bird_call_002.ogg: 1.80s, 1 channel(s), peak 0.443, RMS 0.0685, SHA-256 OK
+bird_call_003.ogg: 1.80s, 1 channel(s), peak 0.286, RMS 0.0613, SHA-256 OK
+train_drive.ogg: 19.05s, 1 channel(s), peak 0.433, RMS 0.0604, SHA-256 OK
+train_rail.ogg: 5.70s, 1 channel(s), peak 0.682, RMS 0.0694, SHA-256 OK
+train_depart.ogg: 4.00s, 1 channel(s), peak 0.345, RMS 0.0465, SHA-256 OK
+train_brake.ogg: 4.00s, 1 channel(s), peak 0.276, RMS 0.0616, SHA-256 OK
+train_stop.ogg: 4.00s, 1 channel(s), peak 0.343, RMS 0.0466, SHA-256 OK
+train_horn.ogg: 3.19s, 1 channel(s), peak 0.279, RMS 0.0646, SHA-256 OK
+
+PASS: 24 recordings decoded and verified.
+Decoded memory before loop trimming: 31.71 MiB at 44100 Hz.

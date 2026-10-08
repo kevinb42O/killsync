@@ -1,0 +1,309 @@
+{
+  "date": "2026-10-08T15:02:43.391Z",
+  "errors": [],
+  "method": "Current working tree; Chromium headless Metal; 1600x900 DPR1; CPU submission and EXT_disjoint_timer_query_webgl2 GPU timings. Arena: fixed 9AM and held train, same spawn camera. Render-only visibility A/B keeps simulation unchanged. First4 retains three touring and one flatbed. Isolated test also compares one touring plus flatbed/stake/gondola.",
+  "setup": {
+    "timer": true,
+    "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "train": [
+      "sunskiff",
+      "grand-engine",
+      "grand-0",
+      "grand-1",
+      "grand-2",
+      "grand-3",
+      "grand-4",
+      "grand-5",
+      "grand-6",
+      "grand-7",
+      "grand-8",
+      "grand-9",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway"
+    ],
+    "forest": {
+      "trees": 3967,
+      "draws": 15,
+      "triangles": 4097962
+    }
+  },
+  "arena": {
+    "disjoint": false,
+    "phases": [
+      {
+        "mode": "all",
+        "cpu": {
+          "mean": 6.102117647844202,
+          "p50": 6,
+          "p95": 7.200000047683716,
+          "count": 425
+        },
+        "gpu": {
+          "mean": 21.40435406398103,
+          "p50": 21.204999,
+          "p95": 22.917625,
+          "count": 422
+        },
+        "calls": {
+          "mean": 1039.070588235294,
+          "p50": 973,
+          "p95": 1207,
+          "count": 425
+        },
+        "triangles": {
+          "mean": 5512133.929411764,
+          "p50": 5470752,
+          "p95": 5617313,
+          "count": 425
+        }
+      },
+      {
+        "mode": "first4",
+        "cpu": {
+          "mean": 5.396338672332415,
+          "p50": 5.200000047683716,
+          "p95": 6.299999952316284,
+          "count": 437
+        },
+        "gpu": {
+          "mean": 21.28601687871855,
+          "p50": 21.082874,
+          "p95": 22.635541,
+          "count": 437
+        },
+        "calls": {
+          "mean": 884.8855835240274,
+          "p50": 832,
+          "p95": 1023,
+          "count": 437
+        },
+        "triangles": {
+          "mean": 5487849.732265446,
+          "p50": 5450412,
+          "p95": 5585621,
+          "count": 437
+        }
+      },
+      {
+        "mode": "none",
+        "cpu": {
+          "mean": 4.792371132447547,
+          "p50": 4.400000095367432,
+          "p95": 5.100000023841858,
+          "count": 485
+        },
+        "gpu": {
+          "mean": 19.281872517525755,
+          "p50": 19.08925,
+          "p95": 20.244125,
+          "count": 485
+        },
+        "calls": {
+          "mean": 784.0082474226804,
+          "p50": 744,
+          "p95": 898,
+          "count": 485
+        },
+        "triangles": {
+          "mean": 5451098.701030928,
+          "p50": 5430688,
+          "p95": 5509253,
+          "count": 485
+        }
+      }
+    ],
+    "rounds": [
+      {
+        "mode": "all",
+        "round": 0,
+        "gpu": {
+          "mean": 21.289156051401868,
+          "p50": 21.125458,
+          "p95": 22.496583,
+          "count": 214
+        }
+      },
+      {
+        "mode": "first4",
+        "round": 0,
+        "gpu": {
+          "mean": 21.282403611872155,
+          "p50": 21.059541,
+          "p95": 22.631624,
+          "count": 219
+        }
+      },
+      {
+        "mode": "none",
+        "round": 0,
+        "gpu": {
+          "mean": 19.38864797925311,
+          "p50": 19.131375,
+          "p95": 20.408249,
+          "count": 241
+        }
+      },
+      {
+        "mode": "all",
+        "round": 1,
+        "gpu": {
+          "mean": 21.522875096153847,
+          "p50": 21.472541,
+          "p95": 23.247374,
+          "count": 208
+        }
+      },
+      {
+        "mode": "first4",
+        "round": 1,
+        "gpu": {
+          "mean": 21.28964672018348,
+          "p50": 21.088291,
+          "p95": 22.649708,
+          "count": 218
+        }
+      },
+      {
+        "mode": "none",
+        "round": 1,
+        "gpu": {
+          "mean": 19.17640986885247,
+          "p50": 19.071208,
+          "p95": 20.164458,
+          "count": 244
+        }
+      }
+    ],
+    "performance": {
+      "drawCalls": 974,
+      "triangles": 5470836,
+      "geometries": 592,
+      "textures": 90,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    },
+    "forest": {
+      "trees": 3967,
+      "draws": 15,
+      "triangles": 4097962
+    }
+  },
+  "isolated": {
+    "inventory": [
+      {
+        "kind": "engine",
+        "meshes": 18,
+        "shadowMeshes": 13,
+        "triangles": 2844,
+        "instances": 113
+      },
+      {
+        "kind": "touring",
+        "meshes": 19,
+        "shadowMeshes": 15,
+        "triangles": 4664,
+        "instances": 173
+      },
+      {
+        "kind": "flatbed",
+        "meshes": 19,
+        "shadowMeshes": 8,
+        "triangles": 3184,
+        "instances": 91
+      },
+      {
+        "kind": "stake",
+        "meshes": 19,
+        "shadowMeshes": 8,
+        "triangles": 3424,
+        "instances": 111
+      },
+      {
+        "kind": "gondola",
+        "meshes": 19,
+        "shadowMeshes": 8,
+        "triangles": 3400,
+        "instances": 109
+      }
+    ],
+    "cpu": [
+      {
+        "mode": "all",
+        "vehicles": 11,
+        "moving": {
+          "mean": 0.09869999988873798,
+          "p50": 0.09699999928474426,
+          "p95": 0.11600000023841858,
+          "count": 30
+        },
+        "held": {
+          "mean": 0.04680000011126199,
+          "p50": 0.04299999952316284,
+          "p95": 0.09699999928474426,
+          "count": 30
+        }
+      },
+      {
+        "mode": "first4",
+        "vehicles": 5,
+        "moving": {
+          "mean": 0.04376666680971779,
+          "p50": 0.042000000476837156,
+          "p95": 0.04300000071525574,
+          "count": 30
+        },
+        "held": {
+          "mean": 0.01686666651566823,
+          "p50": 0.01699999928474426,
+          "p95": 0.017999999523162842,
+          "count": 30
+        }
+      },
+      {
+        "mode": "mixed4",
+        "vehicles": 5,
+        "moving": {
+          "mean": 0.04293333327770232,
+          "p50": 0.041999999284744266,
+          "p95": 0.04299999952316284,
+          "count": 30
+        },
+        "held": {
+          "mean": 0.01806666672229767,
+          "p50": 0.017000000476837158,
+          "p95": 0.01800000071525574,
+          "count": 30
+        }
+      },
+      {
+        "mode": "two",
+        "vehicles": 3,
+        "moving": {
+          "mean": 0.023700000007947288,
+          "p50": 0.02399999976158142,
+          "p95": 0.025,
+          "count": 30
+        },
+        "held": {
+          "mean": 0.008299999992052713,
+          "p50": 0.008000000715255737,
+          "p95": 0.009000000953674316,
+          "count": 30
+        }
+      }
+    ]
+  },
+  "measurementNotes": [
+    "Pilot first4 omitted all gangways, including the three that would remain; use arena-confirmation.json for corrected visibility.",
+    "Isolated render results excluded: synthetic fixture repositioned vehicle bodies without corresponding railway bogie frames, and burst GPU timings had a nonphysical empty-scene baseline. Isolated CPU update and mesh inventory measurements are retained.",
+    "Arena visibility A/B measures rendering only, holds the scenic service, and does not measure full simulation, network, or saved cargo changes."
+  ]
+}

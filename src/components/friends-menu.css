@@ -14,17 +14,19 @@
 .friends-menu__back{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#25463cbf;color:#fff;border:1px solid #ffffff38!important}
 .friends-menu__back:hover{background:#25463c}
 .friends-menu__utilities{display:flex;align-items:center;gap:12px}
-.friends-menu__language,.friends-menu__motion{display:flex;align-items:center;gap:9px;border:1px solid #ffffff38!important;border-radius:24px;background:#25463cde;color:#fff;padding:0 15px;min-height:42px;font-size:13px}
-.friends-menu__language select{border:0;background:transparent;color:inherit;padding:7px 0;max-width:110px;cursor:pointer}
+.friends-menu__language,.friends-menu__motion{display:inline-flex;align-items:center;gap:9px;border:1px solid #ffffff38!important;border-radius:24px;background:#25463cde;color:#fff;padding:0 15px;height:42px;min-height:42px;font-size:13px;box-sizing:border-box;margin:0}
+.friends-menu label.friends-menu__language{display:inline-flex;margin-bottom:0}
+.friends-menu__language svg{flex-shrink:0}
+.friends-menu__language select{border:0;background:transparent;color:inherit;padding:0;max-width:110px;cursor:pointer;line-height:inherit}
 .friends-menu__language option{background:#f8f5ed;color:#253c32}
-.friends-menu__motion:hover{background:#25463c}
+.friends-menu__motion:hover,.friends-menu__language:hover{background:#25463c}
 .friends-menu__main{flex:1;display:flex;align-items:center;justify-content:flex-end;padding:16px 0 32px}
 .friends-menu__panel{width:440px;max-width:100%;padding:32px;border-radius:28px;background:#f8f5ed;box-shadow:0 20px 64px #182c2533;animation:friends-menu-enter .24s ease-out}
 .friends-menu__eyebrow{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--fm-muted);margin-bottom:18px}
 .friends-menu__eyebrow>span{opacity:.5}
 .friends-menu h2{font-size:36px;line-height:1.14;font-weight:600;letter-spacing:-.035em;color:var(--fm-ink);margin:0 0 16px;text-wrap:balance;outline:none}
 .friends-menu__intro{font-size:15px;color:var(--fm-muted);line-height:1.6;margin:0 0 24px}
-.friends-menu label{display:block;font-size:13px;font-weight:500;margin-bottom:8px}
+.friends-menu__panel label{display:block;font-size:13px;font-weight:500;margin-bottom:8px}
 .friends-menu input,.friends-menu textarea{width:100%;border:1px solid #a8b8a9;border-radius:12px;background:#fff;color:var(--fm-ink);padding:12px 14px;min-height:48px;font-size:16px;box-shadow:none}
 .friends-menu input::placeholder,.friends-menu textarea::placeholder{color:#657466}
 .friends-menu__name{margin-bottom:20px}

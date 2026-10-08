@@ -16,7 +16,7 @@ export const BUILD_LIBRARY: Record<Exclude<BuildCategory, 'pinned'>, FriendsBuil
   blocks: ['block', 'half_block', 'floor_tile', 'voxel_ramp', 'voxel_stairs'],
   structure: ['wall', 'window', 'doorway', 'pillar', 'beam', 'railing', 'roof', 'glass', 'long_ramp'],
   furnish: ['lamp', 'planter', 'bench', 'table', 'sign', 'survey_lens', 'gathering_beacon'],
-  workshop: ['workbench', 'furnace', 'storage', 'landing_pad'],
+  workshop: ['workbench', 'furnace', 'storage', 'landing_pad', 'crane', 'crane_joint', 'crane_boom', 'crane_winch', 'crane_console'],
   railway: ['rail_straight', 'rail_curve'],
 };
 export const buildCategory = (shape: FriendsBuildShape): Exclude<BuildCategory, 'pinned'> =>
@@ -38,6 +38,12 @@ export function assignBuildSlot(toolbar: readonly FriendsBuildShape[], index: nu
 }
 export function saveBuildToolbar(toolbar: readonly FriendsBuildShape[]) {
   try { localStorage.setItem(BUILD_TOOLBAR_KEY, JSON.stringify(toolbar)); } catch { /* Selection still works without storage. */ }
+}
+export function cycleBuildToolbar(toolbar: readonly FriendsBuildShape[], shape: FriendsBuildShape, direction: number): FriendsBuildShape {
+  const index = toolbar.indexOf(shape), step = Math.sign(direction);
+  if (!step) return shape;
+  if (index < 0) return toolbar[step > 0 ? 0 : toolbar.length - 1];
+  return toolbar[(index + step + toolbar.length) % toolbar.length];
 }
 export function buildDimensions(shape: FriendsBuildShape) {
   const d = FRIENDS_BUILD_CATALOG[shape];

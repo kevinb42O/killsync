@@ -1,0 +1,21 @@
+{
+  "errors": [],
+  "checks": [
+    "Seating removes mission compass, minimap, reticle, tools HUD and campfire panel; the tiny controls hint fades completely",
+    "A shared mission completion does not open a briefing or release camera control while seated",
+    "F sits, equips a long marshmallow stick and hides the previous held tool",
+    "E spends pack timber and grows the shared fire",
+    "Hold left click roasts to golden brown; releasing withdraws the stick; no weapon fires",
+    "Over-roasting ignites the marshmallow with visible flames",
+    "R supplies a fresh marshmallow; standing restores the original tool and removes the stick"
+  ],
+  "stage": "roast",
+  "golden": {
+    "toast": 0.628,
+    "heat": 0,
+    "roasting": false,
+    "burningMs": 0,
+    "charred": false,
+    "serial": 1
+  }
+}

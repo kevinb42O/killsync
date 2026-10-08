@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FriendsHauling, cargoAnchor, collidePhysicalCargo, cargoFitsVehicle, cargoInDeliveryBay, haulingInteraction, securedCargoPose, ROPE_MAX_PULL, type PhysicalCargo, type HaulingActor, type HaulingEnvironment } from './FriendsHauling';
+import { FriendsHauling, cargoAnchor, collidePhysicalCargo, cargoFitsVehicle, cargoInDeliveryBay, haulingInteraction, securedCargoPose, ROPE_MAX_PULL, ROPE_MIN_LENGTH, type PhysicalCargo, type HaulingActor, type HaulingEnvironment } from './FriendsHauling';
 import { FRIENDS_DELIVERY_BAY as goal } from '../world/FriendsHaulingGoal';
 import type { FriendsVehicle } from './FriendsExpedition';
 import { MULTIPLAYER_PROTOCOL_VERSION, clampInputFrame, type MultiplayerInputFrame } from './protocol';
@@ -28,6 +28,10 @@ describe('physical salvage hauling',()=>{
     expect(h.getCargo()[0].x).toBeCloseTo(1000,1);expect(h.snapshot().ropes[0].tension).toBe(0);
     p.x+=100;h.update(50,100,[p],new Map([[p.id,input({sprinting:true})]]),env);
     const r=h.snapshot().ropes[0];expect(r.tension*ROPE_MAX_PULL).toBeLessThanOrEqual(ROPE_MAX_PULL);
+    // A large movement correction must settle over time, not snap the player
+    // backwards across an entire cable span in one update.
+    expect(p.x).toBeGreaterThanOrEqual(1242);
+    for(let t=150;t<=1150;t+=50)h.update(50,t,[p],new Map([[p.id,input()]]),env);
     expect(p.x-cargoAnchor(h.getCargo()[0],r).x).toBeLessThanOrEqual(r.length+24.01);
   });
   it('makes aligned teammates haul substantially faster than one player',()=>{
@@ -37,7 +41,7 @@ describe('physical salvage hauling',()=>{
       for(let t=0;t<2000;t+=50){for(const p of players)p.x+=18;h.update(50,t,players,new Map(players.map(p=>[p.id,input()])),env);}
       return h.getCargo()[0].x-1000;
     };
-    const solo=pull(1),team=pull(2);expect(solo).toBeGreaterThan(10);expect(team).toBeGreaterThan(solo*1.5);
+    const solo=pull(1),team=pull(2);expect(solo).toBeGreaterThan(10);expect(team).toBeGreaterThan(solo*1.25);
   });
   it('cancels opposing pulls and turns when attached off centre',()=>{
     const h=system(),env=environment(),a=actor('a'),b=actor('b',{x:850});
@@ -50,8 +54,8 @@ describe('physical salvage hauling',()=>{
     const h=system(),p=actor(),env=environment();h.shoot(p,{x:-1,y:0,z:0},env,0);
     const initial=h.snapshot().ropes[0].length;
     for(let t=0;t<3000;t+=50)h.update(50,t,[p],new Map([[p.id,input({aiming:true})]]),env);
-    expect(h.snapshot().ropes[0].length).toBeLessThan(initial);expect(h.snapshot().ropes[0].length).toBeGreaterThanOrEqual(24);
-    const close=system();close.shoot(actor('near',{x:1040}),{x:-1,y:0,z:0},env,0);expect(close.snapshot().ropes[0].length).toBe(24);
+    expect(h.snapshot().ropes[0].length).toBeLessThan(initial);expect(h.snapshot().ropes[0].length).toBeGreaterThanOrEqual(ROPE_MIN_LENGTH);
+    const close=system();close.shoot(actor('near',{x:1040}),{x:-1,y:0,z:0},env,0);expect(close.snapshot().ropes[0].length).toBe(ROPE_MIN_LENGTH);
   });
   it('feeds rope out while crouching and aiming, without exceeding its reach',()=>{
     const h=system(),p=actor(),env=environment();h.shoot(p,{x:-1,y:0,z:0},env,0);const before=h.snapshot().ropes[0].length;

@@ -1,0 +1,246 @@
+{
+  "date": "2026-10-08T15:05:09.461Z",
+  "errors": [],
+  "method": "Current working tree; Chromium headless Metal; 1600x900 DPR1; CPU submission and EXT_disjoint_timer_query_webgl2 GPU timings. Arena: fixed 9AM and held train, same spawn camera. Render-only visibility A/B keeps simulation unchanged. Correct three retained gangways in first4. headlight-off preserves every vehicle and disables only the scenic spotlight. First4 retains three touring and one flatbed.",
+  "setup": {
+    "timer": true,
+    "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "train": [
+      "sunskiff",
+      "grand-engine",
+      "grand-0",
+      "grand-1",
+      "grand-2",
+      "grand-3",
+      "grand-4",
+      "grand-5",
+      "grand-6",
+      "grand-7",
+      "grand-8",
+      "grand-9",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway",
+      "flexible-train-gangway"
+    ],
+    "forest": {
+      "trees": 3967,
+      "draws": 15,
+      "triangles": 4097962
+    }
+  },
+  "arena": {
+    "disjoint": false,
+    "phases": [
+      {
+        "mode": "all",
+        "cpu": {
+          "mean": 7.517964071856287,
+          "p50": 6.899999976158142,
+          "p95": 11.600000023841858,
+          "count": 334
+        },
+        "gpu": {
+          "mean": 22.539474397590364,
+          "p50": 22.131,
+          "p95": 25.99125,
+          "count": 332
+        },
+        "calls": {
+          "mean": 1041.3562874251497,
+          "p50": 973,
+          "p95": 1207,
+          "count": 334
+        },
+        "triangles": {
+          "mean": 5512840.023952096,
+          "p50": 5470740,
+          "p95": 5617301,
+          "count": 334
+        }
+      },
+      {
+        "mode": "first4",
+        "cpu": {
+          "mean": 8.01795665324657,
+          "p50": 7.399999976158142,
+          "p95": 13.700000047683716,
+          "count": 323
+        },
+        "gpu": {
+          "mean": 23.456493188854473,
+          "p50": 23.025249,
+          "p95": 27.931374,
+          "count": 323
+        },
+        "calls": {
+          "mean": 899.5417956656347,
+          "p50": 841,
+          "p95": 1032,
+          "count": 323
+        },
+        "triangles": {
+          "mean": 5491949.767801858,
+          "p50": 5450508,
+          "p95": 5585717,
+          "count": 323
+        }
+      },
+      {
+        "mode": "headlight-off",
+        "cpu": {
+          "mean": 7.321629213483146,
+          "p50": 6.399999976158142,
+          "p95": 12.100000023841858,
+          "count": 356
+        },
+        "gpu": {
+          "mean": 20.625509553370797,
+          "p50": 20.388999,
+          "p95": 22.972291,
+          "count": 356
+        },
+        "calls": {
+          "mean": 1031.7078651685392,
+          "p50": 973,
+          "p95": 1182,
+          "count": 356
+        },
+        "triangles": {
+          "mean": 5497342.528089887,
+          "p50": 5470740,
+          "p95": 5565445,
+          "count": 356
+        }
+      },
+      {
+        "mode": "none",
+        "cpu": {
+          "mean": 5.020887727837027,
+          "p50": 4.700000047683716,
+          "p95": 6.699999928474426,
+          "count": 383
+        },
+        "gpu": {
+          "mean": 20.14205695822455,
+          "p50": 19.923666,
+          "p95": 22.362791,
+          "count": 383
+        },
+        "calls": {
+          "mean": 784.2088772845952,
+          "p50": 744,
+          "p95": 898,
+          "count": 383
+        },
+        "triangles": {
+          "mean": 5451189.054830288,
+          "p50": 5430676,
+          "p95": 5509241,
+          "count": 383
+        }
+      }
+    ],
+    "rounds": [
+      {
+        "mode": "all",
+        "round": 0,
+        "gpu": {
+          "mean": 23.32780930674847,
+          "p50": 22.869208,
+          "p95": 26.979166,
+          "count": 163
+        }
+      },
+      {
+        "mode": "first4",
+        "round": 0,
+        "gpu": {
+          "mean": 23.87998363750001,
+          "p50": 23.589375,
+          "p95": 26.672666,
+          "count": 160
+        }
+      },
+      {
+        "mode": "headlight-off",
+        "round": 0,
+        "gpu": {
+          "mean": 21.098945436046513,
+          "p50": 21.048166,
+          "p95": 23.59525,
+          "count": 172
+        }
+      },
+      {
+        "mode": "none",
+        "round": 0,
+        "gpu": {
+          "mean": 20.258257125654456,
+          "p50": 20.162916,
+          "p95": 22.362791,
+          "count": 191
+        }
+      },
+      {
+        "mode": "all",
+        "round": 1,
+        "gpu": {
+          "mean": 21.779127710059175,
+          "p50": 21.552624,
+          "p95": 23.723499,
+          "count": 169
+        }
+      },
+      {
+        "mode": "first4",
+        "round": 1,
+        "gpu": {
+          "mean": 23.04079704294478,
+          "p50": 22.287541,
+          "p95": 28.856708,
+          "count": 163
+        }
+      },
+      {
+        "mode": "headlight-off",
+        "round": 1,
+        "gpu": {
+          "mean": 20.182949923913046,
+          "p50": 20.019875,
+          "p95": 22.027916,
+          "count": 184
+        }
+      },
+      {
+        "mode": "none",
+        "round": 1,
+        "gpu": {
+          "mean": 20.02646199999999,
+          "p50": 19.760083,
+          "p95": 22.386124,
+          "count": 192
+        }
+      }
+    ],
+    "performance": {
+      "drawCalls": 974,
+      "triangles": 5470824,
+      "geometries": 592,
+      "textures": 90,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    },
+    "forest": {
+      "trees": 3967,
+      "draws": 15,
+      "triangles": 4097962
+    }
+  }
+}

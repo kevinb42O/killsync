@@ -1,0 +1,8 @@
+Bird audio regression fix
+
+Confirmed code causes: every nearby tree was eligible for flocks, 1,000-unit hearing radius, recurring 16–30-second calls.
+Fixed: fixed deterministic 8% tree habitats, two birds per anchor / four maximum, 400-unit 3D hearing radius, half peak volume, 12–24-second encounter delay, 75–135-second global cooldown, 1.2-second maximum calls, active calls stopped on range exit/mute/hide/mode exit.
+Removed mixed park wind bed; downloaded conventional non-AI CC0 isolated wind from Luke.RUSTLTD (2010): https://opengameart.org/content/wind1
+Added HMR disposal: old context/loops stopped; stale references and late downloads cannot restart retired audio.
+45 tests in six targeted files passed; TypeScript passed; production build passed.
+All 60 production asset hashes match source manifest. Old wind.ogg and birds.ogg are absent from production.

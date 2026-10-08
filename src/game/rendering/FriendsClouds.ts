@@ -28,7 +28,6 @@ export class FriendsClouds extends THREE.InstancedMesh<THREE.BoxGeometry,THREE.S
   private sphere=new THREE.Sphere();
   private lightView=new THREE.Vector2();
   private cloudTop=0;
-  private viewDirection={value:new THREE.Vector3()};
   private renderer?:THREE.WebGLRenderer;
   private stableProjection?:THREE.Vector3;
   constructor(renderer?:THREE.WebGLRenderer,options:{stableProjection?:boolean}={}){
@@ -129,7 +128,6 @@ export class FriendsClouds extends THREE.InstancedMesh<THREE.BoxGeometry,THREE.S
       shader.uniforms.frontierCloudShadow={value:this.shadowTarget.texture};
       shader.uniforms.frontierCloudDirection=this.shadowDirection;shader.uniforms.frontierCloudSlope=this.atlasSlope;
       shader.uniforms.frontierCloudWind=this.drift;
-      shader.uniforms.frontierCloudViewDirection=this.viewDirection;
       shader.vertexShader='varying vec3 cloudSurface;\n'+shader.vertexShader.replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
         vec4 cloudVertex=vec4(transformed,1.);
         #ifdef USE_INSTANCING
@@ -139,19 +137,21 @@ export class FriendsClouds extends THREE.InstancedMesh<THREE.BoxGeometry,THREE.S
       // Only the celestial directional light is blocked by clouds. Point/spot
       // lights (including torches and the flashlight) keep their own lighting.
       const lighting=cullInactiveFriendsLights(THREE.ShaderChunk.lights_fragment_begin).replace('getDirectionalLightInfo( directionalLight, directLight );',`getDirectionalLightInfo( directionalLight, directLight );
-        {float cloudAlignment=smoothstep(.9999,.99999,dot(directLight.direction,frontierCloudViewDirection));
+        // Use this draw's view matrix: CPU weather updates precede camera
+        // preparation, so a cached view direction can toggle shadows on motion.
+        {float cloudAlignment=smoothstep(.9999,.99999,dot(directLight.direction,normalize(mat3(viewMatrix)*frontierCloudDirection)));
         directLight.color*=mix(1.,cloudSun,cloudAlignment);}`)
         .replace('directionalLightShadow = directionalLightShadows[ i ];',`directionalLightShadow = directionalLightShadows[ i ];
           {vec2 frontierShadowUV=vDirectionalShadowCoord[i].xy/vDirectionalShadowCoord[i].w;
           float frontierShadowBorder=min(min(frontierShadowUV.x,1.-frontierShadowUV.x),min(frontierShadowUV.y,1.-frontierShadowUV.y));
           directionalLightShadow.shadowIntensity*=smoothstep(0.,.08,frontierShadowBorder);}`);
-      shader.fragmentShader='varying vec3 cloudSurface;uniform sampler2D frontierCloudShadow;uniform vec3 frontierCloudDirection,frontierCloudViewDirection;uniform vec2 frontierCloudSlope,frontierCloudWind;\n'+shader.fragmentShader.replace('#include <lights_fragment_begin>',lighting);
+      shader.fragmentShader='varying vec3 cloudSurface;uniform sampler2D frontierCloudShadow;uniform vec3 frontierCloudDirection;uniform vec2 frontierCloudSlope,frontierCloudWind;\n'+shader.fragmentShader.replace('#include <lights_fragment_begin>',lighting);
       shader.fragmentShader=shader.fragmentShader.replace('IncidentLight directLight;',`// Advect the immutable atlas continuously, rather than redrawing for wind.
         vec2 cloudUV=(cloudSurface.xz-frontierCloudWind-frontierCloudSlope*cloudSurface.y+${CLOUD_FIELD_MARGIN.toFixed(1)})/${CLOUD_FIELD_SPAN.toFixed(1)};
         float cloudShadow=texture2D(frontierCloudShadow,cloudUV).r;
         float cloudSun=1.-cloudShadow*.62*smoothstep(.05,.25,frontierCloudDirection.y);
         IncidentLight directLight;`);
-    };material.customProgramCacheKey=()=>key+':cloud-optical-shadow-v4';material.needsUpdate=true;
+    };material.customProgramCacheKey=()=>key+':cloud-optical-shadow-v5';material.needsUpdate=true;
   }
   private packVisible(camera:THREE.PerspectiveCamera){
     camera.updateMatrixWorld();this.frustum.setFromProjectionMatrix(this.projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
@@ -179,7 +179,6 @@ export class FriendsClouds extends THREE.InstancedMesh<THREE.BoxGeometry,THREE.S
   update(seconds:number,frameSeconds=seconds,camera?:THREE.PerspectiveCamera){
     this.drift.value.set(((seconds*CLOUD_WIND.x)%CLOUD_FIELD_SPAN+CLOUD_FIELD_SPAN)%CLOUD_FIELD_SPAN,((seconds*CLOUD_WIND.z)%CLOUD_FIELD_SPAN+CLOUD_FIELD_SPAN)%CLOUD_FIELD_SPAN);
     if(camera)this.packVisible(camera);
-    this.viewDirection.value.copy(this.shadowDirection.value);if(camera)this.viewDirection.value.transformDirection(camera.matrixWorldInverse);
     const r=this.renderer;if(!r)return;
     // Night/low-horizon shadows have no visible contribution. Wind translation
     // needs no new pass; only an appreciable change in projected sunlight does.

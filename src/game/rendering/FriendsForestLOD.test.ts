@@ -39,6 +39,51 @@ function leaves(scene: THREE.Scene) {
   return list;
 }
 describe('persistent 3D forest', () => {
+  it('updates a cached falling tree without scanning or uploading unchanged standing instances', async () => {
+    const {scene,forest,snapshot,camera,ground}=await fixture();
+    camera.position.z=1500;camera.lookAt(1000,150,1000);
+    snapshot.planted.push({...tree,id:'planted:first',x:1050},{...tree,id:'planted:last',x:1100});snapshot.revision++;
+    snapshot.harvested.push(tree.id);
+    snapshot.interaction={actions:{},damage:[],contacts:[{id:tree.id,tree,kind:'wood',x:tree.x,y:tree.y,z:tree.z,nx:0,ny:1,nz:0,value:6,total:6,by:'fixture',until:6000,serial:1,at:5000,broken:true}]};
+    forest.update(snapshot,ground,new Set(),camera,true,5000);
+    const standing=leaves(scene).find(m=>m.castShadow)!,falling=leaves(scene).find(m=>!m.castShadow)!;
+    const version=standing.instanceMatrix.version,before=falling.instanceMatrix.array.slice();
+    standing.instanceMatrix.clearUpdateRanges();falling.instanceMatrix.clearUpdateRanges();
+    standing.instanceMatrix.onUploadCallback();falling.instanceMatrix.onUploadCallback();
+    forest.update(snapshot,ground,new Set(),camera,true,5300);
+    expect(standing.instanceMatrix.version).toBe(version);
+    expect(falling.instanceMatrix.updateRanges).toEqual([{start:0,count:16}]);
+    expect(falling.instanceMatrix.array).not.toEqual(before);expect(falling.instanceMatrix.count).toBe(3);
+    // A later repack requires a full upload. A cached animation update before
+    // that draw must not replace it with a range covering only the falling tree.
+    camera.position.x += 1;
+    forest.update(snapshot,ground,new Set(),camera,true,5400);
+    expect(falling.instanceMatrix.updateRanges).toEqual([]);
+    forest.update(snapshot,ground,new Set(),camera,true,5500);
+    expect(falling.instanceMatrix.updateRanges).toEqual([]);
+    falling.instanceMatrix.onUploadCallback();
+    forest.update(snapshot,ground,new Set(),camera,true,5600);
+    expect(falling.instanceMatrix.updateRanges).toEqual([{start:0,count:16}]);
+    forest.update(snapshot,ground,new Set(),camera,true,5650);
+    expect(falling.instanceMatrix.updateRanges).toEqual([{start:0,count:16},{start:0,count:16}]);
+    forest.dispose();
+  });
+  it('keeps a harvested tree in the existing instance batches only during its bounded cosmetic fall',async()=>{
+    const {forest,camera,snapshot,ground}=await fixture();camera.position.set(1000,100,1500);
+    snapshot.harvested=[tree.id];snapshot.revision++;
+    snapshot.interaction={actions:{},damage:[],contacts:[{id:tree.id,serial:1,by:'host',kind:'wood',value:6,total:6,until:2100,at:1000,broken:true,x:1000,y:1000,z:30,nx:0,ny:1,nz:0,tree}]};
+    forest.update(snapshot,ground,new Set(),camera,true,1000);expect(forest.stats.fallingTrees).toBe(1);expect(forest.stats.trees).toBe(1);
+    forest.update(snapshot,ground,new Set(),camera,true,1400);expect(forest.stats.draws).toBe(2);
+    forest.update(snapshot,ground,new Set(),camera,true,1950);expect(forest.stats.fallingTrees).toBe(0);expect(forest.stats.trees).toBe(0);
+    forest.dispose();
+  });
+  it('removes a harvested tree immediately when cosmetic effects are disabled',async()=>{
+    const {forest,camera,snapshot,ground}=await fixture();camera.position.set(1000,100,1500);
+    snapshot.harvested=[tree.id];snapshot.revision++;
+    snapshot.interaction={actions:{},damage:[],contacts:[{id:tree.id,serial:1,by:'host',kind:'wood',value:6,total:6,until:2100,at:1000,broken:true,x:1000,y:1000,z:30,nx:0,ny:1,nz:0,tree}]};
+    forest.update(snapshot,ground,new Set(),camera,true,1000,false);
+    expect(forest.stats.fallingTrees).toBe(0);expect(forest.stats.trees).toBe(0);forest.dispose();
+  });
   it('reuses only identical visibility inputs and refreshes immediately for motion, optics and world edits', async () => {
     const { forest, camera, snapshot, ground, renderer } = await fixture();
     const pack = vi.spyOn(forest['frustum'], 'setFromProjectionMatrix');

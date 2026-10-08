@@ -1560,7 +1560,7 @@ export default function App() {
       {gameState === 'PLAYING' && <GameHUD engine={engineRef.current} cinematicProfile={cinematicEffects} />}
       {gameState === 'SOLO_SETUP' && <SoloRunSetup onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
       {gameState === 'MULTIPLAYER_SETUP' && <ManualMultiplayerSetup initialGameMode={multiplayerGameMode} initialRoomCode={initialRoomQuery.current} onClose={() => setGameState('MENU')} onLaunch={(launch) => { setMultiplayerLaunch(launch); setGameState('MULTIPLAYER_PLAYING'); }} />}
-      {gameState === 'MULTIPLAYER_PLAYING' && multiplayerLaunch && <MultiplayerArena launch={multiplayerLaunch} controlScheme={controlScheme} cinematicProfile={cinematicEffects} onExit={() => { setMultiplayerLaunch(null); setGameState('MENU'); }} />}
+      {gameState === 'MULTIPLAYER_PLAYING' && multiplayerLaunch && <MultiplayerArena launch={multiplayerLaunch} controlScheme={controlScheme} cinematicProfile={cinematicEffects} onControlSchemeChange={setControlScheme} onCinematicProfileChange={setCinematicEffects} onExit={() => { setMultiplayerLaunch(null); setGameState('MENU'); }} />}
 
       <AnimatePresence>
         {gameState === 'MENU' && activeCheatFeedback && (

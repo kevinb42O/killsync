@@ -70,7 +70,7 @@ async function play(delayed){
  assert(Math.abs(start.brightnessSum-turned.brightnessSum)>10000,'Turning must change the rendered scenery');
  check(`${delayed?'delayed textures and shader readiness that never completes':'fresh browser storage'}: visible world appears and mouse look changes the canvas`);
  if(!delayed){
-  for(const [delta,names] of [[100,['Pickaxe','Shovel','Earthwork','Combat','Rope','Axe']],[-100,['Rope','Combat','Earthwork','Shovel','Pickaxe','Axe']]])for(const name of names){await page.mouse.wheel(0,delta);await page.waitForFunction(name=>document.querySelector('.frontier-toolbelt [aria-pressed=true]')?.textContent.includes(name),name);}
+  for(const [delta,names] of [[100,['Pickaxe','Shovel','Combat','Rope','Axe']],[-100,['Rope','Combat','Shovel','Pickaxe','Axe']]])for(const name of names){await page.mouse.wheel(0,delta);await page.waitForFunction(name=>document.querySelector('.frontier-toolbelt [aria-pressed=true]')?.textContent.includes(name),name);}
   check('wheel cycles every tool in both directions, including wraparound');
   await page.keyboard.down('w');await page.waitForTimeout(1500);await page.keyboard.up('w');
   await capture(page,canvas,'after-moving');check('world keeps drawing after movement and tool swaps');

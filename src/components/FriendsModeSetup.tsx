@@ -6,6 +6,7 @@ import { COOP_MAX_PLAYERS } from '../game/multiplayer/protocol';
 import { readFriendsWorld } from '../game/multiplayer/FriendsWorldStorage';
 import type { CoopLanguage } from '../game/multiplayer/i18n';
 import { FriendsMenuBackdrop } from './FriendsMenuBackdrop';
+import { friendsAudio } from '../game/FriendsAudio';
 import { friendsMenuText } from './FriendsMenuText';
 import './friends-menu.css';
 
@@ -31,6 +32,7 @@ function initialPaused() {
 }
 
 export function FriendsModeSetup(p: FriendsModeSetupProps) {
+  useEffect(() => friendsAudio.acquire(), []);
   const [view, setView] = useState<'welcome' | 'join'>(p.initialRoomCode ? 'join' : 'welcome');
   const [paused, setPaused] = useState(initialPaused);
   const [nameTouched, setNameTouched] = useState(false);
@@ -80,7 +82,7 @@ export function FriendsModeSetup(p: FriendsModeSetupProps) {
     {nameTouched && !p.nicknameValid && <small id="friends-name-help" className="friends-menu__field-help">{t('nameHelp')}</small>}
   </div>;
   const title = (text: string) => <h2 ref={headingRef} tabIndex={-1}>{text}</h2>;
-  return <div className="friends-menu" ref={menuRef} aria-label={t('mode')} onPointerDown={event => event.stopPropagation()}>
+  return <div className="friends-menu" ref={menuRef} aria-label={t('mode')} onPointerDown={event => event.stopPropagation()} onClickCapture={event => { if ((event.target as HTMLElement).closest('button')) friendsAudio.play('click', .22); }}>
     <FriendsMenuBackdrop paused={paused}/>
     <div className="friends-menu__layout">
       <header className="friends-menu__header">

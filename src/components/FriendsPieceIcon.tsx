@@ -18,6 +18,7 @@ export function FriendsPieceIcon({ shape, finish, large = false }: { shape: Frie
       {texture && <><image href={`${import.meta.env.BASE_URL}textures/frontier/${texture}_1K-JPG_Color.jpg`} width="32" height="32" /><rect width="32" height="32" fill={color} style={{ mixBlendMode: 'multiply' }} /></>}
     </pattern>)}</defs>
     <ellipse cx="60" cy="90" rx="39" ry="8" fill="#031511" opacity=".16" />
+    {shape==='crane' && <g stroke='#d5bea0' strokeWidth='2' fill='none'><line x1={project(120,0,134)[0]} y1={project(120,0,134)[1]} x2={project(120,0,12)[0]} y2={project(120,0,12)[1]}/><circle cx={project(120,0,8)[0]} cy={project(120,0,8)[1]+3} r='3'/></g>}
     {isPlayerRail(shape) ? <g>{Array.from({ length: 12 }, (_, i) => {
       const p = sampleRail({ x: 0, y: 0, z: 0, rotation: 0, shape }, (i + .5) / 12);
       const a = project(p.x - Math.sin(p.angle) * 53, p.y + Math.cos(p.angle) * 53, 2), b = project(p.x + Math.sin(p.angle) * 53, p.y - Math.cos(p.angle) * 53, 2);

@@ -29,6 +29,11 @@ export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSna
     ...next,
     x: redeployed.has(next.id) ? next.x : lerp(old.x, next.x, progress), y: redeployed.has(next.id) ? next.y : lerp(old.y, next.y, progress), angle: lerpAngle(old.angle, next.angle, progress),
     health: lerp(old.health, next.health, progress), z: redeployed.has(next.id) ? next.z : lerp(old.z, next.z, progress),
+    friendsFlashlight: old.friendsFlashlight && next.friendsFlashlight ? {
+      pitch: lerp(old.friendsFlashlight.pitch, next.friendsFlashlight.pitch, progress),
+      cone: lerp(old.friendsFlashlight.cone, next.friendsFlashlight.cone, progress),
+      yaw: lerpAngle(old.friendsFlashlight.yaw??old.angle,next.friendsFlashlight.yaw??next.angle,progress),
+    } : next.friendsFlashlight,
   }));
   const enemies = interpolateEntities(previous.enemies, current.enemies, progress, (old, next) => ({
     ...next,
@@ -130,6 +135,11 @@ export class CoopSnapshotInterpolator {
         target.x = lerp(old.x, next.x, progress); target.y = lerp(old.y, next.y, progress);
         target.angle = lerpAngle(old.angle, next.angle, progress);
         target.health = lerp(old.health, next.health, progress); target.z = lerp(old.z, next.z, progress);
+        if(old.friendsFlashlight && next.friendsFlashlight) target.friendsFlashlight = {
+          pitch: lerp(old.friendsFlashlight.pitch, next.friendsFlashlight.pitch, progress),
+          cone: lerp(old.friendsFlashlight.cone, next.friendsFlashlight.cone, progress),
+          yaw: lerpAngle(old.friendsFlashlight.yaw??old.angle,next.friendsFlashlight.yaw??next.angle,progress),
+        };
       }
       this.playerFrame.push(target);
     }
@@ -216,9 +226,10 @@ function interpolateFriends(previous: FriendsSnapshot | undefined, current: Frie
   });
   const hauling = current.hauling && previous.hauling ? { ...current.hauling,
     cargo: interpolateEntities(previous.hauling.cargo, current.hauling.cargo, alpha, (old,next) => next.secured ? securedCargoPose(next,vehicles) : old.secured ? next : ({ ...next, x:lerp(old.x,next.x,alpha), y:lerp(old.y,next.y,alpha), z:lerp(old.z,next.z,alpha), angle:lerpAngle(old.angle,next.angle,alpha), orientation:interpolateCargoRotation(old,next,alpha) })),
+    cranes: current.hauling.cranes?.map(next=>{const old=previous.hauling?.cranes?.find(c=>c.pieceId===next.pieceId);return old && old.cargoId===next.cargoId ? {...next,length:lerp(old.length,next.length,alpha),angle:old.angle!==undefined&&next.angle!==undefined?lerpAngle(old.angle,next.angle,alpha):next.angle} : next;}),
     ropes: interpolateEntities(previous.hauling.ropes, current.hauling.ropes, alpha, (old,next) => ({...next, tension:lerp(old.tension,next.tension,alpha), length:lerp(old.length,next.length,alpha)})),
   } : current.hauling;
-  return { ...current, vehicles, hauling, building:current.building&&{...current.building,pieces:resolveFriendsBuildPieces(current.building.pieces,vehicles)} };
+  return { ...current, vehicles, hauling, building:current.building&&{...current.building,pieces:resolveFriendsBuildPieces(current.building.pieces,vehicles,new Map((hauling?.cranes??[]).filter(c=>c.angle!==undefined).map(c=>[c.pieceId,c.angle!])))} };
 }
 function passengerAnchor(vehicles: FriendsVehicle[], player: CoopPlayerSnapshot,pieces:readonly FriendsBuildPiece[]=[]) {
   if (player.friendsDevFlight) return undefined;

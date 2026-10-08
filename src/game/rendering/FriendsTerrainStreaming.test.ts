@@ -5,6 +5,7 @@ import { FriendsTerrain } from '../world/FriendsTerrain';
 import { meshBlockHorizon } from '../world/FriendsHorizonMesh';
 import { FriendsBlockSurface } from './FriendsBlockSurface';
 import { BLOCK_DETAIL_START, BLOCK_DETAIL_END, BLOCK_PREFETCH, BLOCK_SURFACE_TILE, surfaceTilesAround, volumeChunksAround } from './FriendsTerrainStreaming';
+import { FRIENDS_NIGHT_VISION_RANGE } from './FriendsVision';
 afterEach(()=>vi.unstubAllGlobals());
 
 describe('surface-first block streaming',()=>{
@@ -29,9 +30,13 @@ describe('surface-first block streaming',()=>{
     expect(volumeChunksAround(45000,45000,edited,false).size).toBe(0);
     expect(volumeChunksAround(24000,24000,edited,false)).toEqual(around);
   });
-  it('preloads the authored mouths locally and expands the underground view only after entry',()=>{
+  it('preloads the visible cave interior on approach and follows the viewer deeper inside',()=>{
     const mouth=volumeChunksAround(CAVE_ENTRANCE.x-100,CAVE_ENTRANCE.y,new Set(),false);
-    expect(mouth.size).toBeGreaterThan(0);expect(mouth.size).toBeLessThan(20);
+    expect(mouth.size).toBeLessThan(180);
+    // The vestibule beyond the shaft used to be missing from the exterior
+    // view, leaving sky behind its torches and crystals.
+    for(const key of ['13,9','13,10','14,9'])expect(mouth.has(key),key).toBe(true);
+    expect(mouth).toEqual(volumeChunksAround(CAVE_ENTRANCE.x-100,CAVE_ENTRANCE.y,new Set(),true));
     const inside=volumeChunksAround(9184,5664,new Set(),true);
     expect(inside.size).toBeGreaterThan(mouth.size);expect(inside.size).toBeLessThan(180);
     expect(inside.has('17,11')).toBe(true);expect(inside.has('32,11')).toBe(false);
@@ -61,5 +66,12 @@ describe('surface-first block streaming',()=>{
     surface.update(47000,47000,.6);
     expect(surface.stats.surfaceTiles).toBe(0);expect(ready.some(Boolean)).toBe(false);
     surface.dispose();material.dispose();coverage.dispose();
+  });
+  it('prepares underground terrain throughout the longer NVG reach before goggles are toggled',()=>{
+    const x=24000,y=24000,desired=volumeChunksAround(x,y,new Set(),true,FRIENDS_NIGHT_VISION_RANGE);
+    for(const [dx,dy]of [[FRIENDS_NIGHT_VISION_RANGE-32,0],[-FRIENDS_NIGHT_VISION_RANGE+32,0],[0,FRIENDS_NIGHT_VISION_RANGE-32],[0,-FRIENDS_NIGHT_VISION_RANGE+32]]){
+      expect(desired.has(`${Math.floor((x+dx)/512)},${Math.floor((y+dy)/512)}`)).toBe(true);
+    }
+    expect(volumeChunksAround(x,y,new Set(),false,FRIENDS_NIGHT_VISION_RANGE).size).toBe(0);
   });
 });

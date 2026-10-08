@@ -1,0 +1,51 @@
+import * as THREE from 'three';
+import type { FrontierTool } from '../multiplayer/FriendsFrontier';
+import type { ToolAction } from '../multiplayer/FriendsToolActions';
+import type { FriendsAssetId } from './FriendsAssets';
+import { loadFinishedFriendsTool, loadFriendsGrip, acquireEquipmentLighting, frameHeldEquipment } from './FriendsHeldEquipment';
+
+/** Existing tool models with an artist-made connected arm. Each assembly is
+ * cached on first use; a tool switch does not rebuild any geometry. */
+export class FriendsToolViewmodels {
+  readonly root=new THREE.Group();
+  private models=new Map<number,THREE.Group>();
+  private current?:THREE.Group;
+  private variant=-1;
+  private equippedAt=0;
+  private action?:ToolAction;
+  private actionTime=0;
+  private disposed=false;
+  private camera?:THREE.PerspectiveCamera;
+  private lighting:ReturnType<typeof acquireEquipmentLighting>;
+  constructor(viewmodel:THREE.Scene){
+    this.root.name='friends-held-tools';this.root.visible=false;const parent=viewmodel.getObjectByProperty('type','PerspectiveCamera')||viewmodel;
+    if(parent instanceof THREE.PerspectiveCamera)this.camera=parent;parent.add(this.root);this.lighting=acquireEquipmentLighting(viewmodel);
+    // Begin one small cached asset request while the island is loading.
+    void loadFriendsGrip('right').catch(()=>{});
+  }
+  setAction(action:ToolAction|undefined,now:number){this.action=action;this.actionTime=now;this.pose(now,Boolean(action));}
+  update(id:FrontierTool,elapsed:number,firing:boolean,upgraded:boolean,visible=true){
+    this.root.visible=visible&&id>=1&&id<=4;this.lighting.setVisible(this.root.visible);if(!this.root.visible)return;
+    const variant=id+(upgraded?10:0);
+    if(variant!==this.variant){
+      if(this.current)this.current.visible=false;let model=this.models.get(variant);
+      if(!model){model=new THREE.Group();model.name=`held-${['axe','pickaxe','shovel','earthwork'][id-1]}`;this.models.set(variant,model);this.root.add(model);
+        const asset:FriendsAssetId=id===1?(upgraded?'toolAxeUpgraded':'toolAxe'):id===2?(upgraded?'toolPickaxeUpgraded':'toolPickaxe'):(upgraded?'toolShovelUpgraded':'toolShovel');
+        const owner=model;
+        void loadFinishedFriendsTool(asset).then(tool=>{if(!this.disposed)owner.add(tool.clone(true));}).catch(()=>{});
+        void loadFriendsGrip('right').then(arm=>{if(!this.disposed)owner.add(arm.clone());}).catch(()=>{});
+      }
+      model.visible=true;this.current=model;this.variant=variant;this.equippedAt=elapsed;
+    }
+    frameHeldEquipment(this.root,this.camera);this.pose(elapsed,firing);
+  }
+  private pose(elapsed:number,firing:boolean){
+    if(!this.current)return;const action=firing&&this.action?.tool===this.variant%10?this.action:undefined;let strike=0,windup=0;
+    if(action){const t=this.actionTime;if(t<action.contact)windup=THREE.MathUtils.clamp((t-action.start)/Math.max(1,action.contact-action.start),0,1);else strike=(1-THREE.MathUtils.clamp((t-action.contact)/Math.max(1,action.end-action.contact),0,1))**2;}
+    const raise=1-THREE.MathUtils.smoothstep(elapsed-this.equippedAt,0,200),pull=Math.sin(windup*Math.PI/2),shovel=this.variant%10>=3;
+    this.current.position.set(-strike*.08,-.14*raise+Math.sin(elapsed/1450)*.004-strike*.10,-strike*.06+raise*.10);
+    this.current.rotation.set(-.22+pull*.55-strike*(shovel ? .85 : .70)+raise*.20,0,0);
+  }
+  hide(){this.root.visible=false;this.lighting.setVisible(false);}
+  dispose(){this.disposed=true;this.models.clear();this.lighting.dispose();this.root.clear();this.root.removeFromParent();}
+}

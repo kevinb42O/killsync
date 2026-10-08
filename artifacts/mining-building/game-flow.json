@@ -1,0 +1,34 @@
+{
+  "origin": "http://localhost:3014",
+  "errors": [],
+  "checks": [
+    "first contact shows stone damage without editing terrain",
+    "held primary breaks stone and awards resources exactly once",
+    "temporary excavation feedback retires after the updated terrain mesh installs",
+    "two-click line gesture places four connected blocks through production controls",
+    "keyboard undo/redo reverses/restores the complete gesture",
+    "plane lock and accessible precision controls respond",
+    "actual game has no browser runtime or shader errors"
+  ],
+  "mining": {
+    "mined": 1,
+    "stone": 2,
+    "feedback": {
+      "fragments": 4,
+      "crackFaces": 2,
+      "draws": 3,
+      "terrain": {
+        "surfaceTiles": 72,
+        "surfaceBytes": 16569696,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 88,
+        "volumeActive": 25,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 75,
+        "editMeshSamples": 1
+      }
+    }
+  }
+}

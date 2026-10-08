@@ -1,0 +1,27 @@
+<!doctype html><html><meta charset="utf-8"><title>Friends bird renderer verification</title>
+<style>body{margin:0;background:#add0d9;font:14px system-ui;color:#eff4e7}canvas{display:block}aside{position:fixed;top:24px;left:24px;background:#152b32db;padding:18px 22px;border-radius:14px}h1{margin:0 0 8px;font-size:20px}p{margin:6px 0;color:#bcd4ce}button{background:#c5dbb5;color:#17343b;border:0;border-radius:6px;padding:8px 12px;cursor:pointer}</style>
+<aside><h1>Swallows · actual game renderer</h1><p>GPU wings · circling, gliding & perching</p><p id="status">Loading</p><button id="mode">Show perched birds</button><p id="errors"></p></aside>
+<script type="module">
+import * as THREE from 'three';
+import {FriendsBirds,sampleBirdFlight} from '/src/game/rendering/FriendsBirds.ts';
+import {frontierTrees} from '/src/game/multiplayer/FriendsFrontier.ts';
+import {loadFriendsAsset,fitFriendsAsset} from '/src/game/rendering/FriendsAssets.ts';
+import {FRIENDS_TREE_SIZES} from '/src/game/world/FriendsVegetationAppearance.ts';
+const errors=document.querySelector('#errors');console.error=(...args)=>{errors.textContent+=args.join(' ')+'\n';};
+const scene=new THREE.Scene();scene.background=new THREE.Color('#acd0dc');scene.fog=new THREE.Fog('#acd0dc',1200,2500);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);document.body.append(renderer.domElement);
+scene.add(new THREE.HemisphereLight('#edf6ff','#627951',2.1));const sun=new THREE.DirectionalLight('#ffe3ac',2.7);sun.position.set(-300,700,200);scene.add(sun);
+const tree=frontierTrees(11,11).find(t=>t.id==='starter:cedar');
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,1,5000);camera.position.set(tree.x+200,tree.z+790,tree.y-480);camera.lookAt(tree.x,tree.z+630,tree.y);
+let birds=new FriendsBirds();scene.add(birds.mesh);
+const floor=new THREE.Mesh(new THREE.CircleGeometry(1600,64),new THREE.MeshStandardMaterial({color:'#739b68',roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.set(tree.x,tree.z,tree.y);scene.add(floor);
+const treeModel=fitFriendsAsset(await loadFriendsAsset('frontierPine'),FRIENDS_TREE_SIZES.pine,0,'contain');
+const canopyHeight=new THREE.Box3().setFromObject(treeModel).max.y;treeModel.position.set(tree.x,tree.z,tree.y);scene.add(treeModel);
+camera.position.y=tree.z+canopyHeight+270;camera.lookAt(tree.x,tree.z+canopyHeight+100,tree.y);
+let flyTime=0,perchTime=0;for(let i=0;i<50;i++){if(sampleBirdFlight(tree,0,i).flight>.99)flyTime=i;if(sampleBirdFlight(tree,0,i).flight===0)perchTime=i;}
+let perched=false,start=performance.now(),base=flyTime;
+document.querySelector('#mode').onclick=()=>{perched=!perched;birds.dispose();birds=new FriendsBirds();scene.add(birds.mesh);base=perched?perchTime:flyTime;start=performance.now();document.querySelector('#mode').textContent=perched?'Show flying birds':'Show perched birds';};
+let last=0;
+renderer.setAnimationLoop(()=>{const t=base+(perched?0:(performance.now()-start)/1000);birds.update({harvested:[],planted:[]},camera.position,t,1,false,c=>c.id===tree.id,()=>canopyHeight);renderer.render(scene,camera);if(performance.now()-last>500){last=performance.now();const near=birds.closestCall(camera.position,0,1).volume;const far=birds.closestCall(new THREE.Vector3(tree.x+3000,tree.z+300,tree.y),0,1).volume;document.querySelector('#status').textContent=`${birds.mesh.count} birds · 1 bird draw call · ${birds.mesh.geometry.getAttribute('position').count/3} triangles/bird · nearby volume ${near.toFixed(3)} · distant ${far.toFixed(3)}`;}});
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+</script></html>

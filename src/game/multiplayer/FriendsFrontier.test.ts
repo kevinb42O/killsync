@@ -32,7 +32,7 @@ describe('volumetric frontier and resource economy', () => {
     const f = flatFrontier(), p = actor({ x: 8000, y: 8000 });
     f.tool(p, 3, down(), 1000, []); f.tool(p, 3, down(), 1400, []);
     expect(f.terrain.floor(p.x, p.y, 0)).toBe(-64); expect(f.pack(p).soil).toBe(2);
-    f.tool(p, 4, down(), 1800, []); expect(f.terrain.floor(p.x, p.y, 0)).toBe(-32); expect(f.pack(p).soil).toBe(1);
+    f.tool(p, 3, down(), 1800, [], true, [], undefined, true); expect(f.terrain.floor(p.x, p.y, 0)).toBe(-32); expect(f.pack(p).soil).toBe(1);
     f.tool(p, 3, down(), 2200, []); expect(f.pack(p).soil).toBe(2);
     const restored = new FriendsFrontier(f.snapshot()); expect(restored.terrain.floor(p.x, p.y, 0)).toBe(-64); expect(restored.pack(p).soil).toBe(2);
   });
@@ -51,7 +51,7 @@ describe('volumetric frontier and resource economy', () => {
   it('pays for a tree exactly once when two players harvest the same trunk and preserves it in saves', () => {
     const f = flatFrontier(), a = actor({ x: 5960, y: 5860, z:baseTerrainHeight(6096,5872) }), b = actor({ id: 'guest', label: 'Guest', x: 5960, y: 5860, z:baseTerrainHeight(6096,5872) });
     const ray = { x: 5960, y: 5860, z: baseTerrainHeight(6096,5872)+26, dx: 1, dy: 0, dz: 0 };
-    f.tool(a,1,ray,1000,[]); f.tool(b,1,ray,1050,[]); f.tool(a,1,ray,1400,[]); f.tool(b,1,ray,1450,[]); f.tool(a,1,ray,1800,[]);
+    f.tool(a,1,ray,1000,[]); f.tool(b,1,ray,1050,[]); f.tool(a,1,ray,1400,[]); f.tool(b,1,ray,1450,[]); f.tool(a,1,ray,1800,[]); f.tool(b,1,ray,1850,[]);
     expect(f.snapshot().chopped).toBe(1); expect(f.pack(a).wood + f.pack(b).wood).toBe(46);
     const saved = new FriendsFrontier(f.snapshot()); saved.tool(a,1,ray,2200,[]); expect(saved.snapshot().chopped).toBe(1);
     expect(saved.treesNear(6080,5860).some(t => t.id === 'starter:cedar')).toBe(false);
@@ -64,7 +64,7 @@ describe('volumetric frontier and resource economy', () => {
   });
   it('prevents filling an operator and rejects invalid terrain edits and malformed planted trees', () => {
     const f = flatFrontier(), p = actor({ x: 8000, y: 8000 }); f.tool(p,3,down(),1000,[]);
-    f.tool(p,4,down(),1400,[],true,[actor({ id:'guest', x:8000, y:8000, z:-32 })]); expect(f.pack(p).soil).toBe(1);
+    f.tool(p,3,down(),1400,[],true,[actor({ id:'guest', x:8000, y:8000, z:-32 })],undefined,true); expect(f.pack(p).soil).toBe(1);
     expect(f.terrain.set(-1,2,3,0)).toBe(false); expect(f.terrain.set(250,250,256,1)).toBe(false);
     expect(isFrontierSave({ ...f.snapshot(), planted:[{ id:'bad',x:NaN,y:0,z:0,kind:'pine',scale:1 }] })).toBe(false);
     expect(isFrontierSave({ ...f.snapshot(), terrain:{revision:0,edits:[[1,2,3,9]]} })).toBe(false);
@@ -125,7 +125,7 @@ describe('volumetric frontier and resource economy', () => {
   it('releases the edit budget when soil is restored and supports renewable planted forestry', () => {
     const t=flatTerrain();t.set(250,250,-1,0);expect(t.snapshot().edits).toHaveLength(1);t.set(250,250,-1,1);expect(t.snapshot().edits).toHaveLength(0);
     const f=flatFrontier(),p=actor({x:8000,y:8000});expect(f.request(p,{requestId:1,action:'plant'},0,[workshop],[]).ok).toBe(true);
-    const ray={x:8000,y:8000,z:26,dx:1,dy:0,dz:0};for(let i=0;i<4;i++)f.tool(p,1,ray,1000+i*400,[]);
+    const ray={x:8000,y:8000,z:26,dx:1,dy:0,dz:0};for(let i=0;i<6;i++)f.tool(p,1,ray,1000+i*300,[]);
     expect(f.snapshot().planted).toHaveLength(0);expect(f.snapshot().harvested.some(id=>id.startsWith('planted:'))).toBe(false);expect(f.pack(p).saplings).toBe(3);
     expect(f.request(p,{requestId:2,action:'plant'},3000,[],[]).ok).toBe(true);
   });

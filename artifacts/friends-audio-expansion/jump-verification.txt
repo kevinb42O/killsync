@@ -1,0 +1,6 @@
+Dedicated jump: mieki256, Jump and Run and Stand (2013), CC0.
+Source: https://opengameart.org/content/jump-and-run-and-stand
+Decoded 0.082 seconds; finite non-silent samples; 4415 bytes; production bytes match.
+Tool gains reduced from 0.09 / 0.04 to 0.008 / 0.003.
+Ground and air jumps use jump.ogg; no cloth or blade-swing cue at takeoff.
+41 targeted tests passed; TypeScript passed; production build passed.

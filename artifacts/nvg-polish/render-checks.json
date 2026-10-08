@@ -1,0 +1,268 @@
+{
+  "errors": [],
+  "fixtures": [
+    {
+      "name": "after",
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "naturalMeanDifference": 0.02372588734567901,
+      "offShadowDraws": 0,
+      "programsBefore": 15,
+      "programsOn": 15,
+      "texturesBefore": 7,
+      "texturesOn": 7,
+      "firstToggleMs": 0.8000000715255737,
+      "toggleSamples": [
+        {
+          "ms": 0.6000000238418579,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.6000000238418579,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.6999999284744263,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.7000000476837158,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.8000000715255737,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.6000000238418579,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 1,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.6000000238418579,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.6000000238418579,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.5999999046325684,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.5,
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "ms": 0.7000000476837158,
+          "programs": 15,
+          "textures": 7
+        }
+      ],
+      "views": [
+        {
+          "fov": 108,
+          "distance": 100,
+          "mean": 162.26100965935072,
+          "whiteFraction": 0,
+          "center": 195,
+          "edge": 143,
+          "corner": 152
+        },
+        {
+          "fov": 108,
+          "distance": 600,
+          "mean": 157.78830161179698,
+          "whiteFraction": 0,
+          "center": 206,
+          "edge": 125,
+          "corner": 122
+        },
+        {
+          "fov": 108,
+          "distance": 1600,
+          "mean": 109.31636755067825,
+          "whiteFraction": 0,
+          "center": 178,
+          "edge": 73,
+          "corner": 67
+        },
+        {
+          "fov": 115,
+          "distance": 100,
+          "mean": 164.9403506515775,
+          "whiteFraction": 0,
+          "center": 198,
+          "edge": 142,
+          "corner": 144
+        },
+        {
+          "fov": 115,
+          "distance": 600,
+          "mean": 159.91323731138547,
+          "whiteFraction": 0,
+          "center": 212,
+          "edge": 121,
+          "corner": 112
+        },
+        {
+          "fov": 115,
+          "distance": 1600,
+          "mean": 102.25315548315805,
+          "whiteFraction": 0,
+          "center": 180,
+          "edge": 64,
+          "corner": 59
+        }
+      ],
+      "exposure": [
+        {
+          "phase": "dark",
+          "gain": 7.86328125
+        },
+        {
+          "phase": "bright-0",
+          "gain": 7.1484375
+        },
+        {
+          "phase": "bright-10",
+          "gain": 2.775390625
+        },
+        {
+          "phase": "bright-59",
+          "gain": 0.103759765625
+        },
+        {
+          "phase": "dark-0",
+          "gain": 0.327880859375
+        },
+        {
+          "phase": "dark-30",
+          "gain": 4.74609375
+        },
+        {
+          "phase": "dark-119",
+          "gain": 7.6796875
+        },
+        {
+          "phase": "bright-image",
+          "mean": 217.7699831390032,
+          "whiteFraction": 0,
+          "center": 218,
+          "edge": 218,
+          "corner": 218
+        }
+      ],
+      "performanceSamples": [
+        {
+          "active": false,
+          "cpuP50": 0.20000004768371582,
+          "gpuP50": 1.936624,
+          "draws": 2
+        },
+        {
+          "active": true,
+          "cpuP50": 0.20000004768371582,
+          "gpuP50": 1.673791,
+          "draws": 3
+        }
+      ],
+      "sizes": [
+        {
+          "width": 1120,
+          "height": 480,
+          "corner": 109,
+          "buffer": [
+            1120,
+            480
+          ],
+          "programs": 15,
+          "textures": 7
+        },
+        {
+          "width": 480,
+          "height": 800,
+          "corner": 121,
+          "buffer": [
+            480,
+            800
+          ],
+          "programs": 15,
+          "textures": 7
+        }
+      ],
+      "glError": 0,
+      "glStages": [
+        {
+          "stage": "direct-reference",
+          "error": 0
+        },
+        {
+          "stage": "off-warmup",
+          "error": 0
+        },
+        {
+          "stage": "first-toggle",
+          "error": 0
+        },
+        {
+          "stage": "coverage",
+          "error": 0
+        },
+        {
+          "stage": "exposure-read",
+          "error": 0
+        },
+        {
+          "stage": "exposure-read",
+          "error": 0
+        },
+        {
+          "stage": "exposure-read",
+          "error": 0
+        },
+        {
+          "stage": "exposure-read",
+          "error": 0
+        },
+        {
+          "stage": "exposure-read",
+          "error": 0
+        },
+        {
+          "stage": "exposure-read",
+          "error": 0
+        },
+        {
+          "stage": "exposure-read",
+          "error": 0
+        }
+      ]
+    }
+  ],
+  "worlds": [
+    {
+      "before": 31,
+      "after": 31,
+      "textures": 49,
+      "texturesAfter": 49,
+      "totalMs": 8.299999952316284,
+      "arrivalRestored": true,
+      "glError": 0
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { friendsAudio } from './FriendsAudio';
 
 type GunfireProfile = { volume: number; playbackRate: number; duration: number };
 type ReloadSoundId = 'handgun' | 'rifle' | 'shotgun';
@@ -75,6 +76,7 @@ export class SoundManager {
    * silently muted.
    */
   activate() {
+    if (friendsAudio.active) { friendsAudio.activate(); return; }
     this.ensureRunning();
     this.unlockMobileOutput();
     void this.loadGunfireAsset();
@@ -108,17 +110,20 @@ export class SoundManager {
 
   /** Start loading the bundled CC0 firearm sound without playing it. */
   preloadGunfire() {
+    if (friendsAudio.active) return;
     this.ensureRunning();
     void this.loadGunfireAsset();
   }
 
   /** Pre-decodes all reload recordings while the arena is loading. */
   preloadReloads() {
+    if (friendsAudio.active) return;
     this.ensureRunning();
     (Object.keys(RELOAD_SOUND_URL) as ReloadSoundId[]).forEach(id => void this.loadReloadAsset(id));
   }
 
   private init() {
+    if (friendsAudio.active) return;
     if (this.ctx) {
       if (this.ctx.state === 'suspended') {
         this.ctx.resume().catch(() => {});
@@ -139,6 +144,7 @@ export class SoundManager {
   }
 
   private ensureRunning() {
+    if (friendsAudio.active) return;
     if (!this.enabled || !this.ctx) {
       this.init();
     } else if (this.ctx.state === 'suspended') {
@@ -196,6 +202,7 @@ export class SoundManager {
   }
 
   private playTone(freq: number, type: OscillatorType, duration: number, volume: number = 1, slide: number = 0, attack: number = 0.01) {
+    if (friendsAudio.active) return;
     this.ensureRunning();
     if (!this.ctx || !this.masterGain) return;
 
@@ -220,6 +227,7 @@ export class SoundManager {
   }
 
   private playNoise(duration: number, volume: number = 1, lowPass: number = 1000) {
+    if (friendsAudio.active) return;
     this.ensureRunning();
     if (!this.ctx || !this.masterGain) return;
 
@@ -250,6 +258,7 @@ export class SoundManager {
   }
 
   private playKick(duration: number, volume: number = 1) {
+    if (friendsAudio.active) return;
     this.ensureRunning();
     if (!this.ctx || !this.masterGain) return;
 
@@ -270,6 +279,7 @@ export class SoundManager {
   }
 
   playShoot() {
+    if (friendsAudio.active) { friendsAudio.play('gunfire', .23, 55, 1, .3); return; }
     // High-pitched laser with a bit of noise
     this.playTone(800, 'sine', 0.1, 0.08, -600, 0.005);
     this.playNoise(0.04, 0.04, 3000);
@@ -282,6 +292,11 @@ export class SoundManager {
    * weapon-specific playback variation.
    */
   playGunfire(weaponId: string = '') {
+    if (friendsAudio.active) {
+      const profile = gunfireProfile(weaponId);
+      friendsAudio.play('gunfire', profile.volume, 45, profile.playbackRate, profile.duration);
+      return;
+    }
     this.ensureRunning();
     void this.loadGunfireAsset();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
@@ -316,6 +331,7 @@ export class SoundManager {
   /** Layered class-artifact stingers. These are intentionally short so the
    * payoff reads as powerful without masking squad callouts or sustained fire. */
   playArtifactCast(artifactId: string) {
+    if (friendsAudio.active) { friendsAudio.play('chime', .2); return; }
     this.ensureRunning();
     if (artifactId === 'reckoning') {
       this.playKick(.28, .42); this.playNoise(.22, .14, 900);
@@ -335,6 +351,7 @@ export class SoundManager {
 
   /** Plays a firearm-specific CC0 reload recording after a host-approved reload. */
   playReload(weaponId: string = '') {
+    if (friendsAudio.active) { friendsAudio.play(weaponId === 'combat_shotgun' ? 'reloadShotgun' : weaponId === 'plasma_gun' ? 'reloadHandgun' : 'reloadRifle', .6, 400); return; }
     this.ensureRunning();
     const profile = reloadProfile(weaponId);
     void this.loadReloadAsset(profile.asset);
@@ -359,6 +376,7 @@ export class SoundManager {
   }
 
   playFrontierHit(kind: 'wood' | 'soil' | 'stone' | 'ore') {
+    if (friendsAudio.active) { if (kind === 'soil') friendsAudio.play('dig', .42, 170, .96 + Math.random() * .08); else friendsAudio.material(kind); return; }
     const woody = kind === 'wood', earthy = kind === 'soil';
     this.playNoise(earthy ? .16 : .075, earthy ? .055 : .07, earthy ? 750 : woody ? 1300 : 3600);
     this.playTone(woody ? 135 : earthy ? 75 : 820, woody || earthy ? 'triangle' : 'sine', .09, .065, woody ? -65 : earthy ? -40 : -230, .002);
@@ -366,6 +384,7 @@ export class SoundManager {
   }
 
   playHit() {
+    if (friendsAudio.active) { friendsAudio.play('soil', .2); return; }
     // Sharp impact
     this.playTone(120, 'triangle', 0.06, 0.15, -80, 0.002);
     this.playNoise(0.04, 0.1, 1500);
@@ -373,6 +392,7 @@ export class SoundManager {
   }
 
   playExplosion() {
+    if (friendsAudio.active) { friendsAudio.play('stone', .5, 180, .65); return; }
     // Deep rumble with noise and kick
     this.playTone(50, 'sine', 0.6, 0.4, -30, 0.05);
     this.playNoise(0.6, 0.3, 400);
@@ -380,10 +400,12 @@ export class SoundManager {
   }
 
   playGrenadeThrow() {
+    if (friendsAudio.active) { friendsAudio.play('swing', .2); return; }
     this.playNoise(.12, .07, 2600); this.playTone(130, 'triangle', .16, .08, -65, .01);
   }
 
   playSpell(id: string, impact = false) {
+    if (friendsAudio.active) { friendsAudio.play(impact ? 'stone' : 'swing', .25); return; }
     const frequency = id === 'astral_lance' ? 740 : id === 'soul_nova' ? 220 : id === 'cinderhex_engine' ? 330 : 150;
     this.playTone(frequency, 'sine', impact ? .65 : .28, .12, impact ? -frequency * .7 : frequency * .9, .02);
     this.playTone(frequency * 1.5, 'triangle', .35, .05, -frequency * .4, .04);
@@ -391,6 +413,7 @@ export class SoundManager {
   }
 
   playRealityBreach(stage: 'opened' | 'sealed' | 'failed') {
+    if (friendsAudio.active) { friendsAudio.play(stage === 'failed' ? 'error' : 'chime', .2); return; }
     if (stage === 'sealed') {
       this.playTone(65, 'sine', 1.1, .32, -42, .02);
       this.playNoise(.65, .2, 700);
@@ -407,12 +430,14 @@ export class SoundManager {
   }
 
   playCollect() {
+    if (friendsAudio.active) { friendsAudio.play('collect', .18, 140); return; }
     // Sparkly chime
     this.playTone(1200, 'sine', 0.15, 0.08, 400, 0.01);
     this.playTone(1800, 'sine', 0.1, 0.04, 200, 0.02);
   }
 
   playTacticalPing(isDanger: boolean = false) {
+    if (friendsAudio.active) { friendsAudio.play(isDanger ? 'error' : 'chime', .17, 300); return; }
     if (isDanger) {
       // Sharp, urgent dual danger alert with aggressive sawtooth bite
       this.playTone(880, 'sawtooth', 0.08, 0.24, 120, 0.005);
@@ -425,6 +450,7 @@ export class SoundManager {
   }
 
   playLevelUp() {
+    if (friendsAudio.active) { friendsAudio.play('success', .2, 400); return; }
     // Arpeggio with square wave for retro feel
     [523.25, 659.25, 783.99, 1046.50, 1318.51].forEach((f, i) => {
       setTimeout(() => this.playTone(f, 'square', 0.25, 0.06, 50, 0.01), i * 120);
@@ -432,6 +458,7 @@ export class SoundManager {
   }
 
   playHeal() {
+    if (friendsAudio.active) { friendsAudio.play('chime', .18); return; }
     // Warm harmonic ascending arpeggio for full health recovery
     [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
       setTimeout(() => this.playTone(f, 'sine', 0.22, 0.12, 80, 0.01), i * 65);
@@ -439,18 +466,21 @@ export class SoundManager {
   }
 
   playDamage() {
+    if (friendsAudio.active) { friendsAudio.play('soil', .32, 180); return; }
     // Low-pitched grunt/crunch
     this.playTone(70, 'sawtooth', 0.25, 0.15, -30, 0.01);
     this.playNoise(0.25, 0.15, 300);
   }
 
   playDash() {
+    if (friendsAudio.active) { friendsAudio.play('swing', .15); return; }
     // Fast whoosh
     this.playDashTone(150, 'sine', 0.2, 0.1, 1200, 0.05);
     this.playNoise(0.15, 0.08, 4000);
   }
 
   playSlash() {
+    if (friendsAudio.active) { friendsAudio.play('swing', .2); return; }
     // Metallic energetic slash
     this.playTone(180, 'sawtooth', 0.15, 0.1, -150, 0.005);
     this.playNoise(0.12, 0.15, 4000);
@@ -463,11 +493,13 @@ export class SoundManager {
   }
 
   playEnemySpawn() {
+    if (friendsAudio.active) { friendsAudio.play('pack', .1, 500); return; }
     // Subtle digital blip
     this.playTone(400, 'sine', 0.15, 0.02, -200, 0.05);
   }
 
   playTreasureSpawn() {
+    if (friendsAudio.active) { friendsAudio.play('chime', .18, 400); return; }
     // High-pitched sparkly sound
     this.ensureRunning();
     [1200, 1500, 1800, 2100].forEach((f, i) => {
@@ -476,10 +508,12 @@ export class SoundManager {
   }
 
   playUIHover() {
+    if (friendsAudio.active) { friendsAudio.play('hover', .045, 100); return; }
     this.playTone(1200, 'sine', 0.04, 0.02, 0, 0.005);
   }
 
   playUIClick() {
+    if (friendsAudio.active) { friendsAudio.play('click', .22, 80); return; }
     this.playTone(800, 'sine', 0.12, 0.08, -400, 0.005);
   }
 
@@ -487,6 +521,7 @@ export class SoundManager {
    * short and synthetic so a suspended AudioContext can fail silently without
    * changing deployment timing. */
   playDeploymentSync() {
+    if (friendsAudio.active) { friendsAudio.play('chime', .15); return; }
     this.playTone(96, 'sine', .7, .08, 34, .08);
     this.playNoise(.18, .025, 1800);
     [720, 880, 1040].forEach((frequency, index) => {
@@ -497,6 +532,7 @@ export class SoundManager {
   /** Final insertion impact: a low mechanical hit followed by a clean squad
    * link chirp. */
   playDeploymentRelease() {
+    if (friendsAudio.active) { friendsAudio.play('success', .18); return; }
     this.playKick(.32, .32);
     this.playNoise(.16, .10, 650);
     this.playTone(180, 'sawtooth', .18, .08, -90, .004);
@@ -504,6 +540,7 @@ export class SoundManager {
   }
 
   playChestOpen() {
+    if (friendsAudio.active) { friendsAudio.play('chest', .3); return; }
     this.playTone(400, 'sine', 0.1, 0.1, 200, 0.01);
     this.playTone(600, 'sine', 0.1, 0.1, 300, 0.05);
     this.playTone(800, 'sine', 0.1, 0.1, 400, 0.1);
@@ -511,18 +548,21 @@ export class SoundManager {
   }
 
   playRespiratorBreathing() {
+    if (friendsAudio.active) { friendsAudio.play('pack', .06, 500); return; }
     // Muffled respirator valve cycle
     this.playNoise(0.55, 0.06, 550);
     this.playTone(90, 'sine', 0.45, 0.03, -20, 0.08);
   }
 
   playFilterDegradation() {
+    if (friendsAudio.active) { friendsAudio.play('pack', .12); return; }
     // Sizzling chemical neutralization hiss
     this.playNoise(0.18, 0.08, 2600);
     this.playTone(320, 'triangle', 0.12, 0.03, -100, 0.01);
   }
 
   playMaskShatter() {
+    if (friendsAudio.active) { friendsAudio.play('stone', .3); return; }
     // Glass fracture and pressurized air seal blowout
     this.playTone(1600, 'sawtooth', 0.28, 0.22, -1100, 0.005);
     this.playNoise(0.35, 0.25, 4500);
@@ -530,12 +570,14 @@ export class SoundManager {
   }
 
   playToxicCough() {
+    if (friendsAudio.active) { friendsAudio.play('pack', .1); return; }
     // Choking / coughing on toxic chemical vapor
     this.playTone(95, 'sawtooth', 0.2, 0.14, -40, 0.01);
     this.playNoise(0.25, 0.12, 700);
   }
 
   playHazardKlaxon() {
+    if (friendsAudio.active) { friendsAudio.play('error', .18, 800); return; }
     // Two-tone industrial emergency containment alarm
     this.ensureRunning();
     this.playTone(680, 'sawtooth', 0.25, 0.12, 0, 0.01);
@@ -544,6 +586,7 @@ export class SoundManager {
 
   /** Low vacuum swell and a sharp spatial snap for gravity-hazard impact. */
   playGravityPull() {
+    if (friendsAudio.active) { friendsAudio.play('swing', .15); return; }
     this.ensureRunning();
     this.playTone(72, 'sine', .42, .14, 190, .025);
     this.playTone(260, 'triangle', .32, .055, -180, .015);
@@ -558,6 +601,7 @@ export class SoundManager {
    * and ascending aerodynamic air swoosh.
    */
   playJump() {
+    if (friendsAudio.active) { friendsAudio.takeoff(); return; }
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
@@ -615,6 +659,7 @@ export class SoundManager {
 
   /** Mid-air jet relight: a two-stage electronic ignition with no boot impact. */
   playDoubleJump() {
+    if (friendsAudio.active) { friendsAudio.play('jump', .1, 100, 1.08); return; }
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
@@ -660,6 +705,7 @@ export class SoundManager {
    * Fuel subtly lowers the turbine pitch without turning low-fuel thrust quiet.
    */
   updateJetpack(active: boolean, fuelRatio: number = 1) {
+    if (friendsAudio.active) return;
     if (!active && !this.jetpackGain) return;
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
@@ -747,6 +793,7 @@ export class SoundManager {
 
   /** Wall-contact snap and lateral thrust. Pan points toward the contacted wall. */
   playWallJump(pan = 0) {
+    if (friendsAudio.active) { friendsAudio.play('stoneStep', .24, 100); return; }
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
@@ -793,6 +840,7 @@ export class SoundManager {
    * lowpass filtering and zero harsh high-frequency clatter.
    */
   playLanding(volume: number = 1) {
+    if (friendsAudio.active) { friendsAudio.land('grass', volume); return; }
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
@@ -851,6 +899,7 @@ export class SoundManager {
    * sub impact and digital alert harmonic.
    */
   playNewRound() {
+    if (friendsAudio.active) { friendsAudio.play('success', .2, 500); return; }
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
@@ -902,6 +951,7 @@ export class SoundManager {
   /** Restrained uplink signal hum. One filtered sine layer replaces the old
    * three-oscillator 220–960 Hz whine and its fast LFO modulation. */
   updateTowerCharge(isCharging: boolean, progressRatio: number) {
+    if (friendsAudio.active) return;
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
@@ -959,6 +1009,7 @@ export class SoundManager {
    * uplink's piercing 220–960 Hz multi-oscillator whine; this is one filtered
    * sine layer in the 105–175 Hz range, audible without dominating combat. */
   updateStationCapture(isCapturing: boolean, progressRatio: number) {
+    if (friendsAudio.active) return;
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
     const now = this.ctx.currentTime;
@@ -1023,6 +1074,7 @@ export class SoundManager {
   /** Short, unmistakable confirmation that the captured terminal has become
    * an operational Buy Station. Kept well below the objective fanfare. */
   playStationCaptured() {
+    if (friendsAudio.active) { friendsAudio.play('success', .2, 500); return; }
     this.stopStationCapture();
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;
@@ -1063,6 +1115,7 @@ export class SoundManager {
 
   /** Triumphant fanfare when the tower/uplink objective completes. */
   playObjectiveComplete() {
+    if (friendsAudio.active) { friendsAudio.play('success', .2, 500); return; }
     this.stopTowerCharge();
     this.ensureRunning();
     if (!this.ctx || !this.masterGain || this.ctx.state !== 'running') return;

@@ -31,7 +31,9 @@ describe('bundled Friends models', () => {
       expect(bytes.readUInt32LE(0)).toBe(0x46546c67); expect(bytes.readUInt32LE(4)).toBe(2); expect(bytes.readUInt32LE(8)).toBe(bytes.length);
       const json = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString());
       for (const resource of [...(json.images || []), ...(json.buffers || [])]) if (resource.uri && !resource.uri.startsWith('data:')) expect(existsSync(resolve(dirname(path), resource.uri))).toBe(true);
-      const license = readFileSync(resolve(dirname(path), 'License.txt'), 'utf8'); expect(license).toContain('CC0');
+      const licensePath=['License.txt','LICENSE'].map(name=>resolve(dirname(path),name)).find(existsSync);
+      expect(licensePath,`Missing asset license: ${path}`).toBeDefined();
+      const license = readFileSync(licensePath!, 'utf8'); expect(license).toContain('CC0');
     }
   });
   it('fits source orientations precisely and gives each world independent geometry and materials', () => {

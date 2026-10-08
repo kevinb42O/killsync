@@ -60,8 +60,8 @@ describe('permanent Friends spawn platform', () => {
     const actor = { ...host, x: platform.x, y: platform.y, z: platform.top, lifeState: 'alive' };
     const ray = { x: actor.x+64, y: actor.y, z: platform.top+26, dx: 0, dy: 0, dz: -1 };
     const materials = { ...frontier.pack(actor) };
-    for (const [index, tool] of ([2, 3, 4] as const).entries()) {
-      frontier.tool(actor, tool, ray, 1000+index*500, []);
+    for (const [index, [tool, fill]] of ([[2, false], [3, false], [3, true]] as const).entries()) {
+      frontier.tool(actor, tool, ray, 1000+index*500, [], true, [], undefined, fill);
       expect(frontier.snapshot().feedback.host.message).toMatch(/spawn platform/);
     }
     expect(frontier.pack(actor)).toEqual(materials);

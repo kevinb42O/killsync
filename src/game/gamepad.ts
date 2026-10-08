@@ -17,6 +17,7 @@ export const GAMEPAD_BUTTON = {
   fire: 7,
   sprint: 10,
   build: 8,
+  menu: 9,
   dpadUp: 12,
   dpadDown: 13,
   dpadLeft: 14,

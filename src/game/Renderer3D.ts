@@ -5,6 +5,7 @@ import type { CoopRealityBreachSnapshot } from './multiplayer/CoopRealityBreach'
 import { createBreachCathedral } from './rendering/RealityBreachVisuals';
 import * as THREE from 'three';
 import { FriendsNightVision } from './rendering/FriendsNightVision';
+import type { FriendsFlashlightGlare } from './rendering/FriendsSharedFlashlights';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { GameEngine } from './Engine';
 import { Enemy, Projectile, ExperienceGem, WorldItem, Treasure, OperatorDefinition, Weapon, Shop } from '../types';
@@ -125,6 +126,7 @@ export class Renderer3D {
   targetPitch: number = 0;
   isPointerLocked: boolean = false;
   sensitivity: number = 0.0022;
+  lookSensitivityScale = 1;
   private activeViewMode: 'TOPDOWN_2D' | 'FIRST_PERSON' | 'THIRD_PERSON' = 'TOPDOWN_2D';
 
   // Manual Shooting & ADS States
@@ -471,7 +473,8 @@ export class Renderer3D {
 
     // 5. Setup Environment (Grid floor, sky/horizon, pillars)
     this.rebuildEnvironment();
-    if (this.worldId === 'friends_frontier') this.nightVision = new FriendsNightVision(this.scene);
+    if (this.worldId === 'friends_frontier') this.nightVision = new FriendsNightVision(this.scene,
+      this.mobilePerformance ? {maxPixels:1600*900,samples:0} : undefined);
 
     // 6. Setup High-End FPS Viewmodel (Production Cyber Arm & Blaster)
     this.setupFPSViewmodel();
@@ -493,6 +496,8 @@ export class Renderer3D {
   }
 
   toggleFriendsNightVision() { return this.nightVision?.toggle() ?? false; }
+  get usesMobilePerformanceProfile(){return this.mobilePerformance;}
+  setFriendsFlashlightGlare(effect:FriendsFlashlightGlare){this.nightVision?.setFlashlightGlare(effect);}
 
   /** Replaces only static world geometry. Player rigs, weapons, particles and
    * network presentation remain alive through an inter-world bridge crossing. */
@@ -2361,8 +2366,8 @@ export class Renderer3D {
     // First and third person share the same locked-mouse look contract. A
     // third-person camera must never require holding a mouse button to orbit.
     if (!this.isPointerLocked) return;
-    this.yaw -= e.movementX * this.sensitivity;
-    this.pitch -= e.movementY * this.sensitivity;
+    this.yaw -= e.movementX * this.sensitivity * this.lookSensitivityScale;
+    this.pitch -= e.movementY * this.sensitivity * this.lookSensitivityScale;
     // Clamp pitch to avoid screen flipping
     this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
 

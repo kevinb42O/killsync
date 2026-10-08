@@ -11,9 +11,10 @@ requires materials rather than tactical charges or unlimited free pieces.
 
 - **1:** axe; hold primary action at a nearby trunk. Four hits yield timber and a sapling.
 - **2:** pickaxe; mine stone, copper and iron. Exposed seams are inside Copper Hollow.
-- **3:** shovel; remove soil, including beneath your feet. There is no invisible zero-height floor.
-- **4:** earthwork; place collected soil against an exposed surface.
-- **5:** combat equipment.
+- **3:** shovel; hold left mouse to excavate soil, including beneath your feet. Hold right mouse to fill holes or build up terrain against an exposed face. Right mouse does not zoom with the shovel. There is no invisible zero-height floor.
+- **4:** combat equipment.
+- **5:** rope.
+- **Mouse wheel:** cycle Axe, Pickaxe, Shovel, Combat and Rope.
 - **G:** field pack, recipes, shared storage, cargo and expedition journal.
 - **B:** construction, including your own workbench, furnace, storage, landing platforms and straight/curved railway tracks.
 - **M:** live full-world atlas; switch to the detailed railway view.
@@ -140,7 +141,7 @@ The refreshed valley render review confirms continuous terraces, irregular woodl
 
 ## Current playtest rules and the Lantern Descent
 
-Friends worlds currently enable free construction, paint/move/undo/redo, earthwork and train assembly. Dismantling free pieces does not manufacture resource refunds. Field packs, shared inventory and train cargo have no gameplay carry cap; finite safe-integer quantities still round-trip through validated saves. The construction palette and field pack show the testing rules. Workshop recipes retain their resource behavior, and permissions, support checks and entity/terrain budgets remain active.
+Friends worlds currently enable free construction, paint/move/undo/redo, shovel soil placement and train assembly. Dismantling free pieces does not manufacture resource refunds. Field packs, shared inventory and train cargo have no gameplay carry cap; finite safe-integer quantities still round-trip through validated saves. The construction palette and field pack show the testing rules. Workshop recipes retain their resource behavior, and permissions, support checks and entity/terrain budgets remain active.
 
 The Lantern Descent lies northeast of arrival at (6384, 5152). Its open sinkhole has a stepped northern rim and a deeper central shaft with a lower escape tunnel. Seven connecting routes form a return loop through six chambers: Lantern Vestibule, Hall of Echoes, Split Cathedral, Blue Vault, Root Gallery and Silent Well. The cathedral has a real suspended stone crossing over a floor at −416, with large vaulted ceilings, solid pillars and routes beneath the overlook. Cave voids, stairs and support surfaces are simulation terrain; they remain mineable and buildable. The atlas marks the entrance and the HUD names underground chambers.
 

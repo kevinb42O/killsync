@@ -14,7 +14,7 @@ describe('former spawn area terrain repair',()=>{
     for(const [x,y] of [[5808,5520],[4704,5728],[5808,5488]]){
       const f=new FriendsFrontier(),z=dig(f,x,y);
       expect(f.terrain.floor(x,y,z,0)).toBe(z-32);
-      expect(f.snapshot().feedback.host.message).toContain('+1 soil');
+      expect(f.snapshot().interaction?.contacts.at(-1)).toMatchObject({broken:true,resource:'Soil',amount:1});
       expect(new FriendsFrontier(f.snapshot()).terrain.floor(x,y,z,0)).toBe(z-32);
     }
   });
@@ -32,9 +32,9 @@ describe('former spawn area terrain repair',()=>{
     f.tool({...actor,z:z-32},3,{x:5808,y:5520,z:z-33,dx:0,dy:0,dz:-1},1400,[piece]);
     expect(f.terrain.material(vx,vy,vz)).toBe(0);expect(f.snapshot().mined).toBe(2);
   });
-  it('permits free earthwork inside the former spawn reserve',()=>{
+  it('permits free shovel filling inside the former spawn reserve',()=>{
     const f=new FriendsFrontier(),z=dig(f,5808,5520);
-    f.tool({...actor,z},4,{x:5808,y:5520,z:z+26,dx:0,dy:0,dz:-1},1400,[]);
+    f.tool({...actor,z},3,{x:5808,y:5520,z:z+26,dx:0,dy:0,dz:-1},1400,[],true,[],undefined,true);
     expect(f.terrain.floor(5808,5520,z,0)).toBe(z);expect(f.pack(actor).soil).toBe(1);
   });
   it('treats the former lake and the ground below it as dry terrain',()=>{

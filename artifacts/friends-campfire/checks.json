@@ -1,0 +1,20 @@
+{
+  "errors": [],
+  "glErrors": [],
+  "initialGlError": 0,
+  "renderGlError": 0,
+  "readGlError": 0,
+  "draws": 8,
+  "triangles": 1950,
+  "stableGeometry": true,
+  "fueledDraws": 8,
+  "fueledTriangles": 1950,
+  "fueledGeometryStable": true,
+  "flameGrowth": 1.799996621991742,
+  "lightGrowth": 1.7999966219917418,
+  "culled": true,
+  "released": true,
+  "changedPixels": 366396,
+  "lightingDelta": 16405075,
+  "glError": 0
+}

@@ -1,0 +1,9 @@
+import {mkdir} from 'node:fs/promises';
+import {createRequire} from 'node:module';import {homedir} from 'node:os';import {join} from 'node:path';
+const require=createRequire(import.meta.url);const {chromium}=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
+const directory=process.env.FRIENDS_TEST_ARTIFACTS||'artifacts/tool-visuals',origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3014';await mkdir(directory,{recursive:true});
+const browser=await chromium.launch({headless:true,args:['--use-angle=metal']});const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+try{await page.goto(origin+'/tools/friends-tool-review.html');await page.waitForFunction(()=>window.friendsToolReview?.frames>100&&window.friendsToolReview.world.terrainStats.surfaceJobs===0&&window.friendsToolReview.world.terrainStats.volumeJobs===0&&window.friendsToolReview.world.tools.root.getObjectByName('premade-right-arm'),null,{timeout:90000});await page.click('#hide');
+for(const [id,name]of [[1,'axe'],[2,'pickaxe'],[3,'shovel']]){await page.evaluate(id=>window.friendsToolReview.setTool(id),id);await page.waitForTimeout(700);await page.evaluate(()=>document.querySelector('aside').hidden=true);await page.screenshot({path:`${directory}/world-${name}.png`});}
+await page.evaluate(()=>{window.friendsToolReview.setTool(0);window.friendsToolReview.world.toggleFlashlight();});await page.waitForTimeout(700);await page.screenshot({path:`${directory}/world-flashlight.png`});
+console.log(JSON.stringify({errors,stats:await page.evaluate(()=>({render:window.friendsToolReview.renderer.info.render,terrain:window.friendsToolReview.world.terrainStats}))}));}finally{await browser.close();}

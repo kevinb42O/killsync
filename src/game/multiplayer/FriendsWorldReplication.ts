@@ -1,3 +1,5 @@
+import { durableBuildPieces } from './FriendsAssemblyPose';
+import { craneTopologyError } from './FriendsCraneAssemblies';
 import { isFriendsFinish, isFriendsShape, resolveFriendsBuildPieces } from './FriendsBuilding';
 import { isFrontierSave } from './FriendsFrontier';
 import { scenicVehicles } from './FriendsScenicService';
@@ -51,8 +53,8 @@ export class FriendsWorldAssembler {
 }
 function durable(snapshot:CoopSnapshot):Durable {
   const f=snapshot.friends!;
-  const {feedback:_feedback,damage:_damage,...frontier}=f.frontier!;
-  return {building:f.building,frontier:{...frontier,feedback:{}},progress:f.progress,projects:f.projects};
+  const {feedback:_feedback,damage:_damage,interaction:_interaction,...frontier}=f.frontier!;
+  return {building:f.building&&{...f.building,pieces:durableBuildPieces(f.building.pieces)},frontier:{...frontier,feedback:{}},progress:f.progress,projects:f.projects};
 }
 type Baseline={revision:number;world:Durable};
 type Flight=Baseline&{packets:ArrayBuffer[];next:number;at:number};
@@ -86,7 +88,9 @@ export class FriendsWorldHost {
     // Scenic car poses are deterministic from the shared route and distance.
     const {building:_b,frontier:_f,progress:_p,projects:_j,transport:_t,...motion}=snapshot.friends!;
     const vehicles=motion.scenicRailway?motion.vehicles.filter(v=>!v.scenic):motion.vehicles;
-    return {format:'friends_motion_v1',epoch:this.epoch,revision:ack.revision,snapshot:{...snapshot,friends:{...motion,vehicles}},feedback:snapshot.friends!.frontier?.feedback,damage:snapshot.friends!.frontier?.damage};
+    const feedback=snapshot.friends!.frontier?.interaction;
+    const interaction=feedback&&{...feedback,contacts:feedback.contacts.filter(c=>c.broken||snapshot.elapsedMs-c.at<350).map(c=>c.broken?c:{...c,tree:undefined})};
+    return {format:'friends_motion_v1',epoch:this.epoch,revision:ack.revision,snapshot:{...snapshot,friends:{...motion,vehicles}},feedback:snapshot.friends!.frontier?.feedback,damage:snapshot.friends!.frontier?.damage,interaction};
   }
 }
 export class FriendsWorldGuest {
@@ -99,6 +103,7 @@ export class FriendsWorldGuest {
       if(m.patch&&(!this.world||m.epoch!==this.epoch||m.base!==this.revision)){this.control({kind:'request'});return;}
       const world=m.world||worldPatch(this.world,m.patch);
       if(!world?.building||!Array.isArray(world.building.pieces)||world.building.pieces.length>1024||!Number.isSafeInteger(world.building.revision)||typeof world.building.guestsCanBuild!=='boolean'||!isFrontierSave(world.frontier)||!world.progress||!world.building.pieces.every((p:any)=>Number.isSafeInteger(p.id)&&isFriendsShape(p.shape)&&isFriendsFinish(p.finish)&&['x','y','z','rotation'].every(k=>Number.isFinite(p[k]))&&Number.isInteger(p.rotation)&&p.rotation>=0&&p.rotation<=3))throw new Error('Invalid island baseline');
+      if(craneTopologyError(world.building.pieces))throw new Error('Invalid crane topology');
       const changed=this.epoch!==m.epoch;this.epoch=m.epoch;this.revision=m.revision;this.world=world;
       if(changed)this.installed();this.control({kind:'ack',epoch:this.epoch,revision:this.revision});
     }catch{this.control({kind:'request'});}
@@ -107,6 +112,6 @@ export class FriendsWorldGuest {
     const m=value as any;if(m?.format!=='friends_motion_v1'||m.epoch!==this.epoch||!this.world||m.revision>this.revision)return;
     const motion=m.snapshot.friends;
     const vehicles=motion.scenicRailway?[...motion.vehicles,...scenicVehicles(motion.scenicRailway.distance)]:motion.vehicles;
-    return {...m.snapshot,friends:{...motion,vehicles,...this.world,building:this.world.building&&{...this.world.building,pieces:resolveFriendsBuildPieces(this.world.building.pieces,vehicles||[])},frontier:{...this.world.frontier,feedback:m.feedback||{},damage:m.damage}}};
+    return {...m.snapshot,friends:{...motion,vehicles,...this.world,building:this.world.building&&{...this.world.building,pieces:resolveFriendsBuildPieces(this.world.building.pieces,vehicles||[],new Map((motion.hauling?.cranes??[]).filter((c:any)=>c.angle!==undefined).map((c:any)=>[c.pieceId,c.angle])))},frontier:{...this.world.frontier,feedback:m.feedback||{},damage:m.damage,interaction:m.interaction}}};
   }
 }

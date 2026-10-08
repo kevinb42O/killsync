@@ -5,6 +5,7 @@ import { FriendsSimulation } from '../multiplayer/FriendsSimulation';
 import { FriendsHaulingVisuals } from './FriendsHaulingVisuals';
 import { FriendsRopeMesh } from './FriendsRopeMesh';
 import { FRIENDS_DELIVERY_BAY } from '../world/FriendsHaulingGoal';
+import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
 
 function fixture(){
   const scene=new THREE.Scene(),viewmodel=new THREE.Scene(),camera=new THREE.PerspectiveCamera(120,16/9,2,10000),handCamera=new THREE.PerspectiveCamera(98,16/9,.025,1000);
@@ -17,6 +18,16 @@ function fixture(){
   return {scene,viewmodel,camera,handCamera,visuals,snapshot,project};
 }
 describe('held hauling rope attachment',()=>{
+  it('hides the rope tool throughout campfire seating and restores it on standing',()=>{
+    const {viewmodel,visuals,snapshot,project}=fixture(),player=snapshot.players[0],gun=viewmodel.getObjectByName('rope-launcher')!;
+    visuals.update(snapshot,'host',5,0,project);expect(gun.visible).toBe(true);
+    player.friendsSeat={vehicleId:FRIENDS_CAMPFIRE.id,index:0};
+    for(const [i,tool]of [5,0,1,2,3,5].entries()){
+      visuals.update(snapshot,'host',tool,16*(i+1),project);expect(gun.visible).toBe(false);
+    }
+    delete player.friendsSeat;
+    visuals.update(snapshot,'host',5,128,project);expect(gun.visible).toBe(true);visuals.dispose();
+  });
   it('marks the physical delivery bay and shares the crew completion state',()=>{
     const {scene,visuals,snapshot,project}=fixture(),g=FRIENDS_DELIVERY_BAY;
     visuals.update(snapshot,'host',0,0,project);

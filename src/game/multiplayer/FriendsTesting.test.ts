@@ -21,6 +21,6 @@ describe('Friends temporary testing rules',()=>{
     const f=new FriendsFrontier();f.terrain.addGrade([8000,8000,0,512]);f.pack(actor).wood=1_500_000;
     f.tool(actor,3,{x:8000,y:8000,z:26,dx:0,dy:0,dz:-1},1000,[]);expect(f.pack(actor).soil).toBe(1);
     const saved=f.snapshot();expect(isFrontierSave(saved)).toBe(true);expect(new FriendsFrontier(saved).pack(actor).wood).toBe(1_500_000);
-    f.tool(actor,4,{x:8000,y:8000,z:26,dx:0,dy:0,dz:-1},1400,[]);expect(f.pack(actor).soil).toBe(1);
+    f.tool(actor,3,{x:8000,y:8000,z:26,dx:0,dy:0,dz:-1},1400,[],true,[],undefined,true);expect(f.pack(actor).soil).toBe(1);
   });
 });

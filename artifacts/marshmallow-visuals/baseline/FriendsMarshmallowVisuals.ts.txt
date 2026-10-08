@@ -1,0 +1,105 @@
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { createCampfireFlames } from './FriendsCampfire';
+import { loadFriendsGrip } from './FriendsHeldEquipment';
+import { isCampfireSeat } from '../multiplayer/FriendsCampfireSeats';
+import type { CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
+import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
+import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
+
+type Stick={group:THREE.Group;rod:THREE.Mesh;food:THREE.Mesh<THREE.CylinderGeometry,THREE.MeshStandardMaterial>;fire:THREE.Mesh;pose:number;arm?:THREE.Mesh;armRequested?:boolean};
+const UP=new THREE.Vector3(0,1,0),WHITE=new THREE.Color(0xfff6e1),GOLD=new THREE.Color(0xc58a43),BROWN=new THREE.Color(0x5a260d),CHAR=new THREE.Color(0x21140e);
+/** One shared stick mesh and food geometry per seated player. Small burning
+ * flames reuse the campfire shader; no new light, textures or particle system. */
+export class FriendsMarshmallowVisuals {
+  readonly group=new THREE.Group();
+  private actors=new Map<string,Stick>();
+  private rodGeometry=new THREE.CylinderGeometry(.55,.85,1,7);
+  private foodGeometry=new THREE.CylinderGeometry(3.7,3.7,7.5,12,1);
+  private wood=new THREE.MeshStandardMaterial({color:0x93623c,roughness:1});
+  private time={value:0};
+  private flameMaterial=createCampfireFlames(this.time);
+  private flameGeometry:THREE.BufferGeometry;
+  private start=new THREE.Vector3();
+  private target=new THREE.Vector3();
+  private rest=new THREE.Vector3();
+  private delta=new THREE.Vector3();
+  private forward=new THREE.Vector3();
+  private quaternion=new THREE.Quaternion();
+  private disposed=false;
+  constructor(scene:THREE.Scene){
+    this.group.name='campfire-marshmallow-sticks';scene.add(this.group);
+    const planes:THREE.BufferGeometry[]=[];
+    for(let i=0;i<3;i++){const g=new THREE.PlaneGeometry(15,24,1,3);g.translate(0,12,0);g.rotateY(i*Math.PI/3);planes.push(g);}
+    this.flameGeometry=mergeGeometries(planes);planes.forEach(g=>g.dispose());
+  }
+  private create(id:string):Stick{
+    const group=new THREE.Group();group.name=`marshmallow-stick-${id}`;
+    const rod=new THREE.Mesh(this.rodGeometry,this.wood);rod.name='long-roasting-stick';
+    const material=new THREE.MeshStandardMaterial({color:WHITE,roughness:.82});
+    material.onBeforeCompile=shader=>{
+      shader.vertexShader='varying vec3 marshmallowPosition;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nmarshmallowPosition=position;');
+      shader.fragmentShader='varying vec3 marshmallowPosition;\n'+shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\nfloat spots=sin(marshmallowPosition.x*2.7+sin(marshmallowPosition.y*2.))*sin(marshmallowPosition.z*3.1);diffuseColor.rgb*=.89+.11*spots;');
+    };
+    material.customProgramCacheKey=()=> 'roasted-marshmallow-surface';
+    const food=new THREE.Mesh(this.foodGeometry,material);food.name='toasting-marshmallow';
+    const fire=new THREE.Mesh(this.flameGeometry,this.flameMaterial);fire.name='burning-marshmallow-flames';fire.visible=false;
+    group.add(rod,food,fire);this.group.add(group);
+    const entry={group,rod,food,fire,pose:0};this.actors.set(id,entry);return entry;
+  }
+  update(players:readonly CoopPlayerSnapshot[],state:CampfireSnapshot|undefined,localId:string,camera:THREE.Camera,seconds:number,dt:number,firstPerson=true){
+    if(this.disposed)return;
+    this.time.value=seconds;
+    for(const entry of this.actors.values())entry.group.visible=false;
+    for(const player of players){
+      if(!isCampfireSeat(player.friendsSeat)||player.lifeState!=='alive'||player.friendsDevFlight)continue;
+      if(Math.hypot(camera.position.x-player.x,camera.position.z-player.y)>800)continue;
+      const entry=this.actors.get(player.id)??this.create(player.id),roast=state?.roasts[player.id];
+      entry.group.visible=true;
+      const local=firstPerson&&player.id===localId;
+      if(local&&!entry.armRequested){
+        entry.armRequested=true;
+        void loadFriendsGrip('right').then(source=>{
+          if(this.disposed||this.actors.get(player.id)!==entry)return;
+          entry.arm=source.clone();entry.arm.name='marshmallow-holding-hand';entry.arm.scale.setScalar(32);entry.group.add(entry.arm);
+        }).catch(()=>{});
+      }
+      if(local){
+        this.start.set(10,-10,-16).applyQuaternion(camera.quaternion).add(camera.position);
+        camera.getWorldDirection(this.forward);
+      }else{
+        this.start.set(player.x-Math.sin(player.angle)*8,player.z+18,player.y+Math.cos(player.angle)*8);
+        this.forward.set(Math.cos(player.angle),0,Math.sin(player.angle));
+      }
+      // Resting stick is held high and to the right, clear of the flames.
+      this.rest.copy(this.start).addScaledVector(this.forward,105);
+      this.rest.x-=Math.sin(player.angle)*24;this.rest.z+=Math.cos(player.angle)*24;this.rest.y+=34;
+      this.target.set(FRIENDS_CAMPFIRE.x,FRIENDS_CAMPFIRE.z+48,FRIENDS_CAMPFIRE.y);
+      entry.pose+=(Number(Boolean(roast?.roasting))-entry.pose)*(1-Math.exp(-Math.max(0,dt)*.009));
+      this.target.lerpVectors(this.rest,this.target,entry.pose);
+      this.delta.copy(this.target).sub(this.start);
+      const length=this.delta.length();entry.group.position.copy(this.start);
+      entry.rod.position.copy(this.delta).multiplyScalar(.5);entry.rod.scale.y=length;
+      this.quaternion.setFromUnitVectors(UP,this.forward.copy(this.delta).normalize());entry.rod.quaternion.copy(this.quaternion);
+      if(entry.arm){entry.arm.visible=local;entry.arm.quaternion.copy(this.quaternion);}
+      entry.food.position.copy(this.delta);entry.food.quaternion.copy(this.quaternion);
+      entry.fire.position.copy(this.delta);entry.fire.position.y+=2;
+      entry.fire.visible=Boolean(roast&&roast.burningMs>0);
+      const toast=roast?.toast??0,color=entry.food.material.color;
+      if(roast?.charred||entry.fire.visible)color.copy(CHAR);
+      else if(toast<.5)color.copy(WHITE).lerp(GOLD,toast*2);
+      else color.copy(GOLD).lerp(BROWN,(toast-.5)*2);
+      entry.food.material.emissive.setHex(entry.fire.visible?0x5a1d02:0);
+      entry.food.scale.setScalar(roast?.charred ? .82 : 1);
+    }
+    // Leaving/death/disconnect releases the only per-player material.
+    for(const [id,entry]of this.actors)if(!players.some(p=>p.id===id&&isCampfireSeat(p.friendsSeat)&&p.lifeState==='alive')){
+      entry.group.removeFromParent();entry.food.material.dispose();this.actors.delete(id);
+    }
+  }
+  dispose(){
+    if(this.disposed)return;this.disposed=true;
+    for(const entry of this.actors.values())entry.food.material.dispose();this.actors.clear();
+    this.rodGeometry.dispose();this.foodGeometry.dispose();this.flameGeometry.dispose();this.wood.dispose();this.flameMaterial.dispose();this.group.removeFromParent();
+  }
+}

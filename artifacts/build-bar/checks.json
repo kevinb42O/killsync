@@ -1,0 +1,20 @@
+{
+  "origin": "http://localhost:3014",
+  "checks": [
+    "eight icon slots fit in a bar under 600px wide and 75px tall",
+    "world scroll follows slot order and wraps both ways; number shortcuts select directly",
+    "Shift scroll and R rotate without selecting; scrolling over the bar selects once",
+    "dragging a library item assigns a slot; dragging slots swaps them without duplicates and saves the order",
+    "idle timeout leaves the construction library open and accessible",
+    "bar hides after five seconds, leaves accessibility/focus, and returns on scroll",
+    "375px layout remains compact, scrolls horizontally, and brings the selected slot into view",
+    "saved customization is restored after a full game reload"
+  ],
+  "errors": [],
+  "desktopDimensions": {
+    "x": 268,
+    "y": 652,
+    "width": 564,
+    "height": 66
+  }
+}

@@ -1,7 +1,7 @@
 import { frontierTrees } from './FriendsFrontier';
 import { collidePhysicalCargo } from './FriendsHauling';
 import { FriendsTerrain, FRIENDS_STEP_HEIGHT } from '../world/FriendsTerrain';
-import { friendsBuildFloor, friendsBuildCeiling, resolveFriendsBuildCollisions } from './FriendsBuilding';
+import { friendsBuildFloor, friendsWalkFloor, friendsInclineConnects, friendsBuildCeiling, resolveFriendsBuildCollisions } from './FriendsBuilding';
 import { friendsWorldFloor, friendsVehicleFloor, friendsVehicleCeiling, FRIENDS_FLIGHT_CEILING, resolveFriendsVehicleCollisions, type FriendsSnapshot } from './FriendsExpedition';
 import type { CoopPlayerSnapshot, CoopSnapshot } from './CoopSimulation';
 import { getBarricadeWallContact, getStructureWalkableTop, resolveBarricadeCollision, type CoopStructureSnapshot } from './CoopFieldEngineering';
@@ -123,7 +123,7 @@ export class LocalPlayerPrediction {
         let collided = this.friends ? resolveFriendsVehicleCollisions(this.friends.vehicles, position, motion.z, radius) : false;
         if (this.friends?.hauling) collided = collidePhysicalCargo(this.friends.hauling.cargo, position, motion.z, radius) || collided;
         if (this.friends?.frontier) {
-          collided = this.terrain.collide(position, motion.z, radius) || collided;
+          collided = this.terrain.collide(position, motion.z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.friends?.building?.pieces??[],position,motion.z,x,y,top)) || collided;
           const cx = Math.floor(position.x / 512), cy = Math.floor(position.y / 512), removed = new Set(this.friends.frontier.harvested);
           const trees = [...this.friends.frontier.planted]; for (let a = cx-1; a <= cx+1; a++) for (let b = cy-1; b <= cy+1; b++) trees.push(...frontierTrees(a,b));
           for (const t of trees) { if (removed.has(t.id) || !this.terrain.supports(t.x,t.y,t.z) || motion.z >= t.z + 180*t.scale || motion.z+50 < t.z) continue; const dx=position.x-t.x,dy=position.y-t.y,d=Math.hypot(dx,dy),extent=radius+10*t.scale; if(d<extent){position.x=t.x+(d>.001?dx/d:1)*extent;position.y=t.y+(d>.001?dy/d:0)*extent;collided=true;} }
@@ -152,7 +152,7 @@ export class LocalPlayerPrediction {
         let floor = this.friends ? friendsWorldFloor(this.friends.vehicles, position.x, position.y, motion.z) : undefined;
         const ground = this.friends?.frontier && this.terrain.floor(position.x, position.y, motion.z);
         if (ground !== undefined) floor = Math.max(floor ?? -Infinity, ground);
-        const creative = this.friends?.building && friendsBuildFloor(this.friends.building.pieces, position.x, position.y, motion.z);
+        const creative = this.friends?.building && friendsWalkFloor(this.friends.building.pieces, position.x, position.y, motion.z, radius, this.friends?.frontier?this.terrain:undefined);
         if (creative !== undefined) floor = Math.max(floor ?? -Infinity, creative);
         for (const structure of this.structures) {
           if (structure.state === 'destroying') continue;

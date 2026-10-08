@@ -1,0 +1,55 @@
+{
+  "errors": [],
+  "controlled": {
+    "programsOff": 6,
+    "programsHDR": 12,
+    "beforeToggle": 12,
+    "afterToggle": 20,
+    "toggleMs": 91.5,
+    "weights": [
+      {
+        "fov": 108,
+        "edgeDegrees": 67.7711389163399,
+        "edgeBeamWeight": 0.10509171520412879
+      },
+      {
+        "fov": 115,
+        "edgeDegrees": 70.28475656961248,
+        "edgeBeamWeight": 0.051750179677281884
+      }
+    ],
+    "parentOffset": 1142.6643622812303,
+    "view": {
+      "center": [
+        103,
+        192,
+        127
+      ],
+      "edge": [
+        51,
+        101,
+        65
+      ],
+      "corner": [
+        3,
+        10,
+        4
+      ]
+    },
+    "buffer": {
+      "width": 960,
+      "height": 540,
+      "samples": 2
+    },
+    "glError": 0
+  },
+  "cave": {
+    "before": 31,
+    "after": 51,
+    "firstActivationMs": 377.89999997615814,
+    "state": {
+      "stats": "60 FPS · 1 draws · 0k triangles\nCamera 17754, 8562 · altitude -258\nOcean island · shared voxel landmarks\nBlocks: 79 surface tiles · 74/74 active/cached volumes · 20.8 MiB · 2 jobs\nTrees: 29 3D · 6 batches · 28k triangles\nClouds: 19/78 visible · 1 atlas bakes",
+      "glError": 0
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { createCraneGeometry, createCranePartGeometry } from './FriendsCraneGeometry';
 import { isPlayerRail, sampleRail, railLength } from '../world/FriendsPlayerRail';
 import * as THREE from 'three';
 import { frontierMaterial } from './FriendsFrontierVisuals';
@@ -5,6 +6,8 @@ import { FRIENDS_TERRAIN_SURFACES } from '../world/FriendsTerrainAppearance';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FRIENDS_BUILD_CATALOG, FRIENDS_FINISHES, friendsShapeBoxes, isSlope, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildPose, type FriendsBuildingSnapshot } from '../multiplayer/FriendsBuilding';
 export function createFriendsBuildGeometry(shape: FriendsBuildShape) {
+  if(shape==='crane')return createCraneGeometry();
+  if(shape.startsWith('crane_'))return createCranePartGeometry(shape);
   const def = FRIENDS_BUILD_CATALOG[shape];
   if (isPlayerRail(shape)) {
     const piece={x:0,y:0,z:0,rotation:0,shape}, parts:THREE.BufferGeometry[]=[];
@@ -36,7 +39,7 @@ export function createFriendsBuildGeometry(shape: FriendsBuildShape) {
 }
 
 export function prepareFriendsBuildGeometry(geometry: THREE.BufferGeometry, shape: FriendsBuildShape) {
-  if (isPlayerRail(shape)) return geometry;
+  if (isPlayerRail(shape) || shape.startsWith('crane')) return geometry;
   const normal = geometry.getAttribute('normal'), count = normal.count;
   const colors = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
@@ -58,6 +61,7 @@ export function prepareFriendsBuildGeometry(geometry: THREE.BufferGeometry, shap
 }
 
 export function createFriendsBuildMaterial(shape: FriendsBuildShape, finish: FriendsBuildFinish, moving=false): THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[] {
+  if(shape.startsWith('crane'))return new THREE.MeshStandardMaterial({vertexColors:true,color:'#ffffff',roughness:.7,metalness:.4});
   const terrain = FRIENDS_TERRAIN_SURFACES[finish as keyof typeof FRIENDS_TERRAIN_SURFACES];
   if (terrain && !isPlayerRail(shape) && shape !== 'glass') {
     const top = frontierMaterial(terrain.asset, terrain.color, !moving);
@@ -71,7 +75,8 @@ export function createFriendsBuildMaterial(shape: FriendsBuildShape, finish: Fri
     emissive: shape === 'lamp' ? '#ffc879' : shape === 'gathering_beacon' ? '#8de6ce' : shape === 'survey_lens' ? '#baa4fa' : '#000000', emissiveIntensity: .45 });
 }
 function buildQuaternion(p:FriendsBuildPose,target:THREE.Quaternion){
-  target.setFromEuler(new THREE.Euler(0,-(p.vehicleFrame?.angle||0),p.vehicleFrame?.pitch||0,'YXZ'));
+  const frame=p.assemblyFrame??p.vehicleFrame;
+  target.setFromEuler(new THREE.Euler(0,-(frame?.angle||0),frame?.pitch||0,'YXZ'));
   return target.multiply(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP,-p.rotation*Math.PI/2));
 }
 export class FriendsBuildVisuals {
@@ -80,24 +85,63 @@ export class FriendsBuildVisuals {
   private materials = new Map<string, THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[]>();
   private batches = new Map<string, THREE.InstancedMesh>();
   private revision = -1;
+  private batchStamps = new Map<string, string>();
+  private detailStamps = new Map<FriendsBuildShape, string>();
+  private groupGhost?: THREE.InstancedMesh;
+  private groupGhostStamp='';
+  private groupGhostMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: .44, depthWrite: false });
+  private pending = false;
+  private edges = new Map<FriendsBuildShape, THREE.EdgesGeometry>();
+  private pulses: Array<{line:THREE.LineSegments;at:number}> = [];
+  private pulseCursor = 0;
+  private faceMarker = new THREE.Mesh(new THREE.PlaneGeometry(13,13), new THREE.MeshBasicMaterial({color:'#c8f1dc',transparent:true,opacity:.32,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,side:THREE.DoubleSide}));
+  private removal?: THREE.Mesh;
+  private removalMaterial = new THREE.MeshBasicMaterial({ color: '#e3b887', transparent: true, opacity: .15, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  setPending(pending: boolean) { this.pending = pending; }
+  removalProgress(piece: import('../multiplayer/FriendsBuilding').FriendsBuildPiece | undefined, progress=0) {
+    if(!piece){if(this.removal)this.removal.visible=false;return;}
+    const geometry=this.geometry(piece.shape);
+    if(!this.removal){this.removal=new THREE.Mesh(geometry,this.removalMaterial);this.group.add(this.removal);}
+    this.removal.geometry=geometry;this.removal.visible=true;this.removal.position.set(piece.x,piece.z,piece.y);buildQuaternion(piece,this.removal.quaternion);
+    this.removalMaterial.opacity=.08+Math.max(0,Math.min(1,progress))*.42;
+  }
+
   private detailBatches: THREE.InstancedMesh[] = [];
   private detailGeometries: THREE.BufferGeometry[] = [];
   private detailMaterials: THREE.Material[] = [];
   private ghost?: THREE.Mesh;
   private outline?: THREE.LineSegments;
-  private ghostMaterial = new THREE.MeshBasicMaterial({ color: '#8de6ce', transparent: true, opacity: .3, depthWrite: false });
+  private ghostMaterial = new THREE.MeshBasicMaterial({ color: '#8de6ce', transparent: true, opacity: .42, depthWrite: false });
   private outlineMaterial = new THREE.LineBasicMaterial({ color: '#eaffdb', transparent: true, opacity: .85, depthWrite: false });
-  constructor(scene: THREE.Scene) { this.group.name = 'friends-creations'; scene.add(this.group); }
+  constructor(scene: THREE.Scene) { this.group.name = 'friends-creations'; this.faceMarker.visible=false;this.group.add(this.faceMarker);scene.add(this.group); }
+  contactFace(surface?: {x:number;y:number;z:number;nx:number;ny:number;nz:number},valid=true) {
+    this.faceMarker.visible=Boolean(surface);if(!surface)return;
+    this.faceMarker.position.set(surface.x+surface.nx*.08,surface.z+surface.nz*.08,surface.y+surface.ny*.08);
+    this.faceMarker.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),new THREE.Vector3(surface.nx,surface.nz,surface.ny));
+    (this.faceMarker.material as THREE.MeshBasicMaterial).color.set(valid?'#c8f1dc':'#ef977c');
+  }
+  confirm(piece: import('../multiplayer/FriendsBuilding').FriendsBuildPiece,now:number) {
+    let geometry=this.edges.get(piece.shape);if(!geometry){geometry=new THREE.EdgesGeometry(this.geometry(piece.shape),25);this.edges.set(piece.shape,geometry);}
+    const slot=this.pulseCursor++%3;let pulse=this.pulses[slot];
+    if(!pulse){const line=new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color:'#d8f4df',transparent:true,opacity:1,depthWrite:false}));pulse={line,at:now};this.pulses[slot]=pulse;this.group.add(line);}
+    pulse.at=now;pulse.line.geometry=geometry;pulse.line.visible=true;pulse.line.position.set(piece.x,piece.z,piece.y);buildQuaternion(piece,pulse.line.quaternion);
+  }
+  animate(now:number) {for(const pulse of this.pulses){const age=(now-pulse.at)/350;pulse.line.visible=age>=0&&age<1;(pulse.line.material as THREE.LineBasicMaterial).opacity=Math.max(0,.9*(1-age));}}
+
   private geometry(shape: FriendsBuildShape) { let g = this.geometries.get(shape); if (!g) { g = prepareFriendsBuildGeometry(createFriendsBuildGeometry(shape), shape); this.geometries.set(shape, g); } return g; }
   update(building: FriendsBuildingSnapshot | undefined) {
     this.group.visible = Boolean(building); if (!building) return;
     if(building.revision===this.revision){
-      if(!building.pieces.some(p=>p.attachment))return;
+      if(!building.pieces.some(p=>p.attachment||p.assembly))return;
       const byId=new Map(building.pieces.map(p=>[p.id,p])),matrix=new THREE.Matrix4(),q=new THREE.Quaternion();
-      for(const mesh of [...this.batches.values(),...this.detailBatches]){const ids=mesh.userData.pieceIds as number[]|undefined;if(!ids)continue;let moved=false;ids.forEach((id,i)=>{const p=byId.get(id);if(!p?.attachment)return;matrix.compose(new THREE.Vector3(p.x,p.z,p.y),buildQuaternion(p,q),new THREE.Vector3(1,1,1));mesh.setMatrixAt(i,matrix);moved=true;});if(moved){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();}}
+      for(const mesh of [...this.batches.values(),...this.detailBatches]){const ids=mesh.userData.pieceIds as number[]|undefined;if(!ids)continue;let moved=false;ids.forEach((id,i)=>{const p=byId.get(id);if(!p?.attachment&&!p?.assembly)return;matrix.compose(new THREE.Vector3(p.x,p.z,p.y),buildQuaternion(p,q),new THREE.Vector3(1,1,1));mesh.setMatrixAt(i,matrix);moved=true;});if(moved){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();}}
       return;
     }
     this.revision = building.revision;
+    const newDetails = new Map<FriendsBuildShape,string>();
+    for (const p of building.pieces) newDetails.set(p.shape, (newDetails.get(p.shape) || '') + p.id + ':' + p.revision + ',');
+    const changedDetails = new Set([...this.detailStamps.keys(), ...newDetails.keys()].filter(shape => this.detailStamps.get(shape) !== newDetails.get(shape)));
+    this.detailStamps = newDetails;
     const grouped = new Map<string, typeof building.pieces>();
     for (const p of building.pieces) { const k = `${p.shape}:${p.finish}:${p.attachment?'cargo':'world'}`, a = grouped.get(k) || []; a.push(p); grouped.set(k, a); }
     for (const mesh of this.batches.values()) mesh.visible = false;
@@ -112,39 +156,45 @@ export class FriendsBuildVisuals {
         mesh = new THREE.InstancedMesh(this.geometry(shape), material, Math.max(8, 2 ** Math.ceil(Math.log2(pieces.length))));
         mesh.name = `creation:${key}`; mesh.castShadow = true; mesh.receiveShadow = true; this.batches.set(key, mesh); this.group.add(mesh);
       }
-      mesh.visible = true; mesh.count = pieces.length;mesh.userData.pieceIds=pieces.map(p=>p.id);
+      mesh.visible = true;
+      const stamp = pieces.map(p => p.id + ':' + p.revision).join(',');
+      if (this.batchStamps.get(key) === stamp&&!pieces.some(p=>p.attachment||p.assembly)) continue;
+      this.batchStamps.set(key, stamp);
+      mesh.count = pieces.length;mesh.userData.pieceIds=pieces.map(p=>p.id);
       pieces.forEach((p, i) => { position.set(p.x, p.z, p.y); buildQuaternion(p,quaternion); matrix.compose(position, quaternion, new THREE.Vector3(1, 1, 1)); mesh!.setMatrixAt(i, matrix); });
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
     }
-    this.clearDetails();
-    const detail = (shape: FriendsBuildShape, geometry: THREE.BufferGeometry, color: string, luminous = false) => {
+    this.clearDetails(changedDetails);
+    const detail = (shape: FriendsBuildShape, create: () => THREE.BufferGeometry, color: string, luminous = false) => {
+      if (!changedDetails.has(shape)) return;
+      const geometry = create();
       const pieces = building.pieces.filter(p => p.shape === shape);
       if (!pieces.length) { geometry.dispose(); return; }
       const material = new THREE.MeshStandardMaterial({ color, roughness: .65, emissive: luminous ? color : '#000000', emissiveIntensity: luminous ? .8 : 0 });
       const mesh = new THREE.InstancedMesh(geometry, material, pieces.length);
       pieces.forEach((p,i) => { position.set(p.x,p.z,p.y); buildQuaternion(p,quaternion); matrix.compose(position,quaternion,new THREE.Vector3(1,1,1)); mesh.setMatrixAt(i,matrix); });
-      mesh.userData.pieceIds=pieces.map(p=>p.id);mesh.castShadow = true; mesh.computeBoundingSphere(); this.group.add(mesh); this.detailBatches.push(mesh); this.detailGeometries.push(geometry); this.detailMaterials.push(material);
+      mesh.userData.detailShape=shape; mesh.userData.pieceIds=pieces.map(p=>p.id);mesh.castShadow = true; mesh.computeBoundingSphere(); this.group.add(mesh); this.detailBatches.push(mesh); this.detailGeometries.push(geometry); this.detailMaterials.push(material);
     };
-    detail('workbench', new THREE.BoxGeometry(68,4,12).translate(0,67,18), '#ded0a6');
-    detail('workbench', new THREE.BoxGeometry(7,14,20).translate(28,70,-16), '#667e7d');
-    detail('furnace', new THREE.BoxGeometry(26,22,2).translate(0,22,-32.5), '#ff9c48', true);
-    for (const x of [-15,15]) detail('furnace',new THREE.BoxGeometry(4,28,3).translate(x,22,-33),'#4b504c');
-    for (const y of [9,35]) detail('furnace',new THREE.BoxGeometry(30,4,3).translate(0,y,-33),'#4b504c');
-    detail('storage', new THREE.BoxGeometry(66,4,50).translate(0,41,0), '#566b63');
-    detail('storage', new THREE.BoxGeometry(8,10,2).translate(0,33,-25), '#dcc483');
-    for (const x of [-36,36]) detail('landing_pad', new THREE.BoxGeometry(9,1,110).translate(x,8.6,0), '#eee4c4');
-    detail('landing_pad', new THREE.BoxGeometry(72,1,9).translate(0,8.6,0), '#eee4c4');
-    detail('planter',new THREE.BoxGeometry(40,2,40).translate(0,24.5,0),'#574e39');
+    detail('workbench', () => new THREE.BoxGeometry(68,4,12).translate(0,67,18), '#ded0a6');
+    detail('workbench', () => new THREE.BoxGeometry(7,14,20).translate(28,70,-16), '#667e7d');
+    detail('furnace', () => new THREE.BoxGeometry(26,22,2).translate(0,22,-32.5), '#ff9c48', true);
+    for (const x of [-15,15]) detail('furnace',() => new THREE.BoxGeometry(4,28,3).translate(x,22,-33),'#4b504c');
+    for (const y of [9,35]) detail('furnace',() => new THREE.BoxGeometry(30,4,3).translate(0,y,-33),'#4b504c');
+    detail('storage', () => new THREE.BoxGeometry(66,4,50).translate(0,41,0), '#566b63');
+    detail('storage', () => new THREE.BoxGeometry(8,10,2).translate(0,33,-25), '#dcc483');
+    for (const x of [-36,36]) detail('landing_pad', () => new THREE.BoxGeometry(9,1,110).translate(x,8.6,0), '#eee4c4');
+    detail('landing_pad', () => new THREE.BoxGeometry(72,1,9).translate(0,8.6,0), '#eee4c4');
+    detail('planter',() => new THREE.BoxGeometry(40,2,40).translate(0,24.5,0),'#574e39');
     for (const [x,z] of [[-12,-10],[10,-8],[0,10]]) {
-      detail('planter',new THREE.CylinderGeometry(1,1,10,5).translate(x,30,z),'#60896a');
-      detail('planter',new THREE.IcosahedronGeometry(5,0).translate(x,35,z),'#f3d4ad');
+      detail('planter',() => new THREE.CylinderGeometry(1,1,10,5).translate(x,30,z),'#60896a');
+      detail('planter',() => new THREE.IcosahedronGeometry(5,0).translate(x,35,z),'#f3d4ad');
     }
-    detail('lamp',new THREE.BoxGeometry(12,12,12).translate(0,56,0),'#ffdb8c',true);
-    detail('survey_lens',new THREE.CylinderGeometry(12,12,3,20).rotateX(Math.PI/2).translate(0,56,-17),'#b3d9ed',true);
-    detail('gathering_beacon',new THREE.TorusGeometry(19,2,6,24).rotateX(Math.PI/2).translate(0,57,0),'#a7e5d2',true);
+    detail('lamp',() => new THREE.BoxGeometry(12,12,12).translate(0,56,0),'#ffdb8c',true);
+    detail('survey_lens',() => new THREE.CylinderGeometry(12,12,3,20).rotateX(Math.PI/2).translate(0,56,-17),'#b3d9ed',true);
+    detail('gathering_beacon',() => new THREE.TorusGeometry(19,2,6,24).rotateX(Math.PI/2).translate(0,57,0),'#a7e5d2',true);
     // The sign carries a physical sun motif visible from either side.
-    detail('sign',new THREE.CylinderGeometry(9,9,1,16).rotateX(Math.PI/2).translate(0,48,-4.8),'#ffe1a2');
-    detail('sign',new THREE.CylinderGeometry(9,9,1,16).rotateX(Math.PI/2).translate(0,48,4.8),'#ffe1a2');
+    detail('sign',() => new THREE.CylinderGeometry(9,9,1,16).rotateX(Math.PI/2).translate(0,48,-4.8),'#ffe1a2');
+    detail('sign',() => new THREE.CylinderGeometry(9,9,1,16).rotateX(Math.PI/2).translate(0,48,4.8),'#ffe1a2');
   }
   preview(shape?: FriendsBuildShape, pose?: FriendsBuildPose, valid = true, finish: FriendsBuildFinish = 'stone') {
     if (!shape || !pose) { if (this.ghost) this.ghost.visible = false; if (this.outline) this.outline.visible = false; return; }
@@ -154,9 +204,28 @@ export class FriendsBuildVisuals {
       this.ghost = new THREE.Mesh(geometry, this.ghostMaterial); this.outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 25), this.outlineMaterial);
       this.group.add(this.ghost, this.outline);
     }
-    this.ghostMaterial.color.set(valid ? FRIENDS_FINISHES[finish].color : '#f88472'); this.outlineMaterial.color.set(valid ? '#b7ffe1' : '#ff9481');
+    this.ghostMaterial.color.set(this.pending ? '#dfc18b' : valid ? FRIENDS_FINISHES[finish].color : '#f88472'); this.outlineMaterial.color.set(this.pending ? '#ffe0a1' : valid ? '#b7ffe1' : '#ff9481');
     for (const object of [this.ghost, this.outline!]) { object.visible = true; object.position.set(pose.x, pose.z, pose.y); buildQuaternion(pose,object.quaternion); }
   }
-  private clearDetails() { this.detailBatches.forEach(m => { m.removeFromParent(); m.dispose(); }); this.detailGeometries.forEach(g => g.dispose()); this.detailMaterials.forEach(m => m.dispose()); this.detailBatches = []; this.detailGeometries = []; this.detailMaterials = []; }
-  dispose() { this.clearDetails(); this.group.removeFromParent(); this.outline?.geometry.dispose(); this.batches.forEach(m => m.dispose()); this.geometries.forEach(g => g.dispose()); this.materials.forEach(material => { for (const m of Array.isArray(material) ? material : [material]) { m.map?.dispose(); m.normalMap?.dispose(); m.roughnessMap?.dispose(); m.dispose(); } }); this.ghostMaterial.dispose(); this.outlineMaterial.dispose(); }
+  previewGroup(shape: FriendsBuildShape | undefined, poses: readonly FriendsBuildPose[], valid: readonly boolean[], finish: FriendsBuildFinish) {
+    if (!shape || !poses.length) { if (this.groupGhost) this.groupGhost.visible = false;this.groupGhostStamp=''; return; }
+    const geometry = this.geometry(shape);
+    if (!this.groupGhost || this.groupGhost.geometry !== geometry) {
+      this.groupGhost?.removeFromParent(); this.groupGhost?.dispose();
+      this.groupGhost = new THREE.InstancedMesh(geometry,this.groupGhostMaterial,64); this.groupGhost.frustumCulled=false; this.group.add(this.groupGhost);
+    }
+    this.groupGhost.visible=true;
+    const stamp=JSON.stringify([shape,finish,this.pending,poses,valid]);if(stamp===this.groupGhostStamp)return;this.groupGhostStamp=stamp;this.groupGhost.count=Math.min(64,poses.length);
+    const matrix=new THREE.Matrix4(),position=new THREE.Vector3(),quaternion=new THREE.Quaternion(),scale=new THREE.Vector3(1,1,1),color=new THREE.Color();
+    for(let i=0;i<this.groupGhost.count;i++){const p=poses[i];position.set(p.x,p.z,p.y);buildQuaternion(p,quaternion);matrix.compose(position,quaternion,scale);this.groupGhost.setMatrixAt(i,matrix);color.set(this.pending?'#dfc18b':valid[i]?FRIENDS_FINISHES[finish].color:'#e97860');this.groupGhost.setColorAt(i,color);}
+    this.groupGhost.instanceMatrix.needsUpdate=true;if(this.groupGhost.instanceColor)this.groupGhost.instanceColor.needsUpdate=true;
+  }
+  private clearDetails(shapes?: ReadonlySet<FriendsBuildShape>) {
+    for(let i=this.detailBatches.length-1;i>=0;i--){
+      const mesh=this.detailBatches[i];if(shapes&&!shapes.has(mesh.userData.detailShape))continue;
+      mesh.removeFromParent();mesh.dispose();this.detailGeometries[i].dispose();this.detailMaterials[i].dispose();
+      this.detailBatches.splice(i,1);this.detailGeometries.splice(i,1);this.detailMaterials.splice(i,1);
+    }
+  }
+  dispose() { this.faceMarker.geometry.dispose();(this.faceMarker.material as THREE.Material).dispose();this.edges.forEach(g=>g.dispose());this.pulses.forEach(p=>(p.line.material as THREE.Material).dispose());this.removalMaterial.dispose(); this.groupGhost?.dispose(); this.groupGhostMaterial.dispose(); this.clearDetails(); this.group.removeFromParent(); this.outline?.geometry.dispose(); this.batches.forEach(m => m.dispose()); this.geometries.forEach(g => g.dispose()); this.materials.forEach(material => { for (const m of Array.isArray(material) ? material : [material]) { m.map?.dispose(); m.normalMap?.dispose(); m.roughnessMap?.dispose(); m.dispose(); } }); this.ghostMaterial.dispose(); this.outlineMaterial.dispose(); }
 }

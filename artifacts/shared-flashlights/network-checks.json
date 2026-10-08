@@ -1,0 +1,21 @@
+{
+  "errors": [],
+  "network": {
+    "guestOn": {
+      "pitch": 0.4000203564071929,
+      "cone": 1.3490368453650288,
+      "yaw": 1.571
+    },
+    "guestOff": true,
+    "hostBeam": {
+      "pitch": -0.20002072448243657,
+      "cone": 1.3490368453650288,
+      "yaw": 1.571
+    },
+    "hostOff": true,
+    "receivedInputs": 2,
+    "receivedSnapshots": 5,
+    "errors": [],
+    "transport": "actual local WebRTC + Friends world sync + compact snapshot deltas"
+  }
+}

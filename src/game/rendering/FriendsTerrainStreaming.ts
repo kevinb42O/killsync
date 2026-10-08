@@ -47,9 +47,13 @@ export function volumeChunksAround(x:number,y:number,edited:ReadonlySet<string>,
   for(const c of columns)for(let ahead=-768;ahead<=2304;ahead+=384){
     const p=sampleRailAlignment(route,c.distance+ahead);promote(Math.floor(p.x/512),Math.floor(p.y/512));
   }
-  if(underground){
+  // Looking through the shaft reveals the vestibule and connecting tunnels
+  // before the camera goes underground. Stream that same view on approach;
+  // a surface shell has no interior walls to close the distant end of it.
+  const approachingCave=Math.hypot(x-CAVE_ENTRANCE.x,y-CAVE_ENTRANCE.y)<900;
+  if(underground||approachingCave){
     const radius=reach+512;
-    const authored=x>=CAVE_BOUNDS.minX&&x<=CAVE_BOUNDS.maxX&&y>=CAVE_BOUNDS.minY&&y<=CAVE_BOUNDS.maxY;
+    const authored=approachingCave||x>=CAVE_BOUNDS.minX&&x<=CAVE_BOUNDS.maxX&&y>=CAVE_BOUNDS.minY&&y<=CAVE_BOUNDS.maxY;
     for(let a=Math.max(0,Math.floor((x-radius)/512));a<=Math.min(93,Math.floor((x+radius)/512));a++)for(let b=Math.max(0,Math.floor((y-radius)/512));b<=Math.min(93,Math.floor((y+radius)/512));b++){
       if(distanceToTerrainTile(x,y,a*512,b*512,512)>radius)continue;
       if(authored&&!columns.length&&(a*512>CAVE_BOUNDS.maxX||(a+1)*512<CAVE_BOUNDS.minX||b*512>CAVE_BOUNDS.maxY||(b+1)*512<CAVE_BOUNDS.minY))continue;

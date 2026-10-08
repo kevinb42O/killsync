@@ -1,3 +1,9 @@
+import { durableBuildPieces } from '../game/multiplayer/FriendsAssemblyPose';
+import { campfireSeatPrompt, isCampfireSeat } from '../game/multiplayer/FriendsCampfireSeats';
+import { campfireNearby } from '../game/multiplayer/FriendsCampfireSimulation';
+import { FriendsCraneControls } from './FriendsCraneControls';
+import { nearbyCrane, craneHookInteraction } from '../game/multiplayer/FriendsCrane';
+import { FriendsConstructionControls, type ConstructionMode } from '../game/multiplayer/FriendsConstructionControls';
 import { scenicControlNearby } from '../game/multiplayer/FriendsScenicService';
 import { FriendsTrainControls } from './FriendsTrainControls';
 import { FRIENDS_SESSION_PROTOCOL } from '../game/multiplayer/FriendsCrewIdentity';
@@ -5,10 +11,10 @@ import { FriendsCommandOutbox, nextFriendsRequestId, validFriendsCommand } from 
 import { physicalCargoBuildBodies } from '../game/multiplayer/FriendsHauling';
 import { FriendsFieldPack, FriendsToolbelt } from './FriendsFieldPack';
 import { useFriendsToolbelt } from './useFriendsToolbelt';
-import { cycleFriendsTool, FRIENDS_TOOL_ORDER, FriendsToolWheel } from '../game/multiplayer/FriendsToolControls';
+import { cycleFriendsTool, friendsToolInput, FRIENDS_TOOL_ORDER, FriendsToolWheel } from '../game/multiplayer/FriendsToolControls';
 import { buildCost, canAfford, packKey, MATERIAL_NAMES, type FrontierRequest, type FrontierResult, type FrontierTool } from '../game/multiplayer/FriendsFrontier';
 import './frontier.css';
-import { assignBuildSlot, BuildWheelGesture, readBuildToolbar, saveBuildToolbar } from '../game/multiplayer/FriendsBuildControls';
+import { assignBuildSlot, BuildWheelGesture, cycleBuildToolbar, readBuildToolbar, saveBuildToolbar } from '../game/multiplayer/FriendsBuildControls';
 import { FriendsBuildPalette } from './FriendsBuildPalette';
 import { FRIENDS_FINISHES, friendsVehicleBuildBodies, friendsPlacementError, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildPiece, type FriendsBuildRequest, type FriendsBuildResult } from '../game/multiplayer/FriendsBuilding';
 import { initialFriendsWorld, saveFriendsWorld, exportFriendsWorld, parseFriendsWorldImport } from '../game/multiplayer/FriendsWorldStorage';
@@ -17,6 +23,12 @@ import { FriendsSimulation } from '../game/multiplayer/FriendsSimulation';
 import { FriendsPresentationTimeline } from '../game/multiplayer/FriendsPresentationTimeline';
 import { friendsCockpitInteraction } from '../game/multiplayer/FriendsExpedition';
 import { FriendsHUD } from './FriendsHUD';
+import { FriendsCampfireControls } from './FriendsCampfireControls';
+import { FriendsPauseMenu } from './FriendsPauseMenu';
+import { neutralizeMenuInput, readGamePreferences, saveGamePreferences, type LocalGamePreferences } from '../game/LocalGamePreferences';
+import { friendsAudio } from '../game/FriendsAudio';
+import { FriendsHaulingBriefing } from './FriendsHaulingBriefing';
+import { useFriendsHaulingBriefing } from './useFriendsHaulingBriefing';
 import { FriendsDevMenu } from './FriendsDevMenu';
 import { FriendsEnvironmentPreview, type FriendsEnvironmentChange } from '../game/world/FriendsEnvironmentPreview';
 import { canPredictCoopCast, COOP_SPELLS, isCoopSpell } from '../game/combat/coopSpells';
@@ -111,8 +123,19 @@ export function deploymentSectorNumber(players: readonly Pick<CoopPlayerSeed, 'i
  * from the legacy GameEngine while the latter is converted from a one-player
  * browser simulation into a shared squad simulation.
  */
-export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfile }: { launch: MultiplayerLaunch; controlScheme: ControlScheme; onExit: () => void; cinematicProfile?: CinematicProfile }) {
+export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfile, onControlSchemeChange, onCinematicProfileChange }: { launch: MultiplayerLaunch; controlScheme: ControlScheme; onExit: () => void; cinematicProfile?: CinematicProfile; onControlSchemeChange?: (scheme: ControlScheme) => void; onCinematicProfileChange?: (profile: CinematicProfile) => void }) {
+  const controlsRef = useRef(controlScheme);
+  controlsRef.current = controlScheme;
+  const [pauseOpen, setPauseOpen] = useState(false);
+  const pauseOpenRef = useRef(false);
+  const clearControlsRef = useRef<() => void>(() => {});
+  const [preferences, setPreferences] = useState(readGamePreferences);
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
+  useEffect(() => launch.gameMode === 'friends' ? friendsAudio.acquire() : undefined, [launch.gameMode]);
+  useEffect(() => { saveGamePreferences(preferences); rendererRef.current?.setLocalPreferences(preferences); }, [preferences]);
   const resolvedProfile: CinematicProfile = cinematicProfile || (typeof localStorage !== 'undefined' && localStorage.getItem('cinematicEffects') as CinematicProfile) || 'full';
+  const friendsEffectsRef = useRef(resolvedProfile); friendsEffectsRef.current = resolvedProfile;
   const tr = (key: CoopTextKey, params?: Record<string, string | number>) => coopText(launch.language, key, params);
   const sceneRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<MultiplayerRendererBridge | null>(null);
@@ -129,9 +152,13 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const mobileInputHandlerRef = useRef<((action: MobileCoopAction) => void) | null>(null);
   const networkTickRef = useRef(0);
   const adminOpenRef = useRef(false);
+  const craneControlsOpenRef = useRef<number|null>(null);
+  const [craneControlsOpen,setCraneControlsOpen]=useState<number|null>(null);
   const trainControlsOpenRef = useRef(false);
   const [trainControlsOpen,setTrainControlsOpen]=useState(false);
   const friendsDevOpenRef = useRef(false);
+  const haulingBriefingOpenRef=useRef(false);
+  const closeHaulingBriefingRef=useRef<()=>void>(()=>{});
   const adminPausedRef = useRef(false);
   const ownerAvailableRef = useRef(false);
   const lastAdminSequenceByPeerRef = useRef(new Map<string, number>());
@@ -220,6 +247,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const [mouseLocked, setMouseLocked] = useState(false);
   const [isMobileTouchDevice, setIsMobileTouchDevice] = useState(false);
   const [matchSnapshot, setMatchSnapshot] = useState<CoopSnapshot | null>(snapshotRef.current);
+  const campfireSeated = Boolean(launch.role !== 'spectator' && isCampfireSeat(matchSnapshot?.players.find(player=>player.id===launch.localPlayerId)?.friendsSeat));
+  const haulingBriefing=useFriendsHaulingBriefing(matchSnapshot?.friends?.hauling,launch.localPlayerId,campfireSeated);
+  haulingBriefingOpenRef.current=!campfireSeated&&Boolean(haulingBriefing.briefing);
+  useEffect(()=>{
+    if(!haulingBriefing.briefing||campfireSeated)return;
+    rendererRef.current?.exitPointerLock();
+    inputRef.current={...inputRef.current,movement:0,firing:false,aiming:false,sprinting:false,sliding:false,jumpPressed:false,jetHeld:false};
+  },[haulingBriefing.briefing,campfireSeated]);
   const [stationOpen, setStationOpen] = useState(false);
   const [stationCategory, setStationCategory] = useState<CoopShopCategoryId | null>(null);
   const [stationMessage, setStationMessage] = useState<string | null>(null);
@@ -251,19 +286,34 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const [buildType, setBuildTypeState] = useState<CoopStructureType>('barricade');
   const [frontierTool, setFrontierTool] = useState<FrontierTool>(1);
   const [frontierToolbeltVisible,revealFrontierToolbelt] = useFriendsToolbelt();
+  const [buildBarVisible, revealBuildBar] = useFriendsToolbelt();
+  const buildSelectionWheelRef = useRef(new FriendsToolWheel());
   const frontierRequestRef = useRef<(request: Omit<FrontierRequest, 'requestId'>) => void>(() => {});
   const frontierRequestId = useRef(launch.gameMode==='friends'?Date.now()*100:0);
   const friendsOutboxRef=useRef<FriendsCommandOutbox>();
   const friendsEpochRef=useRef('');
-  const selectFrontierTool = (tool: FrontierTool) => { inputRef.current = { ...inputRef.current, friendsTool: tool, firing: false, aiming: false }; setFrontierTool(tool); revealFrontierToolbelt(); };
+  const [miningWorkLocked,setMiningWorkLocked]=useState(false);
+  const toggleMiningPlane=()=>{
+    const plane=inputRef.current.friendsWorkPlane?undefined:rendererRef.current?.getFriendsMiningPlane(snapshotRef.current);
+    inputRef.current={...inputRef.current,friendsWorkPlane:plane};setMiningWorkLocked(Boolean(plane));
+  };
+  const selectFrontierTool = (tool: FrontierTool) => {
+    if (isCampfireSeat(snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.friendsSeat)) return;
+    if (tool !== inputRef.current.friendsTool) friendsAudio.play('pack', .12, 80);
+    inputRef.current = { ...inputRef.current, friendsTool: tool, firing: false, aiming: false, friendsWorkPlane:undefined };
+    setMiningWorkLocked(false); setFrontierTool(tool); revealFrontierToolbelt();
+  };
   const [friendsToolbar, setFriendsToolbar] = useState(readBuildToolbar);
   const friendsToolbarRef = useRef(friendsToolbar);
   const [friendsShape, setFriendsShape] = useState<FriendsBuildShape>(() => friendsToolbar[0]);
   const friendsShapeRef = useRef<FriendsBuildShape>(friendsToolbar[0]);
   const [friendsRotation, setFriendsRotation] = useState(0);
+  const constructionRef = useRef(new FriendsConstructionControls());
+  const [constructionState,setConstructionState] = useState(constructionRef.current.state);
   const [buildPlacementHint, setBuildPlacementHint] = useState<string | null>(null);
   const buildPlacementHintRef = useRef<string | null>(null);
   const pendingFriendsMoveRef = useRef<number | null>(null);
+  const pendingBuildPreviewRef=useRef<{requestId:number;shape:FriendsBuildShape;finish:FriendsBuildFinish;poses:import('../game/multiplayer/FriendsBuilding').FriendsBuildPose[]}|null>(null);
   const [friendsFinish, setFriendsFinish] = useState<FriendsBuildFinish>('stone');
   const friendsFinishRef = useRef<FriendsBuildFinish>('stone');
   const friendsMoveRef = useRef<FriendsBuildPiece | null>(null);
@@ -349,14 +399,20 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   }, [isSpectator, releaseDeployment, launch.gameMode]);
 
   const setBuildMode = (enabled: boolean) => {
+    if (enabled) revealBuildBar();
+    if (enabled && inputRef.current.friendsTool === 3) inputRef.current = { ...inputRef.current, firing: false, aiming: false };
     buildModeRef.current = enabled;
+    if(!enabled){constructionRef.current.reset();setConstructionState(constructionRef.current.state);}
     setBuildModeState(enabled);
     buildWheelRef.current.reset();
+    buildSelectionWheelRef.current.reset();
     if (!enabled) { buildLibraryOpenRef.current = false; setBuildPaletteExpanded(false); }
     if (!enabled) { rendererRef.current?.setBuildPreview(undefined); rendererRef.current?.setFriendsBuildPreview(undefined); }
   };
 
   const selectFriendsShape = (shape: FriendsBuildShape) => {
+    revealBuildBar();
+    constructionRef.current.reset();setConstructionState(constructionRef.current.state);
     friendsShapeRef.current = shape; setFriendsShape(shape); setBuildMessage(null);
     friendsMoveRef.current = null; setFriendsMoving(false); pendingFriendsMoveRef.current = null;
   };
@@ -366,11 +422,15 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     setBuildMessage(`Saved ${slot + 1} in your construction toolbar.`);
   };
   const rotateFriendsPiece = (direction: number) => {
+    revealBuildBar();
+    if(constructionRef.current.anchor){setBuildMessage('Finish or cancel the selection before rotating.');return;}
     const quarter = ((Math.round(buildRotationRef.current / (Math.PI / 2)) + direction) % 4 + 4) % 4;
     buildRotationRef.current = quarter * Math.PI / 2; setFriendsRotation(quarter * 90);
   };
-  const selectFriendsFinish = (finish: FriendsBuildFinish) => { friendsFinishRef.current = finish; setFriendsFinish(finish); setBuildMessage(null); };
+  const selectFriendsFinish = (finish: FriendsBuildFinish) => { revealBuildBar(); friendsFinishRef.current = finish; setFriendsFinish(finish); setBuildMessage(null); };
   const expandFriendsPalette = (open: boolean) => {
+    revealBuildBar();
+    buildSelectionWheelRef.current.reset();
     buildLibraryOpenRef.current = open; setBuildPaletteExpanded(open); buildWheelRef.current.reset();
     inputRef.current = { ...inputRef.current, movement: 0, firing: false, aiming: false, sprinting: false, sliding: false, jumpPressed: false, jetHeld: false, friendsDevFlightDown: false };
     if (open) rendererRef.current?.exitPointerLock(); else rendererRef.current?.requestPointerLock();
@@ -397,6 +457,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   };
 
   const setBackpackPanelOpen = (next: boolean) => {
+    if (next !== backpackOpenRef.current && launch.gameMode === 'friends') friendsAudio.play('pack', .18, 180);
     backpackOpenRef.current = next;
     setBackpackOpen(next);
     if (!next) setBackpackMessage(null);
@@ -406,6 +467,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     trainControlsOpenRef.current=next;setTrainControlsOpen(next);
     if(next){setBackpackMessage(null);setBuildMode(false);rendererRef.current?.exitPointerLock();inputRef.current={...inputRef.current,movement:0,firing:false,aiming:false,sprinting:false,sliding:false,jumpPressed:false,jetHeld:false};}
   };
+  const openCraneControls=(id:number)=>{craneControlsOpenRef.current=id;setCraneControlsOpen(id);rendererRef.current?.setCraneControlView(id);setBackpackMessage(null);setBuildMode(false);rendererRef.current?.exitPointerLock();inputRef.current={...inputRef.current,movement:0,firing:false,aiming:false,sprinting:false,sliding:false,jumpPressed:false,jetHeld:false};};
+  const closeCraneControls=()=>{const id=craneControlsOpenRef.current;if(id!==null){const owner=snapshotRef.current?.friends?.hauling?.cranes?.find(c=>c.pieceId===id)?.operatorId;if(!owner||owner===launch.localPlayerId)frontierRequestRef.current({action:'crane_stop_all',pieceId:id});}craneControlsOpenRef.current=null;setCraneControlsOpen(null);rendererRef.current?.setCraneControlView(null);resumeGameplayInteraction();};
   const closeTrainControls=()=>{setTrainControlsPanelOpen(false);resumeGameplayInteraction();};
   const setFriendsDevPanelOpen=(next:boolean)=>{
     friendsDevOpenRef.current=next;setFriendsDevOpen(next);
@@ -416,6 +479,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const state=rendererRef.current?.getFriendsEnvironment();if(state)setDevEnvironment(state);
     }
   };
+  const closeHaulingBriefing=()=>{
+    haulingBriefingOpenRef.current=false;haulingBriefing.dismiss();
+    if(!trainControlsOpenRef.current && craneControlsOpenRef.current===null&&!friendsDevOpenRef.current&&!stationOpenRef.current&&!foundryOpenRef.current&&!backpackOpenRef.current&&!tacticalMapOpenRef.current&&!chatOpenRef.current&&!adminOpenRef.current&&!adminPausedRef.current)resumeGameplayInteraction();
+  };
+  closeHaulingBriefingRef.current=closeHaulingBriefing;
   const closeFriendsDevAndResume=()=>{setFriendsDevPanelOpen(false);resumeGameplayInteraction();};
   const changeFriendsEnvironment=(change:FriendsEnvironmentChange)=>{
     rendererRef.current?.setFriendsEnvironment(change);const state=rendererRef.current?.getFriendsEnvironment();if(state)setDevEnvironment(state);
@@ -653,6 +721,21 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     renderer.requestPointerLock();
   };
 
+  const openPauseMenu = () => {
+    if (launch.gameMode !== 'friends') return;
+    pauseOpenRef.current = true;
+    clearControlsRef.current();
+    inputRef.current = neutralizeMenuInput(inputRef.current);
+    rendererRef.current?.setInteractionBlocked(true);
+    setPauseOpen(true);
+  };
+  const closePauseMenu = () => {
+    pauseOpenRef.current = false;
+    clearControlsRef.current();
+    setPauseOpen(false);
+    resumeGameplayInteraction();
+  };
+
   const closeStationAndResume = () => {
     setStationPanelOpen(false);
     setBackpackPanelOpen(false);
@@ -818,9 +901,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     displayedCombatEventsRef.current.clear();
     const renderer = new MultiplayerRendererBridge(launch.worldId);
     if (sceneRef.current) renderer.mount(sceneRef.current);
+    renderer.setLocalPreferences(preferencesRef.current);
     const performanceMonitor = sceneRef.current ? CoopPerformanceMonitor.mount(sceneRef.current) : undefined;
     rendererRef.current = renderer;
-    const syncPointerLock = () => setMouseLocked(renderer.isPointerLocked);
+    let wasPointerLocked = renderer.isPointerLocked;
+    const syncPointerLock = () => {
+      const locked = renderer.isPointerLocked;
+      setMouseLocked(locked);
+      if (wasPointerLocked && !locked && document.hasFocus() && !pauseOpenRef.current && !deploymentBlockedRef.current
+        && !trainControlsOpenRef.current && craneControlsOpenRef.current===null && !friendsDevOpenRef.current && !haulingBriefingOpenRef.current && !buildLibraryOpenRef.current
+        && !stationOpenRef.current && !foundryOpenRef.current && !backpackOpenRef.current && !tacticalMapOpenRef.current && !chatOpenRef.current && !adminOpenRef.current) openPauseMenu();
+      wasPointerLocked = locked;
+    };
     document.addEventListener('pointerlockchange', syncPointerLock);
     const presentCombatNotice = (snapshot: CoopSnapshot) => {
       const now = performance.now();
@@ -1200,7 +1292,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         }
         if (event.event === 'friends_action_result') {
           const result = event.payload as FrontierResult | undefined;
-          if (result?.playerId === launch.localPlayerId) { friendsOutbox.acknowledge('friends_action',result.requestId);setBackpackMessage(result.message); if (buildModeRef.current) setBuildMessage(result.message); }
+          if (result?.playerId === launch.localPlayerId) { friendsOutbox.acknowledge('friends_action',result.requestId);if(!result.silent)setBackpackMessage(result.message); if (!result.silent&&buildModeRef.current) setBuildMessage(result.message); }
           return;
         }
         if (event.event === 'friends_build' && launch.role === 'host') {
@@ -1217,6 +1309,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           if (result?.playerId === launch.localPlayerId) {
             friendsOutbox.acknowledge('friends_build',result.requestId);
             setBuildMessage(result.message);
+            if(pendingBuildPreviewRef.current?.requestId===result.requestId)pendingBuildPreviewRef.current=null;
             if (pendingFriendsMoveRef.current === result.requestId) {
               pendingFriendsMoveRef.current = null;
               if (result.ok) { friendsMoveRef.current = null; setFriendsMoving(false); }
@@ -1367,8 +1460,6 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     },1000):0;
 
     const keys = new Set<string>();
-    const movementBindings = getMovementBindings(controlScheme);
-    const slideBinding = getCoopSlideBinding(controlScheme);
     let firing = false;
     const mobile = { moveX: 0, moveY: 0, fire: false, aim: false, jump: false, slide: false, sprint: false, stickSprint: false, interact: false };
     let sequence = inputRef.current.sequence;
@@ -1377,7 +1468,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     let grenadeActionId = inputRef.current.grenadeActionId || 0;
     let interactActionId = inputRef.current.interactActionId || 0;
     const updateInput = () => {
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current) { keys.clear(); firing = false; }
+      const movementBindings = getMovementBindings(controlsRef.current);
+      const slideBinding = getCoopSlideBinding(controlsRef.current);
+      if (pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current) { keys.clear(); firing = false; }
       const movement = (movementBindings.up.some(key => keys.has(key)) ? 1 : 0)
         | (movementBindings.down.some(key => keys.has(key)) ? 2 : 0)
         | (movementBindings.left.some(key => keys.has(key)) ? 4 : 0)
@@ -1407,7 +1500,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         | (mobile.moveY > .22 ? 2 : 0)
         | (mobile.moveX < -.22 ? 4 : 0)
         | (mobile.moveX > .22 ? 8 : 0);
-      const specialSelected = inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno');
+      const specialSelected = inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno');
       firing = mobile.fire && !buildModeRef.current;
       inputRef.current = {
         ...inputRef.current,
@@ -1417,7 +1510,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         aimAngle: quantizeAngle(renderer.getAimAngle()),
         aimPitch: quantizePitch(renderer.getAimPitch()),
         firing,
-        aiming: mobile.aim && !specialSelected,
+        aiming: mobile.aim && !specialSelected && !buildModeRef.current,
         sprinting: mobile.sprint || mobile.stickSprint,
         sliding: mobile.slide && !buildModeRef.current,
         reviving: mobile.interact,
@@ -1471,7 +1564,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const payload = { ...request, requestId: frontierRequestId.current = nextFriendsRequestId() };
       const message = launch.role === 'host' ? simulationRef.current?.friendsAction(launch.localPlayerId, payload)?.message || 'World unavailable.'
         : friendsOutbox.submit('friends_action',payload,session.friendsEpoch,performance.now()) ? 'Waiting for host confirmation…' : 'Waiting for the island connection.';
-      setBackpackMessage(message);
+      if(request.action!=='crane_heartbeat')setBackpackMessage(message);
       if (request.action.startsWith('train_')) setBuildMessage(message);
     };
     const requestFriendsEdit = (request: Omit<FriendsBuildRequest, 'requestId'>) => {
@@ -1482,11 +1575,29 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       } else {
         const sent = friendsOutbox.submit('friends_build',payload,session.friendsEpoch,performance.now());
         if (sent && request.action === 'move') pendingFriendsMoveRef.current = payload.requestId;
+        if(sent&&(request.action==='place'||request.action==='place_group')&&request.shape)pendingBuildPreviewRef.current={requestId:payload.requestId,shape:request.shape,finish:request.finish||'stone',poses:request.poses||[request.pose!]};
         setBuildMessage(sent ? 'Edit sent to host…' : 'Connection busy. Try the edit again.');
       }
     };
+    let groupPreviewCache:{key:string;issues:(string|undefined)[]}|undefined;
+    let buildHeld = false;
+    let dismantleHeld = false, dismantleAt = 0, dismantleId = '', dismantleDone = false;
+    const publishConstruction = () => setConstructionState(constructionRef.current.state);
+    const constructionPose = (snapshot: CoopSnapshot | null) => {
+      let raw=renderer.getFriendsBuildPose(snapshot,friendsShapeRef.current,buildRotationRef.current);
+      raw=constructionRef.current.stabilize(raw,friendsShapeRef.current,renderer.getFriendsConstructionSurface(snapshot),String(snapshot?.friends?.building?.revision)+':'+snapshot?.friends?.frontier?.terrain.revision);
+      return constructionRef.current.adjust(raw,renderer.getFriendsConstructionRay(snapshot),friendsShapeRef.current,Math.round(buildRotationRef.current/(Math.PI/2)));
+    };
     const creativeAction = (action: string) => {
-      if (action === 'rotate_left' || action === 'rotate_right') { rotateFriendsPiece(action === 'rotate_left' ? -1 : 1); return; }
+      revealBuildBar();
+      const controls=constructionRef.current;
+      if(action.startsWith('mode_')){controls.setMode(action.slice(5) as ConstructionMode);publishConstruction();return;}
+      if(action==='cancel_gesture'){controls.anchor=undefined;publishConstruction();setBuildMessage('Selection cleared.');return;}
+      if(action==='lock_plane'){const pose=constructionPose(snapshotRef.current),surface=renderer.getFriendsConstructionSurface(snapshotRef.current);if(pose&&surface){controls.lock(pose,[surface.nx,surface.ny,surface.nz]);publishConstruction();}return;}
+      if(action.startsWith('nudge_')){const [,axis,direction]=action.split('_');const voxel=['block','half_block','floor_tile','voxel_ramp','voxel_stairs'].includes(friendsShapeRef.current);controls.offset[Number(axis)]+=Number(direction)*(voxel?(Number(axis)===2&&friendsShapeRef.current!=='block'?8:32):4);return;}
+      if(action==='reset_offset'){controls.offset=[0,0,0];return;}
+
+      if (action === 'rotate_left' || action === 'rotate_right') { if(constructionRef.current.anchor){setBuildMessage('Finish or cancel the selection before rotating.');return;} rotateFriendsPiece(action === 'rotate_left' ? -1 : 1); return; }
       if (action === 'undo' || action === 'redo') { requestFriendsEdit({ action }); return; }
       if (action === 'permissions') { requestFriendsEdit({ action, allowed: snapshotRef.current?.friends?.building?.guestsCanBuild === false }); return; }
       const target = renderer.getFriendsBuildTarget(snapshotRef.current)?.piece;
@@ -1499,15 +1610,25 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     };
     friendsActionRef.current = creativeAction;
     const cycleBuildPiece = (direction: number) => {
-      if (launch.gameMode === 'friends') { const slots = friendsToolbarRef.current, i = Math.max(0, slots.indexOf(friendsShapeRef.current)); selectFriendsShape(slots[(i + direction + slots.length) % slots.length]); }
+      if (launch.gameMode === 'friends') selectFriendsShape(cycleBuildToolbar(friendsToolbarRef.current, friendsShapeRef.current, direction));
       else { const i = COOP_BUILD_TYPES.indexOf(buildTypeRef.current); selectBuildType(COOP_BUILD_TYPES[(i + direction + COOP_BUILD_TYPES.length) % COOP_BUILD_TYPES.length]); }
     };
     const placeStructure = () => {
+      if (launch.gameMode === 'friends') revealBuildBar();
       if (launch.gameMode === 'friends') {
         if (pendingFriendsMoveRef.current !== null) { setBuildMessage('Waiting for the host to finish your move…'); return; }
         const moving = friendsMoveRef.current, snapshot = snapshotRef.current;
-        const pose = renderer.getFriendsBuildPose(snapshot, friendsShapeRef.current, buildRotationRef.current);
+        const pose = constructionPose(snapshot);
         if (!pose) { setBuildMessage('Aim at the ground or the face of your build.'); return; }
+        const controls=constructionRef.current;
+        if(!moving&&controls.mode!=='single'){
+          if(!controls.anchor){controls.anchor={...pose};const face=renderer.getFriendsConstructionSurface(snapshot);if(face){const n=[face.nx,face.ny,face.nz].map(Math.abs);controls.anchorAxis=n.indexOf(Math.max(...n)) as 0|1|2;}publishConstruction();setBuildMessage('Start set. Aim at the end and click to place the group.');return;}
+          const group=controls.footprint(pose,friendsShapeRef.current);
+          if(group.issue){setBuildMessage(group.issue);return;}
+          requestFriendsEdit({action:'place_group',shape:friendsShapeRef.current,finish:friendsFinishRef.current,poses:group.poses});
+          controls.anchor=undefined;publishConstruction();return;
+        }
+        if(!moving&&!controls.repeat(pose,friendsShapeRef.current,friendsFinishRef.current,performance.now()))return;
         const actor = snapshot?.players.find(p => p.id === launch.localPlayerId);
         const issue = friendsPlacementError(snapshot?.friends?.building?.pieces || [], friendsShapeRef.current, pose, actor,
           [...(snapshot?.players || []), ...friendsVehicleBuildBodies(snapshot?.friends?.vehicles), ...physicalCargoBuildBodies(snapshot?.friends?.hauling?.cargo)], moving?.id, false, renderer.getFriendsTerrain(),snapshot?.friends?.vehicles);
@@ -1601,10 +1722,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     const triggerContextualInteract = (keyboardHold = false) => {
       const snapshot = snapshotRef.current;
       const local = snapshot?.players.find(player => player.id === launch.localPlayerId);
-      if (local && snapshot?.friends && (local.friendsSeat || friendsCockpitInteraction(snapshot.friends.vehicles, local))) {
+      if (local && snapshot?.friends && (campfireSeatPrompt(local,snapshot.players) || local.friendsSeat || friendsCockpitInteraction(snapshot.friends.vehicles, local))) {
+        if(campfireSeatPrompt(local,snapshot.players)){
+          firing=false;mobile.fire=false;mobile.aim=false;setBuildMode(false);
+          inputRef.current={...inputRef.current,firing:false,aiming:false};
+        }
         inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), interactActionId: ++interactActionId };
         return;
       }
+      const crane=local && snapshot?.friends && nearbyCrane(snapshot.friends.building?.pieces??[],local);
+      const hook=local&&snapshot?.friends?.hauling&&craneHookInteraction(snapshot.friends.hauling.cranes??[],snapshot.friends.hauling.cargo,local);
+      if(hook&&!crane){frontierRequestRef.current({action:hook.action,pieceId:hook.crane.pieceId});return;}
+      if(crane){keys.clear();firing=false;openCraneControls(crane.craneRootId??crane.id);return;}
       if(local&&snapshot?.friends&&scenicControlNearby(local,snapshot.friends.vehicles)){keys.clear();firing=false;setTrainControlsPanelOpen(true);return;}
       const station = local && snapshot?.buyStations.find(candidate => candidate.state === 'active' && Math.hypot(local.x - candidate.x, local.y - candidate.y) <= candidate.radius + 48);
       const foundry = local && snapshot?.weaponFoundry?.state === 'active' && Math.hypot(local.x - snapshot.weaponFoundry.x, local.y - snapshot.weaponFoundry.y) <= snapshot.weaponFoundry.radius + 48 ? snapshot.weaponFoundry : undefined;
@@ -1656,8 +1785,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     };
 
     const handleMobileAction = (action: MobileCoopAction) => {
+      if (pauseOpenRef.current) return;
       if (deploymentBlockedRef.current || isSpectator || adminOpenRef.current || adminPausedRef.current) return;
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
+      if (pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
       // Mobile has no mouse-down gesture to prime Web Audio. Touch actions are
       // trusted gestures too, so activate the audio context before firing or
       // interacting to keep the first shot and UI cue audible on iOS/Android.
@@ -1681,17 +1811,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (action.type === 'hold') {
         const wasPressed = mobile[action.control];
         mobile[action.control] = action.pressed;
+        if(action.control==='fire'&&!action.pressed){buildHeld=false;constructionRef.current.release();}
         if (action.control === 'fire' && action.pressed && !wasPressed) {
-          if (buildModeRef.current) placeStructure();
+          if (buildModeRef.current) {buildHeld=true;placeStructure();}
           else {
             fireActionId++;
             const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
             const weapon = local?.weaponStates[inputRef.current.selectedSlot];
-            if (!(launch.gameMode === 'friends' && inputRef.current.friendsTool) && weapon && local?.lifeState === 'alive' && weapon.state === 'ready' && canPredictCoopCast(weapon.weaponId, weapon.magazineAmmo, local?.mana) && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) renderer.predictLocalFire(weapon.weaponId, fireActionId);
+            if (!isCampfireSeat(local?.friendsSeat) && !(launch.gameMode === 'friends' && inputRef.current.friendsTool) && weapon && local?.lifeState === 'alive' && weapon.state === 'ready' && canPredictCoopCast(weapon.weaponId, weapon.magazineAmmo, local?.mana) && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) renderer.predictLocalFire(weapon.weaponId, fireActionId);
             inputRef.current = { ...inputRef.current, fireActionId };
           }
         }
-        if (action.control === 'aim' && action.pressed && !wasPressed && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno')) {
+        if (action.control === 'aim' && action.pressed && !wasPressed && inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno')) {
           inputRef.current = { ...inputRef.current, altFireActionId: ++altFireActionId, aiming: false, sequence: ++sequence, clientTime: Date.now() };
         }
         if (action.control === 'jump' && action.pressed && !wasPressed) inputRef.current = { ...inputRef.current, jumpPressed: true, jetHeld: true, sequence: ++sequence, clientTime: Date.now() };
@@ -1736,6 +1867,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     mobileInputHandlerRef.current = handleMobileAction;
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (pauseOpenRef.current) {
+        if (event.key === 'Escape' && !event.repeat && !event.defaultPrevented) { event.preventDefault(); closePauseMenu(); }
+        return;
+      }
+      const movementBindings = getMovementBindings(controlsRef.current);
+      const slideBinding = getCoopSlideBinding(controlsRef.current);
       const typingTarget = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
       if (ownerAvailableRef.current && !event.repeat && !typingTarget && event.key === 'F1') {
         event.preventDefault();
@@ -1762,7 +1899,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         event.preventDefault();
         return;
       }
-      if(trainControlsOpenRef.current){if(event.key==='Escape'){event.preventDefault();closeTrainControls();}return;}
+      if(haulingBriefingOpenRef.current){
+        if(event.key==='Escape'&&!event.repeat){event.preventDefault();closeHaulingBriefingRef.current();}
+        return;
+      }
+      if(craneControlsOpenRef.current!==null){if(event.key==='Escape'){event.preventDefault();closeCraneControls();}return;}
+      if(trainControlsOpenRef.current){if(event.key==='Escape'){event.preventDefault();closeTrainControls();}else if(event.code==='KeyH'&&!event.repeat&&(!typingTarget||(event.target instanceof HTMLInputElement&&event.target.type==='range'))){event.preventDefault();frontierRequestRef.current({action:'train_horn'});}return;}
       if(friendsDevOpenRef.current){
         const editingTime=typingTarget&&(!(event.target instanceof HTMLInputElement)||event.target.type!=='range');
         if(!event.repeat&&(event.key==='Escape'||(!editingTime&&event.key.toLowerCase()==='c'))){event.preventDefault();closeFriendsDevAndResume();}
@@ -1885,6 +2027,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         return;
       }
       if (event.key === 'Escape') {
+        if (launch.gameMode === 'friends' && !event.repeat) { event.preventDefault(); setBuildMode(false); openPauseMenu(); return; }
         if (buildModeRef.current) { event.preventDefault(); setBuildMode(false); }
         return;
       }
@@ -1901,14 +2044,31 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         return;
       }
       const key = event.key.toLowerCase();
-      if (launch.gameMode === 'friends' && key === 'c' && !typingTarget && !event.ctrlKey && !event.metaKey) {
+      if (launch.gameMode === 'friends' && (event.key === 'F2' || key === 'c' && controlsRef.current !== 'QWERTY') && !typingTarget && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         if (!event.repeat) {
           keys.clear();firing=false;updateInput();setFriendsDevPanelOpen(true);
         }
         return;
       }
+      if(launch.gameMode==='friends'&&!typingTarget&&!buildModeRef.current&&!event.ctrlKey&&!event.metaKey&&!event.altKey){
+        const local=snapshotRef.current?.players.find(p=>p.id===launch.localPlayerId);
+        if(event.code==='KeyT'&&isCampfireSeat(local?.friendsSeat)){
+          event.preventDefault();if(!event.repeat)frontierRequestRef.current({action:'campfire_eat'});return;
+        }
+        if(local&&((event.code==='KeyE'&&campfireNearby(local))||(event.code==='KeyR'&&isCampfireSeat(local.friendsSeat)))){
+          event.preventDefault();if(!event.repeat)frontierRequestRef.current({action:event.code==='KeyE'?'campfire_fuel':'campfire_fresh'});return;
+        }
+      }
+      if (launch.gameMode === 'friends' && !buildModeRef.current && event.code === 'KeyH') {
+        event.preventDefault(); if (!event.repeat) frontierRequestRef.current({ action: 'train_horn' }); return;
+      }
+      if(launch.gameMode==='friends'&&!buildModeRef.current&&event.code==='KeyP'&&(inputRef.current.friendsTool===2||inputRef.current.friendsTool===3)){event.preventDefault();if(!event.repeat)toggleMiningPlane();return;}
       if (launch.gameMode === 'friends' && buildModeRef.current) {
+        if(event.code==='KeyP'){event.preventDefault();if(!event.repeat)creativeAction('lock_plane');return;}
+        if(event.code==='KeyH'){event.preventDefault();if(!event.repeat){const modes:ConstructionMode[]=['single','line','rectangle'];creativeAction('mode_'+modes[(modes.indexOf(constructionRef.current.mode)+1)%3]);}return;}
+        if(event.code==='BracketLeft'||event.code==='BracketRight'){event.preventDefault();creativeAction('nudge_2_'+(event.code==='BracketLeft'?-1:1));return;}
+        if(event.altKey&&event.key.startsWith('Arrow')){event.preventDefault();creativeAction('nudge_'+(event.key==='ArrowLeft'?'0_-1':event.key==='ArrowRight'?'0_1':event.key==='ArrowUp'?'1_-1':'1_1'));return;}
         if ((event.ctrlKey || event.metaKey) && key === 'z') { event.preventDefault(); if (!event.repeat) creativeAction(event.shiftKey ? 'redo' : 'undo'); return; }
         if (key === 'i') { event.preventDefault(); if (!event.repeat) creativeAction('copy'); return; }
       }
@@ -1929,7 +2089,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       }
       if (key === 'x' && buildModeRef.current) {
         event.preventDefault();
-        if (!event.repeat) dismantleAimedStructure();
+        if(launch.gameMode==='friends'){if(!event.repeat){dismantleHeld=true;dismantleDone=false;dismantleAt=performance.now();dismantleId='';}}
+        else if (!event.repeat) dismantleAimedStructure();
         return;
       }
       if (key === 'e' && buildModeRef.current) {
@@ -1981,7 +2142,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           selectBuildType(COOP_BUILD_TYPES[Number(key) - 1]);
           return;
         }
-        if (launch.gameMode === 'friends' && Number(key) <= 6) { if(!event.repeat)selectFrontierTool(FRIENDS_TOOL_ORDER[Number(key) - 1]); return; }
+        if (launch.gameMode === 'friends' && Number(key) <= FRIENDS_TOOL_ORDER.length) { if(!event.repeat)selectFrontierTool(FRIENDS_TOOL_ORDER[Number(key) - 1]); return; }
         inputRef.current = { ...inputRef.current, selectedSlot: Number(key) - 1 };
         setHud(current => ({ ...current, selectedSlot: Number(key) - 1 }));
         return;
@@ -1990,7 +2151,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       updateInput();
     };
     const onKeyUp = (event: KeyboardEvent) => {
-      if(trainControlsOpenRef.current || friendsDevOpenRef.current){keys.clear();return;}
+      if(event.key.toLowerCase()==='x'){dismantleHeld=false;dismantleDone=false;}
+      if(pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current||haulingBriefingOpenRef.current){keys.clear();return;}
       if (deploymentBlockedRef.current) return;
       if (buildLibraryOpenRef.current || (launch.gameMode === 'friends' && event.key.toLowerCase() === 'b' && buildBPressedAtRef.current === 0)) { keys.delete(event.key.toLowerCase()); if (event.key.toLowerCase() === 'b') { buildBPressedAtRef.current = 0; if (buildBTimerRef.current !== null) { window.clearTimeout(buildBTimerRef.current); buildBTimerRef.current = null; } } updateInput(); return; }
       if (chatOpenRef.current) { event.preventDefault(); return; }
@@ -2010,7 +2172,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     };
     const onMouseMove = (event: MouseEvent) => {
       if (deploymentBlockedRef.current) return;
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || isSpectator) return;
+      if (pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || isSpectator) return;
       inputRef.current = {
         ...inputRef.current,
         aimAngle: quantizeAngle(renderer.getAimAngle()),
@@ -2021,8 +2183,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (deploymentBlockedRef.current) return;
       // A Buy Station is a focused modal. Do not let a click on its buttons,
       // list, or backdrop leak through to pointer lock, fire, or aiming.
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
+      if (pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
       // Middle mouse button (click scroll wheel) pings
+      if (event.button === 1 && launch.gameMode==='friends' && buildModeRef.current){event.preventDefault();creativeAction('copy');return;}
       if (event.button === 1) {
         event.preventDefault();
         const now = performance.now();
@@ -2052,12 +2215,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       }
       if (buildModeRef.current) {
         if (event.button === 2) { event.preventDefault(); setBuildMode(false); return; }
-        if (event.button === 0) { event.preventDefault(); renderer.requestPointerLock(); placeStructure(); }
+        if (event.button === 0) { event.preventDefault(); renderer.requestPointerLock(); buildHeld=true;placeStructure(); }
         return;
       }
       if (event.button === 2) {
+        event.preventDefault();
+        if (launch.gameMode === 'friends' && inputRef.current.friendsTool === 3) renderer.requestPointerLock();
         const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
-        if (inputRef.current.friendsTool !== 5 && (local?.selectedSlot === 3 || local?.operatorId === 'royal_inferno')) inputRef.current = { ...inputRef.current, altFireActionId: ++altFireActionId, aiming: false, sequence: ++sequence, clientTime: Date.now() };
+        if (inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (local?.selectedSlot === 3 || local?.operatorId === 'royal_inferno')) inputRef.current = { ...inputRef.current, altFireActionId: ++altFireActionId, aiming: false, sequence: ++sequence, clientTime: Date.now() };
         else inputRef.current = { ...inputRef.current, aiming: true, sequence: ++sequence, clientTime: Date.now() };
         return;
       }
@@ -2070,13 +2235,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
       const weapon = local?.weaponStates[inputRef.current.selectedSlot];
       const weaponId = weapon?.weaponId;
-      if (weaponId && local?.lifeState === 'alive' && weapon?.state === 'ready' && canPredictCoopCast(weapon.weaponId, weapon.magazineAmmo, local?.mana) && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
+      if (weaponId && !(launch.gameMode === 'friends' && inputRef.current.friendsTool) && !isCampfireSeat(local?.friendsSeat) && local?.lifeState === 'alive' && weapon?.state === 'ready' && canPredictCoopCast(weapon.weaponId, weapon.magazineAmmo, local?.mana) && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
         renderer.predictLocalFire(weaponId, fireActionId);
       }
     };
     const onMouseUp = (event: MouseEvent) => {
+      if(event.button===0){buildHeld=false;constructionRef.current.release();}
       if (deploymentBlockedRef.current) return;
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) {
+      if (pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) {
         firing = false;
         updateInput();
         return;
@@ -2096,18 +2262,24 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     };
     const friendsToolWheel = new FriendsToolWheel();
     const onWheel = (event: WheelEvent) => {
-      if(trainControlsOpenRef.current || friendsDevOpenRef.current)return;
+      if(pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current||haulingBriefingOpenRef.current)return;
       if (buildLibraryOpenRef.current) return;
       if (deploymentBlockedRef.current) { event.preventDefault(); return; }
       // The station owns wheel input completely; it must never leak into
       // weapon selection or scroll the game page behind the modal.
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current) return;
+      if (pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current) return;
       if (isSpectator) return;
       event.preventDefault();
+      if (isCampfireSeat(snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.friendsSeat)) {
+        friendsToolWheel.reset();
+        return;
+      }
       const direction = event.deltaY > 0 ? 1 : -1;
       if (buildModeRef.current && launch.gameMode === 'friends') {
-        const step = buildWheelRef.current.push(event, performance.now(), event.shiftKey ? 'toolbar' : 'rotate');
-        if (step) { if (event.shiftKey) cycleBuildPiece(step); else rotateFriendsPiece(step); }
+        const step = event.shiftKey
+          ? buildWheelRef.current.push(event, performance.now(), 'rotate')
+          : buildSelectionWheelRef.current.push(event, performance.now());
+        if (step) { if (event.shiftKey) rotateFriendsPiece(step); else cycleBuildPiece(step); }
         return;
       }
       if (buildModeRef.current) {
@@ -2124,10 +2296,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       changeSelectedWeapon(direction);
     };
     const clearControls = () => {
-      keys.clear(); firing = false; updateInput();
+      keys.clear(); firing = false; buildHeld=false;dismantleHeld=false;constructionRef.current.release();updateInput();
       mobile.moveX = 0; mobile.moveY = 0; mobile.fire = false; mobile.aim = false; mobile.jump = false; mobile.slide = false; mobile.sprint = false; mobile.stickSprint = false; mobile.interact = false;
-      inputRef.current = { ...inputRef.current, aiming: false, jumpPressed: false, jetHeld: false, reloadPressed: false };
+      inputRef.current = neutralizeMenuInput(inputRef.current);
     };
+    clearControlsRef.current = clearControls;
     const onVisibilityChange = () => { if (document.hidden) clearControls(); };
     const onContextMenu = (event: MouseEvent) => event.preventDefault();
     const onAuxClick = (event: MouseEvent) => { if (event.button === 1) event.preventDefault(); };
@@ -2145,9 +2318,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     let previousGamepadButtons: boolean[] = [];
     let previousGamepadAimHeld = false;
     const pollGamepad = (elapsedMs: number) => {
-      if (!isGamepadControlScheme(controlScheme) || typeof navigator === 'undefined' || !navigator.getGamepads) return;
+      if (!isGamepadControlScheme(controlsRef.current) || typeof navigator === 'undefined' || !navigator.getGamepads) return;
       const gamepad = firstConnectedGamepad(Array.from(navigator.getGamepads()));
-      if (!gamepad || trainControlsOpenRef.current || friendsDevOpenRef.current || deploymentBlockedRef.current || isSpectator || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current || adminPausedRef.current) {
+      if (gamepad && launch.gameMode === 'friends' && isGamepadButtonDown(gamepad, GAMEPAD_BUTTON.menu) && !previousGamepadButtons[GAMEPAD_BUTTON.menu]) {
+        previousGamepadButtons = gamepad.buttons.map(button => Boolean(button.pressed || button.value > .5));
+        if (pauseOpenRef.current) closePauseMenu(); else openPauseMenu();
+        return;
+      }
+      if (!gamepad || pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || deploymentBlockedRef.current || isSpectator || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current || adminPausedRef.current) {
         if (gamepad) {
           previousGamepadButtons = gamepad.buttons.map(button => Boolean(button.pressed || button.value > .5));
           previousGamepadAimHeld = isGamepadTriggerDown(gamepad, GAMEPAD_BUTTON.aim, 4);
@@ -2159,15 +2337,18 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const pressed = (button: number) => buttons[button] && !previousGamepadButtons[button];
       const down = (button: number) => isGamepadButtonDown(gamepad, button);
       const look = gamepadLookAxes(gamepad);
-      if (look.x || look.y) renderer.adjustAim(look.x * elapsedMs * .0025, look.y * elapsedMs * .002);
+      if (look.x || look.y) renderer.adjustAim(look.x * elapsedMs * .0025 * preferencesRef.current.lookSensitivity, look.y * elapsedMs * .002 * preferencesRef.current.lookSensitivity);
 
       const fireHeld = down(GAMEPAD_BUTTON.fire);
       const firePressed = pressed(GAMEPAD_BUTTON.fire);
       const aimHeld = isGamepadTriggerDown(gamepad, GAMEPAD_BUTTON.aim, 4);
       const casterSelected = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno';
-      const specialPressed = inputRef.current.friendsTool !== 5 && aimHeld && !previousGamepadAimHeld && (inputRef.current.selectedSlot === 3 || casterSelected);
+      const specialPressed = inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && aimHeld && !previousGamepadAimHeld && (inputRef.current.selectedSlot === 3 || casterSelected);
       const jumpPressed = pressed(GAMEPAD_BUTTON.jump);
       const reloadPressed = pressed(GAMEPAD_BUTTON.reload);
+      const camper=snapshotRef.current?.players.find(p=>p.id===launch.localPlayerId);
+      if(camper&&campfireNearby(camper)&&!buildModeRef.current&&pressed(GAMEPAD_BUTTON.dpadUp))frontierRequestRef.current({action:'campfire_fuel'});
+      if(isCampfireSeat(camper?.friendsSeat)&&pressed(GAMEPAD_BUTTON.dpadRight))frontierRequestRef.current({action:'campfire_eat'});
       const interactPressed = pressed(GAMEPAD_BUTTON.interact);
       if (pressed(GAMEPAD_BUTTON.build)) {
         firing = false;
@@ -2176,6 +2357,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         setBuildMessage(null);
       }
       if (buildModeRef.current) {
+        buildHeld=fireHeld;
+        if(!fireHeld)constructionRef.current.release();
         if (pressed(GAMEPAD_BUTTON.dpadUp) || pressed(GAMEPAD_BUTTON.dpadDown)) {
           const direction = pressed(GAMEPAD_BUTTON.dpadDown) ? 1 : -1;
           cycleBuildPiece(direction);
@@ -2192,14 +2375,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       } else {
         if (pressed(GAMEPAD_BUTTON.dpadDown)) { grenadeActionId++; sequence++; }
         if (pressed(GAMEPAD_BUTTON.previousWeapon) || pressed(GAMEPAD_BUTTON.dpadLeft)) changeSelectedWeapon(-1);
-        if (pressed(GAMEPAD_BUTTON.nextWeapon) || pressed(GAMEPAD_BUTTON.dpadRight)) changeSelectedWeapon(1);
+        if (!isCampfireSeat(camper?.friendsSeat) && (pressed(GAMEPAD_BUTTON.nextWeapon) || pressed(GAMEPAD_BUTTON.dpadRight))) changeSelectedWeapon(1);
       }
 
       if (firePressed && !buildModeRef.current) {
         fireActionId++;
         const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
         const weapon = local?.weaponStates[inputRef.current.selectedSlot];
-        if (!(launch.gameMode === 'friends' && inputRef.current.friendsTool) && weapon && local?.lifeState === 'alive' && weapon.state === 'ready' && canPredictCoopCast(weapon.weaponId, weapon.magazineAmmo, local?.mana) && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
+        if (!isCampfireSeat(local?.friendsSeat) && !(launch.gameMode === 'friends' && inputRef.current.friendsTool) && weapon && local?.lifeState === 'alive' && weapon.state === 'ready' && canPredictCoopCast(weapon.weaponId, weapon.magazineAmmo, local?.mana) && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
           renderer.predictLocalFire(weapon.weaponId, fireActionId);
         }
       }
@@ -2229,7 +2412,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         interactActionId,
         jumpPressed: inputRef.current.jumpPressed || jumpPressed,
         jetHeld: down(GAMEPAD_BUTTON.jump),
-        aiming: buildModeRef.current || (inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || casterSelected)) ? false : aimHeld,
+        aiming: buildModeRef.current || (inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || casterSelected)) ? false : aimHeld,
       };
       previousGamepadButtons = buttons;
       previousGamepadAimHeld = aimHeld;
@@ -2260,7 +2443,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         }
         return;
       }
-      inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
+      inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()), ...renderer.getFriendsFlashlightInput() };
       simulation.setInput(launch.localPlayerId, inputRef.current);
       const simulationStartedAt = performance.now();
       simulation.tick(INPUT_INTERVAL_MS);
@@ -2288,12 +2471,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       lastTime = now;
       accumulator += elapsed;
       inputAccumulator += elapsed;
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || chatOpenRef.current) clearControls();
+      if (pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || chatOpenRef.current) clearControls();
       pollGamepad(elapsed);
       if (launch.role === 'guest') {
         while (inputAccumulator >= INPUT_INTERVAL_MS) {
           inputAccumulator -= INPUT_INTERVAL_MS;
-          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()) };
+          inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), aimAngle: quantizeAngle(renderer.getAimAngle()), aimPitch: quantizePitch(renderer.getAimPitch()), ...renderer.getFriendsFlashlightInput() };
           if(launch.gameMode!=='friends'||session.friendsStateReceivedAt&&performance.now()-session.friendsStateReceivedAt<3000){prediction.step(inputRef.current);session.sendInput(inputRef.current);}
           clearJumpInput();
         }
@@ -2342,6 +2525,16 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           frameSnapshot = { ...frameSnapshot, players: frameSnapshot.players.map(player => player.id === local.id ? { ...player, x: motion.x, y: motion.y, z: motion.z } : player) };
         }
       }
+      if(buildModeRef.current&&launch.gameMode==='friends'&&!pauseOpenRef.current&&!buildLibraryOpenRef.current&&!backpackOpenRef.current&&!tacticalMapOpenRef.current&&!chatOpenRef.current&&!stationOpenRef.current&&!foundryOpenRef.current){
+        if(buildHeld&&constructionRef.current.mode==='single')placeStructure();
+        if(dismantleHeld&&!dismantleDone){const target=renderer.getFriendsBuildTarget(frameSnapshot)?.piece;
+          if(!target){dismantleId='';dismantleAt=now;}
+          else if(target.id+':'+target.revision!==dismantleId){dismantleId=target.id+':'+target.revision;dismantleAt=now;}
+          else if(now-dismantleAt>=450){creativeAction('remove');dismantleDone=true;}
+          renderer.setFriendsRemovalProgress(target,(now-dismantleAt)/450);
+        }
+      }
+      if(!dismantleHeld||dismantleDone||!buildModeRef.current)renderer.setFriendsRemovalProgress(undefined);
       // Camera role switches are state transitions, not presentation values.
       // Source them from the latest network snapshot so the downed operator is
       // never selected for even one lingering interpolation frame.
@@ -2350,31 +2543,54 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         : resolveDownedSpectatorTarget(snapshotRef.current);
       const latestLifeState = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.lifeState;
       if (buildModeRef.current && latestLifeState === 'alive' && launch.gameMode === 'friends') {
-        const pose = renderer.getFriendsBuildPose(frameSnapshot, friendsShapeRef.current, buildRotationRef.current);
+        const pose = constructionPose(frameSnapshot);
         const actor = frameSnapshot?.players.find(p => p.id === launch.localPlayerId);
-        const pieces = frameSnapshot?.friends?.building?.pieces || [];
+        const pieces = renderer.getFriendsNearbyPieces(frameSnapshot);
         const issue = friendsPlacementError(pieces, friendsShapeRef.current, pose, actor, [...(frameSnapshot?.players || []), ...friendsVehicleBuildBodies(frameSnapshot?.friends?.vehicles), ...physicalCargoBuildBodies(frameSnapshot?.friends?.hauling?.cargo)], friendsMoveRef.current?.id, false, renderer.getFriendsTerrain(),frameSnapshot?.friends?.vehicles);
         const permitted = launch.role === 'host' || frameSnapshot?.friends?.building?.guestsCanBuild !== false;
         const frontier = frameSnapshot?.friends?.frontier;
-        const materialIssue = frontier && !frontier.testing && !friendsMoveRef.current
+        let materialIssue = frontier && !frontier.testing && !friendsMoveRef.current
           && !canAfford(frontier.packs[packKey(actor)] || {}, buildCost(friendsShapeRef.current, friendsFinishRef.current))
           ? 'Gather materials or withdraw them from storage.' : undefined;
-        const hint = !permitted ? 'The host has disabled building for visitors.' : issue || materialIssue || 'Ready to place · aligned to the world grid';
+        const footprint=pose?constructionRef.current.footprint(pose,friendsShapeRef.current):{poses:[]};
+        if(frontier&&!frontier.testing&&footprint.poses.length>1){const cost=buildCost(friendsShapeRef.current,friendsFinishRef.current);const total=Object.fromEntries(Object.entries(cost).map(([r,n])=>[r,n*footprint.poses.length]));if(!canAfford(frontier.packs[packKey(actor)]||{},total))materialIssue='Gather enough materials for the whole group.';}
+        const buildBodies=[...(frameSnapshot?.players||[]),...friendsVehicleBuildBodies(frameSnapshot?.friends?.vehicles),...physicalCargoBuildBodies(frameSnapshot?.friends?.hauling?.cargo)];
+        const nearbyBodies=buildBodies.filter(p=>!actor||Math.hypot(p.x-actor.x,p.y-actor.y)<1300);
+        const previewKey=JSON.stringify([friendsShapeRef.current,pose,constructionRef.current.anchor,constructionRef.current.anchorAxis,constructionRef.current.mode,constructionRef.current.plane,friendsMoveRef.current?.id,frameSnapshot?.friends?.building?.revision,frontier?.terrain.revision,actor&&[actor.x,actor.y,actor.z,actor.lifeState],nearbyBodies.map(p=>[p.id,p.x,p.y,p.z,p.lifeState,'bodyWidth' in p?p.bodyWidth:38,'bodyDepth' in p?p.bodyDepth:38,'bodyHeight' in p?p.bodyHeight:50])]);
+        let groupIssues:(string|undefined)[];
+        if(groupPreviewCache?.key===previewKey)groupIssues=groupPreviewCache.issues;
+        else{
+          groupIssues=[];const candidates=[...pieces];
+          for(let i=0;i<footprint.poses.length;i++){const q=footprint.poses[i];const error=friendsPlacementError(candidates,friendsShapeRef.current,q,actor,buildBodies,friendsMoveRef.current?.id,false,renderer.getFriendsTerrain(),frameSnapshot?.friends?.vehicles);groupIssues.push(error);
+            if(!error)candidates.push({...q,id:-i-1,shape:friendsShapeRef.current,finish:friendsFinishRef.current,author:'preview',revision:0});
+          }
+          groupPreviewCache={key:previewKey,issues:groupIssues};
+        }
+        renderer.setFriendsBuildGroupPreview(constructionRef.current.anchor?friendsShapeRef.current:undefined,constructionRef.current.anchor?footprint.poses:[],groupIssues.map(e=>!e&&permitted&&!materialIssue),friendsFinishRef.current,launch.role==='guest'&&friendsOutbox.size>0);
+        if(!friendsOutbox.size)pendingBuildPreviewRef.current=null;
+        const pending=pendingBuildPreviewRef.current;
+        if(pending&&!constructionRef.current.anchor)renderer.setFriendsBuildGroupPreview(pending.shape,pending.poses,pending.poses.map(()=>true),pending.finish,true);
+        const capacityIssue=(frameSnapshot?.friends?.building?.pieces.length||0)+footprint.poses.length>1024?'The island has reached its construction budget. Remove some pieces first.':undefined;
+        const groupIssue=footprint.issue||capacityIssue||groupIssues.find(Boolean);
+        const hint = groupIssue || (!permitted ? 'The host has disabled building for visitors.' : issue || materialIssue || (constructionRef.current.anchor?'Ready to place '+footprint.poses.length+' pieces · click to commit':constructionRef.current.mode!=='single'?'Ready · click to set the start':constructionRef.current.plane?'Ready to place · plane locked':'Ready to place · aligned to the world grid'));
         if (hint !== buildPlacementHintRef.current) { buildPlacementHintRef.current = hint; setBuildPlacementHint(hint); }
-        renderer.setFriendsBuildPreview(friendsShapeRef.current, pose, !issue && !materialIssue && permitted, friendsFinishRef.current); renderer.setBuildPreview(undefined);
+        renderer.setFriendsBuildPreview(constructionRef.current.anchor?undefined:friendsShapeRef.current, pose, !issue && !materialIssue && permitted, friendsFinishRef.current); renderer.setFriendsContactFace(constructionRef.current.plane?undefined:renderer.getFriendsConstructionSurface(frameSnapshot),!issue&&!materialIssue&&permitted); renderer.setBuildPreview(undefined);
       } else if (buildModeRef.current && latestLifeState === 'alive') {
         const type = buildTypeRef.current;
         const pose = renderer.getBuildPose(frameSnapshot, launch.localPlayerId, type, buildRotationRef.current, buildSnappingRef.current);
         const placementIssue = pose ? validateCoopBuildPreview(frameSnapshot, launch.localPlayerId, type, pose.x, pose.y, pose.angle) : { code: 'range' as const };
         renderer.setBuildPreview(type, pose, Boolean(pose && !placementIssue));
-      } else { renderer.setBuildPreview(undefined); renderer.setFriendsBuildPreview(undefined); }
+      } else { renderer.setBuildPreview(undefined); renderer.setFriendsBuildPreview(undefined); renderer.setFriendsBuildGroupPreview(undefined,[],[],friendsFinishRef.current); }
       const localJetpack = frameSnapshot?.players.find(player => player.id === launch.localPlayerId);
       soundManager.updateJetpack(
         Boolean(localJetpack?.lifeState === 'alive' && localJetpack.jetActive),
         (localJetpack?.jetFuel ?? 100) / 100,
       );
       const renderStartedAt = performance.now();
-      renderer.setFriendsTool(buildModeRef.current ? 0 : inputRef.current.friendsTool || 0, inputRef.current.firing);
+      renderer.setFriendsWorkPlane(inputRef.current.friendsWorkPlane);
+      renderer.setFriendsEffects(friendsEffectsRef.current);
+      const shovelInput = friendsToolInput(inputRef.current.friendsTool || 0, inputRef.current.firing, Boolean(inputRef.current.aiming));
+      renderer.setFriendsTool(buildModeRef.current ? 0 : inputRef.current.friendsTool || 0, shovelInput.held,launch.role==='host'||frameSnapshot?.friends?.building?.guestsCanBuild!==false,shovelInput.fill);
       renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId, latestLifeState === 'alive', buildModeRef.current && launch.gameMode === 'friends');
       performanceMonitor?.recordFrame(frameElapsed, performance.now() - renderStartedAt, renderer.getPerformanceStats());
       if (damageFlashExpiresAtRef.current > 0 && now > damageFlashExpiresAtRef.current + 40) {
@@ -2427,7 +2643,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         launch.lobbyJoin?.close();
       }, 0);
     };
-  }, [launch, controlScheme]);
+  }, [launch]);
 
   useEffect(() => {
     if (!combatNotice) return;
@@ -2435,7 +2651,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     return () => window.clearTimeout(timeout);
   }, [combatNotice]);
 
-  const friendsSaveStamp = matchSnapshot?.friends ? JSON.stringify({ progress: matchSnapshot.friends.progress, building: matchSnapshot.friends.building && {...matchSnapshot.friends.building,pieces:matchSnapshot.friends.building.pieces.map(p=>p.attachment?{...p,...p.attachment,vehicleFrame:undefined}:p)}, projects: matchSnapshot.friends.projects, frontier: matchSnapshot.friends.frontier && { ...matchSnapshot.friends.frontier, feedback: {}, damage: undefined }, transport: matchSnapshot.friends.transport && { ...matchSnapshot.friends.transport, scenicRailway: matchSnapshot.friends.transport.scenicRailway === false ? false : true, railTrain: matchSnapshot.friends.transport.railTrain && {...matchSnapshot.friends.transport.railTrain,distance:Math.round(matchSnapshot.friends.transport.railTrain.distance/128)*128}, trainDistance: Math.round(matchSnapshot.friends.transport.trainDistance / 128) * 128, trainStoppedMs: Math.round(matchSnapshot.friends.transport.trainStoppedMs / 1000) * 1000, aircraft: { ...matchSnapshot.friends.transport.aircraft, x: Math.round(matchSnapshot.friends.transport.aircraft.x / 64) * 64, y: Math.round(matchSnapshot.friends.transport.aircraft.y / 64) * 64, z: Math.round(matchSnapshot.friends.transport.aircraft.z / 32) * 32 } } }) : '';
+  const friendsSaveStamp = matchSnapshot?.friends ? JSON.stringify({ progress: matchSnapshot.friends.progress, building: matchSnapshot.friends.building && {...matchSnapshot.friends.building,pieces:durableBuildPieces(matchSnapshot.friends.building.pieces).map(p=>p.attachment?{...p,...p.attachment,vehicleFrame:undefined}:p)}, projects: matchSnapshot.friends.projects, frontier: matchSnapshot.friends.frontier && { ...matchSnapshot.friends.frontier, feedback: {}, damage: undefined, interaction: undefined }, transport: matchSnapshot.friends.transport && { ...matchSnapshot.friends.transport, scenicRailway: matchSnapshot.friends.transport.scenicRailway === false ? false : true, railTrain: matchSnapshot.friends.transport.railTrain && {...matchSnapshot.friends.transport.railTrain,distance:Math.round(matchSnapshot.friends.transport.railTrain.distance/128)*128}, trainDistance: Math.round(matchSnapshot.friends.transport.trainDistance / 128) * 128, trainStoppedMs: Math.round(matchSnapshot.friends.transport.trainStoppedMs / 1000) * 1000, aircraft: { ...matchSnapshot.friends.transport.aircraft, x: Math.round(matchSnapshot.friends.transport.aircraft.x / 64) * 64, y: Math.round(matchSnapshot.friends.transport.aircraft.y / 64) * 64, z: Math.round(matchSnapshot.friends.transport.aircraft.z / 32) * 32 } } }) : '';
   useEffect(() => {
     if (launch.role !== 'host' || !friendsSaveStamp) return;
     let disposed = false; setFriendsSaveStatus('Saving…');
@@ -2479,7 +2695,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     const url = URL.createObjectURL(new Blob([exportFriendsWorld({ progress: f.progress, building: f.building, projects: f.projects, frontier: f.frontier, transport: f.transport })], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = 'sunline-world.json'; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  const interactionBlocked = trainControlsOpen || friendsDevOpen || deploymentStage === 'briefing' || deploymentStage === 'ready' || stationOpen || foundryOpen || backpackOpen || tacticalMapOpen || chatOpen || adminOpen || adminPaused || Boolean(matchSnapshot?.results) || hud.matchState !== 'active' || connectionStatus === 'disconnected' || (launch.gameMode==='friends'&&launch.role==='guest'&&connectionStatus!=='connected');
+  const interactionBlocked = pauseOpen || craneControlsOpen!==null || trainControlsOpen || friendsDevOpen || (!campfireSeated && Boolean(haulingBriefing.briefing)) || deploymentStage === 'briefing' || deploymentStage === 'ready' || stationOpen || foundryOpen || backpackOpen || tacticalMapOpen || chatOpen || adminOpen || adminPaused || Boolean(matchSnapshot?.results) || hud.matchState !== 'active' || connectionStatus === 'disconnected' || (launch.gameMode==='friends'&&launch.role==='guest'&&connectionStatus!=='connected');
   const interactionBlockedRef = useRef(false);
 
   useEffect(() => {
@@ -2493,6 +2709,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (wasBlocked) renderer.requestPointerLock();
       return;
     }
+    if (launch.gameMode === 'friends' && inputRef.current.friendsTool === 3) clearControlsRef.current();
     const focusModal = window.requestAnimationFrame(() => {
       const target = document.querySelector<HTMLElement>('.coop-admin-console input, .coop-arena [role="dialog"] button:not(:disabled), .coop-arena [role="dialog"] [tabindex="0"]');
       target?.focus({ preventScroll: true });
@@ -2542,6 +2759,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   }, [launch.localPlayerId]);
 
   const localSnapshot = matchSnapshot?.players.find(player => player.id === (isSpectator ? spectatorTargetRef.current : launch.localPlayerId));
+  useEffect(()=>{if(craneControlsOpen!==null && (!localSnapshot || !matchSnapshot?.friends || !nearbyCrane((matchSnapshot.friends.building?.pieces??[]).filter(p=>p.id===craneControlsOpen||p.craneRootId===craneControlsOpen),localSnapshot))) {craneControlsOpenRef.current=null;setCraneControlsOpen(null);rendererRef.current?.setCraneControlView(null);}},[craneControlsOpen,localSnapshot,matchSnapshot?.friends]);
   useEffect(()=>{if(trainControlsOpen&&(!localSnapshot||!matchSnapshot?.friends||!scenicControlNearby(localSnapshot,matchSnapshot.friends.vehicles)))setTrainControlsPanelOpen(false);},[trainControlsOpen,localSnapshot,matchSnapshot?.friends]);
   const classOperator = getCoopOperator(localSnapshot?.operatorId, localSnapshot?.skinId);
   const specialEffectActive = Boolean(localSnapshot && matchSnapshot?.artifactEffects?.some(effect =>
@@ -2771,7 +2989,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   return (
     <div className={`coop-arena ${launch.gameMode === 'friends' ? 'coop-arena--friends' : ''} absolute inset-0 z-[110] bg-[#05080e] ${interactionBlocked ? 'coop-arena--interaction-blocked' : ''} ${deploymentStage === 'briefing' || deploymentStage === 'ready' ? 'coop-arena--deploying' : deploymentStage === 'released' ? 'coop-arena--releasing' : 'coop-arena--deployed'}`}>
       <div ref={sceneRef} className="coop-arena__scene absolute inset-0 h-full w-full" />
-      {ownerAvailable && !adminOpen && <button
+      {!campfireSeated && ownerAvailable && !adminOpen && <button
         type="button"
         className="coop-owner-trigger"
         aria-label="Open owner console"
@@ -2839,7 +3057,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           {tr('arena.resumeControl')}
         </button>
       )}
-      {showMobileTouchControls && !isSpectator && !interactionBlocked && <CoopMobileControls
+      {!campfireSeated && showMobileTouchControls && !isSpectator && !interactionBlocked && <CoopMobileControls
         spellcaster={classOperator.id === 'royal_inferno'}
         creativeBuilding={launch.gameMode === 'friends'}
         onCreativeLibrary={() => expandFriendsPalette(true)}
@@ -2847,10 +3065,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         buildType={buildType}
         onAction={action => mobileInputHandlerRef.current?.(action)}
       />}
-      {!isSpectator && hud.lifeState === 'alive' && !backpackOpen && !isMobileTouchDevice && <div className="pointer-events-none absolute bottom-5 right-5 z-[54] border border-white/10 bg-black/55 px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white/55 backdrop-blur-sm"><kbd className="mr-1.5 text-cyan-200">G</kbd>{tr('backpack.open')}</div>}
-      {nearbyManualDrop && !backpackOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[5.5rem] left-1/2 z-[86] -translate-x-1/2 border border-amber-300/45 bg-black/80 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,.18)]"><kbd className="mr-2 border border-amber-200/40 bg-amber-300/10 px-1.5 py-0.5">{interactionControlLabel}</kbd>{tr(nearbyManualDrop.manualDropKind === 'cash' ? 'backpack.pickupCash' : 'backpack.pickupRevive', { amount: nearbyManualDrop.value })}</div>}
-      {nearbyMissionPrompt && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[8.5rem] left-1/2 z-[86] -translate-x-1/2 border border-emerald-300/50 bg-black/85 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-emerald-100 shadow-[0_0_26px_rgba(45,212,191,.2)]"><kbd className="mr-2 border border-emerald-200/40 bg-amber-300/10 px-1.5 py-0.5">{interactionControlLabel}</kbd>{nearbyMissionPrompt}</div>}
-      {nearDemolitionPlant && demolitionMission && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className={`coop-demolition-interact pointer-events-none absolute ${activelyPlanting ? 'coop-demolition-interact--active' : ''}`}>
+      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && !backpackOpen && !isMobileTouchDevice && <div className="pointer-events-none absolute bottom-5 right-5 z-[54] border border-white/10 bg-black/55 px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white/55 backdrop-blur-sm"><kbd className="mr-1.5 text-cyan-200">G</kbd>{tr('backpack.open')}</div>}
+      {!campfireSeated && nearbyManualDrop && !backpackOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[5.5rem] left-1/2 z-[86] -translate-x-1/2 border border-amber-300/45 bg-black/80 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,.18)]"><kbd className="mr-2 border border-amber-200/40 bg-amber-300/10 px-1.5 py-0.5">{interactionControlLabel}</kbd>{tr(nearbyManualDrop.manualDropKind === 'cash' ? 'backpack.pickupCash' : 'backpack.pickupRevive', { amount: nearbyManualDrop.value })}</div>}
+      {!campfireSeated && nearbyMissionPrompt && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className="pointer-events-none absolute bottom-[8.5rem] left-1/2 z-[86] -translate-x-1/2 border border-emerald-300/50 bg-black/85 px-4 py-2 text-center font-mono text-[10px] font-black uppercase tracking-[.16em] text-emerald-100 shadow-[0_0_26px_rgba(45,212,191,.2)]"><kbd className="mr-2 border border-emerald-200/40 bg-amber-300/10 px-1.5 py-0.5">{interactionControlLabel}</kbd>{nearbyMissionPrompt}</div>}
+      {!campfireSeated && nearDemolitionPlant && demolitionMission && !tacticalMapOpen && !stationOpen && !foundryOpen && <div className={`coop-demolition-interact pointer-events-none absolute ${activelyPlanting ? 'coop-demolition-interact--active' : ''}`}>
         <div className="coop-demolition-interact__eyebrow">SITE {demolitionSite} · EXPLOSIVE CHARGE</div>
         <div className="coop-demolition-interact__action">
           <kbd>{interactionControlLabel}</kbd>
@@ -2860,12 +3078,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         <div className="coop-demolition-interact__meter" role="progressbar" aria-label={`Plant charge at site ${demolitionSite}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(demolitionProgress)}><i style={{ width: `${demolitionProgress}%` }} /></div>
         <small>{activelyPlanting ? `KEEP ${interactionControlLabel} HELD · REMAIN INSIDE THE MARKED SITE` : demolitionMission.progress > 0 ? 'PROGRESS IS DECAYING' : `STAND CLOSE TO THE DEVICE AND KEEP ${interactionControlLabel} HELD`}</small>
       </div>}
-      {gravityHazard && !isSpectator && <div className="pointer-events-none absolute left-1/2 top-[22%] z-[70] w-64 -translate-x-1/2 border border-fuchsia-300/80 bg-fuchsia-950/45 px-3 py-2 text-center font-mono uppercase shadow-[0_0_34px_rgba(216,180,254,.5)] backdrop-blur-sm">
+      {!campfireSeated && gravityHazard && !isSpectator && <div className="pointer-events-none absolute left-1/2 top-[22%] z-[70] w-64 -translate-x-1/2 border border-fuchsia-300/80 bg-fuchsia-950/45 px-3 py-2 text-center font-mono uppercase shadow-[0_0_34px_rgba(216,180,254,.5)] backdrop-blur-sm">
         <div className="animate-pulse text-[11px] font-black tracking-[.26em] text-fuchsia-100">Gravity lock</div>
         <div className="mt-1 h-1 overflow-hidden bg-fuchsia-100/15"><i className="block h-full bg-fuchsia-200 shadow-[0_0_10px_#f0abfc]" style={{ width: `${Math.max(4, gravityPullProgress * 100)}%` }} /></div>
         <div className="mt-1 text-[8px] font-bold tracking-[.18em] text-fuchsia-200/90">Pull in {gravityPullRemaining.toFixed(1)}s · move clear</div>
       </div>}
-      {localSnapshot?.carryingHostage && <div className="pointer-events-none absolute left-1/2 top-[31%] z-[55] -translate-x-1/2 border border-amber-300/50 bg-black/80 px-4 py-2 text-center text-[10px] font-black uppercase tracking-[.18em] text-amber-100"><div>CARRYING HOSTAGE</div><small className="mt-1 block font-mono text-[8px] text-white/55">WEAPON / SPRINT / JET DISABLED · SPEED −18% · SQUAD PROTECTION REQUIRED</small></div>}
+      {!campfireSeated && localSnapshot?.carryingHostage && <div className="pointer-events-none absolute left-1/2 top-[31%] z-[55] -translate-x-1/2 border border-amber-300/50 bg-black/80 px-4 py-2 text-center text-[10px] font-black uppercase tracking-[.18em] text-amber-100"><div>CARRYING HOSTAGE</div><small className="mt-1 block font-mono text-[8px] text-white/55">WEAPON / SPRINT / JET DISABLED · SPEED −18% · SQUAD PROTECTION REQUIRED</small></div>}
       {backpackOpen && localSnapshot && !matchSnapshot?.friends?.frontier && <CoopBackpackModal
         player={localSnapshot}
         message={backpackMessage}
@@ -2919,7 +3137,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           </div>
         </div>
       )}
-      <div className="coop-vitals pointer-events-none absolute z-50">
+      {launch.gameMode !== 'friends' && <div className="coop-vitals pointer-events-none absolute z-50">
         <div className="coop-vitals__topline"><span>{tr('hud.level', { level: hud.level })}</span><span>{tr('hud.kills', { count: hud.kills })}</span><span>{tr('hud.live', { count: hud.players })}</span></div>
         <div className="coop-vitals__health"><span>{Math.ceil(hud.health)}</span><div className="coop-meter"><i style={{ width: `${Math.max(0, Math.min(100, hud.health / Math.max(1, hud.maxHealth) * 100))}%` }} /></div></div>
         <div className="coop-vitals__lower"><span>{tr('hud.experience', { percent: Math.floor(hud.experience / Math.max(1, hud.experienceToNextLevel) * 100) })}</span><span className="coop-vitals__currency">¤ {hud.coins}</span>{hud.cores > 0 && <span>{tr('hud.cores', { count: hud.cores })}</span>}</div>
@@ -2933,8 +3151,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           </div>
         )}
         {hud.invulnerableRemainingMs > 0 && <div className="coop-vitals__shield">{tr('hud.shielded', { seconds: Math.ceil(hud.invulnerableRemainingMs / 1000) })}</div>}
-      </div>
-      {squadmates.length > 0 && <div className="coop-squad pointer-events-none absolute z-50">
+      </div>}
+      {!campfireSeated && craneControlsOpen===null && squadmates.length > 0 && <div className="coop-squad pointer-events-none absolute z-50">
         {squadmates.map(player => {
           const status = player.lifeState === 'alive' ? `${Math.ceil(player.health)}/${Math.ceil(player.maxHealth)}` : player.lifeState === 'downed' ? (player.downedRemainingMs > 0 ? tr('hud.squadmateDown', { seconds: Math.ceil(player.downedRemainingMs / 1000) }) : tr('hud.squadmateRevivable')) : tr('hud.squadmateOut');
           return <div key={player.id} className={`coop-squadmate coop-squadmate--${player.lifeState}`}>
@@ -2944,7 +3162,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           </div>;
         })}
       </div>}
-      {(chatMessages.length > 0 || chatOpen) && <section className={`coop-chat ${chatOpen ? 'coop-chat--open' : ''}`} aria-label={tr('chat.open')}>
+      {(chatOpen || (!campfireSeated && chatMessages.length > 0)) && <section className={`coop-chat ${chatOpen ? 'coop-chat--open' : ''}`} aria-label={tr('chat.open')}>
         <div className="coop-chat__messages" role="log" aria-live="polite" aria-relevant="additions">
           {chatMessages.slice(chatOpen ? -8 : -4).map(message => <div key={message.id} className="coop-chat__message">
             <b style={{ color: message.playerColor }}>{message.playerLabel}</b>
@@ -2975,12 +3193,22 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       </section>}
       {isSpectator && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span>{tr('hud.spectating')}</span><b>{spectatorTarget?.label || tr('hud.acquireTarget')}</b><small>{tr('hud.nextPlayer')}</small></div>}
       {!isSpectator && !fallCinematicActive && (hud.lifeState === 'downed' || hud.lifeState === 'eliminated' || hud.lifeState === 'extracted') && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span className={hud.lifeState === 'downed' ? 'text-amber-300 font-black' : hud.lifeState === 'extracted' ? 'text-emerald-300 font-black' : 'text-rose-300 font-black'}>● {hud.lifeState === 'extracted' ? 'EXTRACTED · SPECTATING' : tr(hud.lifeState === 'downed' ? 'hud.downedSpectating' : 'hud.eliminatedSpectating')}</span><b style={{ color: spectatedSquadmate?.color || '#f0abfc' }}>{spectatedSquadmate?.label || downedSpectatorTarget?.label || tr('hud.squad')}</b><small>{tr('hud.cycleSquad')}</small></div>}
-      {matchSnapshot?.friends?.frontier && localSnapshot && !buildMode && !backpackOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsToolbelt frontier={matchSnapshot.friends.frontier} player={localSnapshot} tool={frontierTool} visible={frontierToolbeltVisible} onTool={selectFrontierTool} onPack={() => { rendererRef.current?.exitPointerLock(); setBackpackPanelOpen(true); }} elapsed={matchSnapshot.elapsedMs} />}
-      {matchSnapshot?.friends && !friendsDevOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsHUD snapshot={matchSnapshot} player={localSnapshot} interactionLabel={interactionControlLabel} />}
+      {!campfireSeated && craneControlsOpen===null && matchSnapshot?.friends?.frontier && localSnapshot && !buildMode && !backpackOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsToolbelt workLocked={miningWorkLocked} onWorkPlane={toggleMiningPlane} showProgress={preferences.miningProgress===true} frontier={matchSnapshot.friends.frontier} player={localSnapshot} tool={frontierTool} visible={frontierToolbeltVisible} onTool={selectFrontierTool} onPack={() => { rendererRef.current?.exitPointerLock(); setBackpackPanelOpen(true); }} elapsed={matchSnapshot.elapsedMs} />}
+      {pauseOpen && launch.gameMode === 'friends' && <FriendsPauseMenu controlScheme={controlScheme} onControlScheme={scheme => { clearControlsRef.current(); onControlSchemeChange?.(scheme); }} cinematicProfile={resolvedProfile} onCinematicProfile={profile => onCinematicProfileChange?.(profile)} preferences={preferences} onPreferences={patch => setPreferences(current => ({ ...current, ...patch }))} onResume={closePauseMenu} onExit={onExit}/>}
+      {matchSnapshot?.friends && craneControlsOpen===null && !friendsDevOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsHUD snapshot={matchSnapshot} player={localSnapshot} interactionLabel={interactionControlLabel} />}
+      {campfireSeated && !interactionBlocked && <FriendsCampfireControls
+        touch={showMobileTouchControls} gamepad={isGamepadControlScheme(controlScheme)}
+        eating={Boolean(matchSnapshot?.friends?.campfire?.roasts[launch.localPlayerId]?.eatingMs)}
+        waiting={Boolean(matchSnapshot?.friends?.campfire?.roasts[launch.localPlayerId]?.refillMs)}
+        onAction={action=>frontierRequestRef.current({action})}
+        onRoast={held=>mobileInputHandlerRef.current?.({type:'hold',control:'fire',pressed:held})}
+        onStand={()=>{mobileInputHandlerRef.current?.({type:'hold',control:'interact',pressed:true});mobileInputHandlerRef.current?.({type:'hold',control:'interact',pressed:false});}} />}
+      {craneControlsOpen!==null && matchSnapshot?.friends?.hauling?.cranes?.find(c=>c.pieceId===craneControlsOpen) && <FriendsCraneControls crane={matchSnapshot.friends.hauling.cranes.find(c=>c.pieceId===craneControlsOpen)!} message={backpackMessage} localId={launch.localPlayerId} operatorName={matchSnapshot.players.find(p=>p.id===matchSnapshot.friends?.hauling?.cranes?.find(c=>c.pieceId===craneControlsOpen)?.operatorId)?.label} onCameraChange={options=>rendererRef.current?.setCraneControlView(craneControlsOpen,options)} onRequest={r=>frontierRequestRef.current(r)} onClose={closeCraneControls}/>}
       {trainControlsOpen && matchSnapshot?.friends?.scenicRailway && <FriendsTrainControls service={matchSnapshot.friends.scenicRailway} message={backpackMessage} onRequest={r=>frontierRequestRef.current(r)} onClose={closeTrainControls}/>}
+      {!campfireSeated && haulingBriefing.briefing&&matchSnapshot?.friends?.hauling&&<FriendsHaulingBriefing briefing={haulingBriefing.briefing} hauling={matchSnapshot.friends.hauling} interactionLabel={interactionControlLabel} onClose={closeHaulingBriefing}/>}
       {friendsDevOpen && <FriendsDevMenu environment={devEnvironment} flight={Boolean(inputRef.current.friendsDevFlight)} onFlight={()=>{inputRef.current={...inputRef.current,friendsDevFlight:!inputRef.current.friendsDevFlight,jumpPressed:false};setDevEnvironment(current=>({...current}));}} onChange={changeFriendsEnvironment} onClose={closeFriendsDevAndResume}/>}
-      {deploymentStage === 'complete' && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <RealityBreachHUD breach={matchSnapshot?.realityBreach} player={localSnapshot} language={launch.language} />}
-      {objectiveHud && <div className={`coop-objective coop-objective--${objectiveHud.tone} pointer-events-none absolute z-50`}>
+      {!campfireSeated && deploymentStage === 'complete' && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <RealityBreachHUD breach={matchSnapshot?.realityBreach} player={localSnapshot} language={launch.language} />}
+      {!campfireSeated && objectiveHud && <div className={`coop-objective coop-objective--${objectiveHud.tone} pointer-events-none absolute z-50`}>
         <div className="coop-objective__meta"><span>{objectiveHud.label}</span><span>{objectiveHud.detail}</span></div>
         <div className="coop-objective__title">{objectiveHud.title}</div>
         {demolitionMission && <div className="coop-objective__demolition-steps">
@@ -2991,33 +3219,33 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         </div>}
         {objectiveHud.progress !== undefined && <div className="coop-objective__progress"><div className="coop-objective__meter"><i style={{ width: `${Math.max(0, Math.min(100, objectiveHud.progress))}%` }} /></div>{objectiveHud.progressText && <b>{objectiveHud.progressText}</b>}</div>}
       </div>}
-      {combatNotice && <div className="pointer-events-none absolute left-1/2 top-[24%] z-50 -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
-      {specialReadyCue && <div
+      {!campfireSeated && combatNotice && <div className="pointer-events-none absolute left-1/2 top-[24%] z-50 -translate-x-1/2 text-center text-sm font-black uppercase tracking-[0.2em] drop-shadow-[0_0_12px_currentColor]" style={{ color: combatNotice.color }}>{combatNotice.text}</div>}
+      {!campfireSeated && specialReadyCue && <div
         key={specialReadyCue.id}
         className="coop-special-ready pointer-events-none absolute z-50"
         style={{ '--special-color': specialReadyCue.color } as CSSProperties}
         aria-live="polite"
       ><kbd>RMB</kbd><span>{tr('hud.specialReady', { name: specialReadyCue.name })}</span></div>}
-      {activeRecoveryRelay && <div className="coop-healing-field-status pointer-events-none absolute left-1/2 top-[56%] z-50 -translate-x-1/2" aria-label={`Recovery field ${COOP_RECOVERY_RELAY_HEAL_PER_SECOND} HP per second`}>
+      {!campfireSeated && activeRecoveryRelay && <div className="coop-healing-field-status pointer-events-none absolute left-1/2 top-[56%] z-50 -translate-x-1/2" aria-label={`Recovery field ${COOP_RECOVERY_RELAY_HEAL_PER_SECOND} HP per second`}>
         <HeartPulse size={13} strokeWidth={2.6} />
         <span>{hud.health < hud.maxHealth ? `+${COOP_RECOVERY_RELAY_HEAL_PER_SECOND} HP/s` : 'RECOVERY FIELD READY'}</span>
       </div>}
-      {healingPops.length > 0 && <div className="coop-healing-pops pointer-events-none absolute left-1/2 top-[51%] z-[55] -translate-x-1/2" aria-live="polite">
+      {!campfireSeated && healingPops.length > 0 && <div className="coop-healing-pops pointer-events-none absolute left-1/2 top-[51%] z-[55] -translate-x-1/2" aria-live="polite">
         {healingPops.map((pop, index) => <div key={pop.id} className="coop-healing-pop" style={{ '--heal-index': index } as CSSProperties}>
           <HeartPulse size={18} strokeWidth={3} />
           <b>+{formatHealingAmount(pop.amount)}</b><span>{tr('unit.hp')}</span>
         </div>)}
       </div>}
-      {revivingTarget && <div className="pointer-events-none absolute left-1/2 top-[56%] z-20 w-[min(330px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/55 bg-black/80 px-4 py-3 text-center shadow-[0_0_24px_rgba(34,211,238,.18)] backdrop-blur-md"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">{tr('hud.holdRevive', { name: revivingTarget.label })}</div><div className="mt-2 h-2 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, revivingTarget.reviveProgressMs / 3000 * 100)}%` }} /></div><div className="mt-1 text-[9px] font-mono text-cyan-100/70">{Math.round(revivingTarget.reviveProgressMs / 3000 * 100)}%</div></div>}
-      {!isSpectator && hud.lifeState === 'alive' && <CoopCombatReticle mode={classOperator.id === 'royal_inferno' ? 'spell' : reticleMode} />}
-      {!isSpectator && hud.lifeState === 'alive' && matchSnapshot && localSnapshot && (
+      {!campfireSeated && revivingTarget && <div className="pointer-events-none absolute left-1/2 top-[56%] z-20 w-[min(330px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/55 bg-black/80 px-4 py-3 text-center shadow-[0_0_24px_rgba(34,211,238,.18)] backdrop-blur-md"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">{tr('hud.holdRevive', { name: revivingTarget.label })}</div><div className="mt-2 h-2 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, revivingTarget.reviveProgressMs / 3000 * 100)}%` }} /></div><div className="mt-1 text-[9px] font-mono text-cyan-100/70">{Math.round(revivingTarget.reviveProgressMs / 3000 * 100)}%</div></div>}
+      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && <CoopCombatReticle mode={classOperator.id === 'royal_inferno' ? 'spell' : reticleMode} />}
+      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && matchSnapshot && localSnapshot && (
         <CoopOffscreenThreats
           snapshot={matchSnapshot}
           localPlayer={localSnapshot}
           renderer={rendererRef.current}
         />
       )}
-      {!isSpectator && hud.lifeState === 'alive' && matchSnapshot && localSnapshot && (
+      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && matchSnapshot && localSnapshot && (
         <CoopReticleCompass
           localPlayer={localSnapshot}
           players={matchSnapshot.players}
@@ -3028,7 +3256,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           language={launch.language}
         />
       )}
-      {!isSpectator && hud.lifeState === 'alive' && !buildMode && !(matchSnapshot?.friends?.frontier && frontierTool) && activeWeapon && <div className={`coop-weapons pointer-events-none absolute z-50 ${showMobileTouchControls ? 'coop-weapons--touch' : isMobileTouchDevice ? 'coop-weapons--compact' : ''}`}>
+      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && !buildMode && !(matchSnapshot?.friends?.frontier && frontierTool) && activeWeapon && <div className={`coop-weapons pointer-events-none absolute z-50 ${showMobileTouchControls ? 'coop-weapons--touch' : isMobileTouchDevice ? 'coop-weapons--compact' : ''}`}>
         <div className="coop-weapons__class" style={{ color: classOperator.color }}><b>{classOperator.className}</b><span>{classOperator.role}</span></div>
         <div className="coop-weapons__meter"><span style={{ color: classOperator.color }}>{classOperator.resourceLabel}</span><i><em style={{ width: `${Math.max(0, Math.min(100, (localSnapshot?.artifactResource || 0) / classOperator.resourceMax * 100))}%`, backgroundColor: classOperator.color }} /></i><b>{Math.floor(localSnapshot?.artifactResource || 0)}/{classOperator.resourceMax}</b></div>
         <div className="coop-weapons__meter coop-weapons__meter--jet"><span>BURST PACK</span><i><em style={{ width: `${Math.max(0, Math.min(100, localSnapshot?.jetFuel ?? 100))}%` }} /></i><b>{Math.round(localSnapshot?.jetFuel ?? 100)}</b></div>
@@ -3069,7 +3297,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         </div>
       )}
       {!isSpectator && hud.lifeState === 'alive' && buildMode && launch.gameMode === 'friends' && <FriendsBuildPalette
-        shape={friendsShape} finish={friendsFinish} toolbar={friendsToolbar} rotation={friendsRotation}
+        visible={buildBarVisible} onActivity={revealBuildBar}
+        construction={constructionState} shape={friendsShape} finish={friendsFinish} toolbar={friendsToolbar} rotation={friendsRotation}
         building={matchSnapshot?.friends?.building} friends={matchSnapshot?.friends}
         materials={localSnapshot ? matchSnapshot?.friends?.frontier?.packs[packKey(localSnapshot)] : undefined} freeBuild={matchSnapshot?.friends?.frontier?.testing}
         expanded={buildPaletteExpanded} message={buildMessage} placementHint={buildPlacementHint}
@@ -3079,10 +3308,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         onExport={exportWorld} onImport={() => friendsImportRef.current?.click()} />}
 
       <input ref={friendsImportRef} type="file" accept=".json,application/json" hidden onChange={e => { void importWorld(e.target.files?.[0]); }} />
-      {matchSnapshot && localSnapshot && !tacticalMapOpen && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} language={launch.language} />}
+      {!campfireSeated && craneControlsOpen===null && matchSnapshot && localSnapshot && !tacticalMapOpen && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} language={launch.language} />}
       {tacticalMapOpen && matchSnapshot && localSnapshot && <EnhancedCoopTacticalMap snapshot={matchSnapshot} localPlayer={localSnapshot} onPingMission={pingMissionFromMap} onClose={() => { setTacticalMapPanelOpen(false); resumeGameplayInteraction(); }} />}
       {stationOpen && nearbyStation && <div onMouseDown={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} className="absolute inset-0 z-[80] bg-black/55 backdrop-blur-[2px]" aria-hidden="true" />}
-      {nearbyStation && !stationOpen && <div onMouseDown={event => event.stopPropagation()} className="coop-station-prompt absolute bottom-5 left-5 z-[85] w-[min(420px,calc(100vw-2.5rem))] border border-cyan-300/35 bg-[#07111b]/95 p-4 shadow-[0_0_28px_rgba(34,211,238,.14)] backdrop-blur-md">
+      {!campfireSeated && nearbyStation && !stationOpen && <div onMouseDown={event => event.stopPropagation()} className="coop-station-prompt absolute bottom-5 left-5 z-[85] w-[min(420px,calc(100vw-2.5rem))] border border-cyan-300/35 bg-[#07111b]/95 p-4 shadow-[0_0_28px_rgba(34,211,238,.14)] backdrop-blur-md">
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-cyan-200/20 pb-3">
           <div><div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-cyan-200"><ShoppingCart size={16} /> {tr('shop.title')}</div></div>
           <div className="shrink-0 text-right"><div className="text-[9px] font-black uppercase tracking-wider text-white/45">{tr('shop.credits')}</div><div className="mt-0.5 font-mono text-sm text-amber-200"><Coins className="mr-1 inline" size={13} />{localSnapshot.coins}</div></div>

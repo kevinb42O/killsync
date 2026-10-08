@@ -1,9 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { createFriendsBuildGeometry, createFriendsBuildMaterial, prepareFriendsBuildGeometry } from './FriendsBuildVisuals';
+import { FriendsBuildVisuals, createFriendsBuildGeometry, createFriendsBuildMaterial, prepareFriendsBuildGeometry } from './FriendsBuildVisuals';
 import { FRIENDS_TERRAIN_SURFACES } from '../world/FriendsTerrainAppearance';
 afterEach(() => vi.restoreAllMocks());
 describe('terrain-matched construction appearance', () => {
+  it('preserves unaffected GPU batches and details when one shape is edited, and bounds confirmation pulses',()=>{
+    vi.spyOn(THREE.TextureLoader.prototype,'load').mockImplementation(()=>new THREE.Texture());
+    const scene=new THREE.Scene(),visuals=new FriendsBuildVisuals(scene);
+    const pieces=[{id:1,shape:'block' as const,finish:'stone' as const,author:'Host',revision:1,x:8000,y:8000,z:0,rotation:0},{id:2,shape:'workbench' as const,finish:'timber' as const,author:'Host',revision:1,x:8200,y:8000,z:0,rotation:0}];
+    visuals.update({revision:1,guestsCanBuild:true,pieces});
+    const block=scene.getObjectByName('creation:block:stone:world') as THREE.InstancedMesh,bench=scene.getObjectByName('creation:workbench:timber:world') as THREE.InstancedMesh;
+    const version=bench.instanceMatrix.version,details=scene.children[0].children.filter(o=>o.userData.detailShape==='workbench');
+    visuals.update({revision:2,guestsCanBuild:true,pieces:[{...pieces[0],revision:2,x:8032},pieces[1]]});
+    expect(bench.instanceMatrix.version).toBe(version);expect(block.instanceMatrix.version).toBeGreaterThan(version);
+    expect(scene.children[0].children.filter(o=>o.userData.detailShape==='workbench')).toEqual(details);
+    for(let i=0;i<64;i++)visuals.confirm(pieces[0],0);
+    expect(visuals['pulses']).toHaveLength(3);visuals.animate(350);expect(visuals['pulses'].every(p=>!p.line.visible)).toBe(true);visuals.dispose();
+  });
   it('renders a one-block cube with the same face shades as the terrain mesh', () => {
     const geometry = prepareFriendsBuildGeometry(createFriendsBuildGeometry('block'), 'block');
     geometry.computeBoundingBox();

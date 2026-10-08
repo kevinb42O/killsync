@@ -111,6 +111,9 @@ export function caveColumn(x:number,y:number):CaveRange[] {
   if(columns.size>160000)columns.clear();columns.set(k,merged);return merged;
 }
 export function explorationCave(x:number,y:number,z:number){return caveColumn(x,y).some(([floor,roof])=>z>=floor&&z<roof);}
+/** Only the shaft's upper void reaches the sky. A lower passage beneath a
+ * stair ledge still needs enclosed-cave lighting at the same x/y position. */
+export function caveOpenToSky(x:number,y:number,z:number){return caveColumn(x,y).some(([floor,roof])=>z>=floor&&z<roof&&roof===6144);}
 export function caveAt(x:number,y:number,z:number){
   if(!explorationCave(x,y,z)||z>576)return;
   return CAVE_ROOMS.find(r=>Math.hypot((x-r.x)/r.rx,(y-r.y)/r.ry)<1)?.name || CAVE_ENTRANCE.name;

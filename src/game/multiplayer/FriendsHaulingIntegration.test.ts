@@ -30,9 +30,10 @@ describe('hauling in the authoritative Friends game',()=>{
     s.setInput('host',input(sequence++,{firing:true,fireActionId:2}));s.tick(50);
     for(let i=0;i<40;i++){s.setInput('host',input(sequence++));s.tick(50);}
     s.setInput('host',input(sequence++,{interactActionId:1}));s.tick(50);
-    const snapshot=s.createSnapshot();expect(snapshot.friends!.hauling!.delivered,JSON.stringify({cargo:c,player:{x:p.x,y:p.y,z:p.z},feedback:snapshot.friends!.hauling!.feedback})).toBe(true);
-    expect(snapshot.friends!.hauling!.cargo).toHaveLength(1);
-    const decoder=new SnapshotDecoder();expect(decoder.decode(compactSnapshotWirePayload({format:'coop_snapshot_full',snapshot}),10)?.friends!.hauling!.delivered).toBe(true);
+    const snapshot=s.createSnapshot();expect(snapshot.friends!.hauling!.completedCargoIds,JSON.stringify({cargo:c,player:{x:p.x,y:p.y,z:p.z},feedback:snapshot.friends!.hauling!.feedback})).toContain(c.id);
+    expect(snapshot.friends!.hauling!.delivered).toBe(false);
+    expect(snapshot.friends!.hauling!.cargo).toHaveLength(3);
+    const decoder=new SnapshotDecoder();expect(decoder.decode(compactSnapshotWirePayload({format:'coop_snapshot_full',snapshot}),10)?.friends!.hauling!.completedCargoIds).toContain(c.id);
   });
   it('spawns the core on its dedicated platform 750m from the goal and keeps it stable at rest',()=>{
     const s=new FriendsSimulation(seeds),before=s.createSnapshot().friends!.hauling!.cargo[0],terrain=s['friendsFrontier']!.terrain;

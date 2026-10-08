@@ -1,0 +1,33 @@
+{
+  "head": "59a507d07b5a511bd1a2fe42dd58fa9e6014d560",
+  "three": "0.185.1",
+  "files": {
+    "src/game/rendering/FriendsSunShadowCache.ts": "884807e73dca396dc79b0b5c9599554c430e30499862d9220eb3508781ed9934",
+    "src/game/rendering/FriendsSunShadowCache.test.ts": "806051063457d088a84f1120f558f39d9340fd356ab1a4882e888741984c6b95",
+    "src/game/rendering/FriendsForestLOD.ts": "2e4f7267da6d4adf7d6354b4317f6a30950349b472e6ce2252ab77be49f3e4eb",
+    "src/game/rendering/FriendsForestLOD.test.ts": "0a4fb808a1a734ec6fd2a7b360e173dc5f5fd9bfea57c9e3c7ef3281cce87aa8",
+    "src/game/rendering/FriendsDayNightCycle.ts": "0ebdb2009f22b013023cf23bdc8cfeabc61e12814c150103bbfb74713edf82da",
+    "src/game/rendering/FriendsAssets.ts": "c38188c799cdfe52796da15eb5571619e7e7384973ee8d092ad4125ca0773038",
+    "src/game/rendering/FriendsClouds.ts": "38a1e48e40189be5778291b4bf221fbdbb2289035fe0788419b334880a134138",
+    "src/game/rendering/FriendsSunShadow.ts": "3ca071532344c76f44394652341c84b859826b97977be6cca9f5da9974d92846",
+    "src/game/Renderer3D.ts": "493422b78f4665e0e012d3eb005f6c3a6fa34acb3e4284731466c273fc8caf37",
+    "src/game/world/FriendsVegetationAppearance.ts": "42f3fa6d807667b6204143bdbcf1a47f9487b0cf27dd782316cd9a17a67423d5",
+    "src/game/multiplayer/FriendsFrontier.ts": "2959a1505eb9dd74b5b541ab9fdc084b5d775a9f18ae5c6dcd253f66d29e6c1f",
+    "tools/test-friends-forest-equivalence.mjs": "b5ff6d114446a3c63b5ab6a2b787f75b8ad554373340d9d05dcb3e4b462f5179",
+    "tools/profile-friends-world-pair.mjs": "431a9f9b2f51d7accbe836fc45ee9a8ad17da06c1ca1a2fea79692ffc9f8a198",
+    "tools/friends-baseline-modules.mjs": "1e1a66d3b24e2ea6569f691c77628f2c9d1bb2674f51a91a183f24d623591d18",
+    "package-lock.json": "4a1c6105227f990105e0dadb8ceaf8790210faf055459ec2ada25514f0452d8a",
+    "artifacts/friends-render-third-pass/source/FriendsDayNightCycle.ts.txt": "2f3032ecf1b35efada038d2879b80b212145e0a21730010a5cab369f9ee4c191",
+    "artifacts/friends-render-third-pass/source/FriendsForestLOD.ts.txt": "f799de2bc4d99c611fa62aebfa03812cc2de8d00ac10e9a65eeb18003e40cb4e",
+    "artifacts/friends-render-third-pass/source/FriendsFrontierVisuals.ts.txt": "0fa5edb55bf5e32eb5851467fd6dbc466d29d17a79096d7f0d7e65467003b867",
+    "public/models/friends/quaternius/PineTree_1.glb": "ff8440643f06b219c1b25c34c34d8197e6c3d21306f85fbfc335b6dfcab22d86",
+    "public/models/friends/quaternius/PineTree_1_BarkLOD.json": "5460c1e86f73880295bfe2fa2dbec64ae8fdf65aa7508681cfee9017837686e0",
+    "public/models/friends/quaternius/BirchTree_1_BarkLOD.json": "836c90943a2e5fa8d99e496b43342ecb20207a1b05ccfbd6a40ff63965d7ba4e",
+    "public/models/friends/quaternius/BirchTree_1.glb": "37bbc05d6e8dc74c734fd9bc0afe74f8b14834064b4c9020c78e93853ef12587",
+    "public/models/friends/quaternius/MapleTree_1.glb": "e822e6f1ff8014931fafc6045a54ba43e53219956f13a322062e15192b40ac8e",
+    "public/models/friends/quaternius/MapleTree_1_BarkLOD.json": "aa6cd78e5af2a05770720154c335d7c6f0208e2c5ff29f28820307cff5a48ed7",
+    "node_modules/three/src/renderers/webgl/WebGLShadowMap.js": "7d69ca09821ed119d7e1db25e88ad43c2b8c7dd87e8746e1c63f8b86086b3e05",
+    "node_modules/three/src/renderers/WebGLRenderer.js": "867948b57a6abb84d4cfd7619b38ea14fbb2c100c1b6f78d59de2383662ab7a0"
+  },
+  "note": "Current source and frozen baseline hashes after accepted implementation. Other working-tree changes are present; HEAD alone is not the comparison baseline."
+}

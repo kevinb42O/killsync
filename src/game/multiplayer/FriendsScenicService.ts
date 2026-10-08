@@ -3,6 +3,7 @@ import { scenicRailway, scenicStationPoses, SCENIC_ROUTE_ID, SCENIC_CHAPTERS } f
 import { railWrap, sampleRailAlignment } from '../world/FriendsRailAlignment';
 import { vehicleLocalPoint, vehicleWorldPoint } from './FriendsVehiclePose';
 import type { FriendsVehicle } from './FriendsExpedition';
+import { isCampfireSeat } from './FriendsCampfireSeats';
 export type ScenicSeat={vehicleId:string;index:number};
 export type ScenicActor={id:string;x:number;y:number;z:number;lifeState:string;friendsDevFlight?:boolean;friendsSeat?:ScenicSeat;verticalVelocity?:number;velocityX?:number;velocityY?:number;crouching?:boolean};
 export type ScenicServiceState={routeId:string;hash:string;distance:number;speed:number;nextStop:number;dwell:number;held:boolean;targetSpeed?:number;autoStops?:boolean};
@@ -53,6 +54,7 @@ export class FriendsScenicService {
   vehicles(){return scenicVehicles(this.distance);}
   isSeated(player:ScenicActor){return Boolean(player.friendsSeat);}
   interact(player:ScenicActor,players:readonly ScenicActor[]){
+    if(isCampfireSeat(player.friendsSeat))return false;
     if(player.lifeState!=='alive'||player.friendsDevFlight)return false;
     if(player.friendsSeat){this.stand(player);return true;}
     const prompt=scenicSeatPrompt(player,this.vehicles(),players.flatMap(p=>p.friendsSeat?[{playerId:p.id,...p.friendsSeat}]:[]));
@@ -93,11 +95,11 @@ export class FriendsScenicService {
       if(!this.autoStops&&this.dwell===0&&gap<=Math.max(travel,1))this.nextStop=(this.nextStop+1)%stops.length;
       this.distance=railWrap(this.distance+travel,r.length);
     }
-    for(const p of players){if(jumping.has(p.id)&&p.friendsSeat)this.stand(p);else if(p.friendsSeat)this.attach(p);}
+    for(const p of players){if(isCampfireSeat(p.friendsSeat))continue;if(jumping.has(p.id)&&p.friendsSeat)this.stand(p);else if(p.friendsSeat)this.attach(p);}
   }
   private state():ScenicServiceState{return {routeId:SCENIC_ROUTE_ID,hash:scenicRailway().hash,distance:this.distance,speed:this.speed,nextStop:this.nextStop,dwell:this.dwell,held:this.held,targetSpeed:this.targetSpeed,autoStops:this.autoStops};}
   snapshot(players:readonly ScenicActor[]=[]):ScenicServiceSnapshot{
     const r=scenicRailway(),p=sampleRailAlignment(r,this.distance),station=scenicStationPoses()[this.nextStop];
-    return {...this.state(),chapter:SCENIC_CHAPTERS[p.chapter-1],nextStation:station.name,etaSeconds:Math.ceil(railWrap(station.distance+SCENIC_STOP_OFFSET-this.distance,r.length)/Math.max(20,this.targetSpeed*.8)+this.dwell/1000),blocked:this.blocked,seats:players.flatMap(p=>p.friendsSeat?[{playerId:p.id,...p.friendsSeat}]:[])};
+    return {...this.state(),chapter:SCENIC_CHAPTERS[p.chapter-1],nextStation:station.name,etaSeconds:Math.ceil(railWrap(station.distance+SCENIC_STOP_OFFSET-this.distance,r.length)/Math.max(20,this.targetSpeed*.8)+this.dwell/1000),blocked:this.blocked,seats:players.flatMap(p=>p.friendsSeat&&!isCampfireSeat(p.friendsSeat)?[{playerId:p.id,...p.friendsSeat}]:[])};
   }
 }
