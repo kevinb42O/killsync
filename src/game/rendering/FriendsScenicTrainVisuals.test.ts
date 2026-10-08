@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {describe,it,expect,vi,afterEach} from 'vitest';
-import {createScenicTrainVisual,updateScenicTrainVisual} from './FriendsScenicTrainVisuals';
+import {createScenicTrainVisual,updateScenicTrainVisual,updateScenicRunningGear} from './FriendsScenicTrainVisuals';
 import {scenicVehicles} from '../multiplayer/FriendsScenicService';
 import {scenicRailway} from '../world/FriendsScenicRailway';
 import {sampleRailAlignment} from '../world/FriendsRailAlignment';
@@ -15,7 +15,7 @@ describe('scenic train body and running gear',()=>{
     canvas();const ray=new THREE.Raycaster(),origin=new THREE.Vector3(),direction=new THREE.Vector3();
     for(const kind of ['engine','touring','flatbed','stake','gondola'] as const)for(const phase of [0,.43,1.11]){
       const closed=kind==='engine';
-      const train=createScenicTrainVisual(closed,0,kind==='engine'?'touring':kind);for(const bogie of train.userData.scenicBogies)for(const wheel of bogie.wheels)wheel.rotation.z=phase;train.updateMatrixWorld(true);
+      const train=createScenicTrainVisual(closed,0,kind==='engine'?'touring':kind);for(const bogie of train.userData.scenicBogies)for(const wheel of bogie.wheels)wheel.rotation.z=phase;updateScenicRunningGear(train);train.updateMatrixWorld(true);
       const bounds=new THREE.Box3().setFromObject(train),axes=['x','y','z'] as const;
       for(const axis of axes)for(const sign of [-1,1]){
         const [a,b]=axes.filter(key=>key!==axis);
@@ -30,6 +30,17 @@ describe('scenic train body and running gear',()=>{
       }
     }
   },120000);
+  it('batches all original running gear with its exact shadow flags and invalidates bounds/uploads only for articulation',()=>{
+    canvas();const train=createScenicTrainVisual(false,0),batches=train.userData.scenicRunningGear.batches as {mesh:THREE.InstancedMesh}[];
+    expect(batches).toHaveLength(4);expect(batches.map(b=>b.mesh.count)).toEqual([8,8,8,18]);
+    expect(batches.map(b=>[b.mesh.castShadow,b.mesh.receiveShadow])).toEqual([[true,true],[true,true],[true,true],[false,false]]);
+    const versions=batches.map(b=>b.mesh.instanceMatrix.version);updateScenicRunningGear(train);expect(batches.map(b=>b.mesh.instanceMatrix.version)).toEqual(versions);
+    train.userData.scenicBogies[0].wheels[0].rotation.z=.43;updateScenicRunningGear(train);
+    expect(batches.map(b=>b.mesh.instanceMatrix.version)).toEqual(versions.map(v=>v+1));
+    for(const {mesh} of batches){const point=new THREE.Vector3(),matrix=new THREE.Matrix4(),position=mesh.geometry.getAttribute('position');
+      for(let i=0;i<mesh.count;i++){mesh.getMatrixAt(i,matrix);for(let j=0;j<position.count;j++){point.fromBufferAttribute(position,j).applyMatrix4(matrix);expect(point.distanceTo(mesh.boundingSphere!.center)).toBeLessThanOrEqual(mesh.boundingSphere!.radius+.00001);}}
+    }
+  });
   it('steers the bogies onto the actual centreline through curves, grades and the closing seam',()=>{
     canvas();const route=scenicRailway(),mesh=createScenicTrainVisual(false,0);
     for(const distance of [0,10000,40000,90000,route.length-2,route.length+2]){

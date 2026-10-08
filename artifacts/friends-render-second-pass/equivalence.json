@@ -1,0 +1,2630 @@
+{
+  "date": "2026-10-08T00:35:23.424Z",
+  "origin": "http://localhost:3000",
+  "revision": "745226c",
+  "lighting": [
+    {
+      "mode": "standard",
+      "sky": "day",
+      "lighting": "off",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "day",
+      "lighting": "point-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "day",
+      "lighting": "spot-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "day",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "day",
+      "lighting": "outside-range",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "day",
+      "lighting": "mixed",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "twilight",
+      "lighting": "off",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0013762047064079508,
+      "changedChannels": 2,
+      "changedPixels": 2,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "twilight",
+      "lighting": "point-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "twilight",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "twilight",
+      "lighting": "all-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.001685499656158105,
+      "changedChannels": 3,
+      "changedPixels": 3,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "twilight",
+      "lighting": "outside-range",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0013762047064079508,
+      "changedChannels": 2,
+      "changedPixels": 2,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "twilight",
+      "lighting": "mixed",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0019462473604038074,
+      "changedChannels": 4,
+      "changedPixels": 4,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "night",
+      "lighting": "off",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "night",
+      "lighting": "point-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "night",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "night",
+      "lighting": "all-near",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0009731236802019037,
+      "changedChannels": 1,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "night",
+      "lighting": "outside-range",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "standard",
+      "sky": "night",
+      "lighting": "mixed",
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0013762047064079508,
+      "changedChannels": 2,
+      "changedPixels": 2,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "day",
+      "lighting": "off",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "day",
+      "lighting": "point-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "day",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "day",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "day",
+      "lighting": "outside-range",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "day",
+      "lighting": "mixed",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "twilight",
+      "lighting": "off",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "twilight",
+      "lighting": "point-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "twilight",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "twilight",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "twilight",
+      "lighting": "outside-range",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "twilight",
+      "lighting": "mixed",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "night",
+      "lighting": "off",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "night",
+      "lighting": "point-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "night",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "night",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "night",
+      "lighting": "outside-range",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cloud",
+      "sky": "night",
+      "lighting": "mixed",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "day",
+      "lighting": "off",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "day",
+      "lighting": "point-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "day",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "day",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "day",
+      "lighting": "outside-range",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "day",
+      "lighting": "mixed",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "twilight",
+      "lighting": "off",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "twilight",
+      "lighting": "point-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "twilight",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "twilight",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "twilight",
+      "lighting": "outside-range",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "twilight",
+      "lighting": "mixed",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "night",
+      "lighting": "off",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "night",
+      "lighting": "point-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "night",
+      "lighting": "spot-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "night",
+      "lighting": "all-near",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "night",
+      "lighting": "outside-range",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "mode": "cave",
+      "sky": "night",
+      "lighting": "mixed",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    }
+  ],
+  "train": [
+    {
+      "kind": "engine",
+      "distance": 0,
+      "geometryError": 0.000003959152763854945,
+      "draws": [
+        198,
+        113
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.13393019227851,
+            0.022148026839484664,
+            -8.68313137917955
+          ],
+          "radius": 113.60933454303964
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.13393043562884,
+            0.022148026841904325,
+            -8.683131369537726
+          ],
+          "radius": 113.83294121638914
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.133930458359412,
+            0.022148026842130332,
+            -8.68313136863712
+          ],
+          "radius": 116.96343605330134
+        },
+        {
+          "count": 18,
+          "center": [
+            0.031072653930721117,
+            -5.425508973881466,
+            -0.1796668348261728
+          ],
+          "radius": 142.81726113899245
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "engine",
+      "distance": 48,
+      "geometryError": 0.0000033827841576794526,
+      "draws": [
+        198,
+        113
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.098148700637346,
+            0,
+            -7.875119725833073
+          ],
+          "radius": 113.75090584398981
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.098148597509862,
+            0,
+            -7.8751197300576905
+          ],
+          "radius": 113.97451236062
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.098148940994655,
+            0,
+            -7.875119715986807
+          ],
+          "radius": 117.10500741497769
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00017414795146208917,
+            -5.5,
+            -0.03561340949520721
+          ],
+          "radius": 142.8703946915936
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "engine",
+      "distance": 96,
+      "geometryError": 1.7152393638752983e-7,
+      "draws": [
+        198,
+        113
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.09469373085253,
+            0,
+            -7.821602870975263
+          ],
+          "radius": 113.75932461661137
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.094693730852534,
+            0,
+            -7.82160287097525
+          ],
+          "radius": 113.98293119925913
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.09469373085252,
+            0,
+            -7.821602870975253
+          ],
+          "radius": 117.11342658100689
+        },
+        {
+          "count": 18,
+          "center": [
+            0,
+            -5.5,
+            0
+          ],
+          "radius": 142.87048957087498
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "engine",
+      "distance": 10000,
+      "geometryError": 0.0000033530291965178094,
+      "draws": [
+        202,
+        113
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.001941752995315,
+            0.00434763127852968,
+            -6.254306014744536
+          ],
+          "radius": 113.98315864939255
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.001941756552636,
+            0.004347631278405074,
+            -6.254306014588269
+          ],
+          "radius": 114.20676508575954
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.00194212648737,
+            0.004347631265447469,
+            -6.254305998337541
+          ],
+          "radius": 117.33726021808498
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00011601316754195068,
+            -5.499997615814454,
+            0.1788416728065689
+          ],
+          "radius": 142.86271784204743
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "engine",
+      "distance": 40000,
+      "geometryError": 0.000004022066150355386,
+      "draws": [
+        195,
+        104
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.147327053500703,
+            0.006491415588629109,
+            -9.3937166185501
+          ],
+          "radius": 113.50541121595143
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.147327173076484,
+            0.006491415585481564,
+            -9.393716614012067
+          ],
+          "radius": 113.72901803982609
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.1473273796439,
+            0.006491415580044152,
+            -9.393716606172593
+          ],
+          "radius": 116.85951293730398
+        },
+        {
+          "count": 18,
+          "center": [
+            0.0000512346408569897,
+            -5.499999284744459,
+            -0.1801678314675635
+          ],
+          "radius": 142.86273343220032
+        }
+      ],
+      "maxChannelDifference": 5,
+      "rmsChannelDifference": 0.007905694150420948,
+      "changedChannels": 3,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "engine",
+      "distance": 90000,
+      "geometryError": 1.715421262815653e-7,
+      "draws": [
+        198,
+        104
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.09469373085253,
+            0,
+            -7.821602870975263
+          ],
+          "radius": 113.75932461661137
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.094693730852534,
+            0,
+            -7.82160287097525
+          ],
+          "radius": 113.98293119925913
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.09469373085252,
+            0,
+            -7.821602870975253
+          ],
+          "radius": 117.11342658100689
+        },
+        {
+          "count": 18,
+          "center": [
+            0,
+            -5.5,
+            0
+          ],
+          "radius": 142.87048957087498
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "engine",
+      "distance": 145284.5434169472,
+      "geometryError": 0.000003240860664277534,
+      "draws": [
+        198,
+        113
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.13530785495828,
+            0.008843500597309883,
+            -8.74177324652926
+          ],
+          "radius": 113.59909417555019
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.13530769128466,
+            0.008843500638381411,
+            -8.741773252990637
+          ],
+          "radius": 113.82270099926907
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.13530771824908,
+            0.00884350063161508,
+            -8.74177325192615
+          ],
+          "radius": 116.95319611572407
+        },
+        {
+          "count": 18,
+          "center": [
+            0.03736248437432721,
+            -5.425129891901607,
+            -0.18795710601399204
+          ],
+          "radius": 142.80751421085762
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "engine",
+      "distance": 145288.5434169472,
+      "geometryError": 0.000003098800561929238,
+      "draws": [
+        198,
+        113
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.13180326720305,
+            0.03576524948495845,
+            -8.634502482000956
+          ],
+          "radius": 113.61959660974375
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.13180326905356,
+            0.03576524948546697,
+            -8.634502481927584
+          ],
+          "radius": 113.84320347431346
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.131803134721864,
+            0.03576524944855341,
+            -8.634502487253467
+          ],
+          "radius": 116.97369827122677
+        },
+        {
+          "count": 18,
+          "center": [
+            0.024435204923328513,
+            -5.425619125553918,
+            -0.1789069471244535
+          ],
+          "radius": 142.82708613285826
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "touring",
+      "distance": 0,
+      "geometryError": 0.0000034574651479601926,
+      "draws": [
+        212,
+        126
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509031684119446,
+            -0.024506269636229136,
+            -12.966655314963768
+          ],
+          "radius": 125.97271389606978
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509031659267222,
+            -0.024506269638138775,
+            -12.966655316254705
+          ],
+          "radius": 126.19632062445383
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509031493768877,
+            -0.02450626965085554,
+            -12.966655324851349
+          ],
+          "radius": 129.3268155093412
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0004363644282960877,
+            -5.499991416920855,
+            0.53680858047595
+          ],
+          "radius": 156.80972687851738
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "touring",
+      "distance": 48,
+      "geometryError": 0.000003554976359509965,
+      "draws": [
+        212,
+        126
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509030708836146,
+            -0.0245063302018036,
+            -12.966660268516337
+          ],
+          "radius": 125.97272244874324
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509030734762337,
+            -0.024506330199811428,
+            -12.966660267169615
+          ],
+          "radius": 126.19632898599167
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509030553444738,
+            -0.02450633021374371,
+            -12.966660276587982
+          ],
+          "radius": 129.3268238724633
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00043546336898714344,
+            -5.499991416933756,
+            0.5368086694872816
+          ],
+          "radius": 156.8097350273045
+        }
+      ],
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.001685499656158105,
+      "changedChannels": 3,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "touring",
+      "distance": 96,
+      "geometryError": 0.0000036636607774198637,
+      "draws": [
+        212,
+        126
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509270411483087,
+            -0.0002509068080414379,
+            -12.966616226282383
+          ],
+          "radius": 125.9724675040133
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509270545396237,
+            -0.0002509068850852257,
+            -12.9666162193263
+          ],
+          "radius": 126.19607416161408
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509270891080188,
+            -0.0002509070839663524,
+            -12.966616201369863
+          ],
+          "radius": 129.32656949234766
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.030422270179741417,
+            -5.500724554061547,
+            0.5346742272313864
+          ],
+          "radius": 156.77975521073625
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "touring",
+      "distance": 10000,
+      "geometryError": 0.000002476359043157572,
+      "draws": [
+        223,
+        126
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.178921219376363,
+            0.005528726485240795,
+            -8.877500682057812
+          ],
+          "radius": 127.08660131704318
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.17892116787589,
+            0.005528726487062702,
+            -8.877500684832363
+          ],
+          "radius": 127.31020816611976
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.178921316767198,
+            0.005528726481795413,
+            -8.877500676810902
+          ],
+          "radius": 130.4407036468533
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.001053151816023501,
+            -5.49997377395639,
+            -0.11928354360631997
+          ],
+          "radius": 156.86695661401484
+        }
+      ],
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0013762047064079508,
+      "changedChannels": 2,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "touring",
+      "distance": 40000,
+      "geometryError": 0.000003458398019517972,
+      "draws": [
+        213,
+        127
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.386737295518362,
+            0.009099350894162011,
+            -11.406340096363069
+          ],
+          "radius": 126.50178447854853
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.386737168279065,
+            0.009099350899237087,
+            -11.406340102790349
+          ],
+          "radius": 126.72539144426014
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.38673716253122,
+            0.009099350899466363,
+            -11.40634010308071
+          ],
+          "radius": 129.8558869133497
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0013227140688201189,
+            -5.500033378601544,
+            0.17474877915688838
+          ],
+          "radius": 156.86208049145154
+        }
+      ],
+      "maxChannelDifference": 8,
+      "rmsChannelDifference": 0.012462063645441324,
+      "changedChannels": 3,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "touring",
+      "distance": 90000,
+      "geometryError": 1.7154576426037238e-7,
+      "draws": [
+        211,
+        119
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701984,
+            0,
+            -10.01097618663646
+          ],
+          "radius": 126.84122765586768
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701974,
+            0,
+            -10.010976186636467
+          ],
+          "radius": 127.06483423851545
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701967,
+            0,
+            -10.010976186636464
+          ],
+          "radius": 130.1953296202632
+        },
+        {
+          "count": 18,
+          "center": [
+            0,
+            -5.5,
+            1.5777218104420236e-30
+          ],
+          "radius": 156.87048957087498
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "touring",
+      "distance": 145284.5434169472,
+      "geometryError": 0.000004337043804980567,
+      "draws": [
+        212,
+        126
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509025416276728,
+            -0.024504688984262106,
+            -12.966498173580572
+          ],
+          "radius": 125.97251729939971
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509025536327215,
+            -0.024504688975037908,
+            -12.966498167344662
+          ],
+          "radius": 126.19612394839018
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50902534768444,
+            -0.024504688989532435,
+            -12.966498177143512
+          ],
+          "radius": 129.32661936675223
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0004370390728922757,
+            -5.499991178505268,
+            0.5368064644194508
+          ],
+          "radius": 156.80948273840198
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "touring",
+      "distance": 145288.5434169472,
+      "geometryError": 0.0000035600874994656806,
+      "draws": [
+        212,
+        126
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509033302099244,
+            -0.024503548575015105,
+            -12.966299897304998
+          ],
+          "radius": 125.97289415606744
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50903341169177,
+            -0.02450354856659495,
+            -12.966299891612234
+          ],
+          "radius": 126.19650102508342
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50903345243128,
+            -0.024503548563464827,
+            -12.96629988949602
+          ],
+          "radius": 129.3269961373809
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00043831498588531304,
+            -5.499991178510913,
+            0.5368084908041201
+          ],
+          "radius": 156.80984133382753
+        }
+      ],
+      "maxChannelDifference": 6,
+      "rmsChannelDifference": 0.011095317057482432,
+      "changedChannels": 6,
+      "changedPixels": 2,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "flatbed",
+      "distance": 0,
+      "geometryError": 0.0000034574651479601926,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509031684119446,
+            -0.024506269636229136,
+            -12.966655314963768
+          ],
+          "radius": 125.97271389606978
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509031659267222,
+            -0.024506269638138775,
+            -12.966655316254705
+          ],
+          "radius": 126.19632062445383
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509031493768877,
+            -0.02450626965085554,
+            -12.966655324851349
+          ],
+          "radius": 129.3268155093412
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0004363644282960877,
+            -5.499991416920855,
+            0.53680858047595
+          ],
+          "radius": 156.80972687851738
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "flatbed",
+      "distance": 48,
+      "geometryError": 0.000003554976359509965,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509030708836146,
+            -0.0245063302018036,
+            -12.966660268516337
+          ],
+          "radius": 125.97272244874324
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509030734762337,
+            -0.024506330199811428,
+            -12.966660267169615
+          ],
+          "radius": 126.19632898599167
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509030553444738,
+            -0.02450633021374371,
+            -12.966660276587982
+          ],
+          "radius": 129.3268238724633
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00043546336898714344,
+            -5.499991416933756,
+            0.5368086694872816
+          ],
+          "radius": 156.8097350273045
+        }
+      ],
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0019462473604038074,
+      "changedChannels": 4,
+      "changedPixels": 2,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "flatbed",
+      "distance": 96,
+      "geometryError": 0.0000036636607774198637,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509270411483087,
+            -0.0002509068080414379,
+            -12.966616226282383
+          ],
+          "radius": 125.9724675040133
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509270545396237,
+            -0.0002509068850852257,
+            -12.9666162193263
+          ],
+          "radius": 126.19607416161408
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509270891080188,
+            -0.0002509070839663524,
+            -12.966616201369863
+          ],
+          "radius": 129.32656949234766
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.030422270179741417,
+            -5.500724554061547,
+            0.5346742272313864
+          ],
+          "radius": 156.77975521073625
+        }
+      ],
+      "maxChannelDifference": 2,
+      "rmsChannelDifference": 0.0023836564731139808,
+      "changedChannels": 3,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "flatbed",
+      "distance": 10000,
+      "geometryError": 0.000002476359043157572,
+      "draws": [
+        189,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.178921219376363,
+            0.005528726485240795,
+            -8.877500682057812
+          ],
+          "radius": 127.08660131704318
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.17892116787589,
+            0.005528726487062702,
+            -8.877500684832363
+          ],
+          "radius": 127.31020816611976
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.178921316767198,
+            0.005528726481795413,
+            -8.877500676810902
+          ],
+          "radius": 130.4407036468533
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.001053151816023501,
+            -5.49997377395639,
+            -0.11928354360631997
+          ],
+          "radius": 156.86695661401484
+        }
+      ],
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0013762047064079508,
+      "changedChannels": 2,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "flatbed",
+      "distance": 40000,
+      "geometryError": 0.000003458398019517972,
+      "draws": [
+        179,
+        93
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.386737295518362,
+            0.009099350894162011,
+            -11.406340096363069
+          ],
+          "radius": 126.50178447854853
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.386737168279065,
+            0.009099350899237087,
+            -11.406340102790349
+          ],
+          "radius": 126.72539144426014
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.38673716253122,
+            0.009099350899466363,
+            -11.40634010308071
+          ],
+          "radius": 129.8558869133497
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0013227140688201189,
+            -5.500033378601544,
+            0.17474877915688838
+          ],
+          "radius": 156.86208049145154
+        }
+      ],
+      "maxChannelDifference": 8,
+      "rmsChannelDifference": 0.0125,
+      "changedChannels": 4,
+      "changedPixels": 2,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "flatbed",
+      "distance": 90000,
+      "geometryError": 1.7154576426037238e-7,
+      "draws": [
+        179,
+        87
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701984,
+            0,
+            -10.01097618663646
+          ],
+          "radius": 126.84122765586768
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701974,
+            0,
+            -10.010976186636467
+          ],
+          "radius": 127.06483423851545
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701967,
+            0,
+            -10.010976186636464
+          ],
+          "radius": 130.1953296202632
+        },
+        {
+          "count": 18,
+          "center": [
+            0,
+            -5.5,
+            1.5777218104420236e-30
+          ],
+          "radius": 156.87048957087498
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "flatbed",
+      "distance": 145284.5434169472,
+      "geometryError": 0.000004337043804980567,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509025416276728,
+            -0.024504688984262106,
+            -12.966498173580572
+          ],
+          "radius": 125.97251729939971
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509025536327215,
+            -0.024504688975037908,
+            -12.966498167344662
+          ],
+          "radius": 126.19612394839018
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50902534768444,
+            -0.024504688989532435,
+            -12.966498177143512
+          ],
+          "radius": 129.32661936675223
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0004370390728922757,
+            -5.499991178505268,
+            0.5368064644194508
+          ],
+          "radius": 156.80948273840198
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "flatbed",
+      "distance": 145288.5434169472,
+      "geometryError": 0.0000035600874994656806,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509033302099244,
+            -0.024503548575015105,
+            -12.966299897304998
+          ],
+          "radius": 125.97289415606744
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50903341169177,
+            -0.02450354856659495,
+            -12.966299891612234
+          ],
+          "radius": 126.19650102508342
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50903345243128,
+            -0.024503548563464827,
+            -12.96629988949602
+          ],
+          "radius": 129.3269961373809
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00043831498588531304,
+            -5.499991178510913,
+            0.5368084908041201
+          ],
+          "radius": 156.80984133382753
+        }
+      ],
+      "maxChannelDifference": 6,
+      "rmsChannelDifference": 0.01122260975428486,
+      "changedChannels": 9,
+      "changedPixels": 4,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "stake",
+      "distance": 0,
+      "geometryError": 0.0000034574651479601926,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509031684119446,
+            -0.024506269636229136,
+            -12.966655314963768
+          ],
+          "radius": 125.97271389606978
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509031659267222,
+            -0.024506269638138775,
+            -12.966655316254705
+          ],
+          "radius": 126.19632062445383
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509031493768877,
+            -0.02450626965085554,
+            -12.966655324851349
+          ],
+          "radius": 129.3268155093412
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0004363644282960877,
+            -5.499991416920855,
+            0.53680858047595
+          ],
+          "radius": 156.80972687851738
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "stake",
+      "distance": 48,
+      "geometryError": 0.000003554976359509965,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509030708836146,
+            -0.0245063302018036,
+            -12.966660268516337
+          ],
+          "radius": 125.97272244874324
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509030734762337,
+            -0.024506330199811428,
+            -12.966660267169615
+          ],
+          "radius": 126.19632898599167
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509030553444738,
+            -0.02450633021374371,
+            -12.966660276587982
+          ],
+          "radius": 129.3268238724633
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00043546336898714344,
+            -5.499991416933756,
+            0.5368086694872816
+          ],
+          "radius": 156.8097350273045
+        }
+      ],
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.001685499656158105,
+      "changedChannels": 3,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "stake",
+      "distance": 96,
+      "geometryError": 0.0000036636607774198637,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509270411483087,
+            -0.0002509068080414379,
+            -12.966616226282383
+          ],
+          "radius": 125.9724675040133
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509270545396237,
+            -0.0002509068850852257,
+            -12.9666162193263
+          ],
+          "radius": 126.19607416161408
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509270891080188,
+            -0.0002509070839663524,
+            -12.966616201369863
+          ],
+          "radius": 129.32656949234766
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.030422270179741417,
+            -5.500724554061547,
+            0.5346742272313864
+          ],
+          "radius": 156.77975521073625
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "stake",
+      "distance": 10000,
+      "geometryError": 0.000002476359043157572,
+      "draws": [
+        189,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.178921219376363,
+            0.005528726485240795,
+            -8.877500682057812
+          ],
+          "radius": 127.08660131704318
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.17892116787589,
+            0.005528726487062702,
+            -8.877500684832363
+          ],
+          "radius": 127.31020816611976
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.178921316767198,
+            0.005528726481795413,
+            -8.877500676810902
+          ],
+          "radius": 130.4407036468533
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.001053151816023501,
+            -5.49997377395639,
+            -0.11928354360631997
+          ],
+          "radius": 156.86695661401484
+        }
+      ],
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.0013762047064079508,
+      "changedChannels": 2,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "stake",
+      "distance": 40000,
+      "geometryError": 0.000003458398019517972,
+      "draws": [
+        179,
+        93
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.386737295518362,
+            0.009099350894162011,
+            -11.406340096363069
+          ],
+          "radius": 126.50178447854853
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.386737168279065,
+            0.009099350899237087,
+            -11.406340102790349
+          ],
+          "radius": 126.72539144426014
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.38673716253122,
+            0.009099350899466363,
+            -11.40634010308071
+          ],
+          "radius": 129.8558869133497
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0013227140688201189,
+            -5.500033378601544,
+            0.17474877915688838
+          ],
+          "radius": 156.86208049145154
+        }
+      ],
+      "maxChannelDifference": 8,
+      "rmsChannelDifference": 0.0125,
+      "changedChannels": 4,
+      "changedPixels": 2,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "stake",
+      "distance": 90000,
+      "geometryError": 1.7154576426037238e-7,
+      "draws": [
+        179,
+        87
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701984,
+            0,
+            -10.01097618663646
+          ],
+          "radius": 126.84122765586768
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701974,
+            0,
+            -10.010976186636467
+          ],
+          "radius": 127.06483423851545
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701967,
+            0,
+            -10.010976186636464
+          ],
+          "radius": 130.1953296202632
+        },
+        {
+          "count": 18,
+          "center": [
+            0,
+            -5.5,
+            1.5777218104420236e-30
+          ],
+          "radius": 156.87048957087498
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "stake",
+      "distance": 145284.5434169472,
+      "geometryError": 0.000004337043804980567,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509025416276728,
+            -0.024504688984262106,
+            -12.966498173580572
+          ],
+          "radius": 125.97251729939971
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509025536327215,
+            -0.024504688975037908,
+            -12.966498167344662
+          ],
+          "radius": 126.19612394839018
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50902534768444,
+            -0.024504688989532435,
+            -12.966498177143512
+          ],
+          "radius": 129.32661936675223
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0004370390728922757,
+            -5.499991178505268,
+            0.5368064644194508
+          ],
+          "radius": 156.80948273840198
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "stake",
+      "distance": 145288.5434169472,
+      "geometryError": 0.0000035600874994656806,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509033302099244,
+            -0.024503548575015105,
+            -12.966299897304998
+          ],
+          "radius": 125.97289415606744
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50903341169177,
+            -0.02450354856659495,
+            -12.966299891612234
+          ],
+          "radius": 126.19650102508342
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50903345243128,
+            -0.024503548563464827,
+            -12.96629988949602
+          ],
+          "radius": 129.3269961373809
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00043831498588531304,
+            -5.499991178510913,
+            0.5368084908041201
+          ],
+          "radius": 156.80984133382753
+        }
+      ],
+      "maxChannelDifference": 6,
+      "rmsChannelDifference": 0.01122260975428486,
+      "changedChannels": 9,
+      "changedPixels": 4,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "gondola",
+      "distance": 0,
+      "geometryError": 0.0000034574651479601926,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509031684119446,
+            -0.024506269636229136,
+            -12.966655314963768
+          ],
+          "radius": 125.97271389606978
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509031659267222,
+            -0.024506269638138775,
+            -12.966655316254705
+          ],
+          "radius": 126.19632062445383
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509031493768877,
+            -0.02450626965085554,
+            -12.966655324851349
+          ],
+          "radius": 129.3268155093412
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0004363644282960877,
+            -5.499991416920855,
+            0.53680858047595
+          ],
+          "radius": 156.80972687851738
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "gondola",
+      "distance": 48,
+      "geometryError": 0.000003554976359509965,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509030708836146,
+            -0.0245063302018036,
+            -12.966660268516337
+          ],
+          "radius": 125.97272244874324
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509030734762337,
+            -0.024506330199811428,
+            -12.966660267169615
+          ],
+          "radius": 126.19632898599167
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509030553444738,
+            -0.02450633021374371,
+            -12.966660276587982
+          ],
+          "radius": 129.3268238724633
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00043546336898714344,
+            -5.499991416933756,
+            0.5368086694872816
+          ],
+          "radius": 156.8097350273045
+        }
+      ],
+      "maxChannelDifference": 1,
+      "rmsChannelDifference": 0.001685499656158105,
+      "changedChannels": 3,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "gondola",
+      "distance": 96,
+      "geometryError": 0.0000036636607774198637,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509270411483087,
+            -0.0002509068080414379,
+            -12.966616226282383
+          ],
+          "radius": 125.9724675040133
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509270545396237,
+            -0.0002509068850852257,
+            -12.9666162193263
+          ],
+          "radius": 126.19607416161408
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509270891080188,
+            -0.0002509070839663524,
+            -12.966616201369863
+          ],
+          "radius": 129.32656949234766
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.030422270179741417,
+            -5.500724554061547,
+            0.5346742272313864
+          ],
+          "radius": 156.77975521073625
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "gondola",
+      "distance": 10000,
+      "geometryError": 0.000002476359043157572,
+      "draws": [
+        189,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.178921219376363,
+            0.005528726485240795,
+            -8.877500682057812
+          ],
+          "radius": 127.08660131704318
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.17892116787589,
+            0.005528726487062702,
+            -8.877500684832363
+          ],
+          "radius": 127.31020816611976
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.178921316767198,
+            0.005528726481795413,
+            -8.877500676810902
+          ],
+          "radius": 130.4407036468533
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.001053151816023501,
+            -5.49997377395639,
+            -0.11928354360631997
+          ],
+          "radius": 156.86695661401484
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "gondola",
+      "distance": 40000,
+      "geometryError": 0.000003458398019517972,
+      "draws": [
+        179,
+        93
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.386737295518362,
+            0.009099350894162011,
+            -11.406340096363069
+          ],
+          "radius": 126.50178447854853
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.386737168279065,
+            0.009099350899237087,
+            -11.406340102790349
+          ],
+          "radius": 126.72539144426014
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.38673716253122,
+            0.009099350899466363,
+            -11.40634010308071
+          ],
+          "radius": 129.8558869133497
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0013227140688201189,
+            -5.500033378601544,
+            0.17474877915688838
+          ],
+          "radius": 156.86208049145154
+        }
+      ],
+      "maxChannelDifference": 8,
+      "rmsChannelDifference": 0.012462063645441324,
+      "changedChannels": 3,
+      "changedPixels": 1,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "gondola",
+      "distance": 90000,
+      "geometryError": 1.7154576426037238e-7,
+      "draws": [
+        179,
+        87
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701984,
+            0,
+            -10.01097618663646
+          ],
+          "radius": 126.84122765586768
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701974,
+            0,
+            -10.010976186636467
+          ],
+          "radius": 127.06483423851545
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.281768993701967,
+            0,
+            -10.010976186636464
+          ],
+          "radius": 130.1953296202632
+        },
+        {
+          "count": 18,
+          "center": [
+            0,
+            -5.5,
+            1.5777218104420236e-30
+          ],
+          "radius": 156.87048957087498
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "gondola",
+      "distance": 145284.5434169472,
+      "geometryError": 0.000004337043804980567,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509025416276728,
+            -0.024504688984262106,
+            -12.966498173580572
+          ],
+          "radius": 125.97251729939971
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.509025536327215,
+            -0.024504688975037908,
+            -12.966498167344662
+          ],
+          "radius": 126.19612394839018
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50902534768444,
+            -0.024504688989532435,
+            -12.966498177143512
+          ],
+          "radius": 129.32661936675223
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.0004370390728922757,
+            -5.499991178505268,
+            0.5368064644194508
+          ],
+          "radius": 156.80948273840198
+        }
+      ],
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "changedPixels": 0,
+      "totalChannels": 1056000
+    },
+    {
+      "kind": "gondola",
+      "distance": 145288.5434169472,
+      "geometryError": 0.0000035600874994656806,
+      "draws": [
+        178,
+        92
+      ],
+      "bounds": [
+        {
+          "count": 8,
+          "center": [
+            -21.509033302099244,
+            -0.024503548575015105,
+            -12.966299897304998
+          ],
+          "radius": 125.97289415606744
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50903341169177,
+            -0.02450354856659495,
+            -12.966299891612234
+          ],
+          "radius": 126.19650102508342
+        },
+        {
+          "count": 8,
+          "center": [
+            -21.50903345243128,
+            -0.024503548563464827,
+            -12.96629988949602
+          ],
+          "radius": 129.3269961373809
+        },
+        {
+          "count": 18,
+          "center": [
+            -0.00043831498588531304,
+            -5.499991178510913,
+            0.5368084908041201
+          ],
+          "radius": 156.80984133382753
+        }
+      ],
+      "maxChannelDifference": 6,
+      "rmsChannelDifference": 0.011095317057482432,
+      "changedChannels": 6,
+      "changedPixels": 2,
+      "totalChannels": 1056000
+    }
+  ],
+  "errors": []
+}

@@ -2,6 +2,27 @@
 
 Investigated 7 October 2026 against `9314c24`; graphics preparation was added in `c229a93` and removed on 8 October after a reported world-loading regression.
 
+## Train submission optimisation — 8 October
+
+This pass starts from `745226c`. Each scenic carriage previously submitted 42 separate running-gear meshes: eight tyres, eight rims, eight hubs, sixteen spokes and two bogie frames. These now use four articulated instanced batches, keeping the original geometries, materials and individual shadow flags. Original wheel and bogie groups still drive wheel roll, steering and grade alignment; the batches compose their transforms without changing the route or animation. Bounds refresh whenever articulation changes, preserving frustum and shadow visibility. Exactly unchanged poses reuse their instance buffers and bounds. Fixed local mesh transforms are computed once; carriage, bogie and wheel groups remain animated.
+
+| Measured path (mean per frame) | Before | After | Reduction |
+| --- | ---: | ---: | ---: |
+| island — CPU world render | 7.200 ms | 5.882 ms | 18.3% |
+| island — draw calls, including shadows | 1,414.0 | 998.8 | 29.4% |
+| high-dpi — CPU world render | 8.779 ms | 7.372 ms | 16.0% |
+| high-dpi — draw calls, including shadows | 1,460.5 | 1,050.0 | 28.1% |
+| pan — CPU world render | 7.705 ms | 6.153 ms | 20.1% |
+| pan — draw calls, including shadows | 1,410.0 | 993.8 | 29.5% |
+
+Method matches the previous pass: fresh Chromium contexts, Apple M1 Metal, actual Friends host arena, 1600 × 900 viewport, DPR 2 high-dpi phase, paused 09:00 clock/wind and identical continuous camera pan. Twelve seconds of measurement follow each five-second settling period. GPU world time did not improve measurably: 21.179 → 21.348 ms, 39.792 → 40.058 ms and 21.143 → 21.305 ms respectively. This is a CPU submission improvement, not a measured FPS improvement on either PC. Forest counts and triangle totals remain identical in all three phases, as do terrain allocation totals. The grouped bounds can submit a few additional original train triangles when part of a batch intersects a frustum; geometry is neither reduced nor duplicated.
+
+Resolution, render distance, forest LOD thresholds, cloud detail, shaders and shadow settings are unchanged. Experiments with skipping the zero-intensity secondary directional light and drawing foliage after terrain did not improve measured GPU time and are omitted. The dense forest remains the main GPU cost in the tested exterior scene.
+
+`tools/profile-friends-rendering.mjs` now compiles historical fixtures through the same Vite pipeline as the current source, including imports between changed files. Run with `FRIENDS_PROFILE_REV=745226c` for this baseline and omit the variable for the working tree, against `DISABLE_HMR=true npm run dev`. Temporary baseline sources never replace originals and are deleted afterward. Raw reports are `artifacts/friends-render-second-pass/before.json` and `after.json`.
+
+`tools/test-friends-train-equivalence.mjs` compares 40 old/new real-WebGL train views: all five carriage types, wheel motion, curves, grades and the route seam, with antialiasing and shadows. Transformed original running-gear vertices retain the same materials, shadow flags and counts, with a maximum coordinate error below 0.00001 world units. Float32 instance composition introduces sparse silhouette/contact rounding: at most four of 264,000 pixels differ in any comparison, maximum channel difference 8/255 and maximum RMS 0.0125/255. These are not claimed to be pixel-identical. An additional 54 standard/cloud/cave lighting cases under day, twilight and night pass within one 8-bit colour step. No runtime or GL errors occurred. Reports and representative train captures are under `artifacts/friends-render-second-pass`. Unit coverage verifies dynamic bounds and unchanged-pose buffer reuse, alongside existing roof clearance, competing-face and steering tests.
+
 ## Further rendering optimisation — 8 October
 
 This pass starts from `ed8d623`, which already fixes the day/night shader-compilation freeze. It removes unnecessary rendering work without changing resolution, render distance, forest LOD thresholds, geometry, materials, cloud detail, active lighting or shadow settings.

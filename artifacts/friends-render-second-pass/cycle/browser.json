@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-08T00:40:18.789Z",
+  "origin": "http://localhost:3011",
+  "checks": [
+    "no shader compilations while scrubbing noon, sunset, the dusk shadow gap, moonrise, midnight, dawn and sunrise",
+    "terrain remains visible at every phase and midnight is darker than noon; no WebGL draw errors",
+    "2.5 full day/night cycles at 120×: zero shader compilations and zero stalls over 500 ms",
+    "production app has no runtime or shader errors"
+  ],
+  "errors": [],
+  "phases": [
+    {
+      "phase": "noon",
+      "time": "12:00",
+      "shaderCompilations": 0
+    },
+    {
+      "phase": "sunset",
+      "time": "18:00",
+      "shaderCompilations": 0
+    },
+    {
+      "phase": "dusk-shadow-gap",
+      "time": "18:03",
+      "shaderCompilations": 0
+    },
+    {
+      "phase": "moonrise",
+      "time": "18:39",
+      "shaderCompilations": 0
+    },
+    {
+      "phase": "midnight",
+      "time": "00:00",
+      "shaderCompilations": 0
+    },
+    {
+      "phase": "dawn-shadow-gap",
+      "time": "05:57",
+      "shaderCompilations": 0
+    },
+    {
+      "phase": "sunrise",
+      "time": "06:03",
+      "shaderCompilations": 0
+    }
+  ],
+  "frames": [
+    {
+      "phase": "noon",
+      "colors": 217,
+      "brightness": 5251229
+    },
+    {
+      "phase": "sunset",
+      "colors": 84,
+      "brightness": 1939533
+    },
+    {
+      "phase": "dusk-shadow-gap",
+      "colors": 82,
+      "brightness": 1842687
+    },
+    {
+      "phase": "moonrise",
+      "colors": 53,
+      "brightness": 1059921
+    },
+    {
+      "phase": "midnight",
+      "colors": 31,
+      "brightness": 381948
+    },
+    {
+      "phase": "dawn-shadow-gap",
+      "colors": 83,
+      "brightness": 1842867
+    },
+    {
+      "phase": "sunrise",
+      "colors": 92,
+      "brightness": 2040450
+    }
+  ],
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+  "fastCycle": {
+    "speed": 120,
+    "durationMs": 30000,
+    "cycles": 2.5,
+    "shaderCompilations": 0,
+    "frames": 1322,
+    "p95Ms": 33.400000000001455,
+    "maxMs": 34.400000000001455,
+    "stallsOver500Ms": 0
+  }
+}

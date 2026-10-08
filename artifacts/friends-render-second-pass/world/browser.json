@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-08T00:39:38.631Z",
+  "origin": "http://localhost:3011",
+  "checks": [
+    "fresh browser storage: visible world appears and mouse look changes the canvas",
+    "wheel cycles every tool in both directions, including wraparound",
+    "world keeps drawing after movement and tool swaps",
+    "field pack scroll and repeat arrival remain playable",
+    "delayed textures and shader readiness that never completes: visible world appears and mouse look changes the canvas",
+    "production app has no runtime or shader errors"
+  ],
+  "errors": [],
+  "frames": [
+    {
+      "name": "fresh-start",
+      "colors": 75,
+      "brightnessSum": 8426306,
+      "draws": 90082
+    },
+    {
+      "name": "fresh-island",
+      "colors": 213,
+      "brightnessSum": 5290374,
+      "draws": 126528
+    },
+    {
+      "name": "after-moving",
+      "colors": 216,
+      "brightnessSum": 5173314,
+      "draws": 239063
+    },
+    {
+      "name": "repeat-arrival",
+      "colors": 206,
+      "brightnessSum": 5584109,
+      "draws": 415756
+    },
+    {
+      "name": "delayed-start",
+      "colors": 80,
+      "brightnessSum": 7685774,
+      "draws": 89015
+    },
+    {
+      "name": "delayed-island",
+      "colors": 137,
+      "brightnessSum": 3677247,
+      "draws": 130756
+    }
+  ],
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)"
+}

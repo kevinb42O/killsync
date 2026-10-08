@@ -8,6 +8,17 @@ import { vehicleLocalPoint } from '../multiplayer/FriendsVehiclePose';
 import type { FriendsVehicle } from '../multiplayer/FriendsExpedition';
 
 type Bogie={group:THREE.Group;offset:number;wheels:THREE.Group[]};
+type RunningGear={batches:{mesh:THREE.InstancedMesh;slots:{bogie:Bogie;wheel?:THREE.Group;local:THREE.Matrix4}[]}[];matrix:THREE.Matrix4;poses:{object:THREE.Object3D;matrix:THREE.Matrix4}[];valid:boolean};
+/** Preserve the original tyre/rim/hub geometry in four articulated batches. */
+export function updateScenicRunningGear(group:THREE.Group){
+  const gear=group.userData.scenicRunningGear as RunningGear|undefined;if(!gear)return;
+  let changed=!gear.valid;for(const pose of gear.poses){pose.object.updateMatrix();if(!pose.matrix.equals(pose.object.matrix)){changed=true;pose.matrix.copy(pose.object.matrix);}}
+  if(!changed)return;gear.valid=true;
+  for(const batch of gear.batches){
+    batch.slots.forEach((slot,i)=>{gear.matrix.copy(slot.bogie.group.matrix);if(slot.wheel)gear.matrix.multiply(slot.wheel.matrix);gear.matrix.multiply(slot.local);batch.mesh.setMatrixAt(i,gear.matrix);});
+    batch.mesh.instanceMatrix.needsUpdate=true;batch.mesh.boundingBox=null;batch.mesh.computeBoundingSphere();
+  }
+}
 /** A restrained green-and-ivory touring train. Seats and canopy clearance match the walking model; the small roof overhangs
  * and buffers remain inside the surveyed railway clearance. */
 export function createScenicTrainVisual(closed:boolean,index:number,wagonKind:ScenicWagonKind='touring'){
@@ -106,7 +117,23 @@ export function createScenicTrainVisual(closed:boolean,index:number,wagonKind:Sc
     const batch=new THREE.InstancedMesh(geometry,material,parts.length);batch.castShadow=true;batch.receiveShadow=true;batch.name='scenic-body-fittings';
     parts.forEach((m,i)=>{m.updateMatrix();batch.setMatrixAt(i,m.matrix);group.remove(m);});batch.computeBoundingSphere();group.add(batch);
   }
-  group.userData.scenicBogies=bogies;return group;
+  group.userData.scenicBogies=bogies;
+  const gear:RunningGear={batches:[],matrix:new THREE.Matrix4(),poses:bogies.flatMap(b=>[b.group,...b.wheels]).map(object=>({object,matrix:new THREE.Matrix4()})),valid:false};
+  for(const [geometry,material,shadow] of [[tube,materials[M.rubber],true],[tube,materials[M.zinc],true],[tube,materials[M.steel],true],[cube,materials[M.steel],false]] as const){
+    const slots:RunningGear['batches'][number]['slots']=[];
+    for(const bogie of bogies){
+      const parts=[...bogie.group.children.filter(o=>o instanceof THREE.Mesh),...bogie.wheels.flatMap(w=>[...w.children])];
+      for(const child of parts){
+        if(!(child instanceof THREE.Mesh)||child.geometry!==geometry||child.material!==material)continue;
+        child.updateMatrix();slots.push({bogie,wheel:child.parent===bogie.group?undefined:child.parent as THREE.Group,local:child.matrix.clone()});child.removeFromParent();
+      }
+    }
+    const mesh=new THREE.InstancedMesh(geometry,material,slots.length);mesh.name='scenic-articulated-running-gear';mesh.castShadow=shadow;mesh.receiveShadow=shadow;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.add(mesh);gear.batches.push({mesh,slots});
+  }
+  // These local transforms are fixed; carriage and bogie groups still animate.
+  group.traverse(o=>{if(o instanceof THREE.Mesh){o.updateMatrix();o.matrixAutoUpdate=false;}});
+  group.userData.scenicRunningGear=gear;updateScenicRunningGear(group);return group;
 }
 
 export function updateScenicTrainVisual(group:THREE.Group,vehicle:FriendsVehicle){
@@ -120,4 +147,5 @@ export function updateScenicTrainVisual(group:THREE.Group,vehicle:FriendsVehicle
     const pose=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,-p.angle,p.pitch,'YXZ'));bogie.group.quaternion.copy(inverse).multiply(pose);
     for(const wheel of bogie.wheels)wheel.rotation.z=-phase;
   }
+  updateScenicRunningGear(group);
 }
