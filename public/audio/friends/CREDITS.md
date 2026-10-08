@@ -160,13 +160,8 @@ Only their playback speed and gain follow train motion; no audio is generated.
 
 - `eat.ogg`: **Soft Chicken Chomp 3** by **R1nkata**, [Freesound](https://freesound.org/people/R1nkata/sounds/723600/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Full 1.439-second public Ogg preview; unchanged, played quietly at the marshmallow bite.
 
-## Helicopter and dev flight foliage
+## Dev flight foliage
 
-- `helicopter_rotor.ogg`: **Helicopter Sounds** by **aquinn**, [OpenGameArt](https://opengameart.org/content/helicopter-sounds), CC0 1.0.
-  Download: https://opengameart.org/sites/default/files/helicopter_0.mp3
-  Seconds 1–4.4 of the first helicopter effect, converted to mono 32 kHz
-  Vorbis quality 4, filtered below 70 Hz and above 8.5 kHz, normalized to
-  -20 LUFS / -3 dBTP / LRA 8. An 80 ms playback seam crossfade joins the loop.
 - `flight_foliage_000.ogg` through `flight_foliage_002.ogg`: **20 Rustles of
   dry leaves** by **qubodup**, [OpenGameArt](https://opengameart.org/content/20-rustles-dry-leaves), CC0 1.0.
   Download: https://opengameart.org/sites/default/files/qubodup-rustle.7z
@@ -176,3 +171,44 @@ Only their playback speed and gain follow train motion; no audio is generated.
   60 ms closing fades. Gameplay plays bounded 650 ms excerpts at varying
   speed/gain for close canopy brushing. Original and output hashes are
   preserved in `sources.json`. All processing edits downloaded audio.
+
+## Approved Friends world and interaction effects
+
+These 21 user-approved Pixabay recordings produce 33 bundled Ogg files.
+They use the [Pixabay Content License](https://pixabay.com/service/license-summary/).
+Individual source pages, observed preview URLs, original hashes, output hashes
+and exact excerpt boundaries are recorded in `sources.json`. The importer is
+`tools/import-friends-pixabay.py`. No source recordings are generated at runtime.
+
+- `cargo_stone.ogg`: [Film Special Effects Rocks](https://pixabay.com/sound-effects/film-special-effects-rocks-6129/).
+- `cargo_wood.ogg`: [Film Special Effects Chest Slam](https://pixabay.com/sound-effects/film-special-effects-chest-slam-85122/).
+- `cave_air.ogg`: [Film Special Effects Cave Wind 10](https://pixabay.com/sound-effects/film-special-effects-cave-wind-10-76283/).
+- `cave_drips_000.ogg`, `cave_drips_001.ogg`, `cave_drips_002.ogg`, `cave_drips_003.ogg`, `cave_drips_004.ogg`: [Nature Droplets In A Cave](https://pixabay.com/sound-effects/nature-droplets-in-a-cave-482871/).
+- `chest_coins.ogg`: [Film Special Effects Coins Spill](https://pixabay.com/sound-effects/film-special-effects-coins-spill-62512/).
+- `chest_latch.ogg`: [Film Special Effects Wooden Trunk Latch 1](https://pixabay.com/sound-effects/film-special-effects-wooden-trunk-latch-1-183944/).
+- `chest_lid.ogg`: [Household Chest Opening](https://pixabay.com/sound-effects/household-chest-opening-87569/).
+- `chest_reward.ogg`: [Film Special Effects Short Success Sound Glockenspiel Treasure Video Game](https://pixabay.com/sound-effects/film-special-effects-short-success-sound-glockenspiel-treasure-video-game-6346/).
+- `flashlight.ogg`: [Film Special Effects Flashlight Click](https://pixabay.com/sound-effects/film-special-effects-flashlight-click-46073/).
+- `lava.ogg`: [Nature Lava Loop 3](https://pixabay.com/sound-effects/nature-lava-loop-3-28887/).
+- `mining_break.ogg`: [Film Special Effects Rock Falling 010](https://pixabay.com/sound-effects/film-special-effects-rock-falling-010-104938/).
+- `night_vision.ogg`: [Film Special Effects Night Vision](https://pixabay.com/sound-effects/film-special-effects-night-vision-100467/).
+- `reel_motor.ogg`: [Film Special Effects Electric Motor Whir](https://pixabay.com/sound-effects/film-special-effects-electric-motor-whir-77588/).
+- `reel_ratchet.ogg`: [Film Special Effects Ratchet Mechanism](https://pixabay.com/sound-effects/film-special-effects-ratchet-mechanism-594621/).
+- `rope_creak_000.ogg`, `rope_creak_001.ogg`, `rope_creak_002.ogg`: [Film Special Effects Rope Under Tension](https://pixabay.com/sound-effects/film-special-effects-rope-under-tension-7144/).
+- `rope_hook.ogg`: [Film Special Effects Metal Clanking Light](https://pixabay.com/sound-effects/film-special-effects-metal-clanking-light-96330/).
+- `steam.ogg`: [Technology Air Or Steam Pressure Release](https://pixabay.com/sound-effects/technology-air-or-steam-pressure-release-29600/).
+- `step_mud_000.ogg`, `step_mud_001.ogg`, `step_mud_002.ogg`, `step_mud_003.ogg`: [Household Footsteps Mud](https://pixabay.com/sound-effects/household-footsteps-mud-68694/).
+- `step_water_000.ogg`, `step_water_001.ogg`, `step_water_002.ogg`, `step_water_003.ogg`: [Film Special Effects Footsteps Water 01](https://pixabay.com/sound-effects/film-special-effects-footsteps-water-01-73731/).
+- `volcano.ogg`: [Nature Volcano](https://pixabay.com/sound-effects/nature-volcano-71156/).
+- `waterfall.ogg`: [Nature Waterfall 01 Loop](https://pixabay.com/sound-effects/nature-waterfall-01-loop-74884/).
+
+The excerpts are mono 32 kHz Vorbis quality 4, with a 70 Hz high-pass
+(35 Hz for lava/volcano), 8.5 kHz low-pass, short opening/closing fades, and
+fixed linear RMS normalization targets of -28 dBFS for environmental beds,
+-24 dBFS for volcanic rumble, -22 dBFS for the motor and -21 dBFS for effects,
+bounded by -5 dBFS oversampled peaks. The five individual drop excerpts instead
+use a -9 dBFS oversampled peak target; each preserves one attack and its natural
+tail. The exact processing and original/output hashes are in `sources.json`.
+No dynamic loudness processing is applied to the new excerpts. Playback
+adds an 800 ms seam crossfade to environmental loops and 80 ms to the motor.
+Cave reflections use four filtered delay taps on the existing recordings.

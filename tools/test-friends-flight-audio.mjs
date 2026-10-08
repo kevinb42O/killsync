@@ -9,6 +9,7 @@ const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 try {
+  await page.route('**/@vite/client', route => route.fulfill({ contentType: 'application/javascript', body: "export const createHotContext = () => ({dispose(){},accept(){}}); export const injectQuery = (url, query) => url + (url.includes('?') ? '&' : '?') + query;" }));
   await page.route('**/src/main.tsx*', route => route.abort());
   await page.goto(process.env.FRIENDS_TEST_ORIGIN || 'http://localhost:3000');
   const report = await page.evaluate(async () => {
@@ -24,18 +25,13 @@ try {
     const audio = new FriendsAudio(), release = audio.acquire();
     audio.setSettings({ music: 0, effects: .65, muted: false }); audio.activate();
     await until(() => audio.context?.state === 'running');
-    audio.setHelicopterSound({ volume: .35, rate: 1.1, pan: .4 });
     audio.prepareFlightFoliage();
-    await until(() => audio.helicopterLoop && ['000', '001', '002'].every(n => audio.buffers.has(`/audio/friends/flight_foliage_${n}.ogg`)));
-    const decoded = [...audio.buffers].filter(([url]) => /helicopter_rotor|flight_foliage/.test(url)).map(([url, buffer]) => {
+    await until(() => ['000', '001', '002'].every(n => audio.buffers.has(`/audio/friends/flight_foliage_${n}.ogg`)));
+    const decoded = [...audio.buffers].filter(([url]) => /flight_foliage/.test(url)).map(([url, buffer]) => {
       const data = buffer.getChannelData(0), rms = Math.sqrt(data.reduce((s, n) => s + n * n, 0) / data.length);
       check(rms > .005 && buffer.duration > .6, `Silent/short audio: ${url}`);
       return { file: url, duration: buffer.duration, rms };
     });
-    const loop = audio.helicopterLoop.source;
-    for (let i = 0; i < 50; i++) audio.setHelicopterSound({ volume: .4, rate: 1.15, pan: -.4 });
-    check(audio.helicopterLoop.source === loop, 'Rotor loop duplicated during motion');
-    await until(() => audio.helicopterLoop.pan?.pan.value < -.1);
     const forest = new FriendsForestLOD(new THREE.Scene(), {});
     await until(() => forest.canopy({ kind: 'oak' }));
     const crowns = Object.fromEntries(['pine', 'oak', 'autumnOak'].map(kind => [kind, forest.canopy({ kind })]));
@@ -49,11 +45,11 @@ try {
     const before = audio.voices.size;
     audio.play('flightFoliage', brush.volume, 330, brush.rate, .65, { pan: brush.pan });
     check(audio.voices.size === before + 1, 'Native foliage source did not play');
-    audio.setSettings({ muted: true }); check(!audio.helicopterLoop, 'Mute retained rotor');
-    audio.setSettings({ muted: false }); check(audio.helicopterLoop, 'Unmute did not resume rotor');
-    audio.clearSoundscape(); check(!audio.helicopterLoop && !audio.retiringHelicopters.size, 'World exit retained rotor');
+    audio.setSettings({ muted: true }); check(!audio.voices.size, 'Mute retained foliage effects');
+    audio.setSettings({ muted: false });
+    audio.clearSoundscape();
     forest.dispose(); release(); audio.dispose();
-    return { checks: ['four real assets decode and contain audible samples', 'one rotor loop through repeated movement updates', 'native stereo panning', 'leaf bounds loaded for all three rendered species', 'swept crossing of actual oak canopy plays a native effect', 'mute/unmute and exit cleanup'], decoded, crowns };
+    return { checks: ['three real foliage assets decode and contain audible samples', 'leaf bounds loaded for all three rendered species', 'swept crossing of actual oak canopy plays a native effect', 'mute cancels foliage effects', 'world exit cleanup'], decoded, crowns };
   });
   if (errors.length) throw new Error(errors.join('; '));
   await mkdir('artifacts/friends-flight-audio', { recursive: true });

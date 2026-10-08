@@ -1,29 +1,8 @@
-import type { FriendsSnapshot } from './multiplayer/FriendsExpedition';
 import type { FrontierTree } from './multiplayer/FriendsFrontier';
 
 type Point = { x: number; y: number; z: number };
-export type HelicopterSoundMix = { volume: number; rate: number; pan: number };
-export const QUIET_HELICOPTER: HelicopterSoundMix = { volume: 0, rate: 1, pan: 0 };
 export type TreeCanopy = { bottom: number; top: number; radius: number };
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
-
-export class FriendsHelicopterSound {
-  private previous?: Point & { id: string; at: number };
-  sample(friends: FriendsSnapshot, listener: Point, at: number, yaw: number, underground = false): HelicopterSoundMix {
-    const craft = friends.vehicles.find(v => v.kind === 'aircraft');
-    if (!craft) { this.previous = undefined; return QUIET_HELICOPTER; }
-    const old = this.previous, dt = old && old.id === craft.id ? (at - old.at) / 1000 : 0;
-    const speed = old && dt > 0 && dt <= 2 ? Math.min(700, Math.hypot(craft.x - old.x, craft.y - old.y, craft.z - old.z) / dt) : 0;
-    this.previous = { id: craft.id, x: craft.x, y: craft.y, z: craft.z, at };
-    const dx = craft.x - listener.x, dy = craft.y - listener.y;
-    const distance = Math.hypot(dx, dy, craft.z - listener.z), n = clamp(1 - distance / 1800);
-    const gain = n * n * (3 - 2 * n) * (underground && distance > 350 ? .12 : 1);
-    // The Sunskiff's rotors idle even when its controls are released.
-    return { volume: gain * (craft.pilotId ? .34 + .1 * speed / 700 : .1),
-      rate: craft.pilotId ? 1 + .15 * speed / 700 : .72,
-      pan: Math.sin(Math.atan2(dy, dx) - yaw) * .85 };
-  }
-}
 
 /** Sweep the player's short flight segment through canopy ellipsoids. This
  * catches quick crossings without a physics body or per-tree audio nodes. */

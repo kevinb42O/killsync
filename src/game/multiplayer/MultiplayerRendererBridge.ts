@@ -1,3 +1,4 @@
+import { cargoBounds } from './FriendsCargoPose';
 import { craneCameraPose, DEFAULT_CRANE_CAMERA, type CraneCameraOptions } from './FriendsCraneCamera';
 import { FriendsInteractionVisuals } from '../rendering/FriendsInteractionVisuals';
 import { FriendsToolActions } from './FriendsToolActions';
@@ -27,8 +28,9 @@ import { soundManager } from '../SoundManager';
 import { friendsAudio, type SurfaceCue } from '../FriendsAudio';
 import { FriendsSoundscape } from '../FriendsSoundscape';
 import { FriendsTrainSound } from '../FriendsTrainSound';
-import { FriendsFlightFoliage, FriendsHelicopterSound } from '../FriendsFlightSound';
+import { FriendsFlightFoliage } from '../FriendsFlightSound';
 import { campfireSound, inCastleMusicArea } from '../FriendsLocationAudio';
+import { FriendsInteractionSound, friendsWorldSound, friendsSurfaceSound } from '../FriendsWorldSound';
 import { normalizeGamePreferences, type LocalGamePreferences } from '../LocalGamePreferences';
 import { COOP_BRIDGE_SEGMENT_LENGTH, COOP_ENEMY_DEATH_PRESENTATION_MS, COOP_WEAPON_DETAILS, CoopCombatEvent, CoopSnapshot } from './CoopSimulation';
 import { CoopFirearmVisualRig } from '../rendering/coopFirearmVisuals';
@@ -120,16 +122,15 @@ export class MultiplayerRendererBridge {
   private localSurfaceCue: SurfaceCue = 'grass';
   private soundscape = new FriendsSoundscape();
   private trainSound = new FriendsTrainSound();
-  private helicopterSound = new FriendsHelicopterSound();
   private flightFoliage = new FriendsFlightFoliage();
   private flightAudioTimeMs = 0;
   private castleMusicArea = false;
   private nextSoundscapeMs = 0;
+  private interactionSound = new FriendsInteractionSound();
   private audioFeedbackStamp?: string;
   private nativePixelRatio = 1;
   private audioBuildRevision?: number;
   private audioPieces = new Map<number, { revision: number; finish: string; x: number; y: number; z: number }>();
-  private audioTreasures?: number;
   private audioDeliveries?: number;
   private audioEatenMarshmallowSerial?: number;
   private friendsTool: FrontierTool = 1;
@@ -367,13 +368,21 @@ export class MultiplayerRendererBridge {
   getFriendsTerrain() { return this.frontierVisuals?.terrain; }
   getFriendsEnvironment() { return this.frontierVisuals?.environmentState; }
   setFriendsEnvironment(change:FriendsEnvironmentChange) { this.frontierVisuals?.setEnvironment(change); }
-  toggleFriendsFlashlight() { this.frontierVisuals?.toggleFlashlight(); }
+  toggleFriendsFlashlight() {
+    if (!this.frontierVisuals) return;
+    this.frontierVisuals.toggleFlashlight();
+    friendsAudio.equipment('flashlight', this.frontierVisuals.flashlightEquipped);
+  }
   getFriendsFlashlightInput() {
     const world=this.frontierVisuals, shining=world?.flashlightShining && !this.renderer.presentationSpectating;
     return {friendsFlashlight:shining ? true : undefined,
       friendsFlashlightCone:shining ? quantizeFriendsFlashlightCone(world!.flashlightAngle) : undefined};
   }
-  toggleFriendsNightVision() { return this.renderer.toggleFriendsNightVision(); }
+  toggleFriendsNightVision() {
+    const enabled = this.renderer.toggleFriendsNightVision();
+    if (this.frontierVisuals) friendsAudio.equipment('nightVision', enabled);
+    return enabled;
+  }
   setCraneControlView(id:number|null,options:CraneCameraOptions=DEFAULT_CRANE_CAMERA) {
     this.craneControlView=id===null?undefined:{id,options};
     if(id===null)this.renderer.camera.clearViewOffset();
@@ -683,8 +692,9 @@ export class MultiplayerRendererBridge {
           const piece = snapshot.friends.building?.pieces.find(p => Math.abs((friendsBuildFloor([p], targetX, targetY, local.z, 0) ?? Infinity) - local.z) < 2);
           const material = this.getFriendsTerrain()?.material(Math.floor(targetX / 32), Math.floor(targetY / 32), Math.floor((local.z - 2) / 32));
           const wooden = piece?.finish === 'timber' || Boolean(standingVehicle);
-          const hard = Boolean(piece && piece.finish !== 'grass' && piece.finish !== 'soil') || onSpawnDeck || Boolean(material && material !== 1);
-          const cue = wooden ? 'woodStep' : hard ? 'stoneStep' : 'grass';
+          const hard = Boolean(piece && piece.finish !== 'grass' && piece.finish !== 'soil');
+          const cue = friendsSurfaceSound({x:targetX,y:targetY,z:local.z}, wooden ? 'wood' : piece ? (hard ? 'hard' : 'soil') : onSpawnDeck ? 'hard' : undefined,
+            this.frontierVisuals?.soundscapeEnvironment.underground, material);
           this.localSurfaceCue = cue;
           friendsAudio.play(cue, local.crouching ? .08 : local.sprinting ? .25 : .18, 230);
         }
@@ -761,7 +771,8 @@ export class MultiplayerRendererBridge {
         if (snapshot.friends) {
           const piece = snapshot.friends.building?.pieces.find(p => Math.abs((friendsBuildFloor([p], targetX, targetY, local.z, 0) ?? Infinity) - local.z) < 2);
           const material = this.getFriendsTerrain()?.material(Math.floor(targetX / 32), Math.floor(targetY / 32), Math.floor((local.z - 2) / 32));
-          this.localSurfaceCue = piece?.finish === 'timber' || standingVehicle ? 'woodStep' : onSpawnDeck || (piece && piece.finish !== 'grass' && piece.finish !== 'soil') || (material && material !== 1) ? 'stoneStep' : 'grass';
+          this.localSurfaceCue = friendsSurfaceSound({x:targetX,y:targetY,z:local.z}, piece?.finish === 'timber' || standingVehicle ? 'wood' : piece ? (piece.finish === 'grass' || piece.finish === 'soil' ? 'soil' : 'hard') : onSpawnDeck ? 'hard' : undefined,
+            this.frontierVisuals?.soundscapeEnvironment.underground, material);
           friendsAudio.land(this.localSurfaceCue, impactScale);
         } else soundManager.playLanding();
         this.renderer.notifyLand(impactScale);
@@ -900,11 +911,31 @@ export class MultiplayerRendererBridge {
       this.castleMusicArea = inCastleMusicArea(local, this.castleMusicArea);
       friendsAudio.setCastleMusic(this.castleMusicArea);
       friendsAudio.setCampfireSound(campfireSound(local, this.getAimAngle(), snapshot.friends?.campfire?.fuelSeconds, environment.underground));
+      const terrain = this.getFriendsTerrain();
+      friendsAudio.setWorldSound(friendsWorldSound(local, this.getAimAngle(), environment.underground, (a,b) => {
+        const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z,distance=Math.hypot(dx,dy,dz);
+        return distance < 48 || !terrain?.raycast({x:a.x,y:a.y,z:a.z,dx:dx/distance,dy:dy/distance,dz:dz/distance},distance-40);
+      }));
       if (snapshot.friends) {
         const train = this.trainSound.sample(snapshot.friends, local, snapshot.elapsedMs, this.getAimAngle(), environment.underground);
         friendsAudio.setTrainSound(train.mix);
-        friendsAudio.setHelicopterSound(this.helicopterSound.sample(snapshot.friends, local, snapshot.elapsedMs, this.getAimAngle(), environment.underground));
         for (const event of train.events) friendsAudio.play(event.cue, event.volume, event.cue === 'trainHorn' ? 7000 : 2500, 1, undefined, { pan: event.pan });
+      }
+    }
+    if (snapshot.friends && this.frontierVisuals) {
+      const interaction = this.interactionSound.sample(snapshot.friends, {...local,id:localPlayerId}, snapshot.elapsedMs, this.getAimAngle(), cargo => {
+        const bottom = cargoBounds(cargo).minZ;
+        const pieces = snapshot.friends!.building?.pieces || [];
+        const build = pieces.find(p => Math.abs((friendsBuildFloor([p],cargo.x,cargo.y,bottom,16)??Infinity)-bottom)<12);
+        const floor = build ? friendsBuildFloor([build],cargo.x,cargo.y,bottom,16) : this.getFriendsTerrain()?.floor(cargo.x,cargo.y,bottom,16);
+        const deck = friendsVehicleFloor(snapshot.friends!.vehicles,cargo.x,cargo.y,bottom);
+        return deck !== undefined && Math.abs(deck-bottom)<12 ? {floor:deck,wood:true} : floor===undefined ? undefined : {floor,wood:build?.finish==='timber'};
+      }, resetCamera);
+      const audible = !isSpectating && !isFallingLocal && local.lifeState==='alive';
+      friendsAudio.setReelSound(audible ? interaction.motor : {volume:0,pan:0});
+      if (audible) for (const event of interaction.events) {
+        if (event.cue==='treasure') friendsAudio.treasure(event.volume,event.pan);
+        else friendsAudio.play(event.cue,event.volume,150,event.rate??1,undefined,{pan:event.pan});
       }
     }
     this.interactionPlayerId = localPlayerId;
@@ -945,7 +976,8 @@ export class MultiplayerRendererBridge {
         friendsAudio.material(contact.kind, (contact.broken ? .4 : .24) * volume, contact.broken ? .76 : 1);
         if (contact.broken) {
           if (contact.kind === 'wood') friendsAudio.play('treeBreak', .34 * volume, 80, .85);
-          else if(contact.kind==='ore')friendsAudio.play('stone', .2*volume,80,.72);
+          else if(contact.kind==='ore'||contact.kind==='stone')friendsAudio.play('miningBreak', .18*volume,100,1,undefined,
+            {pan:Math.sin(Math.atan2(contact.y-local.y,contact.x-local.x)-this.getAimAngle())*.8});
           if (contact.by === localPlayerId) friendsAudio.play('collect', .085, 140);
         }
       }
@@ -969,11 +1001,6 @@ export class MultiplayerRendererBridge {
         for (const [id, p] of this.audioPieces) if (!next.has(id) && nearby(p)) friendsAudio.material(p.finish, .34);
       }
       this.audioPieces = next; this.audioBuildRevision = building.revision;
-    }
-    const treasures = snapshot.friends?.progress.openedTreasures.length;
-    if (treasures !== undefined) {
-      if (this.audioTreasures !== undefined && treasures > this.audioTreasures) friendsAudio.play('chest', .28, 300);
-      this.audioTreasures = treasures;
     }
     const deliveries = snapshot.friends?.hauling?.completedCargoIds?.length;
     if (deliveries !== undefined) {

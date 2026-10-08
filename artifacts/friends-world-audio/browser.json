@@ -1,0 +1,217 @@
+{
+  "checks": [
+    "33 approved assets decode with audible samples and headroom",
+    "five bounded shared world/reel sources",
+    "smooth native stereo panning and occlusion filtering",
+    "four bounded cave reflections",
+    "treasure audio-clock sequence",
+    "independent Effects/Ambience controls",
+    "reel stops on stationary motion",
+    "mute, hidden tab and mode exit cleanup"
+  ],
+  "decoded": [
+    {
+      "file": "cargo_stone.ogg",
+      "duration": 1,
+      "rms": 0.03946547952590051,
+      "peak": 0.5088095664978027
+    },
+    {
+      "file": "cargo_wood.ogg",
+      "duration": 0.6579818594104309,
+      "rms": 0.07364966810121598,
+      "peak": 0.5131715536117554
+    },
+    {
+      "file": "cave_air.ogg",
+      "duration": 12.903990929705216,
+      "rms": 0.03909530691047055,
+      "peak": 0.17809569835662842,
+      "seamJump": 0.0032641850411891937
+    },
+    {
+      "file": "cave_drips_000.ogg",
+      "duration": 0.6959863945578232,
+      "rms": 0.01778174952321122,
+      "peak": 0.32353830337524414
+    },
+    {
+      "file": "cave_drips_001.ogg",
+      "duration": 0.6959863945578232,
+      "rms": 0.009354908696908765,
+      "peak": 0.3443569839000702
+    },
+    {
+      "file": "cave_drips_002.ogg",
+      "duration": 0.7459863945578231,
+      "rms": 0.024198346864126214,
+      "peak": 0.3546144962310791
+    },
+    {
+      "file": "cave_drips_003.ogg",
+      "duration": 0.7459863945578231,
+      "rms": 0.007945166824689761,
+      "peak": 0.33521565794944763
+    },
+    {
+      "file": "cave_drips_004.ogg",
+      "duration": 0.7459863945578231,
+      "rms": 0.021459447167710834,
+      "peak": 0.3462226092815399
+    },
+    {
+      "file": "chest_coins.ogg",
+      "duration": 2,
+      "rms": 0.040872518012059725,
+      "peak": 0.5315557718276978
+    },
+    {
+      "file": "chest_latch.ogg",
+      "duration": 0.35,
+      "rms": 0.05649833807999529,
+      "peak": 0.5417588949203491
+    },
+    {
+      "file": "chest_lid.ogg",
+      "duration": 1.5,
+      "rms": 0.0335718941082199,
+      "peak": 0.4940968155860901
+    },
+    {
+      "file": "chest_reward.ogg",
+      "duration": 2.5439909297052155,
+      "rms": 0.04944550946906176,
+      "peak": 0.5024993419647217
+    },
+    {
+      "file": "flashlight.ogg",
+      "duration": 0.38798185941043084,
+      "rms": 0.02001834101500146,
+      "peak": 0.5156661868095398
+    },
+    {
+      "file": "lava.ogg",
+      "duration": 15.2,
+      "rms": 0.018407613433580577,
+      "peak": 0.5495293140411377,
+      "seamJump": 0.00006315018981695175
+    },
+    {
+      "file": "mining_break.ogg",
+      "duration": 0.6279818594104308,
+      "rms": 0.08947481188436025,
+      "peak": 0.5382890105247498
+    },
+    {
+      "file": "night_vision.ogg",
+      "duration": 1.92,
+      "rms": 0.08924574653695168,
+      "peak": 0.43480783700942993
+    },
+    {
+      "file": "reel_motor.ogg",
+      "duration": 7.92,
+      "rms": 0.07858268354826217,
+      "peak": 0.39996010065078735,
+      "seamJump": 0.021450474858283997
+    },
+    {
+      "file": "reel_ratchet.ogg",
+      "duration": 0.6979818594104309,
+      "rms": 0.020535187882446616,
+      "peak": 0.5421309471130371
+    },
+    {
+      "file": "rope_creak_000.ogg",
+      "duration": 1.5,
+      "rms": 0.054161287927774894,
+      "peak": 0.5355790257453918
+    },
+    {
+      "file": "rope_creak_001.ogg",
+      "duration": 1.5,
+      "rms": 0.02472496898903345,
+      "peak": 0.5413510799407959
+    },
+    {
+      "file": "rope_creak_002.ogg",
+      "duration": 1.5,
+      "rms": 0.02788326540307229,
+      "peak": 0.5188291668891907
+    },
+    {
+      "file": "rope_hook.ogg",
+      "duration": 0.6459863945578231,
+      "rms": 0.03793117219464152,
+      "peak": 0.5330241918563843
+    },
+    {
+      "file": "steam.ogg",
+      "duration": 2,
+      "rms": 0.06912413244830505,
+      "peak": 0.5164422392845154
+    },
+    {
+      "file": "step_mud_000.ogg",
+      "duration": 0.5459863945578232,
+      "rms": 0.031817934994883584,
+      "peak": 0.5239040851593018
+    },
+    {
+      "file": "step_mud_001.ogg",
+      "duration": 0.5459863945578232,
+      "rms": 0.03629575025938976,
+      "peak": 0.5324442982673645
+    },
+    {
+      "file": "step_mud_002.ogg",
+      "duration": 0.5459863945578232,
+      "rms": 0.03770877358731741,
+      "peak": 0.5135101675987244
+    },
+    {
+      "file": "step_mud_003.ogg",
+      "duration": 0.5479818594104309,
+      "rms": 0.04855355266774451,
+      "peak": 0.580016016960144
+    },
+    {
+      "file": "step_water_000.ogg",
+      "duration": 0.4959863945578231,
+      "rms": 0.021510453944821498,
+      "peak": 0.46536701917648315
+    },
+    {
+      "file": "step_water_001.ogg",
+      "duration": 0.4959863945578231,
+      "rms": 0.02642131809030863,
+      "peak": 0.5339507460594177
+    },
+    {
+      "file": "step_water_002.ogg",
+      "duration": 0.4959863945578231,
+      "rms": 0.03414262374038352,
+      "peak": 0.5553845167160034
+    },
+    {
+      "file": "step_water_003.ogg",
+      "duration": 0.4979818594104308,
+      "rms": 0.02932323406810843,
+      "peak": 0.5866368412971497
+    },
+    {
+      "file": "volcano.ogg",
+      "duration": 17.2,
+      "rms": 0.06326386864417072,
+      "peak": 0.33204373717308044,
+      "seamJump": 0.00013356655836105347
+    },
+    {
+      "file": "waterfall.ogg",
+      "duration": 14.2,
+      "rms": 0.03880943946315084,
+      "peak": 0.21072439849376678,
+      "seamJump": 0.02013358846306801
+    }
+  ]
+}

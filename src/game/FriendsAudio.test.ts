@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { crossfadeLoop, FriendsAudio, friendsAudio } from './FriendsAudio';
 import { SoundManager } from './SoundManager';
+import { effectCalibration } from './FriendsAudioMix';
+import { QUIET_WORLD_SOUND } from './FriendsWorldSound';
 
 function buffer(values: number[], channels = 1, sampleRate = 1) {
   const arrays = Array.from({ length: channels }, () => Float32Array.from(values));
@@ -37,6 +39,90 @@ describe('downloaded Friends audio', () => {
   });
   afterEach(() => { releases.forEach(release => release()); vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
   const load = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+  it('plays single randomized drops with sparse gaps, no loop and no immediate repeats',async()=>{
+    vi.spyOn(Math,'random').mockReturnValue(.5);
+    releases.push(audio.acquire());audio.activate();await load();
+    const mix={...QUIET_WORLD_SOUND,drip:{volume:.12,pan:.4},dripSource:'blue'};
+    audio.setWorldSound(mix);await load();
+    expect(vi.mocked(fetch).mock.calls.filter(([u])=>String(u).includes('cave_drips'))).toHaveLength(5);
+    const state=audio as any, before=sources.length;
+    context.currentTime=19;audio.setWorldSound(mix);expect(sources.length).toBe(before);
+    context.currentTime=19.5;audio.setWorldSound(mix);
+    const first=sources.at(-1),variant=state.lastVariant.get('caveDrip');
+    expect(first.loop).toBe(false);expect(state.dripVoice).toBe(first);
+    expect(first.playbackRate.value).toBe(1);
+    expect(state.nextDrip-context.currentTime).toBeGreaterThanOrEqual(10);
+    expect(state.nextDrip-context.currentTime).toBeLessThanOrEqual(36);
+    context.currentTime=20;audio.setWorldSound(mix);expect(sources.at(-1)).toBe(first);
+    first.onended();context.currentTime=state.nextDrip+.01;audio.setWorldSound(mix);
+    expect(state.lastVariant.get('caveDrip')).not.toBe(variant);
+    expect(sources.at(-1)).not.toBe(first);
+  });
+  it('stops an active drop on leaving the wet room and waits again after re-entry, mute and hiding',async()=>{
+    vi.spyOn(Math,'random').mockReturnValue(0);
+    releases.push(audio.acquire());audio.activate();await load();
+    const mix={...QUIET_WORLD_SOUND,drip:{volume:.12,pan:0},dripSource:'blue'};
+    audio.setWorldSound(mix);await load();context.currentTime=15;audio.setWorldSound(mix);
+    const voice=(audio as any).dripVoice;expect(voice).toBeDefined();
+    audio.setWorldSound(QUIET_WORLD_SOUND);expect(voice.stop).toHaveBeenCalled();
+    context.currentTime=50;const before=sources.length;audio.setWorldSound(mix);
+    expect(sources.length).toBe(before);expect((audio as any).nextDrip).toBe(55);
+    audio.setWorldSound({...mix,dripSource:'well'});expect((audio as any).dripSource).toBe('well');
+    audio.setSettings({ambience:0});expect((audio as any).nextDrip).toBe(0);
+    audio.setSettings({ambience:.5});audio.setWorldSound(mix);
+    doc.hidden=true;doc.dispatchEvent(new Event('visibilitychange'));expect((audio as any).nextDrip).toBe(0);
+  });
+  it('loads world beds lazily, shares sources and routes the reel through Effects', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>/cave_air|waterfall|reel_motor/.test(String(url)))).toBe(false);
+    const before=sources.length;
+    audio.setWorldSound({...QUIET_WORLD_SOUND,caveAir:{volume:.05,pan:0},waterfall:{volume:.3,pan:.5}});
+    audio.setReelSound({volume:.2,pan:0,rate:1.1}); await load();
+    expect(sources.length).toBe(before+3);
+    const state=audio as any, reel=state.worldLoops.get('reel'), falls=state.worldLoops.get('waterfall');
+    expect(reel.gain.connect).toHaveBeenCalledWith(gains[0]);
+    expect(falls.gain.connect).toHaveBeenCalledWith(gains[2]);
+    for(let i=0;i<50;i++) { audio.setWorldSound({...QUIET_WORLD_SOUND,waterfall:{volume:.3,pan:.5}}); audio.setReelSound({volume:.2,pan:0,rate:1.1}); }
+    expect(state.worldLoops.get('reel').source).toBe(reel.source);
+    expect(state.worldLoops.get('waterfall').source).toBe(falls.source);
+    audio.setSettings({ambience:0}); expect(falls.source.stop).toHaveBeenCalled();
+    expect(state.worldLoops.get('reel').source).toBe(reel.source);
+    audio.setReelSound({volume:0,pan:0}); expect(reel.source.stop).toHaveBeenCalledWith(context.currentTime+.18);
+    audio.clearSoundscape(); expect(state.worldLoops.size+state.retiringWorldSources.size).toBe(0);
+  });
+  it('schedules treasure layers and cancels them on mute, hidden tab and exit', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    const before=sources.length; audio.treasure(.34,.5);
+    const layers=sources.slice(before); expect(layers).toHaveLength(4);
+    expect(layers.map(s=>s.start.mock.calls[0][0])).toEqual([10,10.1,10.38,10.6]);
+    audio.setSettings({muted:true}); expect(layers.every(s=>s.stop.mock.calls.length===1)).toBe(true);
+    audio.setSettings({muted:false}); context.currentTime+=1; audio.treasure(.34);
+    const hidden=sources.slice(-4); doc.hidden=true; doc.dispatchEvent(new Event('visibilitychange'));
+    expect(hidden.every(s=>s.stop.mock.calls.length===1)).toBe(true);
+    doc.hidden=false; doc.dispatchEvent(new Event('visibilitychange')); await load();
+    context.currentTime+=1; audio.treasure(.34); const exiting=sources.slice(-4);
+    releases[0](); vi.runOnlyPendingTimers(); expect(exiting.every(s=>s.stop.mock.calls.length===1)).toBe(true);
+  });
+  it('keeps ambience effects independent when Effects volume is disabled', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    const ambient=audio.play('leaves',.1,0,1,undefined,{ambience:true});
+    const effect=audio.play('flashlight',.14,0);
+    audio.setSettings({effects:0});
+    expect(effect!.stop).toHaveBeenCalledOnce(); expect(ambient!.stop).not.toHaveBeenCalled();
+  });
+  it('does not decode silent environmental beds and releases surf/crickets when they become inaudible',async()=>{
+    releases.push(audio.acquire());audio.activate();await load();
+    const quiet={wind:0,birds:0,crickets:0,surf:0,foliage:0,foliagePan:0};
+    audio.setSoundscape(quiet);await load();
+    expect(vi.mocked(fetch).mock.calls.some(([u])=>/\/(crickets|surf|wind_clean|campfire_woods)\.ogg$/.test(String(u)))).toBe(false);
+    audio.setSoundscape({...quiet,crickets:.1,surf:.2});await load();
+    const state=audio as any, beds=[...state.ambientLoops.values()];expect(beds).toHaveLength(2);
+    audio.setSoundscape(quiet);expect(state.ambientLoops.size).toBe(0);
+    expect(beds.every((b:any)=>b.source.stop.mock.calls[0][0]===context.currentTime+1)).toBe(true);
+    beds.forEach((b:any)=>b.source.onended());expect(state.retiringAmbienceSources.size).toBe(0);
+    audio.setSoundscape({...quiet,crickets:.1,surf:.2});await load();
+    expect(vi.mocked(fetch).mock.calls.filter(([u])=>/\/(crickets|surf)\.ogg$/.test(String(u)))).toHaveLength(2);
+  });
   it('loads real bundled files and starts only one loop after a gesture', async () => {
     releases.push(audio.acquire());
     expect(sources).toHaveLength(0);
@@ -67,29 +153,9 @@ describe('downloaded Friends audio', () => {
     const initial=sources.length;
     audio.play('eat',.22,1000);audio.play('eat',.22,1000);
     expect(sources).toHaveLength(initial+1);expect(sources.at(-1).buffer).toBe(decoded);
-    expect(gains.at(-1).gain.value).toBe(.22);expect(gains.at(-1).connect).toHaveBeenCalledWith(gains[0]);
+    expect(gains.at(-1).gain.value).toBeCloseTo(.22*effectCalibration(decoded,'eat'));expect(gains.at(-1).connect).toHaveBeenCalledWith(gains[0]);
     context.currentTime+=6;audio.setSettings({effects:0});audio.play('eat',.22,1000);expect(sources).toHaveLength(initial+1);
     audio.setSettings({effects:.65,muted:true});audio.play('eat',.22,1000);expect(sources).toHaveLength(initial+1);
-  });
-  it('loads one shared helicopter loop near the craft, follows throttle, and cleans up on mute/exit', async () => {
-    releases.push(audio.acquire()); audio.activate(); await load();
-    const requested = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/helicopter_rotor.ogg'));
-    expect(requested()).toHaveLength(0);
-    audio.setHelicopterSound({ volume: 0, rate: 1, pan: 0 }); await load(); expect(requested()).toHaveLength(0);
-    const before = sources.length;
-    audio.setHelicopterSound({ volume: .3, rate: 1.1, pan: .4 }); await load();
-    const rotor = sources.at(-1); expect(sources.length).toBe(before + 1); expect(rotor.loop).toBe(true);
-    expect(gains.at(-1).connect).toHaveBeenCalledWith(gains[0]);
-    for (let i = 0; i < 30; i++) audio.setHelicopterSound({ volume: .4, rate: 1.15, pan: 0 });
-    expect(sources.length).toBe(before + 1); expect(rotor.playbackRate.setTargetAtTime).toHaveBeenLastCalledWith(1.15, context.currentTime, .5);
-    audio.setHelicopterSound({ volume: 0, rate: 1, pan: 0 }); expect(rotor.stop).toHaveBeenCalledWith(context.currentTime + .8);
-    audio.clearSoundscape(); expect(rotor.stop).toHaveBeenCalledTimes(2);
-    audio.setHelicopterSound({ volume: .3, rate: 1, pan: 0 }); await load(); expect(requested()).toHaveLength(1);
-    const second = sources.at(-1); audio.setSettings({ effects: 0 }); expect(second.stop).toHaveBeenCalledOnce();
-    audio.setSettings({ effects: .65 }); const third = sources.at(-1);
-    audio.setSettings({ muted: true }); expect(third.stop).toHaveBeenCalledOnce();
-    audio.setSettings({ muted: false }); const fourth = sources.at(-1);
-    releases[0](); vi.runOnlyPendingTimers(); expect(fourth.stop).toHaveBeenCalledOnce();
   });
   it('prepares flight rustles only in dev flight, rotates recordings and respects effects volume', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
@@ -176,7 +242,7 @@ describe('downloaded Friends audio', () => {
     releases.push(audio.acquire()); audio.activate(); await load();
     audio.setSoundscape({ wind: .3, birds: 0, crickets: 0, surf: 0, foliage: 0, foliagePan: 0 }); await load();
     const loops = sources.filter(source => source.loop);
-    expect(loops).toHaveLength(3);
+    expect(loops).toHaveLength(2);
     audio.dispose();
     expect(loops.every(source => source.stop.mock.calls.length === 1)).toBe(true);
     expect(context.close).toHaveBeenCalledOnce();
@@ -185,7 +251,7 @@ describe('downloaded Friends audio', () => {
     expect(audio.active).toBe(false); expect(sources).toHaveLength(count);
 
     const loading = new FriendsAudio(); releases.push(loading.acquire()); loading.activate(); loading.dispose(); await load();
-    expect(sources.filter(source => source.loop)).toHaveLength(3);
+    expect(sources.filter(source => source.loop)).toHaveLength(2);
   });
   it('routes Friends gameplay to recordings without creating procedural audio', async () => {
     releases.push(friendsAudio.acquire()); const manager = new SoundManager(); manager.activate(); await load();
@@ -197,7 +263,7 @@ describe('downloaded Friends audio', () => {
   it('loads nature only in the world, keeps bounded shared loops, and uses an independent ambience bus', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
     expect(vi.mocked(fetch).mock.calls.some(call => String(call[0]).endsWith('wind_clean.ogg'))).toBe(false);
-    const mix = { wind: .3, birds: .2, crickets: 0, surf: 0, foliage: 0, foliagePan: 0 };
+    const mix = { wind: .3, birds: .2, crickets: .1, surf: 0, foliage: 0, foliagePan: 0 };
     audio.setSoundscape(mix); await load();
     expect(sources.filter(source => source.loop)).toHaveLength(3); // Music, wind, and night ambience. Birds never loop.
     for (let i = 0; i < 30; i++) audio.setSoundscape({ ...mix, birds: 0, crickets: .1 });
@@ -254,8 +320,8 @@ describe('downloaded Friends audio', () => {
     audio.setSoundscape(mix); await load();
     expect(vi.mocked(fetch).mock.calls.some(call => String(call[0]).endsWith('surf.ogg'))).toBe(false);
     audio.setSoundscape({ ...mix, surf: .4 }); await load();
-    for (let i = 0; i < 30; i++) audio.setSoundscape({ ...mix, surf: i / 100 });
-    expect(sources.filter(source => source.loop)).toHaveLength(4);
+    for (let i = 1; i <= 30; i++) audio.setSoundscape({ ...mix, surf: i / 100 });
+    expect(sources.filter(source => source.loop)).toHaveLength(3);
     expect(vi.mocked(fetch).mock.calls.filter(call => String(call[0]).endsWith('surf.ogg'))).toHaveLength(1);
   });
   it('plays only short nearby bird calls after a dwell, with long gaps and no bird loop', async () => {
@@ -344,7 +410,10 @@ describe('asset provenance and the music seam', () => {
     const root = resolve('public/audio/friends');
     const manifest = JSON.parse(readFileSync(resolve(root, 'sources.json'), 'utf8'));
     expect(manifest.defaultLicense).toBe('CC0-1.0');
-    expect(manifest.assets.filter((asset: { license?: string }) => asset.license === 'Pixabay Content License')).toHaveLength(3);
+    const approved = manifest.assets.filter((asset: { pack?: string }) => asset.pack === 'approvedPixabay');
+    expect(approved).toHaveLength(33);
+    expect(new Set(approved.map((asset: { sourcePage: string }) => asset.sourcePage)).size).toBe(21);
+    expect(approved.every((asset: { license: string }) => asset.license === 'Pixabay Content License')).toBe(true);
     for (const asset of manifest.assets) expect(createHash('sha256').update(readFileSync(resolve(root, asset.file))).digest('hex')).toBe(asset.sha256);
   });
   it('joins both channels to contiguous opening samples without changing the source', () => {

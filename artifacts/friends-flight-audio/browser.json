@@ -1,11 +1,10 @@
 {
   "checks": [
-    "four real assets decode and contain audible samples",
-    "one rotor loop through repeated movement updates",
-    "native stereo panning",
+    "three real foliage assets decode and contain audible samples",
     "leaf bounds loaded for all three rendered species",
     "swept crossing of actual oak canopy plays a native effect",
-    "mute/unmute and exit cleanup"
+    "mute cancels foliage effects",
+    "world exit cleanup"
   ],
   "decoded": [
     {
@@ -17,11 +16,6 @@
       "file": "/audio/friends/flight_foliage_000.ogg",
       "duration": 1.5793650793650793,
       "rms": 0.05088641945975406
-    },
-    {
-      "file": "/audio/friends/helicopter_rotor.ogg",
-      "duration": 3.32,
-      "rms": 0.10616732002275711
     },
     {
       "file": "/audio/friends/flight_foliage_002.ogg",

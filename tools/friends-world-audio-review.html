@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Friends audio audition</title>
+<style>
+body{margin:0;background:#0e171b;color:#e6f1ed;font:16px/1.5 system-ui;padding:32px;max-width:1100px;margin:auto}h1{font-size:32px;margin:0}p{color:#a7bcb5}button,a{color:inherit}button{background:#254d40;border:1px solid #538571;border-radius:8px;padding:12px 18px;cursor:pointer}nav{display:flex;gap:10px;flex-wrap:wrap;margin:24px 0}article{background:#17272a;border:1px solid #324847;border-radius:12px;padding:18px;margin:12px 0;display:grid;grid-template-columns:1fr 340px;gap:12px}article h2{font-size:17px;margin:0}article p{margin:6px 0}audio{width:100%}small{color:#a7bcb5}#status{min-height:30px}@media(max-width:720px){article{grid-template-columns:1fr}body{padding:20px}}
+</style>
+<h1>Friends audio audition</h1><p>Every Friends effect, played at a typical nearby game level using the same calibration as gameplay. Actual distance, movement and your Audio settings affect the final volume. The buttons below audition the environment and treasure mixes with stereo placement and cave reflections.</p>
+<nav><button data-mix="treasure">Treasure sequence</button><button data-mix="cave">Cave room</button><button data-mix="waterfall">Waterfall</button><button data-mix="volcano">Volcanic landscape</button><button data-mix="reel">Reel motor</button><button data-mix="stop">Stop all</button></nav>
+<div id="status">Choose a mix or play an individual recording.</div><main id="assets"></main>
+<script type="module" src="./friends-world-audio-review.ts"></script></html>
