@@ -23,6 +23,10 @@ export const COOP_FIRST_PERSON_EYE_HEIGHT = 26;
 export const COOP_CAMERA_OVERHEAD_SAFETY_MARGIN = 90;
 export const PLAYER_COYOTE_MS = 100;
 export const PLAYER_JUMP_BUFFER_MS = 120;
+/** Friends prioritizes precise building and exploration. Sprint retains the
+ * former 300-unit walking pace; walking covers 60% of that distance. */
+export const FRIENDS_WALK_SPEED = 180;
+export const FRIENDS_SPRINT_SPEED = 300;
 const MOVEMENT_SUBSTEP_MS = 1000 / 120;
 
 /** Persisted with authoritative snapshots so replay retains momentum and
@@ -203,12 +207,15 @@ function advanceMovementStep(
       x: (Math.cos(player.angle) * forward - Math.sin(player.angle) * strafe) / magnitude,
       y: (Math.sin(player.angle) * forward + Math.cos(player.angle) * strafe) / magnitude,
     };
+    const friendsMovement = worldId === 'friends_frontier';
+    const walkSpeed = friendsMovement ? FRIENDS_WALK_SPEED : 300;
+    const sprintSpeed = friendsMovement ? FRIENDS_SPRINT_SPEED : 300 * 1.65;
     if (input.sliding && input.sprinting && !player.carryingHostage && (forward !== 0 || strafe !== 0) && grounded && !player.sliding && (!transport || !player.slideHeld)) {
       player.slideAngle = Math.atan2(requested.y, requested.x);
       player.sliding = true;
       player.slideMs = 0;
       if (transport) {
-        const launchSpeed = Math.max(300 * 1.65, Math.hypot(player.velocityX ?? 0, player.velocityY ?? 0)) * 1.3;
+        const launchSpeed = Math.max(sprintSpeed, Math.hypot(player.velocityX ?? 0, player.velocityY ?? 0)) * 1.3;
         player.velocityX = requested.x * launchSpeed;
         player.velocityY = requested.y * launchSpeed;
       }
@@ -224,7 +231,13 @@ function advanceMovementStep(
     const carryMultiplier = player.carryingHostage ? .82 : 1;
     const surfaceMultiplier = grounded ? groundSurface.movementMultiplier : 1;
     const slideMultiplier = groundSurface.kind === 'thin_ice' ? 2.8 : 2.35;
-    const speed = 300 * Math.max(1, Math.min(1.16, player.movementMultiplier || 1)) * carryMultiplier * surfaceMultiplier * Math.max(.3, Math.min(1, transport?.towingScale ?? 1)) * (player.sliding ? slideMultiplier : player.crouching ? 0.55 : !grounded ? 1.10 : player.sprinting ? 1.65 : 1);
+    // Air steering uses the selected gait in Friends. Takeoff momentum is
+    // retained below, but a walking jump must not create a free speed boost.
+    const gaitSpeed = player.sliding ? (friendsMovement ? sprintSpeed * 1.3 * slideMultiplier / 2.35 : walkSpeed * slideMultiplier)
+      : player.crouching ? walkSpeed * .55
+      : !grounded && !friendsMovement ? walkSpeed * 1.10
+      : player.sprinting ? sprintSpeed : walkSpeed;
+    const speed = gaitSpeed * Math.max(1, Math.min(1.16, player.movementMultiplier || 1)) * carryMultiplier * surfaceMultiplier * Math.max(.3, Math.min(1, transport?.towingScale ?? 1));
     let displacementX = movement.x * speed * seconds;
     let displacementY = movement.y * speed * seconds;
     if (transport) {

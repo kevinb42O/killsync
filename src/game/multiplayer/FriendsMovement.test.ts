@@ -35,6 +35,38 @@ function move(p: PlayerMotionState, input: MultiplayerInputFrame | undefined, dt
 }
 
 describe('Friends movement controller', () => {
+  it.each([
+    { sprinting: false, sliding: false, speed: 180 },
+    { sprinting: true, sliding: false, speed: 300 },
+    { sprinting: false, sliding: true, speed: 99 },
+  ])('settles at $speed units per second without a diagonal bonus', ({ speed, ...gait }) => {
+    const terrain = terrainFixture();
+    const straight = actor(), diagonal = actor();
+    for (let i = 1; i <= 12; i++) {
+      move(straight, command(i, gait), COOP_STEP_MS, terrain);
+      move(diagonal, command(i, { ...gait, movement: 9 }), COOP_STEP_MS, terrain);
+    }
+    expect(Math.hypot(straight.velocityX!, straight.velocityY!)).toBeCloseTo(speed, 1);
+    expect(Math.hypot(diagonal.velocityX!, diagonal.velocityY!)).toBeCloseTo(speed, 1);
+    expect(Math.hypot(diagonal.x - 11975, diagonal.y - 12016)).toBeCloseTo(straight.x - 11975, 5);
+  });
+
+  it('does not accelerate a walking jump to the old airborne speed', () => {
+    const p = actor(), terrain = terrainFixture();
+    for (let i = 1; i <= 12; i++) move(p, command(i), COOP_STEP_MS, terrain);
+    move(p, command(13, { jumpPressed: true }), COOP_STEP_MS, terrain);
+    for (let i = 14; i <= 18; i++) move(p, command(i), COOP_STEP_MS, terrain);
+    expect(p.z).toBeGreaterThan(0);
+    expect(p.velocityX).toBeCloseTo(180, 1);
+  });
+
+  it('launches a brief slide at 130 percent of the new sprint pace', () => {
+    const p = actor(), terrain = terrainFixture();
+    move(p, command(1, { sprinting: true, sliding: true }), COOP_STEP_MS, terrain);
+    expect(p.sliding).toBe(true);
+    expect(p.velocityX).toBeCloseTo(390 * Math.exp(-1.8 * COOP_STEP_MS / 1000), 5);
+  });
+
   it.each([32, 64, 160])('requires a jump at a %i-unit terrain face even while sprinting', height => {
     const terrain = terrainFixture();
     for (let z = 0; z < height / 32; z++) terrain.set(375, 375, z, 2);
@@ -69,7 +101,7 @@ describe('Friends movement controller', () => {
   it.each(['ramp', 'long_ramp', 'stairs'] as const)('walks smoothly up a %s without jumping', shape => {
     const p = actor({ x: shape === 'long_ramp' ? 11940 : 11975 }), terrain = terrainFixture(), route = [piece(shape)];
     let peak = 0;
-    for (let i = 1; i <= 18; i++) {
+    for (let i = 1; i <= 30; i++) {
       move(p, command(i), COOP_STEP_MS, terrain, route);
       peak = Math.max(peak, p.z);
     }
@@ -100,10 +132,10 @@ describe('Friends movement controller', () => {
   it('accelerates quickly, brakes smoothly, and preserves takeoff momentum', () => {
     const p = actor();
     move(p, command(1));
-    expect(p.velocityX).toBeGreaterThan(100);
-    expect(p.velocityX).toBeLessThan(300);
+    expect(p.velocityX).toBeGreaterThan(90);
+    expect(p.velocityX).toBeLessThan(180);
     for (let i = 2; i <= 12; i++) move(p, command(i));
-    expect(p.velocityX).toBeGreaterThan(299);
+    expect(p.velocityX).toBeCloseTo(180, 1);
     move(p, command(13, { jumpPressed: true, movement: 0 }));
     const airborneSpeed = p.velocityX!;
     move(p, command(14, { movement: 0 }));
@@ -117,7 +149,7 @@ describe('Friends movement controller', () => {
     for (let i = 1; i <= 12; i++) move(p, command(i, { sprinting: true }));
     move(p, command(13, { sprinting: true, jumpPressed: true }));
     for (let i = 14; i <= 18; i++) move(p, command(i, { sprinting: true }));
-    expect(p.velocityX).toBeGreaterThan(490);
+    expect(p.velocityX).toBeCloseTo(300, 1);
     expect(p.z).toBeGreaterThan(0);
   });
 
@@ -136,10 +168,11 @@ describe('Friends movement controller', () => {
     const p = actor({ x: 12000 - COOP_PLAYER_RADIUS, y: 11980 }), wall = piece('wall', { y: 12000 });
     // A long side wall with its thin face across the forward axis.
     wall.rotation = 1; wall.x = 12004;
-    for (let i = 1; i <= 8; i++) move(p, command(i, { movement: 9 }), COOP_STEP_MS, undefined, [wall]);
+    for (let i = 1; i <= 14; i++) move(p, command(i, { movement: 9 }), COOP_STEP_MS, undefined, [wall]);
     expect(p.x).toBeLessThan(12000);
     expect(p.y).toBeGreaterThan(12025);
-    expect(p.velocityY).toBeGreaterThan(150);
+    expect(p.velocityY).toBeGreaterThan(100);
+    expect(p.velocityY).toBeLessThan(180);
   });
 
   it('allows a jump just after leaving a ledge and consumes that grace once', () => {

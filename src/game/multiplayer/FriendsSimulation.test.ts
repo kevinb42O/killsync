@@ -71,7 +71,7 @@ describe('separate Friends expedition', () => {
     for (let i = 2; i <= 17; i++) { s.setInput('host', input(i)); s.tick(50); }
     const moving = s.createSnapshot().friends!.vehicles[0]; expect(p.z).toBe(14); expect(Math.abs(p.x - moving.x)).toBeLessThan(10);
     s.setInput('host', input(18, { jumpPressed: true, movement: 8 })); s.tick(50);
-    for (let i = 19; i < 40; i++) { s.setInput('host', input(i, { movement: 8 })); s.tick(50); }
+    for (let i = 19; i < 60; i++) { s.setInput('host', input(i, { movement: 8 })); s.tick(50); }
     expect(p.z).toBe(0); expect(p.y - moving.y).toBeGreaterThan(300); expect(p.platformVelocityX).toBe(0);
   });
   it('rotates and elevates free crew, transfers angular momentum to a jumper and holds position when the pilot leaves', () => {
@@ -166,7 +166,7 @@ describe('separate Friends expedition', () => {
       s['friends']!['trainDistance'] = distance; s['friends']!['trainStoppedMs'] = 0;
       const rear = s.createSnapshot().friends!.vehicles[2];
       p.x = rear.x - 60 * Math.cos(rear.angle); p.y = rear.y - 60 * Math.sin(rear.angle); p.z = 14;
-      for (let i = 1; i <= Math.ceil(1350 / COOP_STEP_MS); i++) {
+      for (let i = 1; i <= Math.ceil(2250 / COOP_STEP_MS); i++) {
         const cars = s.createSnapshot().friends!.vehicles.filter(v => v.kind === 'train' && !v.closed);
         const nearest = cars.sort((a, b) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(p.x - b.x, p.y - b.y))[0];
         s.setInput('host', input(i, { movement: 1, aimAngle: quantizeAngle(nearest.angle) })); s.tick(COOP_STEP_MS); expect(p.z, `route distance ${distance}, step ${i}`).toBe(14);

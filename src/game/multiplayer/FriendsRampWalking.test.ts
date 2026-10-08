@@ -72,7 +72,7 @@ describe('player walking over ramp crests without a rope',()=>{
     const player=host['players'].get('host')!;Object.assign(player,f.player);
     const prediction=new LocalPlayerPrediction('host');prediction.reconcile(host.createSnapshot());
     let last:MultiplayerInputFrame;
-    for(let i=1;i<=90;i++){
+    for(let i=1;i<=150;i++){
       const along=(player.x-12000)*Math.cos(f.angle)+(player.y-12000)*Math.sin(f.angle);
       last={type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence:i,clientTime:0,movement:along<f.end+72?1:0,aimAngle:Math.round(f.angle/(Math.PI*2)*65535),aimPitch:32768,selectedSlot:0,firing:false,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false};
       prediction.step(last);host.setInput('host',last);host.tick(1000/30);

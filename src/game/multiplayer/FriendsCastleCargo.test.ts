@@ -3,7 +3,7 @@ import { CASTLE_STAIRS, FriendsTerrain } from '../world/FriendsTerrain';
 import { castleCargoColliders } from './FriendsCastleCargo';
 import { FriendsCargoPhysics } from './FriendsCargoPhysics';
 import { cargoBounds, cargoHullPoints } from './FriendsCargoPose';
-import type { HaulingEnvironment, PhysicalCargo } from './FriendsHauling';
+import { cargoInDeliveryBay, type HaulingEnvironment, type PhysicalCargo } from './FriendsHauling';
 import { FriendsSimulation } from './FriendsSimulation';
 import { quantizeAngle, quantizePitch } from './CoopSimulation';
 import { MULTIPLAYER_PROTOCOL_VERSION, type MultiplayerInputFrame } from './protocol';
@@ -42,7 +42,7 @@ describe('exact castle cargo support',()=>{
     }
     expect(target).toBe(0);
     expect(cargoBounds(cargo).minZ).toBeCloseTo(goal.z,0);
-    expect(Math.hypot(cargo.x-goal.x,cargo.y-goal.y)).toBeLessThan(32);
+    expect(cargoInDeliveryBay(cargo)).toBe(true);
     expect(sim.createSnapshot().friends!.hauling!.ropes).toHaveLength(1);
     sim.setInput('host',input(3602,{interactActionId:1}));sim.tick(50);
     expect(sim.createSnapshot().friends!.hauling!.completedCargoIds).toEqual(['ridge-core']);
