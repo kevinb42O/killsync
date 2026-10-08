@@ -18,7 +18,7 @@ function fixture(){
   return {scene,viewmodel,camera,handCamera,visuals,snapshot,project};
 }
 describe('held hauling rope attachment',()=>{
-  it('keeps a stowed player tether below the first-person view and tapers both local attachment ends',()=>{
+  it('preserves the original full-width first-person shoulder and torso rope attachments',()=>{
     const {scene,visuals,snapshot,project,camera,handCamera}=fixture(),host=snapshot.players[0];
     const passenger={...host,id:'guest',label:'Friend',x:host.x+120,y:host.y,z:host.z};snapshot.players.push(passenger);
     snapshot.friends!.hauling!.ropes=[];snapshot.friends!.hauling!.playerRopes=[{id:host.id,playerId:passenger.id,length:120,bends:[]}];
@@ -28,8 +28,9 @@ describe('held hauling rope attachment',()=>{
       const mesh=scene.getObjectByName('braided-hauling-rope') as FriendsRopeMesh,p=mesh.geometry.getAttribute('position'),segment=end?mesh.geometry.drawRange.count/(3*8*6):0,centre=new THREE.Vector3(),points=[];
       for(let strand=0;strand<3;strand++)for(let side=0;side<8;side++){const point=new THREE.Vector3().fromBufferAttribute(p,(segment*3+strand)*9+side);points.push(point);centre.add(point);}
       centre.multiplyScalar(1/24);
-      expect(centre.clone().project(camera).y).toBeLessThan(-.75);
-      expect(Math.max(...points.map(point=>point.distanceTo(centre)))).toBeLessThan(.12);
+      const expected=end?new THREE.Vector3(passenger.x,passenger.z+26,passenger.y):new THREE.Vector3(host.x+8,host.z+26,host.y+10);
+      expect(centre.distanceTo(expected)).toBeLessThan(.02);
+      expect(Math.max(...points.map(point=>point.distanceTo(centre)))).toBeGreaterThan(1.4);
     }
     visuals.dispose();
   });

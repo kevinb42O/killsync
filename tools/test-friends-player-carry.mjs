@@ -20,7 +20,7 @@ try {
   page.on('pageerror', e => report.errors.push(e.message));
   await page.route('**/@vite/client', route => route.fulfill({ contentType:'application/javascript', body:'export function createHotContext(){return {on(){},off(){},prune(){},send(){},acceptExports(){},accept(){},dispose(){},invalidate(){},data:{}}};export function injectQuery(u){return u};export function updateStyle(id,content){let s=document.getElementById(id);if(!s){s=document.createElement("style");s.id=id;document.head.append(s);}s.textContent=content;}export function removeStyle(id){document.getElementById(id)?.remove();}' }));
   await page.addInitScript(() => {
-    localStorage.setItem('sunline.preferences.v1', JSON.stringify({ renderScale: .7, shadows: false }));
+    localStorage.setItem('sunline.preferences.v1', JSON.stringify({ renderScale: 1, shadows: false }));
     localStorage.setItem('killsync.friends.menu.pause', 'true');
     let locked = null;
     Object.defineProperty(document, 'pointerLockElement', { get: () => locked });
@@ -28,7 +28,7 @@ try {
     document.exitPointerLock = () => { locked = null; document.dispatchEvent(new Event('pointerlockchange')); };
   });
   await page.goto(origin + '/?mode=friends', { waitUntil: 'domcontentloaded' });
-  await page.getByLabel('Your name', { exact: true }).fill('Carry review');
+  await page.getByLabel('Your name', { exact: true }).fill('Carrier');
   await page.getByRole('button', { name: 'Play on my own', exact: true }).click({ noWaitAfter: true });
   await page.locator('.coop-arena').waitFor({ state: 'attached' });
   await page.waitForFunction(() => !document.body.innerText.includes('OPERATOR LINK / SUNLINE COMMONS'), undefined, { timeout: 120000 });
@@ -54,7 +54,7 @@ try {
     for (const tree of frontier.treesNear(12000, 12000, 1200)) frontier.harvested.add(tree.id);
     frontier.snapshotCache = undefined;
     const host = [...simulation.players.values()][0];
-    simulation.addPlayer({ id: 'carry-afk-guest', label: 'AFK Friend', color: '#f90' });
+    simulation.addPlayer({ id: 'carry-afk-guest', label: 'Friend', color: '#f90' });
     const guest = simulation.players.get('carry-afk-guest');
     Object.assign(host, { x: 12100, y: 12016, z: 0, angle: 0, verticalVelocity: 0 });
     Object.assign(guest, { x: 12220, y: 12016, z: 0, verticalVelocity: 0 });
@@ -84,6 +84,52 @@ try {
     gap: Math.hypot(carryReview.host.x - carryReview.guest.x, carryReview.host.y - carryReview.guest.y, carryReview.host.z - carryReview.guest.z),
   }));
   assert.equal(report.rendering.glError, 0); assert.equal(report.rendering.ropes, 1); assert(report.rendering.visibleRope);
+  if (process.env.FRIENDS_CARRY_PERSPECTIVES === '1') {
+    // Render one frozen, connected game state from each player's own camera.
+    // Capture the game canvas itself, excluding the host's HTML HUD while
+    // inspecting the passenger's first-person renderer.
+    await page.evaluate(() => {
+      const r = window.carryReview;
+      r.frozen = r.simulation.createSnapshot();
+      r.originalTick = r.simulation.tick; r.simulation.tick = () => {};
+      r.originalRender = r.bridge.render;
+      r.bridge.render = function (_snapshot, _localId, dt) {
+        const carrier = r.capturePlayer === r.host.id;
+        this.setFriendsTool(r.captureTool ?? (carrier ? 5 : 0), false, true, false);
+        const result = r.originalRender.call(this, r.frozen, r.capturePlayer, dt, undefined, true, false);
+        if (r.capturePending) {
+          // Read before the WebGL drawing buffer is discarded on presentation.
+          r.captureImage = this.renderer.renderer.domElement.toDataURL('image/png');
+          r.capturePending = false;
+        }
+        return result;
+      };
+      r.capturePlayer = r.host.id;
+      r.bridge.renderer.yaw = -Math.PI / 2; r.bridge.renderer.pitch = 0;
+    });
+    const capture = async filename => {
+      await page.evaluate(() => { carryReview.captureImage = undefined; carryReview.capturePending = true; });
+      await page.waitForFunction(() => Boolean(carryReview.captureImage));
+      const data = await page.evaluate(() => carryReview.captureImage);
+      await writeFile(directory + '/' + filename, Buffer.from(data.split(',')[1], 'base64'));
+    };
+    await capture('carrier-ropegun-first-person.png');
+    await page.evaluate(() => { carryReview.captureTool = 0; });
+    await capture('carrier-first-person.png');
+    await page.evaluate(() => {
+      const r = window.carryReview; r.capturePlayer = r.guest.id;
+      r.bridge.renderer.yaw = Math.PI / 2; r.bridge.renderer.pitch = 0;
+    });
+    // Give the normal camera tracking spring time to settle on the passenger.
+    await page.waitForTimeout(800);
+    await capture('passenger-first-person.png');
+    await page.evaluate(() => {
+      const r = window.carryReview; r.bridge.render = r.originalRender;
+      r.simulation.tick = r.originalTick;
+      r.bridge.renderer.yaw = -Math.PI / 2; r.bridge.renderer.pitch = 0;
+    });
+    report.checks.push('captured the same connected state from carrier and passenger first-person cameras');
+  }
   await page.keyboard.press('r');
   await page.waitForFunction(() => carryReview.simulation.friends.hauling.snapshot().playerRopes.length === 0);
   await page.waitForFunction(() => !document.querySelector('.friends-player-carry'));
