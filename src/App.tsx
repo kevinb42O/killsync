@@ -1,11 +1,10 @@
 import type { CoopGameMode } from './game/multiplayer/CoopGameMode';
-import { BreachTransmission } from './components/BreachTransmission';
+import { MainMenu } from './components/MainMenu';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2, Radio, Gamepad2, Smartphone } from 'lucide-react';
 import { GameEngine, BalanceTuning, DEFAULT_BALANCE_TUNING } from './game/Engine';
 import { GameHUD } from './components/GameHUD';
-import { MenuEffects, triggerMenuEffect } from './components/MenuEffects';
 import { IntelArchive } from './components/IntelArchive';
 import { AchievementsPage } from './components/AchievementsPage';
 import { ShopMenu } from './components/ShopMenu';
@@ -98,6 +97,7 @@ export default function App() {
     }
     return 'MENU';
   });
+  const mainMenuReturnFocus = useRef<string | undefined>(undefined);
   const [viewMode, setViewMode] = useState<ViewMode>('TOPDOWN_2D');
   const [pointerLockActive, setPointerLockActive] = useState(false);
   const [multiplayerGameMode, setMultiplayerGameMode] = useState<CoopGameMode>(() => new URLSearchParams(window.location.search).get('mode') === 'friends' ? 'friends' : 'survival');
@@ -778,6 +778,9 @@ export default function App() {
           let target = root?.querySelector<HTMLElement>(
             '[role="dialog"] button:not(:disabled), [role="dialog"] input:not(:disabled), [role="dialog"] select:not(:disabled), [role="dialog"] [tabindex="0"]'
           );
+          if (gameState === 'MENU' && mainMenuReturnFocus.current) {
+            target = root?.querySelector<HTMLElement>(`[data-menu-action="${mainMenuReturnFocus.current}"]`) || target;
+          }
           if (!target && root) {
             target = Array.from(root.querySelectorAll<HTMLElement>(
               'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]'
@@ -1522,7 +1525,6 @@ export default function App() {
         if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) soundManager.activate();
       }}
     >
-      {gameState === 'MENU' && <MenuEffects />}
       {/* 2D Canvas for Topdown Mode */}
       <canvas
         ref={canvasRef}
@@ -1650,456 +1652,33 @@ export default function App() {
       {/* Screens */}
       <AnimatePresence>
         {gameState === 'MENU' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="main-menu-screen absolute inset-0 flex items-center justify-center z-50"
-          >
-            {/* Base overlay over canvas */}
-            <div className="absolute inset-0 bg-black/95 backdrop-blur-md pointer-events-none z-0" />
-            {/* Cyberpunk background image */}
-            <div 
-              className="absolute inset-0 bg-cover bg-center pointer-events-none opacity-20 mix-blend-screen z-0"
-              style={{ backgroundImage: `url('/neon_cityscape_bg.png')` }}
-            />
-            {/* Subtle radial gradient */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] pointer-events-none z-0" />
-
-            {/* Fullscreen toggle */}
-            <button
-              onClick={toggleFullscreen}
-              onMouseEnter={() => soundManager.playUIHover()}
-              className="main-menu-fullscreen absolute top-6 left-6 p-2.5 bg-white/[0.03] text-white/30 hover:text-white border border-white/[0.06] hover:border-white/20 hover:bg-white/[0.08] transition-all z-50 cursor-pointer"
-              style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
-              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-            >
-              {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-            </button>
-
-            <div className="main-menu-profile absolute top-6 right-20 z-50 w-[320px] max-w-[calc(100vw-7rem)] p-3 bg-black/60 border border-cyan-500/20 rounded-xl backdrop-blur-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-[10px] text-cyan-200/70 uppercase tracking-[0.2em] font-bold">Profile Level</div>
-                <div className="text-sm font-mono font-black text-cyan-300">Lv {displayAccountLevel} / {MAX_ACCOUNT_LEVEL}</div>
-              </div>
-              <div className="main-menu-profile-progress h-2.5 bg-white/10 rounded-full overflow-hidden border border-white/10">
-                <motion.div
-                  className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-200"
-                  animate={{
-                    width: `${displayAccountLevel >= MAX_ACCOUNT_LEVEL ? 100 : (displayAccountXP / Math.max(1, getAccountXPRequired(displayAccountLevel))) * 100}%`
-                  }}
-                  transition={{ duration: 0.2 }}
-                />
-              </div>
-              <div className="main-menu-profile-details mt-2 flex items-center justify-between">
-                <div className="text-[10px] text-white/40 font-mono">
-                  {displayAccountLevel >= MAX_ACCOUNT_LEVEL
-                    ? 'MAX LEVEL'
-                    : `${displayAccountXP} / ${getAccountXPRequired(displayAccountLevel)} XP`}
-                </div>
-                {lastXPGainTotal > 0 && (
-                  <div className={`text-[10px] font-mono font-bold ${xpAnimationActive ? 'text-yellow-300' : 'text-cyan-300/80'}`}>
-                    +{lastXPGainTotal} XP
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ═══════ MAIN MENU LAYOUT ═══════ */}
-            <div className="main-menu-layout relative z-10 flex items-center justify-center gap-16 w-full max-w-5xl px-8">
-              
-              {/* ─── LEFT: Title + Buttons ─── */}
-              <div className="main-menu-primary flex-1 max-w-md">
-                {/* Title */}
-                <motion.div initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
-                  <motion.h1 
-                    className="main-menu-title relative text-7xl font-black italic tracking-tighter mb-1 leading-none"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute left-0 top-0 text-transparent bg-clip-text bg-gradient-to-b from-red-200/70 via-red-500/60 to-red-900/60 blur-[1px]"
-                      style={{ transform: 'translate(1.5px, 1px)' }}
-                    >
-                      KILL
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute left-0 top-0 text-red-500/35"
-                      style={{ transform: 'translate(-1.5px, 0)', clipPath: 'polygon(0 58%, 100% 50%, 100% 68%, 0 78%)' }}
-                    >
-                      KILL
-                    </span>
-                    <span className="relative inline-block text-transparent bg-clip-text bg-gradient-to-b from-red-200 via-red-500 to-red-900 drop-shadow-[0_0_18px_rgba(185,28,28,0.65)] [text-shadow:0_2px_0_rgba(80,10,10,0.65)]">
-                      KILL
-                    </span>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-br from-cyan-300 via-cyan-500 to-blue-600 drop-shadow-[0_0_14px_rgba(34,211,238,0.45)]">
-                      SYNC
-                    </span>
-                  </motion.h1>
-                  <div className="main-menu-subtitle flex items-center gap-3 mb-5">
-                    <div className="h-px flex-1 bg-gradient-to-r from-red-500/60 via-cyan-400/35 to-transparent" />
-                    <p className="text-white/35 text-[10px] uppercase tracking-[0.4em] font-mono">Reality Breach / Co-op Survival</p>
-                    <div className="h-px w-8 bg-white/10" />
-                  </div>
-                </motion.div>
-
-                <p className="breach-menu-intro">Survive a world you can rewrite.<span>Link your squad. Weaponize the breach.</span></p>
-
-                {/* Menu Buttons */}
-                <div className="main-menu-actions flex flex-col gap-2">
-                  {/* ▸ PUBLIC CO-OP — server browser and automatic signaling */}
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.14, type: 'spring', damping: 20 }}
-                    onClick={(e) => {
-                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
-                      soundManager.playUIClick();
-                      setMultiplayerGameMode('survival');
-                      setGameState('MULTIPLAYER_SETUP');
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex h-14 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    <div className="absolute inset-0 bg-[#ffb86b] transition-all duration-300 group-hover:bg-[#ffe5c5]" />
-                    <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-black/20" />
-                    <div className="relative z-10 flex w-full items-center px-6">
-                      <div className="mr-4 flex h-8 w-8 items-center justify-center bg-black/10 text-black transition-colors group-hover:bg-black/20">
-                        <Radio size={15} />
-                      </div>
-                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-black">Enter the Breach</span>
-                      <ChevronRight size={16} className="ml-auto text-black/50 transition-all group-hover:translate-x-1 group-hover:text-black" />
-                    </div>
-                  </motion.button>
-
-                  <motion.button initial={{ x: -40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: .18 }}
-                    onClick={() => { soundManager.playUIClick(); setMultiplayerGameMode('friends'); setGameState('MULTIPLAYER_SETUP'); }}
-                    onMouseEnter={() => soundManager.playUIHover()} className="friends-menu-entry">
-                    <span className="friends-menu-entry__icon">↗</span><span><strong>Friends mode</strong><small>Sunline Frontier · mine, build, fly & explore together</small></span><ChevronRight size={16} />
-                  </motion.button>
-                  {/* ▸ INITIALIZE RUN — Primary CTA */}
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.1, type: 'spring', damping: 20 }}
-                    onClick={(e) => {
-                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
-                      soundManager.playUIClick();
-                      setTimeout(() => setGameState('SOLO_SETUP'), 400);
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex items-center h-14 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    {/* Bg fill */}
-                    <div className="absolute inset-0 border border-cyan-300/25 bg-[#0e1b27] transition-all duration-300 group-hover:bg-[#172d3e]" />
-                    {/* Scanline on hover */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)' }} />
-                    {/* Content */}
-                    <div className="relative z-10 flex items-center w-full px-6">
-                      <div className="w-8 h-8 rounded-sm bg-black/20 flex items-center justify-center mr-4 group-hover:bg-black/10 transition-colors">
-                        <Play size={16} fill="currentColor" className="text-cyan-100 ml-0.5" />
-                      </div>
-                      <span className="text-cyan-100 font-black text-sm uppercase tracking-[0.15em]">Solo Recon</span>
-                      <ChevronRight size={18} className="text-cyan-100/40 ml-auto group-hover:translate-x-1 transition-transform" />
-                    </div>
-                    {/* Bottom accent line */}
-                    <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full bg-black/20 transition-all duration-500" />
-                  </motion.button>
-
-                  {/* ▸ OPERATOR SELECT */}
-                  {(() => {
-                    const op = OPERATOR_DEFINITIONS.find(o => o.id === selectedOperator);
-                    const opColor = op?.color || '#00ffff';
-                    return (
-                      <motion.button
-                        initial={{ x: -40, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.17, type: 'spring', damping: 20 }}
-                        onClick={(e) => {
-                          triggerMenuEffect(e.clientX, e.clientY, 'tentacle');
-                          soundManager.playUIClick();
-                          setTimeout(() => setGameState('OPERATOR_SELECT'), 400);
-                        }}
-                        onMouseEnter={() => soundManager.playUIHover()}
-                        className="group relative flex items-center h-14 cursor-pointer overflow-hidden"
-                        style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
-                      >
-                        {/* Bg */}
-                        <div className="absolute inset-0 bg-white/[0.03] border border-white/[0.06] group-hover:bg-white/[0.08] group-hover:border-white/15 transition-all duration-300" />
-                        {/* Left accent bar */}
-                        <div className="absolute left-0 top-0 bottom-0 w-[3px] transition-all duration-300" style={{ background: opColor, opacity: 0.4 }} />
-                        <div className="absolute left-0 top-0 bottom-0 w-[3px] scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-top" style={{ background: opColor }} />
-                        {/* Content */}
-                        <div className="relative z-10 flex items-center w-full px-6">
-                          {/* Mini operator avatar */}
-                          <div className="w-8 h-8 rounded-sm flex items-center justify-center mr-4 relative overflow-hidden bg-black/40">
-                            {op && <img src={`/${op.id}.png`} alt={op.name} className="w-full h-full object-cover" />}
-                          </div>
-                          <div className="flex flex-col items-start">
-                            <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Operators</span>
-                          </div>
-                          {/* Active operator badge on right */}
-                          <div className="ml-auto flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                            <div className="h-px w-4 group-hover:w-8 transition-all duration-300" style={{ background: opColor }} />
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider" style={{ color: opColor }}>{op?.name || 'Phantom'}</span>
-                          </div>
-                        </div>
-                      </motion.button>
-                    );
-                  })()}
-
-                  {/* ▸ NEURAL LAB */}
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.24, type: 'spring', damping: 20 }}
-                    onClick={(e) => {
-                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
-                      soundManager.playUIClick();
-                      setTimeout(() => setGameState('PERMANENT_UPGRADES'), 400);
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex items-center h-14 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    <div className="absolute inset-0 bg-white/[0.03] border border-white/[0.06] group-hover:bg-white/[0.08] group-hover:border-white/15 transition-all duration-300" />
-                    {/* Left accent */}
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-yellow-500/30" />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-bottom bg-yellow-400" />
-                    {/* Content */}
-                    <div className="relative z-10 flex items-center w-full px-6">
-                      <div className="w-8 h-8 rounded-sm bg-yellow-500/10 flex items-center justify-center mr-4 group-hover:bg-yellow-500/20 transition-colors">
-                        <Database size={15} className="text-yellow-400/70 group-hover:text-yellow-400 transition-colors" />
-                      </div>
-                      <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Neural Lab</span>
-                      {/* Upgrade count badge */}
-                      {(() => {
-                        const totalLevels = Object.values(permanentUpgrades as Record<string, number>).reduce((a: number, b: number) => a + b, 0);
-                        return totalLevels > 0 ? (
-                          <div className="ml-auto flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                            <div className="h-px w-4 group-hover:w-8 transition-all duration-300 bg-yellow-500/50" />
-                            <span className="text-[10px] font-mono font-bold text-yellow-500/70 uppercase tracking-wider">{totalLevels} Upgrades</span>
-                          </div>
-                        ) : (
-                          <ChevronRight size={16} className="text-white/10 ml-auto group-hover:text-white/30 group-hover:translate-x-1 transition-all" />
-                        );
-                      })()}
-                    </div>
-                  </motion.button>
-
-                  {/* ▸ INTEL ARCHIVE */}
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.31, type: 'spring', damping: 20 }}
-                    onClick={(e) => {
-                      triggerMenuEffect(e.clientX, e.clientY, 'tentacle');
-                      soundManager.playUIClick();
-                      setTimeout(() => setGameState('INTEL_ARCHIVE'), 400);
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex items-center h-14 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    <div className="absolute inset-0 bg-white/[0.03] border border-white/[0.06] group-hover:bg-white/[0.08] group-hover:border-white/15 transition-all duration-300" />
-                    {/* Left accent */}
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-red-500/30" />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-center bg-red-400" />
-                    {/* Content */}
-                    <div className="relative z-10 flex items-center w-full px-6">
-                      <div className="w-8 h-8 rounded-sm bg-red-500/10 flex items-center justify-center mr-4 group-hover:bg-red-500/20 transition-colors">
-                        <FileWarning size={15} className="text-red-400/70 group-hover:text-red-400 transition-colors" />
-                      </div>
-                      <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Intel Archive</span>
-                      <div className="ml-auto flex items-center gap-2 opacity-40 group-hover:opacity-70 transition-opacity">
-                        <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider hidden sm:inline">Threats &amp; Arms</span>
-                        <ChevronRight size={16} className="text-white/10 group-hover:text-white/30 group-hover:translate-x-1 transition-all" />
-                      </div>
-                    </div>
-                  </motion.button>
-
-                  {/* ▸ ACHIEVEMENTS */}
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.34, type: 'spring', damping: 20 }}
-                    onClick={(e) => {
-                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
-                      soundManager.playUIClick();
-                      setTimeout(() => setGameState('ACHIEVEMENTS'), 300);
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex items-center h-12 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    <div className="absolute inset-0 bg-white/[0.03] border border-white/[0.06] group-hover:bg-white/[0.08] group-hover:border-white/15 transition-all duration-300" />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-emerald-500/30" />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-center bg-emerald-400" />
-                    <div className="relative z-10 flex items-center w-full px-6">
-                      <div className="w-8 h-8 rounded-sm bg-emerald-500/10 flex items-center justify-center mr-4 group-hover:bg-emerald-500/20 transition-colors">
-                        <Trophy size={15} className="text-emerald-300/80 group-hover:text-emerald-200 transition-colors" />
-                      </div>
-                      <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Achievements</span>
-                      <div className="ml-auto flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300/90">
-                          {achievementUnlocks.length}/{ACHIEVEMENTS.length}
-                        </span>
-                        <ChevronRight size={16} className="text-white/20 group-hover:text-emerald-200 group-hover:translate-x-1 transition-all" />
-                      </div>
-                    </div>
-                  </motion.button>
-
-                  {/* ▸ CONTROLS */}
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.35, type: 'spring', damping: 20 }}
-                    onClick={(e) => {
-                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
-                      soundManager.playUIClick();
-                      setTimeout(() => setGameState('SETTINGS'), 250);
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex items-center h-12 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    <div className="absolute inset-0 bg-white/[0.03] border border-white/[0.06] group-hover:bg-white/[0.08] group-hover:border-white/15 transition-all duration-300" />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-violet-500/30" />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-center bg-violet-400" />
-                    <div className="relative z-10 flex items-center w-full px-6">
-                      <div className="w-8 h-8 rounded-sm bg-violet-500/10 flex items-center justify-center mr-4 group-hover:bg-violet-500/20 transition-colors">
-                        <Settings2 size={15} className="text-violet-300/80 group-hover:text-violet-200 transition-colors" />
-                      </div>
-                      <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Settings</span>
-                      <div className="ml-auto flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-violet-300/90">{controlScheme}</span>
-                        <ChevronRight size={16} className="text-white/20 group-hover:text-violet-200 group-hover:translate-x-1 transition-all" />
-                      </div>
-                    </div>
-                  </motion.button>
-
-                  {/* ▸ NIGHTMARE MODE TOGGLE */}
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.35, type: 'spring', damping: 20 }}
-                    onClick={(e) => {
-                      triggerMenuEffect(e.clientX, e.clientY, 'electric_arc');
-                      soundManager.playUIClick();
-                      const input = window.prompt('Enter admin password');
-                      if (input === ADMIN_DASHBOARD_PASSWORD) {
-                        setTimeout(() => setGameState('ADMIN_DASHBOARD'), 250);
-                      } else if (input !== null) {
-                        window.alert('Incorrect password');
-                      }
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex items-center h-12 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    <div className="absolute inset-0 bg-white/[0.03] border border-white/[0.06] group-hover:bg-white/[0.08] group-hover:border-white/15 transition-all duration-300" />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-cyan-500/35" />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-center bg-cyan-400" />
-                    <div className="relative z-10 flex items-center w-full px-6">
-                      <div className="w-8 h-8 rounded-sm bg-cyan-500/10 flex items-center justify-center mr-4 group-hover:bg-cyan-500/20 transition-colors">
-                        <Target size={15} className="text-cyan-300/80 group-hover:text-cyan-200 transition-colors" />
-                      </div>
-                      <span className="text-white/80 font-bold text-xs uppercase tracking-[0.12em] group-hover:text-white transition-colors">Admin Dashboard</span>
-                      <div className="ml-auto flex items-center gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                        <span className="text-[9px] font-mono uppercase tracking-wider text-cyan-300/70">Tune Live</span>
-                        <ChevronRight size={16} className="text-white/20 group-hover:text-cyan-200 group-hover:translate-x-1 transition-all" />
-                      </div>
-                    </div>
-                  </motion.button>
-
-                  <motion.button
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.42, type: 'spring', damping: 20 }}
-                    onClick={() => {
-                      setNightmareMode(prev => !prev);
-                      soundManager.playUIClick();
-                    }}
-                    onMouseEnter={() => soundManager.playUIHover()}
-                    className="group relative flex items-center h-10 cursor-pointer overflow-hidden"
-                    style={{ clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 0px))' }}
-                  >
-                    <div className={`absolute inset-0 border transition-all duration-300 ${nightmareMode ? 'bg-red-950/30 border-red-500/35 group-hover:border-red-400/60' : 'bg-white/[0.02] border-white/[0.05] group-hover:bg-white/[0.06] group-hover:border-white/10'}`} />
-                    {/* Left accent */}
-                    <div className={`absolute left-0 top-0 bottom-0 w-[3px] transition-all duration-300 ${nightmareMode ? 'bg-red-500' : 'bg-white/10 group-hover:bg-white/20'}`} />
-                    {/* Content */}
-                    <div className="relative z-10 flex items-center w-full px-5">
-                      <div className={`w-7 h-7 rounded-sm flex items-center justify-center mr-3 transition-colors ${nightmareMode ? 'bg-red-500/20' : 'bg-white/[0.03] group-hover:bg-white/[0.06]'}`}>
-                        <Skull size={13} className={nightmareMode ? 'text-red-400' : 'text-white/20 group-hover:text-white/35'} />
-                      </div>
-                      <div className="flex flex-col items-start">
-                        <span className={`font-bold text-[10px] uppercase tracking-[0.15em] transition-colors ${nightmareMode ? 'text-red-300' : 'text-white/40 group-hover:text-white/60'}`}>
-                          Nightmare Mode
-                        </span>
-                        {nightmareMode && (
-                          <span className="text-[8px] font-mono text-red-500/60 uppercase tracking-wider">
-                            More events · Adaptive scaling · No mercy
-                          </span>
-                        )}
-                      </div>
-                      {/* Toggle pill */}
-                      <div className="ml-auto flex items-center gap-2">
-                        <div className={`w-9 h-5 rounded-full relative transition-all duration-300 ${nightmareMode ? 'bg-red-500/80' : 'bg-white/10'}`}>
-                          <div className={`absolute w-3.5 h-3.5 rounded-full top-[3px] transition-all duration-300 ${nightmareMode ? 'left-[19px] bg-white' : 'left-[3px] bg-white/30'}`} />
-                        </div>
-                      </div>
-                    </div>
-                  </motion.button>
-                </div>
-
-                {/* ─── Resources Bar ─── */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.45 }}
-                  className="mt-6 flex items-center gap-5 px-2"
-                >
-                  <div className="flex items-center gap-2">
-                    <Coins size={13} className="text-yellow-500/70" />
-                    <span className="text-sm font-mono font-bold text-yellow-500">{playerCoins.toLocaleString()}</span>
-                  </div>
-                  <div className="w-px h-4 bg-white/10" />
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 bg-white rounded-sm rotate-45 border border-cyan-400/50" />
-                    <span className="text-sm font-mono font-bold text-white/70">{savedDataCores}</span>
-                    <span className="text-[9px] text-white/25 uppercase tracking-wider font-mono">cores</span>
-                  </div>
-                  <div className="w-px h-4 bg-white/10" />
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] text-white/25 uppercase tracking-wider font-mono">Lv</span>
-                    <span className="text-sm font-mono font-bold text-white/40">{playerLevel}</span>
-                  </div>
-                </motion.div>
-              </div>
-
-              <BreachTransmission />
-            </div>
-
-            {/* Credit */}
-            <a 
-              href="https://www.webaanzee.be" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="main-menu-credit absolute bottom-6 right-6 flex items-center gap-1.5 group transition-opacity opacity-30 hover:opacity-100"
-              onMouseEnter={() => soundManager.playUIHover()}
-            >
-              <span className="text-[10px] font-mono tracking-widest text-white/50 group-hover:text-white transition-colors">
-                by
-              </span>
-              <span className="text-xs font-bold tracking-tight">
-                <span className="text-white">webaanzee.</span>
-                <span className="text-[#ffcc00]">be</span>
-              </span>
-              <ExternalLink size={12} className="text-white/40 group-hover:text-[#ffcc00] transition-colors" />
-            </a>
-          </motion.div>
+          <MainMenu
+            onEnterMode={mode => { setMultiplayerGameMode(mode); setGameState('MULTIPLAYER_SETUP'); }}
+            onNavigate={setGameState}
+            onAdmin={() => {
+              const input = window.prompt('Enter admin password');
+              if (input === ADMIN_DASHBOARD_PASSWORD) setGameState('ADMIN_DASHBOARD');
+              else if (input !== null) window.alert('Incorrect password');
+            }}
+            onFullscreen={toggleFullscreen}
+            onToggleNightmare={() => setNightmareMode(previous => !previous)}
+            isFullscreen={isFullscreen}
+            nightmareMode={nightmareMode}
+            accountLevel={displayAccountLevel}
+            maxAccountLevel={MAX_ACCOUNT_LEVEL}
+            accountXP={displayAccountXP}
+            accountXPRequired={getAccountXPRequired(displayAccountLevel)}
+            lastXPGain={lastXPGainTotal}
+            achievementCount={achievementUnlocks.length}
+            achievementTotal={ACHIEVEMENTS.length}
+            coins={playerCoins}
+            dataCores={savedDataCores}
+            playerLevel={playerLevel}
+            operatorName={OPERATOR_DEFINITIONS.find(operator => operator.id === selectedOperator)?.name || 'Phantom'}
+            upgradeCount={Object.values(permanentUpgrades as Record<string, number>).reduce((total, level) => total + level, 0)}
+            returnFocus={mainMenuReturnFocus.current}
+            onRememberFocus={action => { mainMenuReturnFocus.current = action; }}
+          />
         )}
 
         {gameState === 'PAUSED' && (

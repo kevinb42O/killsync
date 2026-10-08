@@ -1,0 +1,112 @@
+.two-worlds-menu{--sun-cream:#f8f5ed;--sun-ink:#253c32;--sun-sage:#486b57;--breach-bg:#080d15;--breach-ink:#ecf4f4;--breach-cyan:#65dfec;position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;background:var(--breach-bg);color:var(--breach-ink);isolation:isolate;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color-scheme:dark}
+.two-worlds-menu *{box-sizing:border-box}
+.two-worlds-menu button,.two-worlds-menu summary,.two-worlds-menu a{-webkit-tap-highlight-color:transparent;cursor:pointer}
+.two-worlds-menu button{font:inherit;border:0}
+.two-worlds-menu button:disabled{cursor:default}
+.two-worlds-menu button:focus-visible,.two-worlds-menu summary:focus-visible,.two-worlds-menu a:focus-visible{outline:3px solid currentColor;outline-offset:5px}
+.two-worlds-menu svg{flex-shrink:0}
+.two-worlds-menu__header{position:relative;z-index:3;flex-shrink:0;display:flex;align-items:center;gap:24px;min-height:56px;padding:12px max(28px,env(safe-area-inset-left));padding-top:max(12px,env(safe-area-inset-top));background:#101821}
+.two-worlds-menu__wordmark{font-size:12px;letter-spacing:.18em;font-weight:700;text-transform:uppercase}
+.two-worlds-menu__prompt{color:#adbec5;font-size:12px}
+.two-worlds-menu__worlds{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:580px;position:relative;isolation:isolate}
+.two-worlds-menu__world{min-width:0;position:relative;isolation:isolate;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:clamp(30px,4vw,60px) clamp(28px,4vw,72px) 20px;transition:opacity .32s ease,transform .36s ease}
+.two-worlds-menu__friends{background:#bfd5cb;color:var(--sun-ink);font-family:'Trebuchet MS',Inter,ui-sans-serif,system-ui,sans-serif;color-scheme:light}
+.two-worlds-menu__friends:after{content:'';position:absolute;inset:0;z-index:3;pointer-events:none;box-shadow:inset -1px 0 #dce7db80}
+.two-worlds-menu__survival{background:var(--breach-bg);color:var(--breach-ink)}
+.two-worlds-menu__wash{position:absolute;inset:0;pointer-events:none;z-index:-1}
+.two-worlds-menu__friends .two-worlds-menu__wash{background:linear-gradient(180deg,transparent 0%,transparent 37%,#f8f5ed30 46%,#f8f5edea 61%,#f8f5ed 82%)}
+.two-worlds-menu__friends .two-worlds-menu__eyebrow{display:inline-flex;padding:7px 11px;border-radius:20px;background:#f8f5edee;color:#253c32;font-weight:500}
+.two-worlds-menu__island{position:absolute;inset:0;z-index:-3;pointer-events:none;background:#b8d6db url('/sunline-menu-bg.webp') center top/cover no-repeat}
+.two-worlds-menu__city{position:absolute;inset:0;z-index:-3;pointer-events:none;background:url('/neon_cityscape_bg.png') center/cover no-repeat}
+.two-worlds-menu__survival .two-worlds-menu__wash{background:radial-gradient(ellipse at 78% 16%,#e7495940,transparent 47%),linear-gradient(180deg,#080d151a,#080d1580 42%,#080d15f5 70%,#080d15)}
+.two-worlds-menu__identity,.two-worlds-menu__content{width:100%;max-width:560px;position:relative;flex-shrink:0}
+.two-worlds-menu__eyebrow{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;letter-spacing:.025em;margin:0 0 16px}
+.two-worlds-menu__survival .two-worlds-menu__eyebrow{text-transform:uppercase;letter-spacing:.13em}
+.two-worlds-menu__brand{margin:0;font-size:clamp(62px,7vw,110px);line-height:1;letter-spacing:-.075em;font-weight:900}
+.two-worlds-menu__friends .two-worlds-menu__brand{display:inline-block;transform:rotate(-3deg);text-shadow:0 3px #f8f5ed80}
+.two-worlds-menu__survival .two-worlds-menu__brand{font-family:Impact,'Arial Narrow',sans-serif;font-weight:400;letter-spacing:.005em;text-shadow:2px 0 #65dfec50,-2px 1px #e7495970}
+.two-worlds-menu__subbrand{margin:22px 0 0;font-size:12px;line-height:1.5}
+.two-worlds-menu__survival .two-worlds-menu__subbrand{font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--breach-cyan);text-transform:uppercase;font-size:10px;letter-spacing:.1em}
+.two-worlds-menu__content{margin-top:auto;padding-top:40px}
+.two-worlds-menu__content h2{font-size:clamp(30px,3vw,44px);font-weight:700;line-height:1.15;letter-spacing:-.045em;margin:0 0 12px;min-height:2.3em;text-wrap:balance}
+.two-worlds-menu__content h2 em{font-style:normal;color:var(--sun-sage)}
+.two-worlds-menu__survival .two-worlds-menu__content h2{display:flex;align-items:flex-end}
+.two-worlds-menu__description{font-size:14px;line-height:1.65;color:#52685b;margin:0 0 24px;min-height:48px}
+.two-worlds-menu__survival .two-worlds-menu__description{color:#b3c2cb}
+.two-worlds-menu__entry{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-height:56px;padding:16px 22px;background:var(--sun-sage);color:var(--sun-cream);border-radius:18px;font-size:15px!important;font-weight:700!important;transition:transform .18s ease,background .18s ease,box-shadow .18s ease}
+.two-worlds-menu__entry:hover,.two-worlds-menu__entry:focus-visible{transform:translateY(-2px);background:#385842;box-shadow:0 8px 22px #38584220}
+.two-worlds-menu__survival .two-worlds-menu__entry{background:var(--breach-cyan);color:#080d15;border-radius:0;font:700 13px/1.5 'JetBrains Mono',ui-monospace,monospace;text-transform:uppercase;letter-spacing:.06em;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px))}
+.two-worlds-menu__survival .two-worlds-menu__entry:hover,.two-worlds-menu__survival .two-worlds-menu__entry:focus-visible{background:#a7f3fa;box-shadow:0 0 30px #65dfec24}
+.two-worlds-menu__survival .two-worlds-menu__entry:focus-visible{outline-offset:-6px;outline-color:#080d15}
+.two-worlds-menu__world-footer{min-height:128px}
+.two-worlds-menu__support{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;margin:10px 0 0;font-size:11px;color:#52685b}
+.two-worlds-menu__survival .two-worlds-menu__support{color:#a5bbc5;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;text-transform:uppercase}
+.two-worlds-menu__support button{display:flex;align-items:center;gap:6px;min-height:36px;padding:6px 0;background:transparent;color:inherit;font-size:11px;text-transform:none}
+.two-worlds-menu__preparation{display:flex;align-items:center;flex-wrap:wrap;gap:6px 20px;margin:4px 0 8px}
+.two-worlds-menu__preparation button{padding:8px 0;min-height:34px;color:#c1cfd6;background:transparent;font-size:11px}
+.two-worlds-menu__preparation button:hover,.two-worlds-menu__support button:hover{color:var(--breach-cyan);text-decoration:underline;text-underline-offset:4px}
+.two-worlds-menu__resources{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;color:#a5bac4;font:10px/1.5 'JetBrains Mono',ui-monospace,monospace}
+.two-worlds-menu__resources>span{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.two-worlds-menu__nightmare{margin-left:auto;display:flex;align-items:center;gap:6px;min-height:32px;background:transparent;color:#a5bac4;font-size:10px!important;padding:4px 0}
+.two-worlds-menu__nightmare span{font-size:9px;padding:2px 5px;background:#22333e;border-radius:3px}
+.two-worlds-menu__nightmare[aria-pressed=true]{color:#ff9ca6}
+.two-worlds-menu__nightmare[aria-pressed=true] span{background:#682431;color:#ffe3e6}
+.two-worlds-menu__utilities{position:relative;z-index:4;flex-shrink:0;display:flex;align-items:center;gap:10px 22px;padding:8px max(28px,env(safe-area-inset-left));padding-bottom:max(8px,env(safe-area-inset-bottom));min-height:56px;background:#101821;color:#adbec5;font-size:11px}
+.two-worlds-menu__utilities>button,.two-worlds-menu__utilities summary{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 0;background:transparent;color:inherit;font-size:11px;list-style:none}
+.two-worlds-menu__utilities summary::-webkit-details-marker{display:none}
+.two-worlds-menu__utilities>button:hover,.two-worlds-menu__utilities summary:hover{color:#ecf4f4}
+.two-worlds-menu__profile{margin-left:auto}
+.two-worlds-menu__tools summary{min-width:32px;justify-content:center}
+.two-worlds-menu__popover{position:absolute;right:max(28px,env(safe-area-inset-right));bottom:calc(100% + 10px);width:320px;max-width:calc(100% - 32px);padding:20px;border:1px solid #344853;background:#14222d;color:#ecf4f4;border-radius:12px;box-shadow:0 16px 56px #0005}
+.two-worlds-menu__profile-heading,.two-worlds-menu__xp{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px}
+.two-worlds-menu__profile-heading strong{font-weight:500}
+.two-worlds-menu__profile-heading>span{color:var(--breach-cyan)}
+.two-worlds-menu__popover progress{display:block;appearance:none;border:0;border-radius:6px;width:100%;height:7px;margin:14px 0 10px;overflow:hidden;background:#2a3b48;color:var(--breach-cyan)}
+.two-worlds-menu__popover progress::-webkit-progress-bar{background:#2a3b48}
+.two-worlds-menu__popover progress::-webkit-progress-value{background:var(--breach-cyan);border-radius:6px}
+.two-worlds-menu__popover progress::-moz-progress-bar{background:var(--breach-cyan);border-radius:6px}
+.two-worlds-menu__xp{color:#adbec5;font-size:10px}
+.two-worlds-menu__popover button,.two-worlds-menu__popover a{display:flex;align-items:center;gap:8px;min-height:44px;padding:12px 0;width:100%;color:#ecf4f4;background:transparent;font-size:12px;text-decoration:none}
+.two-worlds-menu__profile .two-worlds-menu__popover button{margin-top:16px;border-top:1px solid #344853}
+.two-worlds-menu__popover button>span{margin-left:auto;color:#adbec5;font-size:10px}
+.two-worlds-menu__popover button>svg:last-child,.two-worlds-menu__popover a>svg{margin-left:auto}
+.two-worlds-menu__popover button:hover,.two-worlds-menu__popover a:hover{color:var(--breach-cyan)}
+.two-worlds-menu__sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+/* Grow only after activation; hover never moves a player's target. */
+.two-worlds-menu--entering-friends .two-worlds-menu__friends,.two-worlds-menu--entering-survival .two-worlds-menu__survival{z-index:2;overflow:visible}
+.two-worlds-menu--entering-friends .two-worlds-menu__friends .two-worlds-menu__wash,.two-worlds-menu--entering-survival .two-worlds-menu__survival .two-worlds-menu__wash{z-index:0;animation:two-worlds-expand-right .36s cubic-bezier(.22,1,.36,1) both}
+.two-worlds-menu--entering-friends .two-worlds-menu__island{animation:two-worlds-expand-right .36s cubic-bezier(.22,1,.36,1) both}
+.two-worlds-menu--entering-survival .two-worlds-menu__city{animation:two-worlds-expand-left .36s cubic-bezier(.22,1,.36,1) both}
+.two-worlds-menu--entering-survival .two-worlds-menu__survival .two-worlds-menu__wash{transform-origin:right center;animation-name:two-worlds-expand-left}
+.two-worlds-menu--entering-friends .two-worlds-menu__identity,.two-worlds-menu--entering-friends .two-worlds-menu__content,.two-worlds-menu--entering-survival .two-worlds-menu__identity,.two-worlds-menu--entering-survival .two-worlds-menu__content{z-index:1}
+.two-worlds-menu--entering-friends .two-worlds-menu__survival,.two-worlds-menu--entering-survival .two-worlds-menu__friends{opacity:0;pointer-events:none}
+@keyframes two-worlds-expand-right{to{right:-100%}}
+@keyframes two-worlds-expand-left{to{left:-100%}}
+@media(max-height:800px) and (min-width:901px){.two-worlds-menu__world{padding-top:32px}.two-worlds-menu__content{padding-top:32px}}
+@media(min-width:1800px){.two-worlds-menu__world{padding-top:76px}.two-worlds-menu__content{padding-top:140px}}
+@media(max-width:1100px) and (min-width:901px){.two-worlds-menu__world{padding-left:28px;padding-right:28px}.two-worlds-menu__resources{gap:6px 10px}.two-worlds-menu__nightmare{margin-left:0}.two-worlds-menu__brand{font-size:72px}}
+@media(max-width:900px){
+ .two-worlds-menu__header{padding:10px 20px;gap:14px;min-height:54px;padding-top:max(10px,env(safe-area-inset-top))}
+ .two-worlds-menu__worlds{grid-template-columns:minmax(0,1fr);min-height:0;flex:none}
+ .two-worlds-menu__world{min-height:490px;padding:26px 24px 18px}
+ .two-worlds-menu__identity,.two-worlds-menu__content{max-width:520px}
+ .two-worlds-menu__friends:after{box-shadow:inset 0 -1px #dce7db80}
+ .two-worlds-menu__brand{font-size:64px}
+ .two-worlds-menu__eyebrow{font-size:10px;margin-bottom:10px}
+ .two-worlds-menu__subbrand{margin-top:16px;font-size:11px}
+ .two-worlds-menu__survival .two-worlds-menu__subbrand{font-size:9px}
+ .two-worlds-menu__content{padding-top:65px}
+ .two-worlds-menu__content h2{font-size:32px;min-height:0}
+ .two-worlds-menu__description{font-size:13px;min-height:0;margin-bottom:20px}
+ .two-worlds-menu__friends .two-worlds-menu__world-footer{min-height:40px}
+ .two-worlds-menu__survival .two-worlds-menu__world-footer{min-height:128px}
+ .two-worlds-menu__survival .two-worlds-menu__content h2{display:block}
+ .two-worlds-menu__utilities{flex-wrap:wrap;gap:6px 16px;padding-left:20px;padding-right:20px}
+ .two-worlds-menu__utilities>button,.two-worlds-menu__utilities summary,.two-worlds-menu__support button,.two-worlds-menu__preparation button,.two-worlds-menu__nightmare{min-height:44px}
+ .two-worlds-menu__preparation{gap:4px 18px;margin:0}
+ .two-worlds-menu__popover{right:16px;bottom:calc(100% + 8px)}
+ .two-worlds-menu--entering-friends .two-worlds-menu__friends,.two-worlds-menu--entering-survival .two-worlds-menu__survival{overflow:hidden}
+ .two-worlds-menu--entering-friends .two-worlds-menu__friends .two-worlds-menu__wash,.two-worlds-menu--entering-survival .two-worlds-menu__survival .two-worlds-menu__wash,.two-worlds-menu .two-worlds-menu__island,.two-worlds-menu .two-worlds-menu__city{animation:none}
+}
+@media(max-width:380px){.two-worlds-menu__utilities{gap:4px 14px;padding-left:16px;padding-right:16px}.two-worlds-menu__utilities>button>span{display:none}.two-worlds-menu__profile{margin-left:auto}.two-worlds-menu__utilities summary{font-size:10px}.two-worlds-menu__world{padding-left:20px;padding-right:20px}.two-worlds-menu__brand{font-size:56px}.two-worlds-menu__content h2{font-size:30px}.two-worlds-menu__linebreak{display:none}.two-worlds-menu__resources{gap:6px 10px}.two-worlds-menu__nightmare{margin-left:0}}
+@media(prefers-reduced-motion:reduce){.two-worlds-menu__world,.two-worlds-menu__entry{transition:none}.two-worlds-menu .two-worlds-menu__wash,.two-worlds-menu .two-worlds-menu__island,.two-worlds-menu .two-worlds-menu__city{animation:none}.two-worlds-menu__entry:hover,.two-worlds-menu__entry:focus-visible{transform:none}}

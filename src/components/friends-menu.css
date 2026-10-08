@@ -3,6 +3,19 @@
 .friends-menu__scenery{position:fixed;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(145deg,#a1beb5,#728f7d 58%,#3d716f)}
 .friends-menu__world,.friends-menu__shade{position:absolute;inset:0}.friends-menu__world canvas{display:block;width:100%;height:100%;opacity:0;transition:opacity .65s ease}.friends-menu__world[data-state=ready] canvas{opacity:1}
 .friends-menu__shade{background:linear-gradient(90deg,#142e2c08,#142e2c00 45%,#142e2c20),linear-gradient(180deg,#152c2940,transparent 20%,transparent 75%,#152c294f)}
+.friends-menu__loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:260px;max-width:calc(100% - 48px);color:#f8f5ed;pointer-events:none}
+.friends-menu__loading-sketch{display:block;width:100%;height:auto;overflow:visible;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
+.friends-menu__loading-sun{transform-origin:80px 44px;animation:friends-menu-sketch-sway 3.7s ease-in-out infinite}
+.friends-menu__loading-sun-outline{fill:#f2cf771a;stroke-dasharray:154;animation:friends-menu-sketch-draw 3.2s ease-in-out infinite}
+.friends-menu__loading-rays{transform-origin:80px 44px;animation:friends-menu-sketch-rays 2.4s ease-in-out infinite}
+.friends-menu__loading-land{stroke:#f8f5edb8;stroke-width:1.8}
+.friends-menu__loading-grass{stroke:#f8f5edb8;stroke-width:1.6}
+.friends-menu__loading-error{font:13px/1.6 Inter,ui-sans-serif,system-ui,sans-serif;text-shadow:0 1px 8px #253c3280}
+@keyframes friends-menu-sketch-sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+@keyframes friends-menu-sketch-draw{0%,100%{stroke-dashoffset:0}45%{stroke-dashoffset:154}80%{stroke-dashoffset:308}}
+@keyframes friends-menu-sketch-rays{0%,100%{opacity:.55;transform:scale(.95)}50%{opacity:1;transform:scale(1.06)}}
+@media(max-width:767px){.friends-menu__loading{left:50%;top:75px;transform:translateX(-50%);width:94px}}
+@media(prefers-reduced-motion:reduce){.friends-menu__loading-sun,.friends-menu__loading-sun-outline,.friends-menu__loading-rays{animation:none}}
 .friends-menu__layout{min-height:100%;max-width:1700px;margin:0 auto;display:flex;flex-direction:column;padding:0 52px}
 .friends-menu__header{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:28px 0;color:#fff}
 .friends-menu__brand{display:flex;align-items:center;gap:11px;font-size:16px;font-weight:600;text-shadow:0 1px 12px #1b3b3b70}

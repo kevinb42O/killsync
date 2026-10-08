@@ -83,7 +83,7 @@ export function FriendsModeSetup(p: FriendsModeSetupProps) {
   </div>;
   const title = (text: string) => <h2 ref={headingRef} tabIndex={-1}>{text}</h2>;
   return <div className="friends-menu" ref={menuRef} aria-label={t('mode')} onPointerDown={event => event.stopPropagation()} onClickCapture={event => { if ((event.target as HTMLElement).closest('button')) friendsAudio.play('click', .22); }}>
-    <FriendsMenuBackdrop paused={paused}/>
+    <FriendsMenuBackdrop paused={paused} language={p.language}/>
     <div className="friends-menu__layout">
       <header className="friends-menu__header">
         <div className="friends-menu__brand"><button type="button" className="friends-menu__back" onClick={goBack} aria-label={p.mode === 'choose' && view === 'welcome' ? t('close') : t('back')}><ArrowLeft size={19}/></button><Leaf size={21} aria-hidden="true"/><span>{t('mode')}</span></div>
