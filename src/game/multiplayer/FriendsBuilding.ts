@@ -117,7 +117,7 @@ export function worldBox(p: FriendsBuildPose, b: BuildBox): BuildBox {
   const a = p.rotation * Math.PI / 2, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
   return box(p.x + b.x * c - b.y * s, p.y + b.x * s + b.y * c, p.z + b.z, p.rotation % 2 ? b.d : b.w, p.rotation % 2 ? b.w : b.d, b.h);
 }
-const contains = (b: BuildBox, x: number, y: number, padding = 0) => Math.abs(x - b.x) <= b.w / 2 + padding && Math.abs(y - b.y) <= b.d / 2 + padding;
+const contains = (b: BuildBox, x: number, y: number, padding = 0) => Math.abs(x - b.x) <= b.w / 2 + padding + .00001 && Math.abs(y - b.y) <= b.d / 2 + padding + .00001;
 export function friendsBuildFloor(pieces: readonly FriendsBuildPiece[], x: number, y: number, z: number, step = FRIENDS_STEP_HEIGHT) {
   let floor: number | undefined;
   for (const p of pieces) {
@@ -129,13 +129,46 @@ export function friendsBuildFloor(pieces: readonly FriendsBuildPiece[], x: numbe
     }
     const q = buildLocal(p, x, y), def = FRIENDS_BUILD_CATALOG[p.shape];
     const padding = isPlayerRail(p.shape) ? 64 : 0;
-    if (Math.abs(q.x) > def.w / 2 + padding || Math.abs(q.y) > def.d / 2 + padding) continue;
+    if (Math.abs(q.x) > def.w / 2 + padding + .00001 || Math.abs(q.y) > def.d / 2 + padding + .00001) continue;
     if (isSlope(p.shape)) {
       const top = p.z + (q.x / def.w + .5) * def.h;
       if (top <= z + step + .00001) floor = Math.max(floor ?? -Infinity, top);
     } else for (const b of friendsShapeBoxes(p.shape)) {
       const top = p.z + b.z + b.h;
       if (contains(b, q.x, q.y) && top <= z + step + .00001) floor = Math.max(floor ?? -Infinity, top);
+    }
+  }
+  return floor;
+}
+const isWalkIncline=(shape:FriendsBuildShape)=>isSlope(shape)||shape==='stairs'||shape==='voxel_stairs';
+/** Only a supported incline may remove the entrance face of its upper landing. */
+export function friendsInclineConnects(pieces:readonly FriendsBuildPiece[],position:{x:number;y:number},z:number,x:number,y:number,top:number,step=FRIENDS_STEP_HEIGHT){
+  return pieces.some(p=>{
+    if(!isWalkIncline(p.shape))return false;
+    const feet=friendsBuildFloor([p],position.x,position.y,z,FRIENDS_STEP_HEIGHT);
+    if(feet===undefined||Math.abs(feet-z)>FRIENDS_STEP_HEIGHT+.00001)return false;
+    const edge=friendsBuildFloor([p],x,y,top,0);
+    return edge!==undefined&&top-edge>=-.00001&&top-edge<=step+.00001;
+  });
+}
+/** Blend a permitted small landing lip across the capsule's approach to a crest.
+ * Point-only floor samples otherwise miss the lip until the cylinder is already
+ * blocked by it. Large steps and walls retain their ordinary collision. */
+export function friendsWalkFloor(pieces:readonly FriendsBuildPiece[],x:number,y:number,z:number,radius:number,terrain?:FriendsTerrain,step=FRIENDS_STEP_HEIGHT){
+  let floor=friendsBuildFloor(pieces,x,y,z,step);
+  if(radius<=0)return floor;
+  for(const p of pieces){
+    if(!isWalkIncline(p.shape)||p.vehicleFrame||('assemblyFrame' in p&&p.assemblyFrame))continue;
+    const q=buildLocal(p,x,y),def=FRIENDS_BUILD_CATALOG[p.shape],remaining=def.w/2-q.x;
+    if(remaining<-.00001||remaining>radius||Math.abs(q.y)>def.d/2+.00001)continue;
+    const feet=friendsBuildFloor([p],x,y,z,step);
+    if(feet===undefined||Math.abs(feet-z)>step+.00001)continue;
+    const a=p.rotation*Math.PI/2,c=Math.cos(a),s=Math.sin(a),edgeX=p.x+(def.w/2+.001)*c-q.y*s,edgeY=p.y+(def.w/2+.001)*s+q.y*c,crest=p.z+def.h;
+    const surfaces=[friendsBuildFloor(pieces.filter(other=>!isWalkIncline(other.shape)),edgeX,edgeY,crest,step),terrain?.floor(edgeX,edgeY,crest,step)];
+    for(const top of surfaces){
+      if(top===undefined||top<crest-.00001||top>crest+step+.00001)continue;
+      const height=feet+(top-crest)*(1-Math.max(0,remaining)/radius);
+      if(height<=z+step+.00001)floor=Math.max(floor??-Infinity,height);
     }
   }
   return floor;
@@ -175,11 +208,9 @@ export function resolveFriendsBuildCollisions(pieces: readonly FriendsBuildPiece
       if (dist >= radius) continue;
       if(!incline&&dist>.00001){
         const a=p.rotation*Math.PI/2,c=Math.cos(a),s=Math.sin(a),contact={x:p.x+nx*c-ny*s,y:p.y+nx*s+ny*c};
-        // A landing attached flush to a ramp has no exposed entrance wall.
-        // The cylinder may overlap that face while its feet follow the ramp.
-        const connected=pieces.some(other=>other!==p&&isSlope(other.shape)&&
-          Math.abs((friendsBuildFloor([other],position.x,position.y,z,step)??Infinity)-z)<=step&&
-          Math.abs((friendsBuildFloor([other],contact.x,contact.y,p.z+top,.01)??Infinity)-(p.z+top))<.01);
+        // A joined landing, including a walkable lip, has no entrance wall.
+        // The cylinder may overlap that face while its feet follow the incline.
+        const connected=friendsInclineConnects(pieces,position,z,contact.x,contact.y,p.z+top,step);
         if(connected)continue;
       }
       if (dist > .00001) { q.x += dx / dist * (radius - dist); q.y += dy / dist * (radius - dist); }

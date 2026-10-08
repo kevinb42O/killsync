@@ -298,23 +298,28 @@ export class FriendsTerrain {
     for (let vz = Math.floor((z + .1) / VOXEL_SIZE); vz <= max; vz++) if (vz * VOXEL_SIZE > z + .1 && this.exposedMaterial(vx, vy, vz)) return Math.min(deck??Infinity,vz*VOXEL_SIZE);
     return deck;
   }
-  collide(p: { x: number; y: number }, z: number, radius: number, bodyHeight = 50, step = FRIENDS_STEP_HEIGHT) {
+  collide(p: { x: number; y: number }, z: number, radius: number, bodyHeight = 50, step = FRIENDS_STEP_HEIGHT, inclineConnection?: (x:number,y:number,top:number)=>boolean) {
     let collided = false;
     for (let pass = 0; pass < 2; pass++) {
       const xmin = Math.floor((p.x - radius) / VOXEL_SIZE), xmax = Math.floor((p.x + radius) / VOXEL_SIZE), ymin = Math.floor((p.y - radius) / VOXEL_SIZE), ymax = Math.floor((p.y + radius) / VOXEL_SIZE);
       for (let vx = xmin; vx <= xmax; vx++) for (let vy = ymin; vy <= ymax; vy++) {
-        let solid = false;
+        let solid = false, top:number|undefined;
         for (let vz = Math.floor((z + step + .1) / VOXEL_SIZE); vz * VOXEL_SIZE < z + bodyHeight - .1; vz++) if (this.material(vx, vy, vz)) {
           const owner=islandRuinsAt((vx+.5)*32,(vy+.5)*32).find(b=>(vz+.5)*32>=b.z&&(vz+.5)*32<b.z+b.h);
           // Only the recessed stair core yields to the exact fan surface.
           // A wall sharing its cell must retain ordinary solid collision.
           if(owner?.detail==='stair-core')continue;
-          solid = true; break;
+          solid = true;
+          if(!this.material(vx,vy,vz+1))top=(vz+1)*VOXEL_SIZE;
+          break;
         }
         if (!solid) continue;
         const cx = (vx + .5) * VOXEL_SIZE, cy = (vy + .5) * VOXEL_SIZE, nearX = Math.max(cx - 16, Math.min(cx + 16, p.x)), nearY = Math.max(cy - 16, Math.min(cy + 16, p.y));
         const dx = p.x - nearX, dy = p.y - nearY, distance = Math.hypot(dx, dy);
         if (distance >= radius) continue;
+        // A ramp meeting this exposed top has no entrance wall. Keep every
+        // other voxel face solid, including higher blocks beside the ramp.
+        if(distance>.001&&top!==undefined&&inclineConnection?.(nearX,nearY,top))continue;
         if (distance > .001) { p.x += dx / distance * (radius - distance); p.y += dy / distance * (radius - distance); }
         else if (Math.abs(p.x - cx) > Math.abs(p.y - cy)) p.x = cx + (p.x < cx ? -1 : 1) * (16 + radius);
         else p.y = cy + (p.y < cy ? -1 : 1) * (16 + radius);

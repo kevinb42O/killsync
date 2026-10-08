@@ -3,7 +3,7 @@ import { FriendsCommandResults, validFriendsCommand } from './FriendsCommands';
 import { FRIENDS_STEP_HEIGHT, FRIENDS_SPAWN_PLATFORM } from '../world/FriendsTerrain';
 import { PLAYER_TRAIN_COST, isPlayerRail, railSamples } from '../world/FriendsPlayerRail';
 import { FriendsFrontier, type FrontierSnapshot, type FrontierRequest } from './FriendsFrontier';
-import { FriendsBuilding, FRIENDS_BUILD_CATALOG, friendsShapeBoxes, isSlope, worldBox, friendsBuildFloor, friendsBuildCeiling, friendsVehicleBuildBodies, resolveFriendsBuildCollisions, raycastFriendsBuild, type FriendsBuildingSnapshot, type FriendsBuildRequest, type FriendsBuildResult } from './FriendsBuilding';
+import { FriendsBuilding, FRIENDS_BUILD_CATALOG, friendsShapeBoxes, isSlope, worldBox, friendsBuildFloor, friendsWalkFloor, friendsInclineConnects, friendsBuildCeiling, friendsVehicleBuildBodies, resolveFriendsBuildCollisions, raycastFriendsBuild, type FriendsBuildingSnapshot, type FriendsBuildRequest, type FriendsBuildResult } from './FriendsBuilding';
 import type { CargoStaticCollider } from './FriendsCargoPhysics';
 import { castleCargoColliders } from './FriendsCastleCargo';
 import { routeHaulingRope } from './FriendsRopePath';
@@ -2602,7 +2602,7 @@ export class CoopSimulation {
   private resolvePlayerStructureCollisions(position: { x: number; y: number }, z: number, radius: number) {
     let collided = this.friends ? resolveFriendsVehicleCollisions(this.friends.vehicles(), position, z, radius) : false;
     if (this.friends) collided = collidePhysicalCargo(this.friends.hauling.getCargo(), position, z, radius) || collided;
-    if (this.friendsFrontier) { collided = this.friendsFrontier.terrain.collide(position, z, radius) || collided; collided = this.friendsFrontier.collideTrees(position, z, radius) || collided; }
+    if (this.friendsFrontier) { collided = this.friendsFrontier.terrain.collide(position, z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.friendsBuilding?.getPieces()??[],position,z,x,y,top)) || collided; collided = this.friendsFrontier.collideTrees(position, z, radius) || collided; }
     if (this.friendsBuilding) collided = resolveFriendsBuildCollisions(this.friendsBuilding.getPieces(), position, z, radius) || collided;
     if (z > 34) return collided;
     for (const structure of this.structures) {
@@ -2635,6 +2635,7 @@ export class CoopSimulation {
         }
         return colliders;
       },
+      operatorFloor:(x,y,z)=>this.getPlayerStructureFloor({x,y,z},PLAYER_RADIUS),
       floor: (x,y,z,step) => {
         const floors = [terrain.floor(x,y,z,step), friendsBuildFloor(pieces,x,y,z,step), friendsWorldFloor(vehicles,x,y,z)];
         const available = floors.filter((f): f is number => f !== undefined && f <= z + step);
@@ -2691,7 +2692,7 @@ export class CoopSimulation {
     let floor = this.friends ? friendsWorldFloor(this.friends.vehicles(), position.x, position.y, position.z ?? 0) : undefined;
     const terrainFloor = this.friendsFrontier?.terrain.floor(position.x, position.y, position.z ?? 0);
     if (terrainFloor !== undefined) floor = Math.max(floor ?? -Infinity, terrainFloor);
-    const creativeFloor = this.friendsBuilding && friendsBuildFloor(this.friendsBuilding.getPieces(), position.x, position.y, position.z ?? 0);
+    const creativeFloor = this.friendsBuilding && friendsWalkFloor(this.friendsBuilding.getPieces(), position.x, position.y, position.z ?? 0, radius, this.friendsFrontier?.terrain);
     if (creativeFloor !== undefined) floor = Math.max(floor ?? -Infinity, creativeFloor);
     for (const structure of this.structures) {
       if (structure.state === 'destroying') continue;

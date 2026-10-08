@@ -32,6 +32,7 @@ export type HaulingSnapshot = HaulingSave & { ropes: CargoRope[]; feedback: Reco
 export type HaulingEnvironment = {
   revision: string;
   floor: (x: number, y: number, z: number, step: number) => number | undefined;
+  operatorFloor?: HaulingEnvironment['floor'];
   collide: (point: { x: number; y: number }, z: number, radius: number, height: number, step: number) => boolean;
   blocked: (from: Point, to: Point) => boolean;
   vehicles: readonly FriendsVehicle[];
@@ -292,7 +293,7 @@ export class FriendsHauling {
             if(!Number.isFinite(point.x)||!Number.isFinite(point.y)||Math.hypot(point.x-p.x,point.y-p.y)>recoil+.001)continue;
             let floor:number|undefined;
             if(Math.abs(p.verticalVelocity??0)<1){
-              floor=env.floor(point.x,point.y,p.z,STEP);
+              floor=(env.operatorFloor??env.floor)(point.x,point.y,p.z,STEP);
               // A grounded operator's cable slips at a ledge. Walking/jumping
               // can still leave it, but recoil cannot drop them into a cave.
               if(floor===undefined||Math.abs(floor-p.z)>STEP)continue;
