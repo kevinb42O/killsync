@@ -242,6 +242,7 @@ function passengerAnchor(vehicles: FriendsVehicle[], player: CoopPlayerSnapshot,
 function interpolatePassengers(previous: CoopSnapshot, current: CoopSnapshot, friends: FriendsSnapshot, players: CoopPlayerSnapshot[], alpha: number) {
   const oldPlayers = indexEntities(previous.players);
   for (const target of players) {
+    if (friends.hauling?.playerRopes?.some(r => r.playerId === target.id)) continue;
     const old = oldPlayers.get(target.id), next = current.players.find(p => p.id === target.id);
     if (!old || !next) continue;
     if (Math.hypot(next.x - old.x, next.y - old.y, next.z - old.z) > 900) { target.x = next.x; target.y = next.y; target.z = next.z; continue; }

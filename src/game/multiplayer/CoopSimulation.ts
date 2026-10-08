@@ -950,7 +950,9 @@ export class CoopSimulation {
         player.lastProcessedInput = input.sequence;
         if(player.friendsSeat)player.angle=input.aimAngle/65535*Math.PI*2;
         const piloting = this.friends?.vehicles().some(v => v.pilotId === player.id);
-        if (!piloting && !player.friendsSeat) advancePlayerMovement(
+        const carried = this.friends?.hauling.playerCarry.isCarried(player.id);
+        if (carried) player.angle = input.aimAngle / 65535 * Math.PI * 2;
+        if (!piloting && !player.friendsSeat && !carried) advancePlayerMovement(
           player,
           input,
           dt,
@@ -979,14 +981,14 @@ export class CoopSimulation {
         player.selectedWeaponId = this.weapon(player).weaponId;
         player.selectedWeaponLevel = this.weapon(player).level;
         player.isAiming = !(this.friends && input.friendsTool === 3) && !isCampfireSeat(player.friendsSeat) && !isCoopSpell(player.selectedWeaponId) && Boolean(input.aiming) && player.selectedSlot !== 3 && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
-        if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; if (this.friends && isCampfireSeat(player.friendsSeat)) this.friends.campfire.replace(player); else if (this.friends && input.friendsTool === 5) this.friends.hauling.detach(player.id); else this.startReload(player); }
+        if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; if (this.friends && (carried || this.friends.hauling.playerCarry.hasCarrier(player.id))) this.friends.hauling.detach(player.id); else if (this.friends && isCampfireSeat(player.friendsSeat)) this.friends.campfire.replace(player); else if (this.friends && input.friendsTool === 5) this.friends.hauling.detach(player.id); else this.startReload(player); }
         this.advanceWeaponActions(player);
         const fireActionId = input.fireActionId || 0;
         const triggerPressed = fireActionId > player.lastFireActionId || (input.fireActionId === undefined && input.firing && !player.previousFiring);
         if (fireActionId > player.lastFireActionId) player.lastFireActionId = fireActionId;
         if (!stale && !piloting && !isCampfireSeat(player.friendsSeat) && this.friends && input.friendsTool === 5 && triggerPressed) {
           const a = player.angle, pitch = player.aimPitch;
-          this.friends.hauling.shoot(player, { x: Math.cos(a) * Math.cos(pitch), y: Math.sin(a) * Math.cos(pitch), z: Math.sin(pitch) }, this.haulingEnvironment(), this.elapsedMs);
+          this.friends.hauling.shoot(player, { x: Math.cos(a) * Math.cos(pitch), y: Math.sin(a) * Math.cos(pitch), z: Math.sin(pitch) }, this.haulingEnvironment(), this.elapsedMs, [...this.players.values()]);
         }
         player.lastProcessedFireAction = player.lastFireActionId;
         const altFireActionId = input.altFireActionId || 0;
@@ -1009,7 +1011,7 @@ export class CoopSimulation {
         if (!piloting && !isCampfireSeat(player.friendsSeat) && !(this.friendsFrontier && input.friendsTool) && input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
       }
-      if (!input && !player.friendsSeat) advancePlayerMovement(player, undefined, dt, this.friends ? (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius) : undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId, this.friends ? { elevationAware: true, devFlightAllowed: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined);
+      if (!input && !player.friendsSeat && !this.friends?.hauling.playerCarry.isCarried(player.id)) advancePlayerMovement(player, undefined, dt, this.friends ? (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius) : undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId, this.friends ? { elevationAware: true, devFlightAllowed: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined);
     }
 
     this.friendsFrontier?.tickTools(this.elapsedMs, new Set(this.players.keys()), new Set([...this.players.values()]
@@ -2674,7 +2676,7 @@ export class CoopSimulation {
     const terrain = this.friendsFrontier!.terrain, pieces = this.friendsBuilding!.getPieces(), vehicles = this.friends!.vehicles();
     const environment:HaulingEnvironment = {
       revision: `${terrain.revision}:${this.friendsBuilding!.getRevision()}:${this.friendsFrontier!.getRevision()}`,
-      vehicles, builds: pieces, craneAccess:id=>id===this.friendsHostId||this.friendsBuilding!.getGuestAccess(),
+      vehicles, builds: pieces, releasePassenger:id=>this.friends!.releasePlayer(id), craneAccess:id=>id===this.friendsHostId||this.friendsBuilding!.getGuestAccess(),
       // Exact stair envelopes replace the hidden voxel backing. Sampling the
       // backing here creates 32-unit walls above the eight-unit fan paving.
       solid:(x,y,z)=>Boolean(terrain.exposedMaterial(x,y,z)),

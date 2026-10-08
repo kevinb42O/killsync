@@ -104,6 +104,9 @@ export class FriendsInteractionSound {
       return { motor:this.motor, events };
     }
     for (const [id, until] of this.cargoCooldown) if (at >= until) this.cargoCooldown.delete(id);
+    const carry = friends.hauling?.playerRopes?.find(r => r.id === listener.id || r.playerId === listener.id);
+    const previousCarry = old.hauling?.playerRopes?.find(r => r.id === listener.id || r.playerId === listener.id);
+    if (carry?.id !== previousCarry?.id || carry?.playerId !== previousCarry?.playerId) events.push({ cue:'ropeHook', volume:.18, pan:0, rate:carry?1:.85 });
     const rope = friends.hauling?.ropes.find(r => r.id === listener.id), previousRope = old.hauling?.ropes.find(r => r.id === listener.id);
     if (rope?.cargoId !== previousRope?.cargoId) events.push({ cue:'ropeHook', volume:.18, pan:0, rate:rope?1:.85 });
     if (rope && previousRope && rope.cargoId === previousRope.cargoId) {

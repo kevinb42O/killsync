@@ -40,7 +40,7 @@ export class FriendsRopeMesh extends THREE.Mesh<THREE.BufferGeometry, THREE.Mesh
     geometry.setIndex(indices);super(geometry,material);
     this.name='braided-hauling-rope';this.frustumCulled=false;this.castShadow=true;
   }
-  update(start:THREE.Vector3,end:THREE.Vector3,restLength:number,tension:number,startRadius=HAULING_ROPE_RADIUS,bends:readonly THREE.Vector3[] = []) {
+  update(start:THREE.Vector3,end:THREE.Vector3,restLength:number,tension:number,startRadius=HAULING_ROPE_RADIUS,bends:readonly THREE.Vector3[] = [],endRadius=HAULING_ROPE_RADIUS) {
     const path=[start,...bends,end],lengths=path.slice(1).map((p,i)=>p.distanceTo(path[i])),distance=lengths.reduce((sum,n)=>sum+n,0);
     if(distance<.001){this.geometry.setDrawRange(0,0);return;}
     const sag=Math.min(55,Math.max(0,restLength-distance)*.5)*(1-THREE.MathUtils.clamp(tension,0,1));
@@ -66,14 +66,14 @@ export class FriendsRopeMesh extends THREE.Mesh<THREE.BufferGeometry, THREE.Mesh
       for(let i=0;i<=segments;i++) {
         this.normal.copy(this.frames[i]);this.setTangent(this.centres,i,segments);
         this.binormal.crossVectors(this.tangent,this.normal).normalize();
-        const radius=THREE.MathUtils.lerp(startRadius,HAULING_ROPE_RADIUS,THREE.MathUtils.smootherstep(this.arc[i],0,60));
+        const radius=Math.min(THREE.MathUtils.lerp(startRadius,HAULING_ROPE_RADIUS,THREE.MathUtils.smootherstep(this.arc[i],0,60)),THREE.MathUtils.lerp(endRadius,HAULING_ROPE_RADIUS,THREE.MathUtils.smootherstep(this.arc[segments]-this.arc[i],0,60)));
         const phase=this.arc[i]/PITCH*Math.PI*2+strand*Math.PI*2/STRANDS;
         this.strand[i].copy(this.centres[i]).addScaledVector(this.normal,Math.cos(phase)*radius*.56).addScaledVector(this.binormal,Math.sin(phase)*radius*.56);
       }
       for(let i=0;i<=segments;i++) {
         this.setTangent(this.strand,i,segments);
         this.normal.copy(this.frames[i]);this.orthogonalizeNormal();this.binormal.crossVectors(this.tangent,this.normal).normalize();
-        const radius=THREE.MathUtils.lerp(startRadius,HAULING_ROPE_RADIUS,THREE.MathUtils.smootherstep(this.arc[i],0,60))*.48;
+        const radius=Math.min(THREE.MathUtils.lerp(startRadius,HAULING_ROPE_RADIUS,THREE.MathUtils.smootherstep(this.arc[i],0,60)),THREE.MathUtils.lerp(endRadius,HAULING_ROPE_RADIUS,THREE.MathUtils.smootherstep(this.arc[segments]-this.arc[i],0,60)))*.48;
         for(let side=0;side<=SIDES;side++) {
           const theta=side/SIDES*Math.PI*2,id=(i*STRANDS+strand)*(SIDES+1)+side;
           this.radial.copy(this.normal).multiplyScalar(Math.cos(theta)).addScaledVector(this.binormal,Math.sin(theta));this.point.copy(this.strand[i]).addScaledVector(this.radial,radius);

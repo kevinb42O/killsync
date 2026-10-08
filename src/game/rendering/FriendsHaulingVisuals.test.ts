@@ -18,6 +18,39 @@ function fixture(){
   return {scene,viewmodel,camera,handCamera,visuals,snapshot,project};
 }
 describe('held hauling rope attachment',()=>{
+  it('keeps a stowed player tether below the first-person view and tapers both local attachment ends',()=>{
+    const {scene,visuals,snapshot,project,camera,handCamera}=fixture(),host=snapshot.players[0];
+    const passenger={...host,id:'guest',label:'Friend',x:host.x+120,y:host.y,z:host.z};snapshot.players.push(passenger);
+    snapshot.friends!.hauling!.ropes=[];snapshot.friends!.hauling!.playerRopes=[{id:host.id,playerId:passenger.id,length:120,bends:[]}];
+    for(const [local,yaw,end]of [[host,-Math.PI/2,false],[passenger,Math.PI/2,true]] as const){
+      camera.position.set(local.x,local.z+40,local.y);camera.rotation.set(0,yaw,0,'YXZ');handCamera.position.copy(camera.position);handCamera.quaternion.copy(camera.quaternion);
+      visuals.update(snapshot,local.id,0,0,project);
+      const mesh=scene.getObjectByName('braided-hauling-rope') as FriendsRopeMesh,p=mesh.geometry.getAttribute('position'),segment=end?mesh.geometry.drawRange.count/(3*8*6):0,centre=new THREE.Vector3(),points=[];
+      for(let strand=0;strand<3;strand++)for(let side=0;side<8;side++){const point=new THREE.Vector3().fromBufferAttribute(p,(segment*3+strand)*9+side);points.push(point);centre.add(point);}
+      centre.multiplyScalar(1/24);
+      expect(centre.clone().project(camera).y).toBeLessThan(-.75);
+      expect(Math.max(...points.map(point=>point.distanceTo(centre)))).toBeLessThan(.12);
+    }
+    visuals.dispose();
+  });
+  it('draws a player rope to the passenger body and removes it when released',()=>{
+    const {scene,visuals,snapshot,project}=fixture(),host=snapshot.players[0];
+    const passenger={...host,id:'guest',label:'Friend',x:host.x+120,y:host.y+40,z:host.z+50};
+    snapshot.players.push(passenger);
+    snapshot.friends!.hauling!.ropes=[];
+    snapshot.friends!.hauling!.playerRopes=[{id:host.id,playerId:passenger.id,length:180,bends:[]}];
+    visuals.update(snapshot,'host',5,0,project);
+    const rope=scene.getObjectByName('braided-hauling-rope') as FriendsRopeMesh;
+    expect(rope).toBeDefined();
+    const positions=rope.geometry.getAttribute('position'),end=new THREE.Vector3();
+    // Average the three strand rings at the live draw range's endpoint.
+    const segments=rope.geometry.drawRange.count/(3*8*6);
+    for(let strand=0;strand<3;strand++)for(let side=0;side<8;side++)end.add(new THREE.Vector3().fromBufferAttribute(positions,(segments*3+strand)*9+side));
+    end.multiplyScalar(1/24);
+    expect(end.x).toBeCloseTo(passenger.x,1);expect(end.y).toBeCloseTo(passenger.z+26,1);expect(end.z).toBeCloseTo(passenger.y,1);
+    snapshot.friends!.hauling!.playerRopes=[];visuals.update(snapshot,'host',5,16,project);
+    expect(rope.parent).toBeNull();visuals.dispose();
+  });
   it('hides the rope tool throughout campfire seating and restores it on standing',()=>{
     const {viewmodel,visuals,snapshot,project}=fixture(),player=snapshot.players[0],gun=viewmodel.getObjectByName('rope-launcher')!;
     visuals.update(snapshot,'host',5,0,project);expect(gun.visible).toBe(true);

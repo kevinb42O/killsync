@@ -18,6 +18,8 @@ export class FriendsHaulingVisuals {
   private gun = new THREE.Group();
   private muzzlePoint = new THREE.Object3D();
   private muzzleRim = new THREE.Object3D();
+  private carryBelt = new THREE.Object3D();
+  private carryBeltRim = new THREE.Object3D();
   private reel = new THREE.Group();
   private goal = new THREE.Group();
   private goalBeacon = new THREE.Group();
@@ -55,6 +57,8 @@ export class FriendsHaulingVisuals {
     const bore=new THREE.Mesh(boreGeometry,this.material(0x101a1a));bore.rotation.y=Math.PI;bore.position.set(0,.025,-.465);this.gun.add(bore);
     this.muzzlePoint.name='rope-muzzle';this.muzzlePoint.position.set(0,.025,-.484);
     this.muzzleRim.position.set(.039,.025,-.484);this.gun.add(this.muzzlePoint,this.muzzleRim);
+    this.carryBelt.name='player-carry-belt';this.carryBelt.position.set(-.1,-.6,.04);
+    this.carryBeltRim.position.set(-.094,-.6,.04);this.gun.add(this.carryBelt,this.carryBeltRim);
     this.reel.position.set(.155,.025,.02);this.gun.add(this.reel);
     const reelGeometry = new THREE.CylinderGeometry(.105,.105,.075,24); this.geometries.push(reelGeometry);
     const drum = new THREE.Mesh(reelGeometry,grip); drum.rotation.z=Math.PI/2;this.reel.add(drum);
@@ -141,17 +145,31 @@ export class FriendsHaulingVisuals {
       let beacon=this.cargoBeacons.get(cargo.id);if(!beacon){beacon=new FriendsCargoBeacon();this.group.add(beacon);this.cargoBeacons.set(cargo.id,beacon);}
       beacon.update(cargo,elapsed,cargoDelivered(hauling,cargo),cargo.id==='lantern-core'?'#ffc36e':haulingJob(cargo).goal.color);
     }
-    const cargoIds=new Set(hauling.cargo.map(c=>c.id)), ropeIds=new Set(hauling.ropes.map(r=>r.id));
+    const cargoIds=new Set(hauling.cargo.map(c=>c.id)), ropeIds=new Set([...hauling.ropes,...(hauling.playerRopes??[])].map(r=>r.id));
     for(const [id,group]of this.loads)if(!cargoIds.has(id)){group.visible=false;}
     for(const cargo of hauling.cargo){let group=this.loads.get(cargo.id);if(!group){group=this.makeLoad(cargo.id);this.loads.set(cargo.id,group);}group.visible=true;group.position.set(cargo.x,cargo.z,cargo.y);const q=cargoRotation(cargo);group.quaternion.set(-q.x,-q.z,-q.y,q.w);group.getObjectByName('cargo-straps')!.visible=Boolean(cargo.secured);}
     for(const [id,mesh]of this.ropes)if(!ropeIds.has(id)){mesh.dispose();mesh.removeFromParent();this.ropes.delete(id);}
-    for(const rope of hauling.ropes){
-      const cargo=hauling.cargo.find(c=>c.id===rope.cargoId),player=snapshot.players.find(p=>p.id===rope.id);if(!cargo||!player)continue;
+    for(const rope of [...hauling.ropes,...(hauling.playerRopes??[])]){
+      const player=snapshot.players.find(p=>p.id===rope.id);
+      const cargo='cargoId' in rope?hauling.cargo.find(c=>c.id===rope.cargoId):undefined;
+      const passenger='playerId' in rope?snapshot.players.find(p=>p.id===rope.playerId):undefined;
+      if(!player||(!cargo&&!passenger))continue;
       let mesh=this.ropes.get(rope.id);
       if(!mesh){mesh=new FriendsRopeMesh(this.ropeMaterial());this.group.add(mesh);this.ropes.set(rope.id,mesh);}
-      const anchor=cargoAnchor(cargo,rope),forward=Math.cos(player.angle),side=Math.sin(player.angle);
+      const anchor=cargo&&'cargoId' in rope?cargoAnchor(cargo,rope):{x:passenger!.x,y:passenger!.y,z:passenger!.z+26},forward=Math.cos(player.angle),side=Math.sin(player.angle);
       this.start.set(player.x+forward*8-side*10,player.z+26,player.y+side*8+forward*10);
       let startRadius=1.45;
+      let endRadius=1.45;
+      let bends=rope.bends;
+      if(firstPerson && passenger && player.id===localId && !this.gun.visible){
+        // A persistent tether leaves the belt when the launcher is stowed.
+        // Project it below the view instead of running a full-width cable
+        // through the near plane at the player's world-space shoulder.
+        const belt=projectMuzzle(this.carryBelt),rim=projectMuzzle(this.carryBeltRim);
+        this.start.set(belt.x,belt.y,belt.z);this.rim.set(rim.x,rim.y,rim.z);
+        startRadius=THREE.MathUtils.clamp(this.start.distanceTo(this.rim)*.88,.04,1.45);
+        bends=bends?.filter(p=>Math.hypot(p.x-player.x,p.y-player.y,p.z-player.z-26)>32);
+      }
       if(player.id===localId && this.gun.visible){
         // Screen-space muzzle matching across the independently projected cameras.
         // The rim projection also matches near-field thickness to the actual bore.
@@ -159,8 +177,15 @@ export class FriendsHaulingVisuals {
         this.start.set(start.x,start.y,start.z);this.rim.set(rim.x,rim.y,rim.z);
         startRadius=THREE.MathUtils.clamp(this.start.distanceTo(this.rim)*.88,.04,1.45);
       }
-      this.end.set(anchor.x,anchor.z,anchor.y);mesh.update(this.start,this.end,rope.length,rope.tension,startRadius,rope.bends?.map(p=>new THREE.Vector3(p.x,p.z,p.y)));
-      mesh.material.color.setHex(rope.blocked?0xd9947b:0xffffff);
+      this.end.set(anchor.x,anchor.z,anchor.y);
+      if(firstPerson && passenger?.id===localId){
+        const belt=projectMuzzle(this.carryBelt),rim=projectMuzzle(this.carryBeltRim);
+        this.end.set(belt.x,belt.y,belt.z);this.rim.set(rim.x,rim.y,rim.z);
+        endRadius=THREE.MathUtils.clamp(this.end.distanceTo(this.rim)*.88,.04,1.45);
+        bends=bends?.filter(p=>Math.hypot(p.x-passenger.x,p.y-passenger.y,p.z-passenger.z-26)>32);
+      }
+      mesh.update(this.start,this.end,rope.length,'tension' in rope?rope.tension:.4,startRadius,bends?.map(p=>new THREE.Vector3(p.x,p.z,p.y)),endRadius);
+      mesh.material.color.setHex('blocked' in rope&&rope.blocked?0xd9947b:0xffffff);
     }
   }
   dispose(){this.cranes.dispose();for(const beacon of this.cargoBeacons.values())beacon.dispose();this.cargoBeacons.clear();this.goals.clear();this.group.removeFromParent();this.gun.removeFromParent();for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose();for(const mesh of this.ropes.values())mesh.dispose();this.fibres.map.dispose();this.fibres.normalMap.dispose();this.loads.clear();this.ropes.clear();}

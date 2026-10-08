@@ -2165,7 +2165,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         return;
       }
       if (event.code === 'Space') { inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), jumpPressed: false, jetHeld: false }; return; }
-      if (event.key.toLowerCase() === 'r') { inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), reloadPressed: false }; return; }
+      // Reload / rope release is a one-shot, cleared after the input is sent
+      // or simulated. Keyup must not erase a quick tap between network ticks.
+      if (event.key.toLowerCase() === 'r') return;
       keys.delete(event.key.toLowerCase());
       if (event.key.toLowerCase() === 'alt') buildSnappingRef.current = true;
       updateInput();

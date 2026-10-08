@@ -57,6 +57,7 @@ export class LocalPlayerPrediction {
     // Ground prediction cannot replay a pilot’s remote vehicle motion.
     const onLoad=this.friends?.building?.pieces.some(p=>p.attachment&&Math.abs((friendsBuildFloor([p],player.x,player.y,player.z,0)??Infinity)-player.z)<2);
     const vehicleFloor = this.friends && friendsVehicleFloor(this.friends.vehicles, player.x, player.y, player.z);
+    if (this.friends?.hauling?.playerRopes?.some(r => r.playerId === player.id)) { this.pending = []; this.motion = undefined; this.correction = { x: 0, y: 0, z: 0 }; return; }
     if (this.friends && !player.friendsDevFlight && (onLoad || player.friendsSeat || this.friends.hauling?.ropes.some(r => r.id === player.id) || this.friends.vehicles.some(v => v.pilotId === player.id) || (vehicleFloor !== undefined && Math.abs(player.z - vehicleFloor) < 2))) { this.pending = []; this.motion = undefined; this.correction = { x: 0, y: 0, z: 0 }; return; }
     const previous = this.motion;
     this.pending = this.pending.filter(input => input.sequence > (player.lastProcessedInput ?? -1));

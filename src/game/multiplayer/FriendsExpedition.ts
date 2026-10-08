@@ -297,7 +297,7 @@ export class FriendsExpedition {
     }
     const after = this.vehicles();
     for (const p of players) {
-      if (p.friendsSeat || p.lifeState !== 'alive' || (inputs.get(p.id)?.friendsDevFlight ?? p.friendsDevFlight)) continue;
+      if (this.hauling.playerCarry.isCarried(p.id) || p.friendsSeat || p.lifeState !== 'alive' || (inputs.get(p.id)?.friendsDevFlight ?? p.friendsDevFlight)) continue;
       const oldPosition = { x: p.x, y: p.y, z: p.z };
       let carried = false;
       for (let i = 0; i < before.length; i++) {

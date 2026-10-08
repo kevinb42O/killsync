@@ -1,4 +1,5 @@
 import { sweepCrane } from './FriendsCraneSweep';
+import { FriendsPlayerCarry, rayCarryPlayer, type PlayerCarryRope } from './FriendsPlayerCarry';
 import { CRANE_MIN_LENGTH, CRANE_MAX_LENGTH, CRANE_SPEED, craneOutlet, craneHookInteraction, nearbyCrane, craneCandidate, craneCargoAnchor, type FriendsCraneState, type CraneAction } from './FriendsCrane';
 import type { FriendsBuildPiece } from './FriendsBuilding';
 import { scenicCargoWagon } from '../world/FriendsTrainLayout';
@@ -31,7 +32,7 @@ export type PhysicalCargo = Point & {
 };
 export type CargoRope = { id: string; cargoId: string; anchorX: number; anchorY: number; anchorZ: number; length: number; tension: number; blocked: boolean; bends?:Point[] };
 export type HaulingSave = { version: 1; spawnRevision?: number; cargo: PhysicalCargo[]; delivered: boolean; completedCargoIds?: string[] };
-export type HaulingSnapshot = HaulingSave & { cranes?: FriendsCraneState[]; ropes: CargoRope[]; feedback: Record<string, { message: string; until: number }> };
+export type HaulingSnapshot = HaulingSave & { cranes?: FriendsCraneState[]; ropes: CargoRope[]; playerRopes?: PlayerCarryRope[]; feedback: Record<string, { message: string; until: number }> };
 export type HaulingEnvironment = {
   revision: string;
   floor: (x: number, y: number, z: number, step: number) => number | undefined;
@@ -41,6 +42,7 @@ export type HaulingEnvironment = {
   vehicles: readonly FriendsVehicle[];
   builds?: readonly FriendsBuildPiece[];
   craneAccess?:(playerId:string)=>boolean;
+  releasePassenger?: (playerId: string) => void;
   solid?: (vx:number,vy:number,vz:number)=>boolean;
   colliders?: (region:CargoPhysicsRegion)=>CargoStaticCollider[];
   dynamicColliders?: (region:CargoPhysicsRegion)=>CargoStaticCollider[];
@@ -131,6 +133,7 @@ function validCargoState(c:PhysicalCargo){
     &&(!c.orientation||Math.abs(Math.hypot(...c.orientation)-1)<.01);
 }
 export class FriendsHauling {
+  readonly playerCarry = new FriendsPlayerCarry();
   private cargo: PhysicalCargo[];
   private ropes = new Map<string, CargoRope>();
   private feedback: HaulingSnapshot['feedback'] = {};
@@ -246,7 +249,7 @@ export class FriendsHauling {
   getCargo() { return this.cargo; }
   hasSecuredTrainCargo() { return this.cargo.some(c => c.secured?.vehicleId.startsWith('sunline')); }
   movementScale(id: string) { const rope = this.ropes.get(id); return rope && !rope.blocked ? 1 - .65 * rope.tension : 1; }
-  detach(id: string) { this.ropes.delete(id); }
+  detach(id: string) { this.ropes.delete(id); this.playerCarry.release(id); }
   private recoverCargo(cargo:PhysicalCargo,physics?:FriendsCargoPhysics){
     // Release first: recovery must never drag an attached player to a pickup.
     for(const [id,rope]of this.ropes)if(rope.cargoId===cargo.id)this.detach(id);
@@ -255,12 +258,28 @@ export class FriendsHauling {
     physics?.sync(cargo);
   }
   private tell(id: string, message: string, elapsed: number) { this.feedback[id] = { message, until: elapsed + 4000 }; }
-  shoot(player: HaulingActor, direction: Point, env: HaulingEnvironment, elapsed: number) {
+  shoot(player: HaulingActor, direction: Point, env: HaulingEnvironment, elapsed: number, players: readonly HaulingActor[] = []) {
+    if (this.playerCarry.release(player.id)) return;
     if (this.ropes.delete(player.id)) { this.tell(player.id, 'Rope released.', elapsed); return; }
-    if (player.lifeState !== 'alive' || player.friendsDevFlight || env.vehicles.some(v => v.pilotId === player.id)) return;
+    if (player.lifeState !== 'alive') return;
     const origin = { x: player.x, y: player.y, z: player.z + 26 };
     const hits = this.cargo.map(cargo => ({ cargo, hit: rayCargo(cargo, origin, direction) })).filter(h => h.hit).sort((a, b) => a.hit!.distance - b.hit!.distance);
     const h = hits[0];
+    const teammate = players.filter(p => p.id !== player.id && p.lifeState === 'alive')
+      .map(p => ({ player: p, distance: rayCarryPlayer(origin, direction, p, ROPE_REACH) }))
+      .filter((p): p is { player: HaulingActor; distance: number } => p.distance !== undefined)
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (teammate && (!h || teammate.distance < h.hit!.distance)) {
+      const hit = { x: origin.x + direction.x * teammate.distance, y: origin.y + direction.y * teammate.distance, z: origin.z + direction.z * teammate.distance };
+      if (env.blocked(origin, hit)) return;
+      if (!this.playerCarry.canAttach(player, teammate.player)) return;
+      env.releasePassenger?.(teammate.player.id);
+      this.detach(teammate.player.id);
+      delete this.feedback[player.id]; delete this.feedback[teammate.player.id];
+      this.playerCarry.attach(player, teammate.player);
+      return;
+    }
+    if (player.friendsDevFlight || env.vehicles.some(v => v.pilotId === player.id)) return;
     if (!h || env.blocked(origin, { x: origin.x + direction.x * h.hit!.distance, y: origin.y + direction.y * h.hit!.distance, z: origin.z + direction.z * h.hit!.distance })) { this.tell(player.id, 'Aim at the salvage core within 40m, with a clear rope path.', elapsed); return; }
     if (h.cargo.secured) { this.tell(player.id, 'Release the cargo straps with F before towing.', elapsed); return; }
     const a = h.hit!.anchor;
@@ -449,8 +468,9 @@ export class FriendsHauling {
       }
       cargo.x=clamp(cargo.x,168,47832);cargo.y=clamp(cargo.y,168,47832);
     }
+    this.playerCarry.update(dt, players, env);
     this.previousVehicles = env.vehicles.map(v => ({ ...v })); this.restRevision = env.revision;
   }
   save(): HaulingSave { return { version: 1, spawnRevision: HAULING_SPAWN_REVISION, delivered: this.delivered, completedCargoIds:[...this.completedCargoIds], cargo: this.cargo.map(c => ({ ...c, orientation:c.orientation ? [...c.orientation] as [number,number,number,number]:undefined, secured: c.secured ? { ...c.secured,orientation:c.secured.orientation?[...c.secured.orientation] as [number,number,number,number]:undefined } : undefined })) }; }
-  snapshot(): HaulingSnapshot { return { ...this.save(), cranes:[...this.cranes.values()].map(c=>({...c})), ropes: [...this.ropes.values()].map(r => ({ ...r,bends:r.bends?.map(p=>({...p})) })), feedback: Object.fromEntries(Object.entries(this.feedback).map(([id, f]) => [id, { ...f }])) }; }
+  snapshot(): HaulingSnapshot { return { ...this.save(), playerRopes: this.playerCarry.snapshot(), cranes:[...this.cranes.values()].map(c=>({...c})), ropes: [...this.ropes.values()].map(r => ({ ...r,bends:r.bends?.map(p=>({...p})) })), feedback: Object.fromEntries(Object.entries(this.feedback).map(([id, f]) => [id, { ...f }])) }; }
 }
