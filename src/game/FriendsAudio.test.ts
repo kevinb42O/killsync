@@ -44,7 +44,8 @@ describe('downloaded Friends audio', () => {
     expect(sources.filter(source => source.loop)).toHaveLength(1);
     expect(context.createOscillator).not.toHaveBeenCalled();
     const requests = vi.mocked(fetch).mock.calls.map(call => call[0]);
-    expect(requests.filter(url => String(url).endsWith('vaporware.mp3'))).toHaveLength(1);
+    expect(requests.filter(url => String(url).endsWith('exploration.ogg'))).toHaveLength(1);
+    expect(requests.some(url => String(url).endsWith('vaporware.mp3') || String(url).endsWith('castle.ogg'))).toBe(false);
   });
   it('bounds rapid effects, rotates samples, and respects mute and zero effects', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
@@ -69,6 +70,89 @@ describe('downloaded Friends audio', () => {
     expect(gains.at(-1).gain.value).toBe(.22);expect(gains.at(-1).connect).toHaveBeenCalledWith(gains[0]);
     context.currentTime+=6;audio.setSettings({effects:0});audio.play('eat',.22,1000);expect(sources).toHaveLength(initial+1);
     audio.setSettings({effects:.65,muted:true});audio.play('eat',.22,1000);expect(sources).toHaveLength(initial+1);
+  });
+  it('loads one shared helicopter loop near the craft, follows throttle, and cleans up on mute/exit', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    const requested = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/helicopter_rotor.ogg'));
+    expect(requested()).toHaveLength(0);
+    audio.setHelicopterSound({ volume: 0, rate: 1, pan: 0 }); await load(); expect(requested()).toHaveLength(0);
+    const before = sources.length;
+    audio.setHelicopterSound({ volume: .3, rate: 1.1, pan: .4 }); await load();
+    const rotor = sources.at(-1); expect(sources.length).toBe(before + 1); expect(rotor.loop).toBe(true);
+    expect(gains.at(-1).connect).toHaveBeenCalledWith(gains[0]);
+    for (let i = 0; i < 30; i++) audio.setHelicopterSound({ volume: .4, rate: 1.15, pan: 0 });
+    expect(sources.length).toBe(before + 1); expect(rotor.playbackRate.setTargetAtTime).toHaveBeenLastCalledWith(1.15, context.currentTime, .5);
+    audio.setHelicopterSound({ volume: 0, rate: 1, pan: 0 }); expect(rotor.stop).toHaveBeenCalledWith(context.currentTime + .8);
+    audio.clearSoundscape(); expect(rotor.stop).toHaveBeenCalledTimes(2);
+    audio.setHelicopterSound({ volume: .3, rate: 1, pan: 0 }); await load(); expect(requested()).toHaveLength(1);
+    const second = sources.at(-1); audio.setSettings({ effects: 0 }); expect(second.stop).toHaveBeenCalledOnce();
+    audio.setSettings({ effects: .65 }); const third = sources.at(-1);
+    audio.setSettings({ muted: true }); expect(third.stop).toHaveBeenCalledOnce();
+    audio.setSettings({ muted: false }); const fourth = sources.at(-1);
+    releases[0](); vi.runOnlyPendingTimers(); expect(fourth.stop).toHaveBeenCalledOnce();
+  });
+  it('prepares flight rustles only in dev flight, rotates recordings and respects effects volume', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('flight_foliage'))).toBe(false);
+    audio.prepareFlightFoliage(); await load();
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('flight_foliage'))).toHaveLength(3);
+    const before = sources.length;
+    audio.play('flightFoliage', .3, 330, 1, .65); audio.play('flightFoliage', .3, 330, 1, .65);
+    expect(sources.length).toBe(before + 1); expect(sources.at(-1).start).toHaveBeenCalledWith(context.currentTime, 0, .65);
+    context.currentTime += .36; audio.play('flightFoliage', .3, 330, 1, .65); expect(sources.length).toBe(before + 2);
+    audio.setSettings({ effects: 0 }); context.currentTime += 1; audio.play('flightFoliage'); expect(sources.length).toBe(before + 2);
+  });
+  it('crossfades castle music for eight seconds, reverses without duplicate loops, and resumes the main track', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    const main = sources.at(-1), before = sources.length;
+    context.currentTime += 10;
+    audio.setCastleMusic(true); await load();
+    const castle = sources.at(-1);
+    expect(sources.length).toBe(before + 1); expect(castle.loop).toBe(true); expect(main.stop).not.toHaveBeenCalled();
+    expect(gains.at(-1).gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(1, context.currentTime + 8);
+    for (let i = 0; i < 20; i++) audio.setCastleMusic(true);
+    expect(sources.length).toBe(before + 1);
+    context.currentTime += 4; audio.setCastleMusic(false);
+    expect(gains.at(-1).gain.setValueAtTime).toHaveBeenLastCalledWith(.5, context.currentTime);
+    audio.setCastleMusic(true); expect(sources.length).toBe(before + 1);
+    context.currentTime += 8; audio.setCastleMusic(true); expect(main.stop).toHaveBeenCalledOnce();
+    audio.setCastleMusic(false); const resumed = sources.at(-1);
+    expect(resumed).not.toBe(main); expect(resumed.start.mock.calls[0][1]).toBeGreaterThan(0);
+    context.currentTime += 8; audio.setCastleMusic(false); expect(castle.stop).toHaveBeenCalledOnce();
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/castle.ogg'))).toHaveLength(1);
+    audio.setSettings({ music: 0 }); expect(resumed.stop).toHaveBeenCalledOnce();
+    audio.setSettings({ music: .28 }); const unmuted = sources.at(-1);
+    releases[0](); vi.runOnlyPendingTimers(); expect(unmuted.stop).toHaveBeenCalledOnce();
+  });
+  it('keeps the main track during a pending castle download and ignores a stale area request', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load(); const main = sources.at(-1), before = sources.length;
+    let finish: (() => void) | undefined;
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url: any, options?: any) => {
+      if (String(url).endsWith('/castle.ogg')) await new Promise<void>(resolve => { finish = resolve; });
+      return original(url, options);
+    });
+    audio.setCastleMusic(true); await load(); expect(sources.length).toBe(before); expect(main.stop).not.toHaveBeenCalled();
+    audio.setCastleMusic(false); finish!(); await load(); expect(sources.length).toBe(before);
+    audio.setCastleMusic(true); expect(sources.length).toBe(before + 1);
+    audio.setSettings({ muted: true }); expect(main.stop).toHaveBeenCalledOnce(); expect(sources.at(-1).stop).toHaveBeenCalledOnce();
+  });
+  it('loads one positional campfire loop nearby, fades it out at range and honors the ambience slider', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    const mix = { wind: 0, birds: 0, crickets: 0, surf: 0, foliage: 0, foliagePan: 0 };
+    audio.setSoundscape(mix); await load();
+    const requests = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/campfire_woods.ogg'));
+    expect(requests()).toHaveLength(0);
+    const before = sources.length; audio.setCampfireSound({ volume: .3, pan: .6 }); await load();
+    const fire = sources.at(-1); expect(fire.loop).toBe(true); expect(sources.length).toBe(before + 1);
+    expect(gains.at(-1).connect).toHaveBeenCalledWith(gains[2]);
+    for (let i = 0; i < 30; i++) audio.setCampfireSound({ volume: .4, pan: -.6 });
+    expect(sources.length).toBe(before + 1);
+    audio.setCampfireSound({ volume: 0, pan: 0 }); expect(fire.stop).toHaveBeenCalledWith(context.currentTime + 1);
+    audio.setCampfireSound({ volume: .3, pan: 0 }); expect(requests()).toHaveLength(1);
+    const resumed = sources.at(-1); audio.setSettings({ ambience: 0 }); expect(resumed.stop).toHaveBeenCalledOnce();
+    audio.setSettings({ ambience: .5 }); const unmuted = sources.at(-1);
+    audio.clearSoundscape(); expect(unmuted.stop).toHaveBeenCalledOnce();
   });
   it('survives a menu-to-world remount then cleans up all sources on exit', async () => {
     const release = audio.acquire(); audio.activate(); await load();
@@ -259,7 +343,8 @@ describe('asset provenance and the music seam', () => {
   it('preserves the downloaded bytes recorded in the source manifest', () => {
     const root = resolve('public/audio/friends');
     const manifest = JSON.parse(readFileSync(resolve(root, 'sources.json'), 'utf8'));
-    expect(manifest.license).toBe('CC0-1.0');
+    expect(manifest.defaultLicense).toBe('CC0-1.0');
+    expect(manifest.assets.filter((asset: { license?: string }) => asset.license === 'Pixabay Content License')).toHaveLength(3);
     for (const asset of manifest.assets) expect(createHash('sha256').update(readFileSync(resolve(root, asset.file))).digest('hex')).toBe(asset.sha256);
   });
   it('joins both channels to contiguous opening samples without changing the source', () => {

@@ -1,11 +1,9 @@
 {
   "downloaded": "2026-10-08",
-  "license": "CC0-1.0",
   "sources": {
     "impact": "https://kenney.nl/assets/impact-sounds",
     "rpg": "https://kenney.nl/assets/rpg-audio",
     "interface": "https://kenney.nl/assets/interface-sounds",
-    "music": "https://opengameart.org/content/calm-piano-1-vaporware",
     "park": "https://opengameart.org/content/park-ambiences",
     "natureFoley": "https://opengameart.org/content/random-sounds-samples",
     "shovel": "https://opengameart.org/content/shovel-sound",
@@ -19,7 +17,12 @@
     "trainWhistle": "https://freesound.org/people/Bidone/sounds/71778/",
     "jump": "https://opengameart.org/content/jump-and-run-and-stand",
     "wind": "https://opengameart.org/content/wind1",
-    "eat": "https://freesound.org/people/R1nkata/sounds/723600/"
+    "eat": "https://freesound.org/people/R1nkata/sounds/723600/",
+    "helicopter": "https://opengameart.org/content/helicopter-sounds",
+    "flightFoliage": "https://opengameart.org/content/20-rustles-dry-leaves",
+    "castleMusic": "https://pixabay.com/music/solo-piano-game-music-soundtrack-exploration-peaceful-area-372769/",
+    "campfire": "https://pixabay.com/sound-effects/nature-campfire-in-the-woods-467491/",
+    "mainMusic": "https://pixabay.com/music/beats-cornerian-flight-academy-vgm-yume-minecraft-title-theme-lofi-439427/"
   },
   "assets": [
     {
@@ -225,12 +228,6 @@
       "pack": "interface",
       "original": "glass_001.ogg",
       "sha256": "183eebee20eb0a532b0b85104d139cbf2673eb66d95c3cc733ac9ea98362e7e8"
-    },
-    {
-      "file": "vaporware.mp3",
-      "author": "The Cynic Project",
-      "source": "https://opengameart.org/sites/default/files/003_Vaporware_2.mp3",
-      "sha256": "1697fa1b7ed6f3fe1eca4daa4f9d1a2eb3db8fe40a0f3c283529ab47e57b5b38"
     },
     {
       "file": "wind_clean.ogg",
@@ -441,6 +438,87 @@
       "original": "Soft Chicken Chomp 3",
       "processing": "Full 1.439-second public Vorbis preview, unchanged. Runtime gain 0.22.",
       "sha256": "842c076049f9ba2c2730385b318946427c1f10a362792468bf5f92f3ba6faa27"
+    },
+    {
+      "file": "helicopter_rotor.ogg",
+      "pack": "helicopter",
+      "original": "helicopter.mp3",
+      "download": "https://opengameart.org/sites/default/files/helicopter_0.mp3",
+      "sourceSha256": "06b910f2e73cf4c6ba6e749ddc5e18674565f30de573ef94e4f42f43fd3711b6",
+      "sha256": "330b7b55c0911af060493a71934bcb016dad1afd7f8ac3a6067c933a554f1914",
+      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Excerpt 1\u20134.4s; 80 ms runtime seam crossfade."
+    },
+    {
+      "file": "flight_foliage_000.ogg",
+      "pack": "flightFoliage",
+      "original": "rustle/rustle01.flac",
+      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
+      "sourceSha256": "9c5da19eb8d37b59890c0be1171c40fe4dd16177e7a97558a156c1036b7bed05",
+      "sha256": "f43ea045ad6f83133bd1a9e88aea81d61bd4d0a831d3e3b4a051b2628d709cf6",
+      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+    },
+    {
+      "file": "flight_foliage_001.ogg",
+      "pack": "flightFoliage",
+      "original": "rustle/rustle02.flac",
+      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
+      "sourceSha256": "1e01e752b2165d78482bd91ef8b859541601ae4de6b7cf6178e935cce0036c69",
+      "sha256": "95811b2566c3c176d3099574b6030a931f1fd425c6627a872461b1440c3599a8",
+      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+    },
+    {
+      "file": "flight_foliage_002.ogg",
+      "pack": "flightFoliage",
+      "original": "rustle/rustle03.flac",
+      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
+      "sourceSha256": "517bbf429a21d3a0cd39f6f7bf9be1894615091fa07c4926f8cf69bbbfa05366",
+      "sha256": "d3cac88f05f98e351f1cd1f849d31b7b6d377341a2e8eb0e9a28ecefb035540e",
+      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+    },
+    {
+      "file": "castle.ogg",
+      "pack": "castleMusic",
+      "original": "audio_9116a3530e.mp3",
+      "download": "https://cdn.pixabay.com/audio/2025/07/10/audio_9116a3530e.mp3",
+      "license": "Pixabay Content License",
+      "sourceSha256": "fe865b50a8103169106f4df2e85b2cc6be3aab25ddc00b5cbe3c072460d52655",
+      "sha256": "785a5007fb2e4461975d7046c180146108ad4a23a659c782f5c336c1d48d3fcb",
+      "processing": "Stereo 44.1 kHz Vorbis q5; full track; -18 LUFS / -3 dBTP / LRA 8; four-second runtime seam crossfade.",
+      "author": "Sonic289",
+      "title": "Game Music_ Soundtrack_Exploration _ Peaceful Area",
+      "publisherLabels": [
+        "AI generated",
+        "Content ID Registered"
+      ],
+      "licenseUrl": "https://pixabay.com/service/license-summary/"
+    },
+    {
+      "file": "exploration.ogg",
+      "pack": "mainMusic",
+      "original": "audio_766da5bfec.mp3",
+      "download": "https://cdn.pixabay.com/audio/2025/11/19/audio_766da5bfec.mp3",
+      "license": "Pixabay Content License",
+      "licenseUrl": "https://pixabay.com/service/license-summary/",
+      "title": "Cornerian Flight Academy, VGM Yume - Minecraft Title Theme Lofi",
+      "publisherAccount": "51383504",
+      "sourceSha256": "9fa324d5482181db3d8301d61abf5847476a21c77d3046bf0488d1aa77083506",
+      "sha256": "d276933e2f3c8a76afb625fff5f3815903f2ee3c8bc57ba03d661fef675fc954",
+      "processing": "Stereo 44.1 kHz Vorbis q5; full track; -18 LUFS / -3 dBTP / LRA 8; four-second runtime seam crossfade."
+    },
+    {
+      "file": "campfire_woods.ogg",
+      "pack": "campfire",
+      "author": "DRAGON-STUDIO",
+      "title": "Campfire in the Woods",
+      "original": "audio_9b2a34b5c3.mp3",
+      "download": "https://cdn.pixabay.com/audio/2026/01/16/audio_9b2a34b5c3.mp3",
+      "license": "Pixabay Content License",
+      "licenseUrl": "https://pixabay.com/service/license-summary/",
+      "sourceSha256": "9cc26e0b700cdd958e139c805970b5f487caa024a6f70a91544af5f211269e62",
+      "sha256": "3373508ae7689a1ead7f7fcf8e70de5355ec96a455387f3115c5c7812b486587",
+      "processing": "Mono 32 kHz Vorbis q4; full recording; highpass 80 Hz / lowpass 8 kHz; -23 LUFS / -3 dBTP / LRA 8; two-second runtime seam crossfade."
     }
-  ]
+  ],
+  "defaultLicense": "CC0-1.0",
+  "license": "Mixed; see defaultLicense and asset overrides"
 }

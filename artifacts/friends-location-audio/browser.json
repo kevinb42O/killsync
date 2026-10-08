@@ -1,0 +1,27 @@
+{
+  "method": "Native Web Audio playback in the location review harness, inspected through browser DOM controls",
+  "checks": [
+    "Selected main, castle and campfire recordings decode with nonzero samples",
+    "Actual approach stairs and castle court select the castle track",
+    "Leaving castle selects main music",
+    "Campfire plays nearby and stops when muted; unmute restores playback",
+    "Quick area reversal keeps two music sources and continues their current fade levels",
+    "World exit clears all music, ambience and decoded buffers"
+  ],
+  "decoded": [
+    { "file": "/audio/friends/exploration.ogg", "loopDuration": 138.21, "rms": 0.116 },
+    { "file": "/audio/friends/castle.ogg", "loopDuration": 206.86, "rms": 0.1063 },
+    { "file": "/audio/friends/campfire_woods.ogg", "loopDuration": 59.34, "rms": 0.0807 }
+  ],
+  "campfireNearGain": 0.378,
+  "transition": [
+    { "theme": "castle", "gain": 0.981, "target": 0 },
+    { "theme": "exploration", "gain": 0.019, "target": 1 }
+  ],
+  "quickReversal": [
+    { "theme": "castle", "gain": 0.964, "target": 1 },
+    { "theme": "exploration", "gain": 0.036, "target": 0 }
+  ],
+  "cleanup": { "music": [], "campfire": null, "assets": [] },
+  "automatedValidation": { "targetedTests": 43, "typecheck": "passed", "productionBuild": "passed" }
+}

@@ -1,0 +1,49 @@
+{
+  "checks": [
+    "four real assets decode and contain audible samples",
+    "one rotor loop through repeated movement updates",
+    "native stereo panning",
+    "leaf bounds loaded for all three rendered species",
+    "swept crossing of actual oak canopy plays a native effect",
+    "mute/unmute and exit cleanup"
+  ],
+  "decoded": [
+    {
+      "file": "/audio/friends/flight_foliage_001.ogg",
+      "duration": 0.8484353741496599,
+      "rms": 0.06342995966348161
+    },
+    {
+      "file": "/audio/friends/flight_foliage_000.ogg",
+      "duration": 1.5793650793650793,
+      "rms": 0.05088641945975406
+    },
+    {
+      "file": "/audio/friends/helicopter_rotor.ogg",
+      "duration": 3.32,
+      "rms": 0.10616732002275711
+    },
+    {
+      "file": "/audio/friends/flight_foliage_002.ogg",
+      "duration": 2.334716553287982,
+      "rms": 0.051642837852693364
+    }
+  ],
+  "crowns": {
+    "pine": {
+      "bottom": 125.9988582483637,
+      "top": 382.9269280011928,
+      "radius": 130.00000000000003
+    },
+    "oak": {
+      "bottom": 174.29342358963777,
+      "top": 440.00000000000006,
+      "radius": 109.24897042986002
+    },
+    "autumnOak": {
+      "bottom": 140.8228566264962,
+      "top": 341.32256933409803,
+      "radius": 160
+    }
+  }
+}

@@ -13,7 +13,7 @@ import { FriendsCaveVisuals } from './FriendsCaveVisuals';
 import * as THREE from 'three';
 import { FriendsTerrain, FRONTIER_SIZE, FRONTIER_SITES, frontierSiteElevation, terrainHash } from '../world/FriendsTerrain';
 import { meshTerrainChunk, type TerrainMeshData } from '../world/FriendsTerrainMesh';
-import { frontierTrees, type FrontierSnapshot, type FrontierTool } from '../multiplayer/FriendsFrontier';
+import { frontierTrees, type FrontierSnapshot, type FrontierTool, type FrontierTree } from '../multiplayer/FriendsFrontier';
 import { addFriendsAssetInstances } from './FriendsAssets';
 import { FOREST_DETAIL_END, FriendsForestLOD } from './FriendsForestLOD';
 import { FriendsBlockHorizon } from './FriendsBlockHorizon';
@@ -316,6 +316,7 @@ export class FriendsFrontierVisuals {
   get environmentState(){return this.environmentPreview.state;}
   get soundscapeEnvironment(){return { ...this.environmentPreview.state, windSeconds:this.environmentPreview.windSeconds, underground:this.audioUnderground };}
   birdCallSource(yaw:number){return this.birds.closestCall(this.camera.position,yaw,this.environmentPreview.state.daylight);}
+  treeCanopy(tree: FrontierTree){return this.forestLOD.canopy(tree);}
   setEnvironment(change:FriendsEnvironmentChange){this.environmentPreview.change(change);}
   toggleFlashlight() { this.flashlight.toggle(); }
   dispose() {

@@ -1,10 +1,13 @@
 import type { FriendsSoundscapeMix } from './FriendsSoundscape';
 import { QUIET_TRAIN, type TrainSoundMix } from './FriendsTrainSound';
+import { QUIET_HELICOPTER, type HelicopterSoundMix } from './FriendsFlightSound';
+import type { CampfireSoundMix } from './FriendsLocationAudio';
+const QUIET_CAMPFIRE: CampfireSoundMix = { volume: 0, pan: 0 };
 const QUIET_SOUNDSCAPE: FriendsSoundscapeMix = { wind: 0, birds: 0, crickets: 0, surf: 0, foliage: 0, foliagePan: 0 };
 
 export type SurfaceCue = 'grass' | 'woodStep' | 'stoneStep' | 'snow';
 type Cue = SurfaceCue | 'wood' | 'stone' | 'soil' | 'ore' | 'dig' | 'landing' | 'leaves' | 'treeBreak' | 'birdCall'
-  | 'trainDepart' | 'trainBrake' | 'trainStop' | 'trainHorn'
+  | 'trainDepart' | 'trainBrake' | 'trainStop' | 'trainHorn' | 'flightFoliage'
   | 'click' | 'hover' | 'success' | 'error' | 'collect' | 'pack' | 'jump' | 'swing' | 'chest' | 'chime'
   | 'gunfire' | 'reloadRifle' | 'reloadHandgun' | 'reloadShotgun' | 'eat';
 export type FriendsAudioSettings = { music: number; effects: number; ambience: number; muted: boolean };
@@ -15,6 +18,7 @@ const CUES: Record<Cue, string[]> = {
   wood: variants('impactWood_medium'), stone: variants('impactMining', 5), soil: variants('impactSoft_medium'), ore: variants('impactMetal_light'),
   dig: [ROOT + 'shovel.ogg'], landing: [ROOT + 'landing.wav'], leaves: [ROOT + 'leaves.ogg'], treeBreak: variants('impactWood_heavy'),
   birdCall: variants('bird_call', 4),
+  flightFoliage: variants('flight_foliage'),
   trainDepart: [ROOT + 'train_depart.ogg'], trainBrake: [ROOT + 'train_brake.ogg'], trainStop: [ROOT + 'train_stop.ogg'], trainHorn: [ROOT + 'train_horn.ogg'],
   click: [ROOT + 'click_001.ogg'], hover: [ROOT + 'select_001.ogg'], success: [ROOT + 'confirmation_001.ogg'], error: [ROOT + 'error_001.ogg'],
   collect: [ROOT + 'handleCoins.ogg'], pack: [ROOT + 'handleSmallLeather.ogg'], jump: [ROOT + 'jump.ogg'], swing: [ROOT + 'knifeSlice.ogg'],
@@ -25,8 +29,13 @@ const CUES: Record<Cue, string[]> = {
   reloadHandgun: [`${import.meta.env.BASE_URL}audio/cc0-handgun-reload.wav`],
   reloadShotgun: [`${import.meta.env.BASE_URL}audio/cc0-shotgun-reload.wav`],
 };
-const AMBIENCE = { wind: ROOT + 'wind_clean.ogg', crickets: ROOT + 'crickets.ogg', surf: ROOT + 'surf.ogg' };
+const AMBIENCE = { wind: ROOT + 'wind_clean.ogg', crickets: ROOT + 'crickets.ogg', surf: ROOT + 'surf.ogg', campfire: ROOT + 'campfire_woods.ogg' };
+const MUSIC = { exploration: ROOT + 'exploration.ogg', castle: ROOT + 'castle.ogg' };
+type MusicTheme = keyof typeof MUSIC;
+type MusicLoop = { source: AudioBufferSourceNode; gain: GainNode; from: number; target: number; changedAt: number; startedAt: number; offset: number };
+const MUSIC_FADE_SECONDS = 8;
 const TRAIN_LOOPS = { engine: ROOT + 'train_drive.ogg', rail: ROOT + 'train_rail.ogg' };
+const HELICOPTER_LOOP = ROOT + 'helicopter_rotor.ogg';
 const STORAGE = 'sunline.audio.v1';
 const clamp = (value: number) => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 
@@ -56,20 +65,24 @@ export class FriendsAudio {
   private effectsGain?: GainNode;
   private musicGain?: GainNode;
   private ambienceGain?: GainNode;
-  private ambientLoops = new Map<keyof typeof AMBIENCE, { source: AudioBufferSourceNode; gain: GainNode }>();
+  private ambientLoops = new Map<keyof typeof AMBIENCE, { source: AudioBufferSourceNode; gain: GainNode; pan?: StereoPannerNode }>();
   private retiringAmbienceSources = new Set<AudioBufferSourceNode>();
   private soundscape: FriendsSoundscapeMix = QUIET_SOUNDSCAPE;
   private soundscapeEnabled = false;
+  private campfireMix: CampfireSoundMix = QUIET_CAMPFIRE;
   private trainMix: TrainSoundMix = QUIET_TRAIN;
   private trainLoops = new Map<keyof typeof TRAIN_LOOPS, { source: AudioBufferSourceNode; gain: GainNode; pan?: StereoPannerNode }>();
   private retiringTrainSources = new Set<AudioBufferSourceNode>();
+  private helicopterMix: HelicopterSoundMix = QUIET_HELICOPTER;
+  private helicopterLoop?: { source: AudioBufferSourceNode; gain: GainNode; pan?: StereoPannerNode };
+  private retiringHelicopters = new Set<AudioBufferSourceNode>();
   private nextRustle = 0;
   private nextBirdCall = 0;
   private nearbyBirdSince?: number;
   private birdVoice?: AudioBufferSourceNode;
-  private music?: AudioBufferSourceNode;
-  private musicBuffer?: AudioBuffer;
-  private musicLoad?: Promise<void>;
+  private music = new Map<MusicTheme, MusicLoop>();
+  private musicOffsets = new Map<MusicTheme, number>();
+  private castleMusic = false;
   private activated = false;
   private preloaded = false;
   private buffers = new Map<string, AudioBuffer>();
@@ -96,6 +109,7 @@ export class FriendsAudio {
     this.syncMusic();
     this.syncAmbience();
     this.syncTrain();
+    this.syncHelicopter();
     this.listeners.forEach(listener => listener());
   }
   /** Reference counting keeps the same theme alive across menu → world and
@@ -139,7 +153,7 @@ export class FriendsAudio {
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.stopMusic(); this.clearSoundscape();
     for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } voice.disconnect(); }
-    this.voices.clear(); this.buffers.clear(); this.musicBuffer = undefined;
+    this.voices.clear(); this.buffers.clear(); this.musicOffsets.clear();
     void this.context?.close().catch(() => {}); this.context = undefined;
   }
   activate = () => {
@@ -158,27 +172,19 @@ export class FriendsAudio {
         unlock.connect(this.effectsGain); unlock.onended = () => unlock.disconnect(); unlock.start();
       }
       this.activated = true;
-      if (this.context.state === 'suspended') void this.context.resume().then(() => { this.syncMusic(); this.syncAmbience(); this.syncTrain(); }).catch(() => {});
+      if (this.context.state === 'suspended') void this.context.resume().then(() => { this.syncMusic(); this.syncAmbience(); this.syncTrain(); this.syncHelicopter(); }).catch(() => {});
       this.preload();
       this.syncMusic();
       this.syncAmbience();
       this.syncTrain();
+      this.syncHelicopter();
     } catch { /* Audio must never block world input. */ }
   };
   preload() {
     if (!this.context) return;
     if (!this.preloaded) {
       this.preloaded = true;
-      for (const url of new Set(Object.entries(CUES).filter(([cue]) => cue !== 'birdCall' && !cue.startsWith('train')).flatMap(([, urls]) => urls))) void this.load(url);
-    }
-    if (!this.musicBuffer && !this.musicLoad) {
-      const context = this.context;
-      this.musicLoad = fetch(ROOT + 'vaporware.mp3')
-        .then(response => { if (!response.ok) throw new Error('Theme unavailable'); return response.arrayBuffer(); })
-        .then(data => context.decodeAudioData(data))
-        .then(buffer => { if (this.disposed) return; this.musicBuffer = crossfadeLoop(context, buffer); this.syncMusic(); })
-        .catch(() => {})
-        .finally(() => { this.musicLoad = undefined; });
+      for (const url of new Set(Object.entries(CUES).filter(([cue]) => cue !== 'birdCall' && cue !== 'flightFoliage' && !cue.startsWith('train')).flatMap(([, urls]) => urls))) void this.load(url);
     }
   }
   private load(url: string, loop = false, seamSeconds = 2): Promise<void> {
@@ -248,6 +254,17 @@ export class FriendsAudio {
     this.stopAmbience();
     this.stopBirdCall();
     this.trainMix = QUIET_TRAIN; this.stopTrain();
+    this.helicopterMix = QUIET_HELICOPTER; this.stopHelicopter();
+    this.campfireMix = QUIET_CAMPFIRE;
+    this.setCastleMusic(false);
+  }
+  setCastleMusic(inside: boolean) {
+    this.castleMusic = inside;
+    this.syncMusic();
+  }
+  setCampfireSound(mix: CampfireSoundMix) {
+    this.campfireMix = mix;
+    this.syncAmbience();
   }
   private stopBirdCall() {
     if (!this.birdVoice) return;
@@ -258,6 +275,52 @@ export class FriendsAudio {
     this.trainMix = mix;
     if (mix.nearby && this.active && this.activated && !this.settings.muted && this.settings.effects > 0) for (const cue of ['trainDepart', 'trainBrake', 'trainStop', 'trainHorn'] as const) for (const url of CUES[cue]) void this.load(url);
     this.syncTrain();
+  }
+  prepareFlightFoliage() {
+    if (this.active && this.activated && !this.settings.muted && this.settings.effects > 0)
+      for (const url of CUES.flightFoliage) void this.load(url);
+  }
+  setHelicopterSound(mix: HelicopterSoundMix) {
+    this.helicopterMix = mix;
+    this.syncHelicopter();
+  }
+  private syncHelicopter() {
+    const context = this.context;
+    if (!this.active || !this.activated || this.settings.muted || !this.settings.effects) { this.stopHelicopter(); return; }
+    if (!context || context.state !== 'running' || document.hidden) return;
+    let loop = this.helicopterLoop;
+    if (this.helicopterMix.volume <= .003) {
+      if (loop) {
+        loop.gain.gain.setTargetAtTime(0, context.currentTime, .18);
+        this.retiringHelicopters.add(loop.source); loop.source.stop(context.currentTime + .8); this.helicopterLoop = undefined;
+      }
+      return;
+    }
+    if (!loop) {
+      const buffer = this.buffers.get(HELICOPTER_LOOP);
+      if (!buffer) {
+        if (!this.loads.has(HELICOPTER_LOOP)) void this.load(HELICOPTER_LOOP, true, .08).then(() => { if (this.buffers.has(HELICOPTER_LOOP)) this.syncHelicopter(); });
+        return;
+      }
+      const source = context.createBufferSource(), gain = context.createGain(), pan = context.createStereoPanner?.();
+      source.buffer = buffer; source.loop = true; source.playbackRate.value = this.helicopterMix.rate; gain.gain.value = 0;
+      source.connect(gain);
+      if (pan) { gain.connect(pan); pan.connect(this.effectsGain!); } else gain.connect(this.effectsGain!);
+      source.onended = () => { this.retiringHelicopters.delete(source); source.disconnect(); gain.disconnect(); pan?.disconnect(); };
+      source.start(); loop = { source, gain, pan }; this.helicopterLoop = loop;
+    }
+    loop.gain.gain.setTargetAtTime(clamp(this.helicopterMix.volume), context.currentTime, .25);
+    loop.source.playbackRate.setTargetAtTime(this.helicopterMix.rate, context.currentTime, .5);
+    loop.pan?.pan.setTargetAtTime(this.helicopterMix.pan, context.currentTime, .2);
+  }
+  private stopHelicopter() {
+    if (this.helicopterLoop) {
+      const { source, gain, pan } = this.helicopterLoop;
+      try { source.stop(); } catch { /* Ended. */ } source.disconnect(); gain.disconnect(); pan?.disconnect();
+      this.helicopterLoop = undefined;
+    }
+    for (const source of this.retiringHelicopters) { try { source.stop(); } catch { /* Ended. */ } source.disconnect(); }
+    this.retiringHelicopters.clear();
   }
   private syncTrain() {
     const context = this.context;
@@ -292,8 +355,8 @@ export class FriendsAudio {
     if (!context || context.state !== 'running' || document.hidden) return;
     for (const key of Object.keys(AMBIENCE) as (keyof typeof AMBIENCE)[]) {
       let loop = this.ambientLoops.get(key);
-      const volume = this.soundscape[key];
-      if (key === 'wind' && volume <= .001) {
+      const volume = key === 'campfire' ? this.campfireMix.volume : this.soundscape[key];
+      if ((key === 'wind' || key === 'campfire') && volume <= .001) {
         if (loop) {
           loop.gain.gain.setTargetAtTime(0, context.currentTime, .2);
           this.retiringAmbienceSources.add(loop.source);
@@ -304,23 +367,27 @@ export class FriendsAudio {
       }
       if (!loop) {
         if (key === 'wind' && volume <= .003) continue; // Don't load wind on ordinary ground.
+        if (key === 'campfire' && volume <= .003) continue;
         if (key === 'surf' && this.soundscape.surf <= .001) continue; // Don't download/decode the coast inland.
         const buffer = this.buffers.get(AMBIENCE[key]);
         if (!buffer) {
           if (!this.loads.has(AMBIENCE[key])) void this.load(AMBIENCE[key], true).then(() => { if (this.buffers.has(AMBIENCE[key])) this.syncAmbience(); });
           continue;
         }
-        const source = context.createBufferSource(), gain = context.createGain();
+        const source = context.createBufferSource(), gain = context.createGain(), pan = key === 'campfire' ? context.createStereoPanner?.() : undefined;
         source.buffer = buffer; source.loop = true; gain.gain.value = 0;
-        source.onended = () => { this.retiringAmbienceSources.delete(source); source.disconnect(); gain.disconnect(); };
-        source.connect(gain); gain.connect(this.ambienceGain!); source.start();
-        loop = { source, gain }; this.ambientLoops.set(key, loop);
+        source.onended = () => { this.retiringAmbienceSources.delete(source); source.disconnect(); gain.disconnect(); pan?.disconnect(); };
+        source.connect(gain);
+        if (pan) { gain.connect(pan); pan.connect(this.ambienceGain!); } else gain.connect(this.ambienceGain!);
+        source.start();
+        loop = { source, gain, pan }; this.ambientLoops.set(key, loop);
       }
-      loop.gain.gain.setTargetAtTime(clamp(this.soundscape[key]), context.currentTime, 1.2);
+      loop.gain.gain.setTargetAtTime(clamp(volume), context.currentTime, key === 'campfire' ? .35 : 1.2);
+      loop.pan?.pan.setTargetAtTime(this.campfireMix.pan, context.currentTime, .25);
     }
   }
   private stopAmbience() {
-    for (const { source, gain } of this.ambientLoops.values()) { try { source.stop(); } catch { /* Already stopped. */ } source.disconnect(); gain.disconnect(); }
+    for (const { source, gain, pan } of this.ambientLoops.values()) { try { source.stop(); } catch { /* Already stopped. */ } source.disconnect(); gain.disconnect(); pan?.disconnect(); }
     this.ambientLoops.clear();
     for (const source of this.retiringAmbienceSources) { try { source.stop(); } catch { /* Already ended. */ } source.disconnect(); }
     this.retiringAmbienceSources.clear();
@@ -334,21 +401,47 @@ export class FriendsAudio {
   }
   private syncMusic() {
     if (!this.active || !this.activated || document.hidden || this.settings.muted || !this.settings.music) { this.stopMusic(); return; }
-    if (this.music || !this.musicBuffer || !this.context || this.context.state !== 'running') return;
-    const source = this.context.createBufferSource(); source.buffer = this.musicBuffer; source.loop = true;
-    source.connect(this.musicGain!); this.music = source;
-    const gain = this.musicGain!.gain, now = this.context.currentTime;
-    gain.cancelScheduledValues(now); gain.setValueAtTime(0, now); gain.linearRampToValueAtTime(this.settings.music * .35, now + 2);
-    source.start();
+    const context = this.context;
+    if (!context || context.state !== 'running') return;
+    const desired: MusicTheme = this.castleMusic ? 'castle' : 'exploration';
+    const buffer = this.buffers.get(MUSIC[desired]);
+    if (!buffer) {
+      if (!this.loads.has(MUSIC[desired])) void this.load(MUSIC[desired], true, 4).then(() => { if (this.buffers.has(MUSIC[desired])) this.syncMusic(); });
+      return; // Keep the existing theme audible while the next one downloads.
+    }
+    const now = context.currentTime;
+    if (!this.music.has(desired)) {
+      const source = context.createBufferSource(), gain = context.createGain();
+      const offset = (this.musicOffsets.get(desired) ?? 0) % buffer.duration;
+      source.buffer = buffer; source.loop = true; gain.gain.value = 0;
+      source.connect(gain); gain.connect(this.musicGain!);
+      source.onended = () => { source.disconnect(); gain.disconnect(); };
+      source.start(now, offset);
+      this.music.set(desired, { source, gain, from: 0, target: -1, changedAt: now, startedAt: now, offset });
+    }
+    for (const [theme, loop] of this.music) {
+      const target = theme === desired ? 1 : 0;
+      if (loop.target !== target) {
+        const progress = clamp((now - loop.changedAt) / MUSIC_FADE_SECONDS);
+        const current = loop.target < 0 ? 0 : loop.from + (loop.target - loop.from) * progress;
+        loop.gain.gain.cancelScheduledValues(now); loop.gain.gain.setValueAtTime(current, now);
+        loop.gain.gain.linearRampToValueAtTime(target, now + MUSIC_FADE_SECONDS);
+        loop.from = current; loop.target = target; loop.changedAt = now;
+      } else if (!target && now - loop.changedAt >= MUSIC_FADE_SECONDS) this.stopMusicTheme(theme, loop);
+    }
+  }
+  private stopMusicTheme(theme: MusicTheme, loop: MusicLoop) {
+    const duration = loop.source.buffer?.duration ?? 1;
+    this.musicOffsets.set(theme, (loop.offset + (this.context?.currentTime ?? loop.startedAt) - loop.startedAt) % duration);
+    try { loop.source.stop(); } catch { /* Already stopped. */ }
+    loop.source.disconnect(); loop.gain.disconnect(); this.music.delete(theme);
   }
   private stopMusic() {
-    if (!this.music) return;
-    try { this.music.stop(); } catch { /* Already stopped. */ }
-    this.music.disconnect(); this.music = undefined;
+    for (const [theme, loop] of this.music) this.stopMusicTheme(theme, loop);
   }
   private onVisibility = () => {
     if (document.hidden) { this.nearbyBirdSince = undefined; this.stopBirdCall(); void this.context?.suspend().catch(() => {}); }
-    else if (this.active && this.activated && this.context) { void this.context.resume().then(() => { this.syncMusic(); this.syncAmbience(); this.syncTrain(); }).catch(() => {}); }
+    else if (this.active && this.activated && this.context) { void this.context.resume().then(() => { this.syncMusic(); this.syncAmbience(); this.syncTrain(); this.syncHelicopter(); }).catch(() => {}); }
   };
 }
 export const friendsAudio = new FriendsAudio();

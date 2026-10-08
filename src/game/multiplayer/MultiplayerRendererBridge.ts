@@ -27,6 +27,8 @@ import { soundManager } from '../SoundManager';
 import { friendsAudio, type SurfaceCue } from '../FriendsAudio';
 import { FriendsSoundscape } from '../FriendsSoundscape';
 import { FriendsTrainSound } from '../FriendsTrainSound';
+import { FriendsFlightFoliage, FriendsHelicopterSound } from '../FriendsFlightSound';
+import { campfireSound, inCastleMusicArea } from '../FriendsLocationAudio';
 import { normalizeGamePreferences, type LocalGamePreferences } from '../LocalGamePreferences';
 import { COOP_BRIDGE_SEGMENT_LENGTH, COOP_ENEMY_DEATH_PRESENTATION_MS, COOP_WEAPON_DETAILS, CoopCombatEvent, CoopSnapshot } from './CoopSimulation';
 import { CoopFirearmVisualRig } from '../rendering/coopFirearmVisuals';
@@ -118,6 +120,10 @@ export class MultiplayerRendererBridge {
   private localSurfaceCue: SurfaceCue = 'grass';
   private soundscape = new FriendsSoundscape();
   private trainSound = new FriendsTrainSound();
+  private helicopterSound = new FriendsHelicopterSound();
+  private flightFoliage = new FriendsFlightFoliage();
+  private flightAudioTimeMs = 0;
+  private castleMusicArea = false;
   private nextSoundscapeMs = 0;
   private audioFeedbackStamp?: string;
   private nativePixelRatio = 1;
@@ -891,9 +897,13 @@ export class MultiplayerRendererBridge {
         environment.windSpeed, environment.windSeconds, environment.underground, tree => Boolean(this.getFriendsTerrain()?.supports(tree.x, tree.y, tree.z)),
         this.frontierVisuals.terrain.surfaceHeight(local.x, local.y));
       friendsAudio.setSoundscape({ ...mix, birds: bird.volume, birdPan: bird.pan });
+      this.castleMusicArea = inCastleMusicArea(local, this.castleMusicArea);
+      friendsAudio.setCastleMusic(this.castleMusicArea);
+      friendsAudio.setCampfireSound(campfireSound(local, this.getAimAngle(), snapshot.friends?.campfire?.fuelSeconds, environment.underground));
       if (snapshot.friends) {
         const train = this.trainSound.sample(snapshot.friends, local, snapshot.elapsedMs, this.getAimAngle(), environment.underground);
         friendsAudio.setTrainSound(train.mix);
+        friendsAudio.setHelicopterSound(this.helicopterSound.sample(snapshot.friends, local, snapshot.elapsedMs, this.getAimAngle(), environment.underground));
         for (const event of train.events) friendsAudio.play(event.cue, event.volume, event.cue === 'trainHorn' ? 7000 : 2500, 1, undefined, { pan: event.pan });
       }
     }
@@ -907,6 +917,15 @@ export class MultiplayerRendererBridge {
         for(let x=cx-1;x<=cx+1;x++)for(let y=cy-1;y<=cy+1;y++)this.interactionTrees.push(...frontierTrees(x,y));
       }
       const removed=this.removedInteractionTrees,trees=this.interactionTrees;
+      // Snapshot presentation time may step backwards on reconciliation;
+      // brushing cadence uses a monotonic local render clock instead.
+      this.flightAudioTimeMs += Math.max(0, deltaMs);
+      const flying = Boolean(local.friendsDevFlight && !resetCamera && !isSpectating && !isFallingLocal && !this.interactionBlocked && local.lifeState === 'alive');
+      if (flying) friendsAudio.prepareFlightFoliage();
+      const brush = this.flightFoliage.sample(local, this.flightAudioTimeMs, flying, trees,
+        tree => !removed.has(tree.id) && this.frontierVisuals!.terrain.supports(tree.x, tree.y, tree.z),
+        tree => this.frontierVisuals!.treeCanopy(tree), this.getAimAngle());
+      if (brush) friendsAudio.play('flightFoliage', brush.volume, 330, brush.rate, .65, { pan: brush.pan });
       const active = !isSpectating && !this.interactionBlocked && !pilotedVehicle && !isCampfireSeat(local.friendsSeat) && local.lifeState === 'alive' && this.friendsTool >= 1 && this.friendsTool <= 3;
       const target = active ? friendsInteractionTarget(this.frontierVisuals.terrain, ray, this.friendsTool, this.nearbyBuilds(snapshot, 300),
         trees.filter(t => !removed.has(t.id) && friendsTreeWithinReach(t,ray.x,ray.y) && this.frontierVisuals!.terrain.supports(t.x,t.y,t.z)), this.interactionAllowed,this.workPlane,this.friendsShovelFill) : undefined;

@@ -2986,6 +2986,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     return base;
   })() : null;
 
+  const showResumeControl = !mouseLocked && !interactionBlocked && !isSpectator && !isMobileTouchDevice && !(launch.gameMode === 'friends' && buildMode);
+
   return (
     <div className={`coop-arena ${launch.gameMode === 'friends' ? 'coop-arena--friends' : ''} absolute inset-0 z-[110] bg-[#05080e] ${interactionBlocked ? 'coop-arena--interaction-blocked' : ''} ${deploymentStage === 'briefing' || deploymentStage === 'ready' ? 'coop-arena--deploying' : deploymentStage === 'released' ? 'coop-arena--releasing' : 'coop-arena--deployed'}`}>
       <div ref={sceneRef} className="coop-arena__scene absolute inset-0 h-full w-full" />
@@ -3048,7 +3050,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         insertionRemainingMs={run?.insertionRemainingMs}
         onDeploy={() => releaseDeployment(true)}
       />}
-      {!mouseLocked && !interactionBlocked && !isSpectator && !isMobileTouchDevice && !(launch.gameMode === 'friends' && buildMode) && (
+      {showResumeControl && (
         <button
           type="button"
           className="absolute bottom-8 left-1/2 z-[105] -translate-x-1/2 border border-cyan-300/70 bg-black/85 px-6 py-4 text-center font-mono text-xs font-black uppercase tracking-[.2em] text-cyan-100 shadow-[0_0_36px_rgba(34,211,238,.3)] backdrop-blur-md hover:bg-cyan-950/90 focus:outline-none focus:ring-2 focus:ring-cyan-300"
@@ -3195,7 +3197,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       {!isSpectator && !fallCinematicActive && (hud.lifeState === 'downed' || hud.lifeState === 'eliminated' || hud.lifeState === 'extracted') && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span className={hud.lifeState === 'downed' ? 'text-amber-300 font-black' : hud.lifeState === 'extracted' ? 'text-emerald-300 font-black' : 'text-rose-300 font-black'}>● {hud.lifeState === 'extracted' ? 'EXTRACTED · SPECTATING' : tr(hud.lifeState === 'downed' ? 'hud.downedSpectating' : 'hud.eliminatedSpectating')}</span><b style={{ color: spectatedSquadmate?.color || '#f0abfc' }}>{spectatedSquadmate?.label || downedSpectatorTarget?.label || tr('hud.squad')}</b><small>{tr('hud.cycleSquad')}</small></div>}
       {!campfireSeated && craneControlsOpen===null && matchSnapshot?.friends?.frontier && localSnapshot && !buildMode && !backpackOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsToolbelt workLocked={miningWorkLocked} onWorkPlane={toggleMiningPlane} showProgress={preferences.miningProgress===true} frontier={matchSnapshot.friends.frontier} player={localSnapshot} tool={frontierTool} visible={frontierToolbeltVisible} onTool={selectFrontierTool} onPack={() => { rendererRef.current?.exitPointerLock(); setBackpackPanelOpen(true); }} elapsed={matchSnapshot.elapsedMs} />}
       {pauseOpen && launch.gameMode === 'friends' && <FriendsPauseMenu controlScheme={controlScheme} onControlScheme={scheme => { clearControlsRef.current(); onControlSchemeChange?.(scheme); }} cinematicProfile={resolvedProfile} onCinematicProfile={profile => onCinematicProfileChange?.(profile)} preferences={preferences} onPreferences={patch => setPreferences(current => ({ ...current, ...patch }))} onResume={closePauseMenu} onExit={onExit}/>}
-      {matchSnapshot?.friends && craneControlsOpen===null && !friendsDevOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsHUD snapshot={matchSnapshot} player={localSnapshot} interactionLabel={interactionControlLabel} />}
+      {matchSnapshot?.friends && craneControlsOpen===null && !friendsDevOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsHUD snapshot={matchSnapshot} player={localSnapshot} interactionLabel={interactionControlLabel} toolbeltVisible={frontierToolbeltVisible && !buildMode && !backpackOpen} resumeControlVisible={showResumeControl} />}
       {campfireSeated && !interactionBlocked && <FriendsCampfireControls
         touch={showMobileTouchControls} gamepad={isGamepadControlScheme(controlScheme)}
         eating={Boolean(matchSnapshot?.friends?.campfire?.roasts[launch.localPlayerId]?.eatingMs)}

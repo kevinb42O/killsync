@@ -9,7 +9,7 @@ import { friendsVehicleFloor, vehicleLocal } from '../game/multiplayer/FriendsEx
 import { FriendsHaulingCompass } from './FriendsHaulingCompass';
 import { haulingInteraction } from '../game/multiplayer/FriendsHauling';
 
-export function FriendsHUD({ snapshot, player, interactionLabel }: { snapshot: CoopSnapshot; player?: CoopPlayerSnapshot; interactionLabel: string }) {
+export function FriendsHUD({ snapshot, player, interactionLabel, toolbeltVisible = false, resumeControlVisible = false }: { snapshot: CoopSnapshot; player?: CoopPlayerSnapshot; interactionLabel: string; toolbeltVisible?: boolean; resumeControlVisible?: boolean }) {
   const expedition = snapshot.friends;
   if (!expedition || !player || isCampfireSeat(player.friendsSeat)) return null;
   const service=expedition.scenicRailway;
@@ -24,12 +24,16 @@ export function FriendsHUD({ snapshot, player, interactionLabel }: { snapshot: C
   const cargoTarget=hauling && haulingInteraction(hauling.cargo,player,expedition.vehicles,hauling.delivered,hauling.completedCargoIds);
   const crane=nearbyCrane(expedition.building?.pieces??[],player);
   const hook=hauling&&craneHookInteraction(hauling.cranes??[],hauling.cargo,player);
-  const prompt = crane ? 'Freight crane controls' : hook?hook.label:scenicControlNearby(player,expedition.vehicles) ? 'Train speed controls' : seatPrompt ? seatPrompt.label : piloting ? 'Release pilot controls' : canPilot ? 'Pilot the Sunskiff' : cargoTarget ? cargoTarget.label : treasure ? `Open ${treasure.name} · ${treasure.gold.toLocaleString('en-US')} gold` : '';
+  const seatLabel = seatPrompt && !isCampfireSeat(seatPrompt.seat) ? player.friendsSeat ? 'Stand up' : 'Take a seat' : seatPrompt?.label;
+  const prompt = crane ? 'Freight crane controls' : hook?hook.label:scenicControlNearby(player,expedition.vehicles) ? 'Train speed controls' : seatLabel ? seatLabel : piloting ? 'Release pilot controls' : canPilot ? 'Pilot the Sunskiff' : cargoTarget ? cargoTarget.label : treasure ? `Open ${treasure.name} · ${treasure.gold.toLocaleString('en-US')} gold` : '';
+  const trainDock = !player.friendsDevFlight && vehicle?.scenic;
   return <>
     {hauling && <FriendsHaulingCompass hauling={hauling} player={player}/>}
     {haulingFeedback && snapshot.elapsedMs < haulingFeedback.until && <div className="friends-hauling-feedback" role="status">{haulingFeedback.message}</div>}
+    <div className={trainDock ? 'friends-train-dock pointer-events-none' : 'friends-context'} data-toolbelt-visible={toolbeltVisible} data-resume-visible={resumeControlVisible}>
     {player.friendsDevFlight && <div className="friends-ride pointer-events-none"><Plane size={16} /><div><strong>DEV FREE FLIGHT · C SETTINGS</strong><small>Move toward your view · Space rise · Ctrl descend · Shift boost</small></div></div>}
-    {!player.friendsDevFlight && vehicle && <div className="friends-ride pointer-events-none">{vehicle.kind === 'train' ? <TrainFront size={16} /> : <Plane size={16} />}<div><strong>{piloting ? 'SUNSKIFF · PILOT' : vehicle.scenic ? 'GRAND TRAVERSE · '+(player.friendsSeat?'SEATED':'ON BOARD') : vehicle.kind === 'train' ? 'SUNLINE · ON BOARD' : 'SUNSKIFF · CREW'}</strong><small>{piloting ? 'Move: fly · jump: ascend · crouch: descend · sprint: boost' : vehicle.scenic && service ? `${service.chapter} · ${service.blocked?'Track obstructed':service.held?'Held':service.dwell>0?'Boarding':Math.round(service.speed/12*3.6)+' km/h'} · Next: ${service.nextStation} · F sit / stand` : vehicle.kind === 'train' ? expedition.transport?.held ? 'Held · G opens train controls' : 'Your railway · walk freely · jump off anywhere' : 'Walk freely · shoot from the cabin · jump out anytime'}</small></div></div>}
-    {prompt && <div className="friends-interact pointer-events-none"><kbd>{interactionLabel}</kbd>{prompt}{campfireNearby(player)&&<small> · E add wood</small>}</div>}
+    {!player.friendsDevFlight && vehicle && <div className="friends-ride pointer-events-none">{vehicle.kind === 'train' ? <TrainFront size={16} /> : <Plane size={16} />}<div><strong>{piloting ? 'SUNSKIFF · PILOT' : vehicle.scenic ? 'GRAND TRAVERSE · '+(player.friendsSeat?'SEATED':'ON BOARD') : vehicle.kind === 'train' ? 'SUNLINE · ON BOARD' : 'SUNSKIFF · CREW'}</strong><small>{piloting ? 'Move: fly · jump: ascend · crouch: descend · sprint: boost' : vehicle.scenic && service ? `${service.chapter} · ${service.blocked?'Track obstructed':service.held?'Held':service.dwell>0?'Boarding':Math.round(service.speed/12*3.6)+' km/h'} · Next: ${service.nextStation}` : vehicle.kind === 'train' ? expedition.transport?.held ? 'Held · G opens train controls' : 'Your railway · walk freely · jump off anywhere' : 'Walk freely · shoot from the cabin · jump out anytime'}</small></div></div>}
+    {prompt && <div className="friends-interact pointer-events-none"><kbd>{interactionLabel}</kbd><span>{prompt}{campfireNearby(player)&&<small> · E add wood</small>}</span></div>}
+    </div>
   </>;
 }

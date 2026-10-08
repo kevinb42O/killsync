@@ -1,21 +1,36 @@
 # Sunline / Friends audio credits
 
-Downloaded from the original publishers on 2026-10-08. All new audio in this
-directory is CC0-1.0. No AI audio generators were used. These named releases
-date from 2005–2022 (music: 2019), before modern generative audio services.
-The source recordings are bundled locally; gameplay does not contact the
+Downloaded from the original publishers on 2026-10-08. Effects use CC0-1.0;
+the two music tracks and campfire recording use the Pixabay Content License.
+Per-file licenses, publisher labels, source URLs and hashes are preserved in
+`sources.json`. Assets are bundled locally; gameplay does not contact the
 publishers or depend on their servers.
 
 ## Music
 
-**Vaporware / Calm Piano 1** — The Cynic Project / cynicmusic.com / pixelsphere.org.
+- `exploration.ogg`: **Cornerian Flight Academy, VGM Yume - Minecraft Title Theme Lofi** — the main exploration soundtrack.
+  [Publisher/source](https://pixabay.com/music/beats-cornerian-flight-academy-vgm-yume-minecraft-title-theme-lofi-439427/).
+  Original download: https://cdn.pixabay.com/audio/2025/11/19/audio_766da5bfec.mp3
+- `castle.ogg`: **Game Music_ Soundtrack_Exploration _ Peaceful Area** by **Sonic289** — the castle approach, stairs and grounds soundtrack.
+  [Publisher/source](https://pixabay.com/music/solo-piano-game-music-soundtrack-exploration-peaceful-area-372769/).
+  Original download: https://cdn.pixabay.com/audio/2025/07/10/audio_9116a3530e.mp3
+  The publisher labels this track “AI generated” and “Content ID Registered”.
 
-- Publisher and license: https://opengameart.org/content/calm-piano-1-vaporware
-- Original download: https://opengameart.org/sites/default/files/003_Vaporware_2.mp3
-- Published 2019-05-11; CC0-1.0.
-- `vaporware.mp3` is the original, unmodified file. Playback adds a four-second
-  linear crossfade between the tail and opening for a smooth repeating loop,
-  a two-second initial fade, and reduced background volume.
+Both user-selected tracks use the [Pixabay Content License](https://pixabay.com/service/license-summary/).
+Full recordings are converted to stereo 44.1 kHz Vorbis quality 5 and matched
+to -18 LUFS / -3 dBTP / LRA 8. Playback adds a four-second loop-seam crossfade,
+an eight-second transition between themes, and reduced background volume.
+Leaving the castle returns to the main recording at its remembered position.
+
+## Campfire
+
+- `campfire_woods.ogg`: **Campfire in the Woods** by **DRAGON-STUDIO**.
+  [Publisher/source](https://pixabay.com/sound-effects/nature-campfire-in-the-woods-467491/),
+  [Pixabay Content License](https://pixabay.com/service/license-summary/).
+  Original download: https://cdn.pixabay.com/audio/2026/01/16/audio_9b2a34b5c3.mp3
+  Full 61-second recording, converted to mono 32 kHz Vorbis quality 4, filtered
+  at 80–8,000 Hz and normalized to -23 LUFS / -3 dBTP / LRA 8. Playback adds a
+  two-second seam crossfade and fades/pans relative to the fire's position.
 
 ## Effects
 
@@ -111,9 +126,6 @@ and retain their existing provenance. This pass does not replace those assets.
 
 CC0-1.0: https://creativecommons.org/publicdomain/zero/1.0/
 
-This sound direction uses original free assets. It includes no Minecraft or
-C418 recordings.
-
 ## Recorded train sounds
 
 All six train files use the publishers' public high-quality MP3 previews of
@@ -147,3 +159,20 @@ The engine and rail loops receive an 80 ms playback seam crossfade.
 Only their playback speed and gain follow train motion; no audio is generated.
 
 - `eat.ogg`: **Soft Chicken Chomp 3** by **R1nkata**, [Freesound](https://freesound.org/people/R1nkata/sounds/723600/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Full 1.439-second public Ogg preview; unchanged, played quietly at the marshmallow bite.
+
+## Helicopter and dev flight foliage
+
+- `helicopter_rotor.ogg`: **Helicopter Sounds** by **aquinn**, [OpenGameArt](https://opengameart.org/content/helicopter-sounds), CC0 1.0.
+  Download: https://opengameart.org/sites/default/files/helicopter_0.mp3
+  Seconds 1–4.4 of the first helicopter effect, converted to mono 32 kHz
+  Vorbis quality 4, filtered below 70 Hz and above 8.5 kHz, normalized to
+  -20 LUFS / -3 dBTP / LRA 8. An 80 ms playback seam crossfade joins the loop.
+- `flight_foliage_000.ogg` through `flight_foliage_002.ogg`: **20 Rustles of
+  dry leaves** by **qubodup**, [OpenGameArt](https://opengameart.org/content/20-rustles-dry-leaves), CC0 1.0.
+  Download: https://opengameart.org/sites/default/files/qubodup-rustle.7z
+  Full `rustle01.flac`, `rustle02.flac` and `rustle03.flac` recordings,
+  converted to mono 32 kHz Vorbis quality 4, filtered below 70 Hz and above
+  8.5 kHz, normalized to -20 LUFS / -3 dBTP / LRA 8, with 12 ms opening and
+  60 ms closing fades. Gameplay plays bounded 650 ms excerpts at varying
+  speed/gain for close canopy brushing. Original and output hashes are
+  preserved in `sources.json`. All processing edits downloaded audio.

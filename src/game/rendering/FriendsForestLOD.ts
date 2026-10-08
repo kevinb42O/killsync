@@ -3,6 +3,7 @@ import { FRIENDS_TREE_SIZES, FRIENDS_FOREST_DETAIL_END } from '../world/FriendsV
 import { type FrontierTree, type FrontierSnapshot, frontierTrees } from '../multiplayer/FriendsFrontier';
 import { FRONTIER_SIZE, terrainHash } from '../world/FriendsTerrain';
 import { FRIENDS_ASSETS, fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
+import type { TreeCanopy } from '../FriendsFlightSound';
 
 export const FOREST_DETAIL_END = FRIENDS_FOREST_DETAIL_END;
 const KINDS = ['pine', 'oak', 'autumnOak'] as const;
@@ -11,7 +12,7 @@ const SHADOW_RADIUS = 1400;
 const TILE = 2048;
 interface BarkLevels { sourceIndices: number; sourceVertices: number; levels: { error: number; indices: number[] }[] }
 interface Part { geometry: THREE.BufferGeometry[]; errors: number[]; material: THREE.Material; transform: THREE.Matrix4; bark: boolean; buckets: (Bucket | undefined)[][] }
-interface Species { parts: Part[]; bounds: THREE.Sphere; canopyHeight: number }
+interface Species { parts: Part[]; bounds: THREE.Sphere; canopyHeight: number; canopy?: TreeCanopy }
 interface Entry { tree: FrontierTree; species: number; sphere: THREE.Sphere; matrices: Float32Array[]; levels: number[]; supported: boolean }
 interface Bucket { mesh: THREE.InstancedMesh; slots: string[]; entries: Entry[]; animatedSlots: number[]; fullUploadPending: boolean; part: number }
 interface Tile { bounds: THREE.Sphere; entries: Entry[] }
@@ -102,11 +103,13 @@ export class FriendsForestLOD {
     fitted.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(fitted);
     const bounds = box.getBoundingSphere(new THREE.Sphere());
+    const leaves = new THREE.Box3();
     const parts: Part[] = [];
     fitted.traverse(child => {
       if (!(child instanceof THREE.Mesh) || Array.isArray(child.material)) return;
       const material = child.material as THREE.MeshStandardMaterial;
       const bark = material.name.endsWith('_Bark');
+      if (!bark) leaves.union(new THREE.Box3().setFromObject(child));
       // Leaf cards retain the asset's alpha cutoff and depth writes. MSAA softens
       // coverage without transparency sorting or changing the canopy silhouette.
       material.alphaToCoverage = !bark; material.transparent = false; material.depthWrite = true;
@@ -126,9 +129,12 @@ export class FriendsForestLOD {
       }
       parts.push({ geometry, errors, material, transform: child.matrixWorld.clone(), bark, buckets: geometry.map(() => []) });
     });
-    return { parts, bounds, canopyHeight: box.max.y };
+    const canopy = leaves.isEmpty() ? undefined : { bottom: leaves.min.y, top: leaves.max.y,
+      radius: Math.max(Math.abs(leaves.min.x), Math.abs(leaves.max.x), Math.abs(leaves.min.z), Math.abs(leaves.max.z)) };
+    return { parts, bounds, canopyHeight: box.max.y, canopy };
   }
   canopyHeight(tree: FrontierTree) { return this.species[KINDS.indexOf(tree.kind)]?.canopyHeight; }
+  canopy(tree: FrontierTree) { return this.species[KINDS.indexOf(tree.kind)]?.canopy; }
   private rebuild(trees: FrontierTree[], ground: (tree: FrontierTree) => boolean) {
     this.speciesCounts = this.species.map(() => 0);
     this.entries = trees.map(tree => {
