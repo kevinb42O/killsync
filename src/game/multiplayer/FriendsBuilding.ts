@@ -3,7 +3,7 @@ import { vehicleLocalPoint, vehicleWorldPoint, vehiclePlaneHeight } from './Frie
 import type { FriendsVehicle } from './FriendsExpedition';
 import { scenicTransitProtected } from '../world/FriendsRailInfrastructure';
 import { FRIENDS_TERRAIN_SURFACES } from '../world/FriendsTerrainAppearance';
-import { FriendsTerrain, FRONTIER_SIZE, TERRAIN_BOTTOM, FRIENDS_STEP_HEIGHT, VOXEL_SIZE, FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORM } from '../world/FriendsTerrain';
+import { FriendsTerrain, FRONTIER_SIZE, TERRAIN_BOTTOM, FRIENDS_STEP_HEIGHT, VOXEL_SIZE, FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORMS } from '../world/FriendsTerrain';
 import { getNearbyWorldObstacles } from '../world/WorldLayout';
 import { FRIENDS_AIRPAD, FRIENDS_HUB } from '../world/FriendsRegion';
 import { isPlayerRail, railSamples, railOverlapError, snapRailPose } from '../world/FriendsPlayerRail';
@@ -165,11 +165,23 @@ export function resolveFriendsBuildCollisions(pieces: readonly FriendsBuildPiece
     const boxes = (p.shape === 'stairs' || p.shape === 'voxel_stairs') ? [box(0, 0, 0, def.w, def.d, def.h)] : friendsShapeBoxes(p.shape);
     for (const b of boxes) {
       let top = b.z + b.h;
-      if (incline) top = Math.max(0, Math.min(1, (q.x + radius * .25) / def.w + .5)) * def.h;
+      // Extend only the low approach plane by the body's contact radius.
+      // Clamping it at zero makes consecutive ramps present a false wall
+      // while the player's feet are still on the preceding incline.
+      if (incline) top = Math.min(1, (q.x + radius * .25) / def.w + .5) * def.h;
       if (z >= p.z + top - step || z + bodyHeight <= p.z + b.z + .01) continue;
       const nx = Math.max(b.x - b.w / 2, Math.min(b.x + b.w / 2, q.x)), ny = Math.max(b.y - b.d / 2, Math.min(b.y + b.d / 2, q.y));
       const dx = q.x - nx, dy = q.y - ny, dist = Math.hypot(dx, dy);
       if (dist >= radius) continue;
+      if(!incline&&dist>.00001){
+        const a=p.rotation*Math.PI/2,c=Math.cos(a),s=Math.sin(a),contact={x:p.x+nx*c-ny*s,y:p.y+nx*s+ny*c};
+        // A landing attached flush to a ramp has no exposed entrance wall.
+        // The cylinder may overlap that face while its feet follow the ramp.
+        const connected=pieces.some(other=>other!==p&&isSlope(other.shape)&&
+          Math.abs((friendsBuildFloor([other],position.x,position.y,z,step)??Infinity)-z)<=step&&
+          Math.abs((friendsBuildFloor([other],contact.x,contact.y,p.z+top,.01)??Infinity)-(p.z+top))<.01);
+        if(connected)continue;
+      }
       if (dist > .00001) { q.x += dx / dist * (radius - dist); q.y += dy / dist * (radius - dist); }
       else if (b.w / 2 + radius - Math.abs(q.x - b.x) < b.d / 2 + radius - Math.abs(q.y - b.y)) q.x = b.x + (q.x < b.x ? -1 : 1) * (b.w / 2 + radius);
       else q.y = b.y + (q.y < b.y ? -1 : 1) * (b.d / 2 + radius);
@@ -287,9 +299,9 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
   })) return 'Keep the player spawn platform clear.';
   // Preserve existing saved builds; new construction must leave the hauling bay free.
   if (!restoring && friendsShapeBoxes(shape).some(local=>{
-    const b=worldBox(pose,local),p=FRIENDS_HAULING_PLATFORM;
-    return Math.abs(b.x-p.x)<(b.w+p.size)/2&&Math.abs(b.y-p.y)<(b.d+p.size)/2
-      &&b.z<p.top+p.clearance&&b.z+b.h>p.top-p.thickness;
+    const b=worldBox(pose,local);
+    return FRIENDS_HAULING_PLATFORMS.some(p=>Math.abs(b.x-p.x)<(b.w+p.size)/2&&Math.abs(b.y-p.y)<(b.d+p.size)/2
+      &&b.z<p.top+p.clearance&&b.z+b.h>p.top-p.thickness);
   })) return 'Keep the hauling platform clear.';
   if (!restoring && pose.z < 160 && Math.hypot(pose.x-FRIENDS_HUB.x,pose.y-FRIENDS_HUB.y-90)<90+extent) return 'Leave room to spawn safely.';
   if (isPlayerRail(shape)) {

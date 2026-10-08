@@ -117,13 +117,19 @@ export const FRIENDS_SPAWN_PLATFORM = {
     baseTerrainHeight(5776 + (i % 9) * 32, 5584 + Math.floor(i / 9) * 32))) + 32,
 } as const;
 export const FRIENDS_ARRIVAL_HEIGHT=FRIENDS_SPAWN_PLATFORM.top;
-/** Salvage pickup in a surveyed clearing about 750m east-northeast of arrival. */
-export const FRIENDS_HAULING_PLATFORM = {
-  x: 14800, y: 4464, size: 288, thickness: 64, clearance: 128,
+function haulingPlatform(x:number,y:number){return {
+  x,y,size:288,thickness:64,clearance:128,
   top: Math.max(...Array.from({ length: 81 }, (_, i) =>
-    baseTerrainHeight(14672 + (i % 9) * 32, 4336 + Math.floor(i / 9) * 32))) + 32,
-} as const;
-export const FRIENDS_FIXED_PLATFORMS = [FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORM] as const;
+    baseTerrainHeight(x-128+(i%9)*32,y-128+Math.floor(i/9)*32)))+32,
+} as const;}
+/** Separate surveyed staging areas for the three hauling missions. */
+export const FRIENDS_HAULING_PLATFORMS = [
+  haulingPlatform(14800,4464), // Lantern clearing, east-northeast of arrival.
+  haulingPlatform(20784,18544), // Eastern ridge beside the castle approach.
+  haulingPlatform(6864,8016), // Freight yard south of Sunline Commons.
+] as const;
+export const FRIENDS_HAULING_PLATFORM=FRIENDS_HAULING_PLATFORMS[0];
+export const FRIENDS_FIXED_PLATFORMS = [FRIENDS_SPAWN_PLATFORM,...FRIENDS_HAULING_PLATFORMS] as const;
 export function friendsFixedPlatformAt(x:number,y:number){
   return FRIENDS_FIXED_PLATFORMS.find(p=>x>=p.x-p.size/2&&x<p.x+p.size/2&&y>=p.y-p.size/2&&y<p.y+p.size/2);
 }

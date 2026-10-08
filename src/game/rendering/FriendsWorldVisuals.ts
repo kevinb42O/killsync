@@ -1,8 +1,8 @@
 import { addFriendsAsset, fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
 import * as THREE from 'three';
 import { createScenicTrainVisual,updateScenicTrainVisual } from './FriendsScenicTrainVisuals';
-import { FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORM } from '../world/FriendsTerrain';
-import { FRIENDS_DELIVERY_BAY } from '../world/FriendsHaulingGoal';
+import { FRIENDS_SPAWN_PLATFORM } from '../world/FriendsTerrain';
+import { FRIENDS_DELIVERY_BAY, FRIENDS_HAULING_JOBS } from '../world/FriendsHaulingGoal';
 import { trainGangways, type FriendsSnapshot, type FriendsVehicle } from '../multiplayer/FriendsExpedition';
 
 const palette = { grass: 0x476955, metal: 0x23464b, cream: 0xe9dfbe, dark: 0x19353a, mint: 0x8de6ce, amber: 0xffcf8a, purple: 0xc9b2eb };
@@ -44,7 +44,8 @@ export function createFriendsEnvironment(): THREE.Group {
   const ring = new THREE.Mesh(new THREE.RingGeometry(76, 79, 48), glow);
   ring.rotation.x = -Math.PI / 2; ring.position.set(p.x, p.top + .6, p.y); group.add(ring);
   sign(group, 'PLAYER SPAWN', p.x, p.top + 70, p.y - 120, 360, '#8de6ce');
-  const bay=FRIENDS_HAULING_PLATFORM, paint=new THREE.MeshBasicMaterial({color:0xffc36e});
+  for(const job of FRIENDS_HAULING_JOBS){
+  const bay=job.pickup,color=job.number===1?'#ffc36e':job.goal.color,paint=new THREE.MeshBasicMaterial({color});
   for(const side of [-1,1]){
     box(group,bay.size-12,.5,3,bay.x,bay.top+.3,bay.y+side*(bay.size/2-8),paint);
     box(group,3,.5,bay.size-12,bay.x+side*(bay.size/2-8),bay.top+.3,bay.y,paint);
@@ -52,7 +53,8 @@ export function createFriendsEnvironment(): THREE.Group {
     box(group,84,.5,2,bay.x,bay.top+.5,bay.y+side*34,paint);
     box(group,2,.5,68,bay.x+side*42,bay.top+.5,bay.y,paint);
   }
-  sign(group,'SALVAGE PICKUP',bay.x,bay.top+70,bay.y-92,340,'#ffc36e');
+  sign(group,bay.name,bay.x,bay.top+70,bay.y-92,340,color);
+  }
   const goal=FRIENDS_DELIVERY_BAY;
   sign(group,'DELIVERY BAY · GOAL',goal.x,goal.z+125,goal.y,440,goal.color);
   return group;

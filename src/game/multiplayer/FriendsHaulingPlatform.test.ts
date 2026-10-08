@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { FriendsTerrain, FRIENDS_HAULING_PLATFORM as bay, FRIENDS_SPAWN_PLATFORM as arrival, TERRAIN_GENERATION } from '../world/FriendsTerrain';
+import { FriendsTerrain, FRIENDS_HAULING_PLATFORM as bay, FRIENDS_HAULING_PLATFORMS, FRIENDS_SPAWN_PLATFORM as arrival, TERRAIN_GENERATION } from '../world/FriendsTerrain';
 import { FriendsFrontier } from './FriendsFrontier';
 import { FriendsBuilding, friendsPlacementError } from './FriendsBuilding';
 import { volumeChunksAround } from '../rendering/FriendsTerrainStreaming';
 
 describe('dedicated hauling platform',()=>{
+  it.each(FRIENDS_HAULING_PLATFORMS)('keeps pickup $x,$y level, protected, clear of trees, and streamed locally',p=>{
+    const f=new FriendsFrontier(),terrain=f.terrain;
+    for(const dx of [-96,0,96])for(const dy of [-96,0,96]){
+      const x=p.x+dx,y=p.y+dy,vx=Math.floor(x/32),vy=Math.floor(y/32);
+      expect(terrain.floor(x,y,6000,0)).toBe(p.top);
+      expect(terrain.collide({x,y},p.top,18,50,0)).toBe(false);
+      expect(f.collideTrees({x,y},p.top,20)).toBe(false);
+      expect(terrain.set(vx,vy,p.top/32-1,0)).toBe(false);
+    }
+    expect(friendsPlacementError([],'block',{x:p.x,y:p.y,z:p.top,rotation:0})).toMatch(/hauling platform/);
+    expect(volumeChunksAround(p.x,p.y,new Set(),false).has(`${Math.floor(p.x/512)},${Math.floor(p.y/512)}`)).toBe(true);
+  });
   it('places a level pickup deck about 750m from arrival on the surveyed local terrain',()=>{
     const terrain=new FriendsTerrain();
     const metres=Math.hypot(bay.x-arrival.x,bay.y-arrival.y)/12;

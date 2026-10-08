@@ -17,6 +17,8 @@ import { FriendsSimulation } from '../game/multiplayer/FriendsSimulation';
 import { FriendsPresentationTimeline } from '../game/multiplayer/FriendsPresentationTimeline';
 import { friendsCockpitInteraction } from '../game/multiplayer/FriendsExpedition';
 import { FriendsHUD } from './FriendsHUD';
+import { FriendsHaulingBriefing } from './FriendsHaulingBriefing';
+import { useFriendsHaulingBriefing } from './useFriendsHaulingBriefing';
 import { FriendsDevMenu } from './FriendsDevMenu';
 import { FriendsEnvironmentPreview, type FriendsEnvironmentChange } from '../game/world/FriendsEnvironmentPreview';
 import { canPredictCoopCast, COOP_SPELLS, isCoopSpell } from '../game/combat/coopSpells';
@@ -132,6 +134,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const trainControlsOpenRef = useRef(false);
   const [trainControlsOpen,setTrainControlsOpen]=useState(false);
   const friendsDevOpenRef = useRef(false);
+  const haulingBriefingOpenRef=useRef(false);
+  const closeHaulingBriefingRef=useRef<()=>void>(()=>{});
   const adminPausedRef = useRef(false);
   const ownerAvailableRef = useRef(false);
   const lastAdminSequenceByPeerRef = useRef(new Map<string, number>());
@@ -220,6 +224,13 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const [mouseLocked, setMouseLocked] = useState(false);
   const [isMobileTouchDevice, setIsMobileTouchDevice] = useState(false);
   const [matchSnapshot, setMatchSnapshot] = useState<CoopSnapshot | null>(snapshotRef.current);
+  const haulingBriefing=useFriendsHaulingBriefing(matchSnapshot?.friends?.hauling,launch.localPlayerId);
+  haulingBriefingOpenRef.current=Boolean(haulingBriefing.briefing);
+  useEffect(()=>{
+    if(!haulingBriefing.briefing)return;
+    rendererRef.current?.exitPointerLock();
+    inputRef.current={...inputRef.current,movement:0,firing:false,aiming:false,sprinting:false,sliding:false,jumpPressed:false,jetHeld:false};
+  },[haulingBriefing.briefing]);
   const [stationOpen, setStationOpen] = useState(false);
   const [stationCategory, setStationCategory] = useState<CoopShopCategoryId | null>(null);
   const [stationMessage, setStationMessage] = useState<string | null>(null);
@@ -416,6 +427,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const state=rendererRef.current?.getFriendsEnvironment();if(state)setDevEnvironment(state);
     }
   };
+  const closeHaulingBriefing=()=>{
+    haulingBriefingOpenRef.current=false;haulingBriefing.dismiss();
+    if(!trainControlsOpenRef.current&&!friendsDevOpenRef.current&&!stationOpenRef.current&&!foundryOpenRef.current&&!backpackOpenRef.current&&!tacticalMapOpenRef.current&&!chatOpenRef.current&&!adminOpenRef.current&&!adminPausedRef.current)resumeGameplayInteraction();
+  };
+  closeHaulingBriefingRef.current=closeHaulingBriefing;
   const closeFriendsDevAndResume=()=>{setFriendsDevPanelOpen(false);resumeGameplayInteraction();};
   const changeFriendsEnvironment=(change:FriendsEnvironmentChange)=>{
     rendererRef.current?.setFriendsEnvironment(change);const state=rendererRef.current?.getFriendsEnvironment();if(state)setDevEnvironment(state);
@@ -1377,7 +1393,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     let grenadeActionId = inputRef.current.grenadeActionId || 0;
     let interactActionId = inputRef.current.interactActionId || 0;
     const updateInput = () => {
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current) { keys.clear(); firing = false; }
+      if (trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current) { keys.clear(); firing = false; }
       const movement = (movementBindings.up.some(key => keys.has(key)) ? 1 : 0)
         | (movementBindings.down.some(key => keys.has(key)) ? 2 : 0)
         | (movementBindings.left.some(key => keys.has(key)) ? 4 : 0)
@@ -1657,7 +1673,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
 
     const handleMobileAction = (action: MobileCoopAction) => {
       if (deploymentBlockedRef.current || isSpectator || adminOpenRef.current || adminPausedRef.current) return;
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
+      if (trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
       // Mobile has no mouse-down gesture to prime Web Audio. Touch actions are
       // trusted gestures too, so activate the audio context before firing or
       // interacting to keep the first shot and UI cue audible on iOS/Android.
@@ -1760,6 +1776,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (deploymentBlockedRef.current) {
         if (event.key === 'Escape') return;
         event.preventDefault();
+        return;
+      }
+      if(haulingBriefingOpenRef.current){
+        if(event.key==='Escape'&&!event.repeat){event.preventDefault();closeHaulingBriefingRef.current();}
         return;
       }
       if(trainControlsOpenRef.current){if(event.key==='Escape'){event.preventDefault();closeTrainControls();}return;}
@@ -1990,7 +2010,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       updateInput();
     };
     const onKeyUp = (event: KeyboardEvent) => {
-      if(trainControlsOpenRef.current || friendsDevOpenRef.current){keys.clear();return;}
+      if(trainControlsOpenRef.current || friendsDevOpenRef.current||haulingBriefingOpenRef.current){keys.clear();return;}
       if (deploymentBlockedRef.current) return;
       if (buildLibraryOpenRef.current || (launch.gameMode === 'friends' && event.key.toLowerCase() === 'b' && buildBPressedAtRef.current === 0)) { keys.delete(event.key.toLowerCase()); if (event.key.toLowerCase() === 'b') { buildBPressedAtRef.current = 0; if (buildBTimerRef.current !== null) { window.clearTimeout(buildBTimerRef.current); buildBTimerRef.current = null; } } updateInput(); return; }
       if (chatOpenRef.current) { event.preventDefault(); return; }
@@ -2010,7 +2030,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     };
     const onMouseMove = (event: MouseEvent) => {
       if (deploymentBlockedRef.current) return;
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || isSpectator) return;
+      if (trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || isSpectator) return;
       inputRef.current = {
         ...inputRef.current,
         aimAngle: quantizeAngle(renderer.getAimAngle()),
@@ -2021,7 +2041,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (deploymentBlockedRef.current) return;
       // A Buy Station is a focused modal. Do not let a click on its buttons,
       // list, or backdrop leak through to pointer lock, fire, or aiming.
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
+      if (trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) return;
       // Middle mouse button (click scroll wheel) pings
       if (event.button === 1) {
         event.preventDefault();
@@ -2076,7 +2096,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     };
     const onMouseUp = (event: MouseEvent) => {
       if (deploymentBlockedRef.current) return;
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) {
+      if (trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) {
         firing = false;
         updateInput();
         return;
@@ -2101,7 +2121,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (deploymentBlockedRef.current) { event.preventDefault(); return; }
       // The station owns wheel input completely; it must never leak into
       // weapon selection or scroll the game page behind the modal.
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current) return;
+      if (trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current) return;
       if (isSpectator) return;
       event.preventDefault();
       const direction = event.deltaY > 0 ? 1 : -1;
@@ -2147,7 +2167,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     const pollGamepad = (elapsedMs: number) => {
       if (!isGamepadControlScheme(controlScheme) || typeof navigator === 'undefined' || !navigator.getGamepads) return;
       const gamepad = firstConnectedGamepad(Array.from(navigator.getGamepads()));
-      if (!gamepad || trainControlsOpenRef.current || friendsDevOpenRef.current || deploymentBlockedRef.current || isSpectator || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current || adminPausedRef.current) {
+      if (!gamepad || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || deploymentBlockedRef.current || isSpectator || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current || adminOpenRef.current || adminPausedRef.current) {
         if (gamepad) {
           previousGamepadButtons = gamepad.buttons.map(button => Boolean(button.pressed || button.value > .5));
           previousGamepadAimHeld = isGamepadTriggerDown(gamepad, GAMEPAD_BUTTON.aim, 4);
@@ -2288,7 +2308,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       lastTime = now;
       accumulator += elapsed;
       inputAccumulator += elapsed;
-      if (trainControlsOpenRef.current || friendsDevOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || chatOpenRef.current) clearControls();
+      if (trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || buildLibraryOpenRef.current || stationOpenRef.current || foundryOpenRef.current || chatOpenRef.current) clearControls();
       pollGamepad(elapsed);
       if (launch.role === 'guest') {
         while (inputAccumulator >= INPUT_INTERVAL_MS) {
@@ -2479,7 +2499,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     const url = URL.createObjectURL(new Blob([exportFriendsWorld({ progress: f.progress, building: f.building, projects: f.projects, frontier: f.frontier, transport: f.transport })], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = 'sunline-world.json'; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  const interactionBlocked = trainControlsOpen || friendsDevOpen || deploymentStage === 'briefing' || deploymentStage === 'ready' || stationOpen || foundryOpen || backpackOpen || tacticalMapOpen || chatOpen || adminOpen || adminPaused || Boolean(matchSnapshot?.results) || hud.matchState !== 'active' || connectionStatus === 'disconnected' || (launch.gameMode==='friends'&&launch.role==='guest'&&connectionStatus!=='connected');
+  const interactionBlocked = trainControlsOpen || friendsDevOpen || Boolean(haulingBriefing.briefing) || deploymentStage === 'briefing' || deploymentStage === 'ready' || stationOpen || foundryOpen || backpackOpen || tacticalMapOpen || chatOpen || adminOpen || adminPaused || Boolean(matchSnapshot?.results) || hud.matchState !== 'active' || connectionStatus === 'disconnected' || (launch.gameMode==='friends'&&launch.role==='guest'&&connectionStatus!=='connected');
   const interactionBlockedRef = useRef(false);
 
   useEffect(() => {
@@ -2976,8 +2996,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       {isSpectator && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span>{tr('hud.spectating')}</span><b>{spectatorTarget?.label || tr('hud.acquireTarget')}</b><small>{tr('hud.nextPlayer')}</small></div>}
       {!isSpectator && !fallCinematicActive && (hud.lifeState === 'downed' || hud.lifeState === 'eliminated' || hud.lifeState === 'extracted') && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span className={hud.lifeState === 'downed' ? 'text-amber-300 font-black' : hud.lifeState === 'extracted' ? 'text-emerald-300 font-black' : 'text-rose-300 font-black'}>● {hud.lifeState === 'extracted' ? 'EXTRACTED · SPECTATING' : tr(hud.lifeState === 'downed' ? 'hud.downedSpectating' : 'hud.eliminatedSpectating')}</span><b style={{ color: spectatedSquadmate?.color || '#f0abfc' }}>{spectatedSquadmate?.label || downedSpectatorTarget?.label || tr('hud.squad')}</b><small>{tr('hud.cycleSquad')}</small></div>}
       {matchSnapshot?.friends?.frontier && localSnapshot && !buildMode && !backpackOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsToolbelt frontier={matchSnapshot.friends.frontier} player={localSnapshot} tool={frontierTool} visible={frontierToolbeltVisible} onTool={selectFrontierTool} onPack={() => { rendererRef.current?.exitPointerLock(); setBackpackPanelOpen(true); }} elapsed={matchSnapshot.elapsedMs} />}
-      {matchSnapshot?.friends && !friendsDevOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsHUD snapshot={matchSnapshot} player={localSnapshot} interactionLabel={interactionControlLabel} />}
+      {matchSnapshot?.friends && !friendsDevOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsHUD snapshot={matchSnapshot} player={localSnapshot} interactionLabel={interactionControlLabel} onMission={haulingBriefing.show} />}
       {trainControlsOpen && matchSnapshot?.friends?.scenicRailway && <FriendsTrainControls service={matchSnapshot.friends.scenicRailway} message={backpackMessage} onRequest={r=>frontierRequestRef.current(r)} onClose={closeTrainControls}/>}
+      {haulingBriefing.briefing&&matchSnapshot?.friends?.hauling&&<FriendsHaulingBriefing briefing={haulingBriefing.briefing} hauling={matchSnapshot.friends.hauling} interactionLabel={interactionControlLabel} onClose={closeHaulingBriefing}/>}
       {friendsDevOpen && <FriendsDevMenu environment={devEnvironment} flight={Boolean(inputRef.current.friendsDevFlight)} onFlight={()=>{inputRef.current={...inputRef.current,friendsDevFlight:!inputRef.current.friendsDevFlight,jumpPressed:false};setDevEnvironment(current=>({...current}));}} onChange={changeFriendsEnvironment} onClose={closeFriendsDevAndResume}/>}
       {deploymentStage === 'complete' && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <RealityBreachHUD breach={matchSnapshot?.realityBreach} player={localSnapshot} language={launch.language} />}
       {objectiveHud && <div className={`coop-objective coop-objective--${objectiveHud.tone} pointer-events-none absolute z-50`}>

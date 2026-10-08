@@ -5,6 +5,7 @@ import { PLAYER_TRAIN_COST, isPlayerRail, railSamples } from '../world/FriendsPl
 import { FriendsFrontier, type FrontierSnapshot, type FrontierRequest } from './FriendsFrontier';
 import { FriendsBuilding, FRIENDS_BUILD_CATALOG, friendsShapeBoxes, isSlope, worldBox, friendsBuildFloor, friendsBuildCeiling, friendsVehicleBuildBodies, resolveFriendsBuildCollisions, raycastFriendsBuild, type FriendsBuildingSnapshot, type FriendsBuildRequest, type FriendsBuildResult } from './FriendsBuilding';
 import type { CargoStaticCollider } from './FriendsCargoPhysics';
+import { castleCargoColliders } from './FriendsCastleCargo';
 import { routeHaulingRope } from './FriendsRopePath';
 import { collidePhysicalCargo, physicalCargoBuildBodies, type HaulingEnvironment } from './FriendsHauling';
 import { FriendsProjects, type FriendsProjectSnapshot } from './FriendsProjects';
@@ -2616,13 +2617,15 @@ export class CoopSimulation {
     const environment:HaulingEnvironment = {
       revision: `${terrain.revision}:${this.friendsBuilding!.getRevision()}:${this.friendsFrontier!.getRevision()}`,
       vehicles,
-      solid:(x,y,z)=>Boolean(terrain.material(x,y,z)),
+      // Exact stair envelopes replace the hidden voxel backing. Sampling the
+      // backing here creates 32-unit walls above the eight-unit fan paving.
+      solid:(x,y,z)=>Boolean(terrain.exposedMaterial(x,y,z)),
       colliders:region=>{
-        const colliders:CargoStaticCollider[]=[];
+        const colliders:CargoStaticCollider[]=castleCargoColliders(region);
         for(const p of pieces){
           const def=FRIENDS_BUILD_CATALOG[p.shape];
           if(p.x+def.w+def.d<region.minX||p.x-def.w-def.d>region.maxX||p.y+def.w+def.d<region.minY||p.y-def.w-def.d>region.maxY||p.z+def.h<region.minZ||p.z>region.maxZ)continue;
-          if(isSlope(p.shape))colliders.push({x:p.x,y:p.y,z:p.z,w:def.w,d:def.d,h:def.h,kind:'ramp',angle:p.rotation*Math.PI/2});
+          if(isSlope(p.shape)||p.shape==='stairs'||p.shape==='voxel_stairs')colliders.push({x:p.x,y:p.y,z:p.z,w:def.w,d:def.d,h:def.h,kind:'ramp',angle:p.rotation*Math.PI/2});
           else for(const b of friendsShapeBoxes(p.shape))colliders.push(worldBox(p,b));
         }
         const x=(region.minX+region.maxX)/2,y=(region.minY+region.maxY)/2;
@@ -2655,7 +2658,19 @@ export class CoopSimulation {
         return false;
       },
     };
-    environment.routeRope=(hand,anchor,previous)=>routeHaulingRope(hand,anchor,environment.blocked,(ray,length)=>terrain.raycast(ray,length),previous);
+    environment.routeRope=(hand,anchor,previous)=>routeHaulingRope(hand,anchor,environment.blocked,(ray,length)=>{
+      const ground=terrain.raycast(ray,length),build=raycastFriendsBuild(pieces,ray,length);
+      if(!build||ground&&ground.distance<=build.distance)return ground;
+      const p=build.piece,def=FRIENDS_BUILD_CATALOG[p.shape],a=p.rotation*Math.PI/2,c=Math.cos(a),s=Math.sin(a);
+      // Route over the actual structure, rather than treating build obstacles
+      // as unroutable terrain. Include edge centres to avoid sideways zigzags.
+      const ropeCorners=[];
+      for(const x of [-def.w/2-3.5,0,def.w/2+3.5])for(const y of [-def.d/2-3.5,0,def.d/2+3.5]){
+        if(x===0&&y===0)continue;
+        ropeCorners.push({x:p.x+x*c-y*s,y:p.y+x*s+y*c,z:p.z+def.h+3.5});
+      }
+      return {...build,vx:Math.floor(build.x/32),vy:Math.floor(build.y/32),vz:Math.floor(build.z/32),material:2 as const,ropeCorners};
+    },previous);
     return environment;
   }
 
