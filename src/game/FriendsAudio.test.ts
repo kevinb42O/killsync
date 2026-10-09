@@ -183,6 +183,19 @@ describe('downloaded Friends audio', () => {
     audio.setUnderwaterDive(false);
     expect(dive.stop).toHaveBeenCalledWith(context.currentTime + .2);
   });
+  it('does not endlessly reload a failed dive asset and can retry on the next dive', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    const url = FRIENDS_CUE_ASSETS.waterDive[0];
+    (audio as any).buffers.delete(url);
+    const failed = vi.fn(async () => ({ ok: false }));
+    vi.stubGlobal('fetch', failed);
+    audio.setUnderwaterDive(true); await load(); await load();
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect((audio as any).underwaterDiveVoice).toBeUndefined();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })));
+    audio.setUnderwaterDive(false); audio.setUnderwaterDive(true); await load();
+    expect((audio as any).underwaterDiveVoice).toBeDefined();
+  });
   it('plays a short inhale after the resurfacing splash and cancels it if diving again', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
     audio.resurfaceFromDive();

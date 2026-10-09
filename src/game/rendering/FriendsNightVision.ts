@@ -156,6 +156,8 @@ export class FriendsNightVision {
 
   get equipped() { return this.enabled; }
   toggle() { return this.enabled = !this.enabled; }
+  /** Recreate the HDR target at the next frame boundary, retaining exposure history. */
+  setSamples(samples: number) { this.options.samples = samples; }
   setFlashlightGlare(effect:FriendsFlashlightGlare) {
     const flares=this.material.uniforms.flashlightFlares.value as THREE.Vector4[];
     for(let i=0;i<flares.length;i++){
@@ -184,15 +186,19 @@ export class FriendsNightVision {
 
     renderer.getDrawingBufferSize(this.size);
     friendsVisionBufferSize(this.size.x,this.size.y,this.options.maxPixels ?? 3840*2160,this.size);
+    const samples = Math.max(0, Math.min(this.options.samples ?? 2, renderer.capabilities?.maxSamples ?? 4));
+    if (this.buffer && this.buffer.samples !== samples) {
+      this.buffer.dispose(); this.buffer = undefined;
+    }
     if(!this.buffer){
       this.buffer=new THREE.WebGLRenderTarget(this.size.x,this.size.y,{
         type:THREE.HalfFloatType,minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
-        samples:this.options.samples ?? 2,
+        samples,
       });
       this.buffer.texture.name='friends-vision-hdr';
       this.material.uniforms.image.value=this.meterMaterial.uniforms.image.value=this.buffer.texture;
       // The tiny exposure buffers are allocated during the first world frame.
-      for(const target of this.exposureTargets)renderer.initRenderTarget(target);
+      if (!this.meterWarmed) for(const target of this.exposureTargets)renderer.initRenderTarget(target);
     }else if(this.buffer.width!==this.size.x||this.buffer.height!==this.size.y){
       this.buffer.setSize(this.size.x,this.size.y);
     }

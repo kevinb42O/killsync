@@ -16,6 +16,22 @@ export function cullInactiveFriendsLights(lighting: string) {
   );
 }
 
+/** Compose with authored material hooks and the current shared light bounds.
+ * Keep dormant lamps in the shader layout without shading their contribution. */
+export function applyFriendsDirectLighting(material: THREE.MeshStandardMaterial) {
+  const previous = material.onBeforeCompile;
+  const key = material.customProgramCacheKey();
+  material.onBeforeCompile = (shader, renderer) => {
+    previous.call(material, shader, renderer);
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <lights_fragment_begin>',
+      cullInactiveFriendsLights(THREE.ShaderChunk.lights_fragment_begin),
+    );
+  };
+  material.customProgramCacheKey = () => `${key}:friends-direct-light-culling-v1`;
+  material.needsUpdate = true;
+}
+
 /** Clip the two interior fixtures to their physical shell. Every lit world
  * material consumes this shared chunk, so lamps cannot shine through walls
  * onto the landscape. The deliberately small window-spill lamp stays outside. */

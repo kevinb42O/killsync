@@ -1,3 +1,7 @@
+export const ROWBOAT_ID='reedwater-skiff';
+export const OPPOSITE_ROWBOAT_ID='deepmere-skiff';
+export function isRowboatSeat(seat:{vehicleId:string;index:number}|undefined){return seat?.vehicleId===ROWBOAT_ID||seat?.vehicleId===OPPOSITE_ROWBOAT_ID;}
+
 /** The Deepmere fishing dock sits beside the shared skiff's original mooring. */
 export const FRIENDS_FISHING_DOCK = {
   x: 13624,

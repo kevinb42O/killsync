@@ -297,6 +297,7 @@ export class FriendsFrontierVisuals {
     }
   }
   get forestStats(){return this.forestLOD.stats;}
+  setMultisampled(enabled: boolean) { this.forestLOD.setMultisampled(enabled); }
   get campfireDrawCalls(){return this.campfire.drawCalls;}
   get cloudStats(){return this.clouds.stats;}
   get terrainStats(){return {...this.surface.stats,...this.editFeedback.stats,volumeChunks:this.chunks.size,volumeActive:[...this.chunks.values()].filter(m=>m.visible).length,volumeJobs:this.pending.size+this.completed.length,editMeshLatencyP95:this.meshLatencies.length?[...this.meshLatencies].sort((a,b)=>a-b)[Math.floor((this.meshLatencies.length-1)*.95)]:0,editMeshSamples:this.meshLatencies.length};}

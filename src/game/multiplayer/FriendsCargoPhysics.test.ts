@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { firstPersonEyeZ } from './FirstPersonEye';
 import { FriendsTerrain } from '../world/FriendsTerrain';
 import { FriendsHauling, cargoAnchor, type HaulingEnvironment, type HaulingActor, type PhysicalCargo } from './FriendsHauling';
 import { cargoBounds, cargoRotation, cargoWorldPoint, interpolateCargoRotation } from './FriendsCargoPose';
@@ -17,7 +18,7 @@ function world(solid:(x:number,y:number,z:number)=>boolean):HaulingEnvironment{
 function pullOver(solid:(x:number,y:number,z:number)=>boolean,start:PhysicalCargo,playerZ:number,anchorZ:number,playerX=1120){
   const h=new FriendsHauling({version:1,cargo:[start],delivered:false}),env=world(solid);
   const players:HaulingActor[]=[-14,14].map((dy,i)=>({id:String(i),x:playerX,y:960+dy,z:playerZ,lifeState:'alive'}));
-  for(const p of players){const target={x:start.x+36,y:start.y+(p.y-start.y)*.2,z:start.z+anchorZ},dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z-26,d=Math.hypot(dx,dy,dz);h.shoot(p,{x:dx/d,y:dy/d,z:dz/d},env,0);}
+  for(const p of players){const target={x:start.x+36,y:start.y+(p.y-start.y)*.2,z:start.z+anchorZ},dx=target.x-p.x,dy=target.y-p.y,dz=target.z-firstPersonEyeZ(p),d=Math.hypot(dx,dy,dz);h.shoot(p,{x:dx/d,y:dy/d,z:dz/d},env,0);}
   expect(h.snapshot().ropes).toHaveLength(2);
   let maxTilt=0,bent=false;
   for(let t=0;t<6000;t+=50){if(playerZ<=start.z)for(const p of players)p.x+=12;h.update(50,t,players,new Map(players.map(p=>[p.id,input(playerZ>start.z)])),env);const q=cargoRotation(h.getCargo()[0]);maxTilt=Math.max(maxTilt,Math.hypot(q.x,q.y));bent||=h.snapshot().ropes.some(r=>Boolean(r.bends?.length));}

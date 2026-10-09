@@ -1,4 +1,5 @@
 import type { SeedHand } from '../multiplayer/FriendsBirds';
+import { isRowboatSeat } from '../world/FriendsFishingDock';
 import type { StoneHand } from '../multiplayer/FriendsStones';
 import { finishFriendsCharacter } from './FriendsCharacterFinish';
 import { applyFriendsArmPose } from './FriendsGesturePose';
@@ -87,7 +88,7 @@ export function updateFriendsCharacter(rig:CoopOperatorRig, player:CoopPlayerSna
   if(!falling)rig.avatar.rotation.set(player.motion?.swimSubmerged?-.55:0,0,downed?Math.PI/2:0);
   for(const child of rig.avatar.children)child.visible=child===model.root;
   rig.seatedLegs.visible=false;
-  if(fishingHold||hands||player.friendsSeat?.vehicleId==='reedwater-skiff'||player.motion?.swimming)rig.firearm.group.visible=false;
+  if(fishingHold||hands||isRowboatSeat(player.friendsSeat)||player.motion?.swimming)rig.firearm.group.visible=false;
   rig.nameplate.position.y=downed?32:seated||player.crouching?47:62;
   rig.avatar.updateWorldMatrix(true,true);
 }

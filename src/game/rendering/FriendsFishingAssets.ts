@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { loadFriendsAsset } from './FriendsAssets';
+import { groundedFishClip } from './FriendsFishGroundAnimation';
 
 let fishTemplate:Promise<{root:THREE.Group;clips:THREE.AnimationClip[]}>|undefined;
 let rodTemplate:Promise<THREE.Group>|undefined;
@@ -27,7 +28,7 @@ export function loadFishingFish(){
     gltf.scene.updateMatrixWorld(true);
     const bounds=new THREE.Box3().setFromObject(gltf.scene),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
     const root=new THREE.Group();root.add(gltf.scene);gltf.scene.position.sub(center);root.scale.setScalar(34/Math.max(size.x,size.y,size.z));
-    return {root,clips:gltf.animations};
+    return {root,clips:gltf.animations.map(clip=>clip.name.endsWith('|Out_Of_Water')?groundedFishClip(clip):clip)};
   });
   return fishTemplate;
 }

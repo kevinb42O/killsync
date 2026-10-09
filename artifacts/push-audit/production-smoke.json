@@ -1,0 +1,10 @@
+{
+  "errors": [],
+  "checks": [
+    "Production FPS overlay toggles with = and displays finite telemetry",
+    "Actual Fun-bar selection and mouse press create visible shared confetti",
+    "Second boat boards, selects its own third-person camera and stows local equipment",
+    "Rowing with confetti selected moves the oars without producing confetti bursts"
+  ],
+  "telemetry": "FPS 58.6  frame 16.7 ms  max 17.4 ms\nrender 6.7 ms  sim 0.87 ms  snapshot 0.06 ms\ndraws 417 (peak 444)  tris 282k  enemies 0\nbatched 0 in 0 draws\ncampfire 2 draws  forest 14 draws / 58 trees\ngeometry 163  textures 60  heap 202.2 MB"
+}

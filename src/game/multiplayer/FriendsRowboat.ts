@@ -5,10 +5,9 @@ import { friendsWaterAt } from '../world/FriendsWaterSurface';
 import { riverWetAt } from '../world/FriendsHydrology';
 import { resolveFriendsBuildCollisions, type FriendsBuildPiece } from './FriendsBuilding';
 import { vehicleLocalPoint, vehiclePlaneHeight, vehicleWorldPoint } from './FriendsVehiclePose';
-import { FRIENDS_FISHING_DOCK, FRIENDS_OPPOSITE_BOAT } from '../world/FriendsFishingDock';
+import { FRIENDS_FISHING_DOCK, ROWBOAT_ID } from '../world/FriendsFishingDock';
+export { ROWBOAT_ID, OPPOSITE_ROWBOAT_ID, isRowboatSeat } from '../world/FriendsFishingDock';
 
-export const ROWBOAT_ID='reedwater-skiff';
-export const OPPOSITE_ROWBOAT_ID='deepmere-skiff';
 export const ROWBOAT_LENGTH=164,ROWBOAT_WIDTH=82,ROW_STROKE_MS=900;
 export type RowStroke={atMs:number;direction:1|-1;playerId?:string};
 export type RowingSnapshot={left:RowStroke;right:RowStroke;speed:number};
@@ -20,7 +19,6 @@ const home={
   y:FRIENDS_FISHING_DOCK.y+MOORING_ACROSS*Math.cos(FRIENDS_FISHING_DOCK.angle),
   angle:FRIENDS_FISHING_DOCK.angle,
 };
-export function isRowboatSeat(seat:{vehicleId:string;index:number}|undefined){return seat?.vehicleId===ROWBOAT_ID||seat?.vehicleId===OPPOSITE_ROWBOAT_ID;}
 export function rowboatStrokePhase(stroke:RowStroke,elapsed:number){return Math.max(0,Math.min(1,(elapsed-stroke.atMs)/ROW_STROKE_MS));}
 // Keep rowers above the thick inner gunwale and at the same height for local
 // prediction, host simulation and interpolated snapshots.

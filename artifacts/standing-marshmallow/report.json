@@ -1,0 +1,63 @@
+{
+  "errors": [],
+  "stages": [
+    {
+      "stage": "rest",
+      "roast": {
+        "toast": 0,
+        "heat": 0,
+        "roasting": false,
+        "burningMs": 0,
+        "charred": false,
+        "serial": 1
+      },
+      "gl": 0
+    },
+    {
+      "stage": "extended",
+      "roast": {
+        "toast": 0.05,
+        "heat": 1,
+        "roasting": true,
+        "burningMs": 0,
+        "charred": false,
+        "serial": 1,
+        "reach": {
+          "x": 6607.997028253782,
+          "y": 5552.01614226921,
+          "z": 751.999246801852
+        }
+      },
+      "gl": 0
+    },
+    {
+      "stage": "golden",
+      "roast": {
+        "toast": 0.517,
+        "heat": 1,
+        "roasting": true,
+        "burningMs": 0,
+        "charred": false,
+        "serial": 1,
+        "reach": {
+          "x": 6607.997028253782,
+          "y": 5552.01614226921,
+          "z": 751.999246801852
+        }
+      },
+      "gl": 0
+    },
+    {
+      "stage": "released",
+      "roast": {
+        "toast": 0.545,
+        "heat": 0,
+        "roasting": false,
+        "burningMs": 0,
+        "charred": false,
+        "serial": 1
+      },
+      "gl": 0
+    }
+  ]
+}

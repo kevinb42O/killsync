@@ -1,0 +1,336 @@
+{
+  "method": "Sequential production builds of current workspace, changing only campfire lighting; Chromium/Metal, DPR 2, 1100x740 CSS viewport, solo host, fixed noon and camera. RAF includes normal simulation and streaming.",
+  "errors": [],
+  "samples": [
+    {
+      "variant": "before",
+      "repeat": 0,
+      "fps": 6.000120002400046,
+      "frames": {
+        "count": 60,
+        "mean": 166.66333333333338,
+        "p50": 166.6999999999971,
+        "p95": 183.40000000000146,
+        "max": 184.20000000000437
+      },
+      "renderMs": {
+        "count": 61,
+        "mean": 158.8508196721678,
+        "p50": 157.79999999981374,
+        "p95": 169,
+        "max": 170
+      },
+      "stats": {
+        "drawCalls": 1331,
+        "triangles": 3060544,
+        "geometries": 637,
+        "textures": 115,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "campfireDrawCalls": 8,
+        "forestDrawCalls": 18,
+        "visibleForestTrees": 1787,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "buffer": [
+        2200,
+        1480
+      ],
+      "glError": 0,
+      "preparation": {
+        "submitted": 117,
+        "completed": 117,
+        "queued": 0,
+        "scanning": false,
+        "pending": false,
+        "pendingCount": 0,
+        "texturesQueued": 0,
+        "failures": 0,
+        "maxSubmitMs": 97.29999999981374,
+        "maxReadinessMs": 14.200000000186265,
+        "maxScanMs": 2.3000000002793968,
+        "maxTextureMs": 29.300000000279397,
+        "ready": true,
+        "fallback": false
+      }
+    },
+    {
+      "variant": "before",
+      "repeat": 1,
+      "fps": 5.96947334835994,
+      "frames": {
+        "count": 58,
+        "mean": 167.51896551724136,
+        "p50": 166.6999999999971,
+        "p95": 184.09999999999854,
+        "max": 516.5
+      },
+      "renderMs": {
+        "count": 59,
+        "mean": 163.66949152540005,
+        "p50": 161.79999999981374,
+        "p95": 504.79999999981374,
+        "max": 517.7000000001863
+      },
+      "stats": {
+        "drawCalls": 1331,
+        "triangles": 3060544,
+        "geometries": 637,
+        "textures": 115,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "campfireDrawCalls": 8,
+        "forestDrawCalls": 18,
+        "visibleForestTrees": 1787,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "buffer": [
+        2200,
+        1480
+      ],
+      "glError": 0,
+      "preparation": {
+        "submitted": 117,
+        "completed": 117,
+        "queued": 0,
+        "scanning": false,
+        "pending": false,
+        "pendingCount": 0,
+        "texturesQueued": 0,
+        "failures": 0,
+        "maxSubmitMs": 97.29999999981374,
+        "maxReadinessMs": 14.200000000186265,
+        "maxScanMs": 2.3000000002793968,
+        "maxTextureMs": 29.300000000279397,
+        "ready": true,
+        "fallback": false
+      }
+    },
+    {
+      "variant": "after",
+      "repeat": 0,
+      "fps": 16.9434090138936,
+      "frames": {
+        "count": 170,
+        "mean": 59.01999999999999,
+        "p50": 51,
+        "p95": 67.59999999999854,
+        "max": 199.90000000000146
+      },
+      "renderMs": {
+        "count": 171,
+        "mean": 53.27953216375794,
+        "p50": 52.5,
+        "p95": 57.6999999997206,
+        "max": 191.59999999962747
+      },
+      "stats": {
+        "drawCalls": 1331,
+        "triangles": 3060544,
+        "geometries": 637,
+        "textures": 115,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "campfireDrawCalls": 8,
+        "forestDrawCalls": 18,
+        "visibleForestTrees": 1787,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "buffer": [
+        2200,
+        1480
+      ],
+      "glError": 0,
+      "preparation": {
+        "submitted": 117,
+        "completed": 117,
+        "queued": 0,
+        "scanning": false,
+        "pending": false,
+        "pendingCount": 0,
+        "texturesQueued": 0,
+        "failures": 0,
+        "maxSubmitMs": 109,
+        "maxReadinessMs": 15.100000000093132,
+        "maxScanMs": 4.600000000093132,
+        "maxTextureMs": 32.59999999962747,
+        "ready": true,
+        "fallback": false
+      }
+    },
+    {
+      "variant": "after",
+      "repeat": 1,
+      "fps": 17.430852609118134,
+      "frames": {
+        "count": 174,
+        "mean": 57.369540229885075,
+        "p50": 51,
+        "p95": 67.5,
+        "max": 200.40000000000146
+      },
+      "renderMs": {
+        "count": 175,
+        "mean": 51.89657142855759,
+        "p50": 52.89999999990687,
+        "p95": 57,
+        "max": 188.60000000009313
+      },
+      "stats": {
+        "drawCalls": 1304,
+        "triangles": 2951818,
+        "geometries": 637,
+        "textures": 115,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "campfireDrawCalls": 8,
+        "forestDrawCalls": 18,
+        "visibleForestTrees": 1787,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "buffer": [
+        2200,
+        1480
+      ],
+      "glError": 0,
+      "preparation": {
+        "submitted": 117,
+        "completed": 117,
+        "queued": 0,
+        "scanning": false,
+        "pending": false,
+        "pendingCount": 0,
+        "texturesQueued": 0,
+        "failures": 0,
+        "maxSubmitMs": 109,
+        "maxReadinessMs": 15.100000000093132,
+        "maxScanMs": 4.600000000093132,
+        "maxTextureMs": 32.59999999962747,
+        "ready": true,
+        "fallback": false
+      }
+    }
+  ],
+  "commons-night": {
+    "glError": 0,
+    "programs": 106,
+    "pending": 0,
+    "fireGroups": [
+      {
+        "visible": true,
+        "children": 8
+      },
+      {
+        "visible": false,
+        "children": 8
+      }
+    ]
+  },
+  "saltwind-night": {
+    "glError": 0,
+    "programs": 108,
+    "pending": 0,
+    "fireGroups": [
+      {
+        "visible": false,
+        "children": 8
+      },
+      {
+        "visible": true,
+        "children": 8
+      }
+    ]
+  }
+}

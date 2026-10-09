@@ -1,5 +1,6 @@
 import { rowboatWaterCutout } from './FriendsWaterClip';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { FriendsDayNightCycle } from './FriendsDayNightCycle';
 
 function lightIslandWater(material:THREE.ShaderMaterial,atmosphere:FriendsDayNightCycle){
@@ -21,6 +22,26 @@ import { FriendsCastleStairVisuals } from './FriendsCastleStairVisuals';
 import { FriendsRiverVisuals } from './FriendsRiverVisuals';
 import { friendsWaterAt, friendsWaterDepth } from '../world/FriendsWaterSurface';
 import { FRIENDS_FISHING_DOCK, FRIENDS_FISHING_PLATFORM, FRIENDS_OPPOSITE_DOCK } from '../world/FriendsFishingDock';
+
+/** Static dock detail shares six materials; batch it once instead of submitting
+ * a separate draw for every plank, nail, post and lamp each frame. */
+function batchDock(group: THREE.Group) {
+  const batches = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  for (const object of [...group.children]) {
+    if (!(object instanceof THREE.Mesh) || Array.isArray(object.material)) continue;
+    object.updateMatrix();
+    const geometry = object.geometry.clone().applyMatrix4(object.matrix);
+    const parts = batches.get(object.material) ?? [];
+    parts.push(geometry); batches.set(object.material, parts);
+    object.geometry.dispose(); group.remove(object);
+  }
+  for (const [material, parts] of batches) {
+    const geometry = mergeGeometries(parts)!;
+    parts.forEach(part => part.dispose());
+    group.add(new THREE.Mesh(geometry, material));
+  }
+  return group;
+}
 
 function createTimberPier(name:string,x:number,y:number,angle:number,deck:number,length:number,width:number,weathered=false,approachLength=0,mooringSide:-1|1=-1) {
   const group = new THREE.Group();
@@ -60,7 +81,7 @@ function createTimberPier(name:string,x:number,y:number,angle:number,deck:number
     const post=new THREE.Mesh(new THREE.CylinderGeometry(3,4,42,8),bronze);post.position.set(length/2-24,21,side*(width/2-12));group.add(post);
     const glow=new THREE.Mesh(new THREE.SphereGeometry(7,12,8),lamp);glow.position.set(length/2-24,44,side*(width/2-12));group.add(glow);
   }
-  return group;
+  return batchDock(group);
 }
 
 function createDeepmereFishingPlatform(){
@@ -86,7 +107,7 @@ function createDeepmereFishingPlatform(){
   }
   box(2,2,p.width-32,p.length/2-18,27,0,rope);
   const ring=new THREE.Mesh(new THREE.TorusGeometry(12,2.5,8,28),rope);ring.position.set(-48,16,-p.width/2+24);group.add(ring);
-  return group;
+  return batchDock(group);
 }
 
 export function islandOceanDepth(x:number,y:number){

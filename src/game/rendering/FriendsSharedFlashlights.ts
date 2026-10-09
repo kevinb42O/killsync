@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import { COOP_MAX_PLAYERS } from '../multiplayer/protocol';
-import { COOP_FIRST_PERSON_EYE_HEIGHT } from '../multiplayer/playerMovement';
+import { firstPersonEyeZ } from '../multiplayer/FirstPersonEye';
 import { FRIENDS_FLASHLIGHT_INTENSITY, FRIENDS_FLASHLIGHT_RANGE, FRIENDS_FLASHLIGHT_MAX_ANGLE, FRIENDS_FLASHLIGHT_PENUMBRA } from './FriendsFlashlight';
 import { installFriendsFlashlightFalloff, FRIENDS_FLASHLIGHT_SOFT_DISTANCE } from './FriendsFlashlightFalloff';
 import { FriendsSharedFlashlightAtlas } from './FriendsSharedFlashlightAtlas';
@@ -65,7 +65,7 @@ export class FriendsSharedFlashlights {
         const pitch=THREE.MathUtils.clamp(state.pitch,-1.45,1.45),cp=Math.cos(pitch),yaw=state.yaw??p.angle;
         s.direction.set(Math.cos(yaw)*cp,Math.sin(pitch),Math.sin(yaw)*cp);
         // Place the torch in front of the operator, clear of their own shadow.
-        s.light.position.set(p.x,p.z+COOP_FIRST_PERSON_EYE_HEIGHT-(p.sliding?9:0)-5,p.y)
+        s.light.position.set(p.x,firstPersonEyeZ(p)-5,p.y)
           .addScaledVector(s.direction,18);
         s.light.position.x+=Math.sin(yaw)*10;s.light.position.z-=Math.cos(yaw)*10;
         s.target.position.copy(s.light.position).addScaledVector(s.direction,FRIENDS_FLASHLIGHT_RANGE);

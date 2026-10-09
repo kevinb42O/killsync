@@ -1,0 +1,321 @@
+{
+  "errors": [],
+  "checks": [
+    {
+      "label": "Legacy defaults",
+      "state": {
+        "preferences": {
+          "renderScale": 1,
+          "shadows": true,
+          "antialiasing": "auto",
+          "frameLimit": 0,
+          "fieldOfView": 108,
+          "lookSensitivity": 1
+        },
+        "samples": 2,
+        "equipped": false,
+        "buffer": [
+          2200,
+          1480
+        ],
+        "maxSamples": 4,
+        "leaves": [
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          }
+        ],
+        "glError": 0,
+        "tick": 303,
+        "rendererMemory": {
+          "geometries": 194,
+          "textures": 65
+        }
+      }
+    },
+    {
+      "label": "Movement under frame cap",
+      "beforeMove": {
+        "x": 6470,
+        "y": 5552
+      },
+      "afterMove": {
+        "x": 6654.046089873951,
+        "y": 5552
+      }
+    },
+    {
+      "label": "Full quality restored",
+      "state": {
+        "preferences": {
+          "renderScale": 1,
+          "shadows": true,
+          "antialiasing": 4,
+          "frameLimit": 0,
+          "fieldOfView": 108,
+          "lookSensitivity": 1
+        },
+        "samples": 4,
+        "equipped": false,
+        "buffer": [
+          2200,
+          1480
+        ],
+        "maxSamples": 4,
+        "leaves": [
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": true,
+            "cutoff": 0.45,
+            "depth": true
+          }
+        ],
+        "glError": 0,
+        "tick": 505,
+        "rendererMemory": {
+          "geometries": 645,
+          "textures": 118
+        }
+      }
+    },
+    {
+      "label": "Saved settings restored on reload",
+      "state": {
+        "preferences": {
+          "renderScale": 0.7,
+          "shadows": true,
+          "antialiasing": 0,
+          "frameLimit": 30,
+          "fieldOfView": 108,
+          "lookSensitivity": 1
+        },
+        "samples": 0,
+        "equipped": false,
+        "buffer": [
+          1540,
+          1036
+        ],
+        "maxSamples": 4,
+        "leaves": [
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          }
+        ],
+        "glError": 0,
+        "tick": 328,
+        "rendererMemory": {
+          "geometries": 193,
+          "textures": 65
+        }
+      }
+    }
+  ],
+  "samples": [
+    {
+      "label": "70%, AA off, 30 FPS limit",
+      "fps": 15.645328634246114,
+      "renders": 95,
+      "ticks": 182,
+      "meanDelta": 61.94000000000003,
+      "p95": 89.90000000037253,
+      "max": 171.1000000005588,
+      "state": {
+        "preferences": {
+          "renderScale": 0.7,
+          "shadows": true,
+          "antialiasing": 0,
+          "frameLimit": 30,
+          "fieldOfView": 108,
+          "lookSensitivity": 1
+        },
+        "samples": 0,
+        "equipped": false,
+        "buffer": [
+          1540,
+          1036
+        ],
+        "maxSamples": 4,
+        "leaves": [
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          }
+        ],
+        "glError": 0,
+        "tick": 184,
+        "rendererMemory": {
+          "geometries": 639,
+          "textures": 118
+        }
+      }
+    },
+    {
+      "label": "50%, AA off, 30 FPS limit",
+      "fps": 19.29928741092518,
+      "renders": 117,
+      "ticks": 182,
+      "meanDelta": 51.8401709401709,
+      "p95": 72.6000000005588,
+      "max": 87,
+      "state": {
+        "preferences": {
+          "renderScale": 0.5,
+          "shadows": true,
+          "antialiasing": 0,
+          "frameLimit": 30,
+          "fieldOfView": 108,
+          "lookSensitivity": 1
+        },
+        "samples": 0,
+        "equipped": false,
+        "buffer": [
+          1100,
+          740
+        ],
+        "maxSamples": 4,
+        "leaves": [
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          },
+          {
+            "coverage": false,
+            "cutoff": 0.45,
+            "depth": true
+          }
+        ],
+        "glError": 0,
+        "tick": 183,
+        "rendererMemory": {
+          "geometries": 639,
+          "textures": 118
+        }
+      }
+    }
+  ],
+  "passed": true
+}

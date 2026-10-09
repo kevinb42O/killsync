@@ -1,0 +1,400 @@
+[
+  {
+    "port": 3014,
+    "errors": [],
+    "scenes": [
+      {
+        "scene": "spawn",
+        "frame": {
+          "mean": 16.628266033254597,
+          "p95": 17.599999999998545,
+          "max": 17.700000000000728,
+          "samples": 421
+        },
+        "render": {
+          "mean": 5.816389548695136,
+          "p95": 7.5,
+          "max": 8.5,
+          "samples": 421
+        },
+        "sim": {
+          "mean": null,
+          "max": null,
+          "samples": 0
+        },
+        "parts": {
+          "frontierVisuals": {
+            "mean": 0.908551068889694,
+            "p95": 1.1000000000931323,
+            "max": 1.3999999999068677,
+            "samples": 421
+          },
+          "friendsVehicleVisuals": {
+            "mean": 0.2166270783924301,
+            "p95": 0.30000000004656613,
+            "max": 0.5,
+            "samples": 421
+          },
+          "fishingVisuals": {
+            "mean": 0.0023752969115609724,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 421
+          },
+          "marshmallows": {
+            "mean": 0.007363420428880745,
+            "p95": 0.09999999986030161,
+            "max": 0.10000000009313226,
+            "samples": 421
+          },
+          "birdVisuals": {
+            "mean": 0.0026128266035466323,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 421
+          },
+          "confettiVisuals": {
+            "mean": 0.004750593825334113,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 421
+          }
+        },
+        "stats": {
+          "drawCalls": 417,
+          "triangles": 281747,
+          "geometries": 163,
+          "textures": 60,
+          "batchedEnemies": 0,
+          "enemyBatches": 0,
+          "enemyCount": 0,
+          "campfireDrawCalls": 2,
+          "forestDrawCalls": 14,
+          "visibleForestTrees": 58,
+          "interaction": {
+            "fragments": 0,
+            "crackFaces": 0,
+            "draws": 0,
+            "terrain": {
+              "surfaceTiles": 58,
+              "surfaceBytes": 10509096,
+              "surfaceJobs": 0,
+              "pendingVoxels": 0,
+              "patchDraws": 0,
+              "volumeChunks": 161,
+              "volumeActive": 161,
+              "volumeJobs": 0,
+              "editMeshLatencyP95": 0,
+              "editMeshSamples": 0
+            }
+          }
+        },
+        "docks": [
+          {
+            "name": "deepmere-fishing-dock",
+            "meshes": 73
+          },
+          {
+            "name": "deepmere-detached-fishing-platform",
+            "meshes": 41
+          },
+          {
+            "name": "deepmere-opposite-dock",
+            "meshes": 84
+          }
+        ]
+      },
+      {
+        "scene": "dock",
+        "frame": {
+          "mean": 26.406766917293577,
+          "p95": 34.299999999995634,
+          "max": 34.400000000001455,
+          "samples": 266
+        },
+        "render": {
+          "mean": 10.678195488721455,
+          "p95": 12.699999999953434,
+          "max": 18.199999999953434,
+          "samples": 266
+        },
+        "sim": {
+          "mean": null,
+          "max": null,
+          "samples": 0
+        },
+        "parts": {
+          "frontierVisuals": {
+            "mean": 1.3402255639132756,
+            "p95": 1.5,
+            "max": 3.5,
+            "samples": 266
+          },
+          "friendsVehicleVisuals": {
+            "mean": 0.2022556390952935,
+            "p95": 0.30000000004656613,
+            "max": 0.5,
+            "samples": 266
+          },
+          "fishingVisuals": {
+            "mean": 0.0033834586471417232,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 266
+          },
+          "marshmallows": {
+            "mean": 0.006015037595210387,
+            "p95": 0.09999999986030161,
+            "max": 0.10000000009313226,
+            "samples": 266
+          },
+          "birdVisuals": {
+            "mean": 0.0037593984962406013,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 266
+          },
+          "confettiVisuals": {
+            "mean": 0.006390977443433962,
+            "p95": 0.09999999986030161,
+            "max": 0.10000000009313226,
+            "samples": 266
+          }
+        },
+        "stats": {
+          "drawCalls": 891,
+          "triangles": 2062798,
+          "geometries": 729,
+          "textures": 100,
+          "batchedEnemies": 0,
+          "enemyBatches": 0,
+          "enemyCount": 0,
+          "campfireDrawCalls": 0,
+          "forestDrawCalls": 14,
+          "visibleForestTrees": 1036,
+          "interaction": {
+            "fragments": 0,
+            "crackFaces": 0,
+            "draws": 0,
+            "terrain": {
+              "surfaceTiles": 90,
+              "surfaceBytes": 26606632,
+              "surfaceJobs": 0,
+              "pendingVoxels": 0,
+              "patchDraws": 0,
+              "volumeChunks": 0,
+              "volumeActive": 0,
+              "volumeJobs": 0,
+              "editMeshLatencyP95": 0,
+              "editMeshSamples": 0
+            }
+          }
+        },
+        "docks": [
+          {
+            "name": "deepmere-fishing-dock",
+            "meshes": 73
+          },
+          {
+            "name": "deepmere-detached-fishing-platform",
+            "meshes": 41
+          },
+          {
+            "name": "deepmere-opposite-dock",
+            "meshes": 84
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "port": 3015,
+    "errors": [],
+    "scenes": [
+      {
+        "scene": "spawn",
+        "frame": {
+          "mean": 16.6294536817101,
+          "p95": 17.599999999998545,
+          "max": 17.700000000000728,
+          "samples": 421
+        },
+        "render": {
+          "mean": 5.281710213778602,
+          "p95": 6.5,
+          "max": 7.800000000046566,
+          "samples": 421
+        },
+        "sim": {
+          "mean": null,
+          "max": null,
+          "samples": 0
+        },
+        "parts": {
+          "frontierVisuals": {
+            "mean": 0.8282660332490688,
+            "p95": 1,
+            "max": 1.1999999999534339,
+            "samples": 421
+          },
+          "friendsVehicleVisuals": {
+            "mean": 0.1909738717320864,
+            "p95": 0.30000000004656613,
+            "max": 0.4000000001396984,
+            "samples": 421
+          },
+          "fishingVisuals": {
+            "mean": 0.001900237529248778,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 421
+          },
+          "marshmallows": {
+            "mean": 0.006888361045462466,
+            "p95": 0.09999999986030161,
+            "max": 0.19999999995343387,
+            "samples": 421
+          },
+          "birdVisuals": {
+            "mean": 0.004275534440256708,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 421
+          }
+        },
+        "stats": {
+          "drawCalls": 444,
+          "triangles": 320951,
+          "geometries": 163,
+          "textures": 60,
+          "batchedEnemies": 0,
+          "enemyBatches": 0,
+          "enemyCount": 0,
+          "interaction": {
+            "fragments": 0,
+            "crackFaces": 0,
+            "draws": 0,
+            "terrain": {
+              "surfaceTiles": 58,
+              "surfaceBytes": 10509096,
+              "surfaceJobs": 0,
+              "pendingVoxels": 0,
+              "patchDraws": 0,
+              "volumeChunks": 161,
+              "volumeActive": 161,
+              "volumeJobs": 0,
+              "editMeshLatencyP95": 0,
+              "editMeshSamples": 0
+            }
+          }
+        },
+        "docks": [
+          {
+            "name": "deepmere-fishing-dock",
+            "meshes": 0
+          },
+          {
+            "name": "deepmere-detached-fishing-platform",
+            "meshes": 0
+          },
+          {
+            "name": "deepmere-opposite-dock",
+            "meshes": 0
+          }
+        ]
+      },
+      {
+        "scene": "dock",
+        "frame": {
+          "mean": 27.61377952755886,
+          "p95": 33.400000000001455,
+          "max": 34.200000000004366,
+          "samples": 254
+        },
+        "render": {
+          "mean": 9.182283464571695,
+          "p95": 11.100000000093132,
+          "max": 12.899999999906868,
+          "samples": 254
+        },
+        "sim": {
+          "mean": null,
+          "max": null,
+          "samples": 0
+        },
+        "parts": {
+          "frontierVisuals": {
+            "mean": 1.2988188976355952,
+            "p95": 1.5,
+            "max": 1.6999999999534339,
+            "samples": 254
+          },
+          "friendsVehicleVisuals": {
+            "mean": 0.21889763780389215,
+            "p95": 0.39999999990686774,
+            "max": 0.6999999999534339,
+            "samples": 254
+          },
+          "fishingVisuals": {
+            "mean": 0.0027559055116276924,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 254
+          },
+          "marshmallows": {
+            "mean": 0.008661417319901346,
+            "p95": 0.09999999986030161,
+            "max": 0.10000000009313226,
+            "samples": 254
+          },
+          "birdVisuals": {
+            "mean": 0.0035433070853308547,
+            "p95": 0,
+            "max": 0.10000000009313226,
+            "samples": 254
+          }
+        },
+        "stats": {
+          "drawCalls": 672,
+          "triangles": 2023608,
+          "geometries": 527,
+          "textures": 100,
+          "batchedEnemies": 0,
+          "enemyBatches": 0,
+          "enemyCount": 0,
+          "interaction": {
+            "fragments": 0,
+            "crackFaces": 0,
+            "draws": 0,
+            "terrain": {
+              "surfaceTiles": 90,
+              "surfaceBytes": 26606632,
+              "surfaceJobs": 0,
+              "pendingVoxels": 0,
+              "patchDraws": 0,
+              "volumeChunks": 0,
+              "volumeActive": 0,
+              "volumeJobs": 0,
+              "editMeshLatencyP95": 0,
+              "editMeshSamples": 0
+            }
+          }
+        },
+        "docks": [
+          {
+            "name": "deepmere-fishing-dock",
+            "meshes": 0
+          },
+          {
+            "name": "deepmere-detached-fishing-platform",
+            "meshes": 0
+          },
+          {
+            "name": "deepmere-opposite-dock",
+            "meshes": 0
+          }
+        ]
+      }
+    ]
+  }
+]

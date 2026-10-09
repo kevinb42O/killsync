@@ -6,7 +6,7 @@ import { cargoBounds } from './FriendsCargoPose';
 import { quantizeAngle, quantizePitch } from './CoopSimulation';
 import { MULTIPLAYER_PROTOCOL_VERSION, type MultiplayerInputFrame } from './protocol';
 
-const input=(sequence:number,extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence,clientTime:0,movement:0,aimAngle:0,aimPitch:quantizePitch(0),friendsTool:5,selectedSlot:0,firing:false,fireActionId:0,interactActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
+const input=(sequence:number,extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence,clientTime:0,movement:0,aimAngle:0,aimPitch:quantizePitch(-Math.atan2(24,46)),friendsTool:5,selectedSlot:0,firing:false,fireActionId:0,interactActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
 function incline(shape:FriendsBuildShape,rotation:number){
   const f=railFixture(),def=FRIENDS_BUILD_CATALOG[shape],angle=rotation*Math.PI/2,c=Math.cos(angle),s=Math.sin(angle);
   const at=(x:number,y=0)=>({x:4000+c*x-s*y,y:10800+s*x+c*y});

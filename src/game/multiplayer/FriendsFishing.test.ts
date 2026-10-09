@@ -12,8 +12,9 @@ const input=(extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({t
 const player=():FishingActor=>({id:'host',x:0,y:0,z:0,angle:0,lifeState:'alive'});
 const environment:FishingEnvironment={water:(x)=>x>=80?{level:0,depth:40,bodyId:'test'}:undefined,floor:(x)=>x>=80?-40:0,blocked:()=>false};
 const fixtureBiteDelay=FISHING_CAST_MS+(FISHING_WAIT_MIN_MS+FISHING_WAIT_MAX_MS)/2+50;
-function fixture(){
-  const fishing=new FriendsFishing(()=>.5),p=player();let now=0,command=input();
+function fixture(sizeRandom=.5){
+  let samples=0;
+  const fishing=new FriendsFishing(()=>++samples%2?.5:sizeRandom),p=player();let now=0,command=input();
   const step=(ms=50)=>{for(let t=0;t<ms;t+=50){now+=50;fishing.update(50,now,[p],new Map([[p.id,command]]),environment);}};
   const click=()=>{command={...command,fireActionId:(command.fireActionId??0)+1,firing:true};step();};
   const catchFish=()=>{click();step(fixtureBiteDelay);expect(fishing.snapshot().casts[0]?.phase).toBe('bite');click();step(FISHING_REEL_MS);expect(fishing.held(p.id)).toBeDefined();};
@@ -60,8 +61,8 @@ describe('casual Friends fishing',()=>{
     const f=fixture();f.click();f.command={...f.command,friendsFishingBlocked:true};f.step();expect(f.fishing.snapshot().casts).toHaveLength(0);
     f.command={...f.command,friendsFishingBlocked:false};f.click();f.command={...f.command,friendsTool:6};f.step();expect(f.fishing.snapshot().casts).toHaveLength(0);
   });
-  it('drops on dry land, permits one pickup owner, then throws into water and swims away',()=>{
-    const f=fixture();f.catchFish();f.command={...f.command,altFireActionId:1};f.step(1200);
+  it.each([0,.5,.999])('drops, picks up and throws a fish of size sample %s back into water',sizeRandom=>{
+    const f=fixture(sizeRandom);f.catchFish();f.command={...f.command,altFireActionId:1};f.step(1200);
     expect(f.fishing.snapshot().fish[0].phase).toBe('dry');expect(f.fishing.pickup(f.p,7,f.now)).toBe(true);expect(f.fishing.pickup({...f.p,id:'guest'},7,f.now)).toBe(false);
     f.click();f.step(2000);expect(f.fishing.snapshot().fish[0].phase).toBe('swimming');f.step(5000);expect(f.fishing.snapshot().fish).toHaveLength(0);
   });

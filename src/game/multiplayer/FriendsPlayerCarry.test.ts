@@ -13,7 +13,7 @@ const actor = (id: string, x = 0, y = 0, z = 0): HaulingActor => ({ id, x, y, z,
 const env: HaulingEnvironment = { revision: 'flat', vehicles: [], floor: () => 0, blocked: () => false, collide: () => false };
 const input = (sequence: number, extra: Partial<MultiplayerInputFrame> = {}): MultiplayerInputFrame => ({
   type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence, clientTime: 0,
-  movement: 0, aimAngle: quantizeAngle(0), aimPitch: quantizePitch(0), selectedSlot: 0,
+  movement: 0, aimAngle: quantizeAngle(0), aimPitch: quantizePitch(-Math.atan2(24, 120)), selectedSlot: 0,
   firing: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, dashPressed: false, friendsTool: 5, ...extra,
 });
 function fixture(active = false) {
@@ -42,7 +42,7 @@ describe('assisted teammate rope carry', () => {
   });
   it('requires clear sight and rejects duplicate carries and carry cycles', () => {
     const hauling = new FriendsHauling(), host = actor('host', 12000), guest = actor('guest', 12120), third = actor('third', 12220);
-    const shoot = (blocked = false) => hauling.shoot(host, { x: 1, y: 0, z: 0 }, { ...env, blocked: () => blocked }, 0, [host, guest]);
+    const shoot = (blocked = false) => hauling.shoot(host, { x: 1 / Math.hypot(1, .2), y: 0, z: -.2 / Math.hypot(1, .2) }, { ...env, blocked: () => blocked }, 0, [host, guest]);
     shoot(true); expect(hauling.snapshot().playerRopes).toEqual([]);
     shoot(); expect(hauling.snapshot().playerRopes).toHaveLength(1);
     expect(hauling.playerCarry.canAttach(third, guest)).toBe(false);
@@ -51,7 +51,7 @@ describe('assisted teammate rope carry', () => {
   });
   it('attaches to a seated player immediately without carry messages', () => {
     const hauling = new FriendsHauling(), host = actor('host', 12000), guest = { ...actor('guest', 12120), friendsSeat: { vehicleId: 'train', index: 0 } };
-    hauling.shoot(host, { x: 1, y: 0, z: 0 }, env, 0, [host, guest]);
+    hauling.shoot(host, { x: 1 / Math.hypot(1, .2), y: 0, z: -.2 / Math.hypot(1, .2) }, env, 0, [host, guest]);
     expect(hauling.snapshot().playerRopes).toHaveLength(1);
     expect(guest.friendsSeat).toBeUndefined(); expect(hauling.snapshot().feedback).toEqual({});
   });
@@ -60,7 +60,7 @@ describe('assisted teammate rope carry', () => {
     const vehicle = { id: 'plane', kind: 'aircraft' as const, x: 12120, y: 0, z: 0, angle: 0, length: 240, width: 100, pilotId: guest.id as string | undefined };
     let released: string | undefined;
     const environment = { ...env, vehicles: [vehicle], releasePassenger: (id: string) => { released = id; vehicle.pilotId = undefined; } };
-    hauling.shoot(host, { x: 1, y: 0, z: 0 }, environment, 0, [host, guest]);
+    hauling.shoot(host, { x: 1 / Math.hypot(1, .2), y: 0, z: -.2 / Math.hypot(1, .2) }, environment, 0, [host, guest]);
     expect(released).toBe(guest.id); expect(hauling.snapshot().playerRopes).toHaveLength(1);
     hauling.playerCarry.update(50, [host, guest], environment);
     expect(hauling.snapshot().playerRopes).toHaveLength(1);

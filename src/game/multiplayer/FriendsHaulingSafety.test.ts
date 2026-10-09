@@ -8,7 +8,7 @@ function fixture(){
   const h=new FriendsHauling({version:1,cargo:[{id:'lantern-core',x:1000,y:1000,z:0,angle:0,vx:0,vy:0,vz:0,spin:0}],delivered:false});
   const p:HaulingActor={id:'host',x:1150,y:1000,z:0,lifeState:'alive',velocityX:0,velocityY:0,verticalVelocity:0};
   const env:HaulingEnvironment={revision:'1',floor:()=>0,collide:()=>false,blocked:()=>false,vehicles:[]};
-  h.shoot(p,{x:-1,y:0,z:0},env,0);
+  h.shoot(p,{x:-1,y:0,z:-.25},env,0);
   return {h,p,env,cargo:h.getCargo()[0],inputs:new Map([[p.id,input]])};
 }
 describe('rope operator safety',()=>{

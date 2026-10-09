@@ -14,7 +14,7 @@ vi.mock('./FriendsAssets', async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 const tree: FrontierTree = { id: 'natural', x: 1000, y: 1000, z: 0, scale: 1, kind: 'pine' };
-async function fixture() {
+async function fixture(multisampled = true) {
   class WorkerStub {
     static instance: WorkerStub;
     onmessage?: (e: MessageEvent) => void;
@@ -26,6 +26,7 @@ async function fixture() {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ sourceIndices: 36, sourceVertices: 24, levels: [{ error: .001, indices: [0, 2, 1, 0, 3, 2] }] }) })));
   const scene = new THREE.Scene(), renderer = { getDrawingBufferSize: (v: THREE.Vector2) => v.set(1600, 900) } as THREE.WebGLRenderer;
   const forest = new FriendsForestLOD(scene, renderer);
+  forest.setMultisampled(multisampled);
   WorkerStub.instance.onmessage!({ data: [tree] } as MessageEvent);
   const snapshot = new FriendsFrontier().snapshot(), camera = new THREE.PerspectiveCamera(70, 16 / 9, 2, 100000);
   const ground = vi.fn(() => true);
@@ -39,6 +40,21 @@ function leaves(scene: THREE.Scene) {
   return list;
 }
 describe('persistent 3D forest', () => {
+  it('uses alpha testing without MSAA, including assets loaded after the preference, and restores leaf coverage live', async () => {
+    const { scene, forest } = await fixture(false);
+    const leaf = leaves(scene)[0], material = leaf.material as THREE.MeshStandardMaterial;
+    const geometry = leaf.geometry, matrices = leaf.instanceMatrix.array.slice();
+    expect(material.alphaToCoverage).toBe(false); expect(material.alphaTest).toBe(.45);
+    expect(material.transparent).toBe(false); expect(material.depthWrite).toBe(true);
+    const version = material.version;
+    forest.setMultisampled(true); expect(material.alphaToCoverage).toBe(true);
+    expect(material.version).toBe(version + 1);
+    forest.setMultisampled(true); expect(material.version).toBe(version + 1);
+    forest.setMultisampled(false); expect(material.alphaToCoverage).toBe(false);
+    expect(leaf.geometry).toBe(geometry); expect(leaf.instanceMatrix.array).toEqual(matrices);
+    scene.traverse(o => { if (o instanceof THREE.InstancedMesh && o.name.includes('-bark-')) expect((o.material as THREE.Material).alphaToCoverage).toBe(false); });
+    forest.dispose();
+  });
   it('updates a cached falling tree without scanning or uploading unchanged standing instances', async () => {
     const {scene,forest,snapshot,camera,ground}=await fixture();
     camera.position.z=1500;camera.lookAt(1000,150,1000);

@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
 import { campfireHeat, type CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
 import { CAMPFIRE_SEATS } from '../multiplayer/FriendsCampfireSeats';
+import { applyFriendsDirectLighting } from './FriendsDirectLighting';
 
 const noise = `
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -65,6 +66,7 @@ export class FriendsCampfire {
       shader.fragmentShader='varying vec2 gravelPosition;\n'+noise+shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\nfloat grit=noise(gravelPosition*1.3);float mottling=noise(gravelPosition*.035);diffuseColor.rgb*=.65+.28*mottling+.3*grit;');
     };
     gravel.customProgramCacheKey=()=> 'commons-gravel';
+    for (const material of [wood, stone, charcoal, cut, gravel]) applyFriendsDirectLighting(material);
     const floor=new THREE.Mesh(new THREE.CircleGeometry(176,48),gravel);
     floor.name='campfire-gravel-clearing';floor.rotation.x=-Math.PI/2;floor.position.y=.35;floor.receiveShadow=true;this.group.add(floor);
     const parts:THREE.BufferGeometry[]=[];
@@ -126,7 +128,7 @@ export class FriendsCampfire {
       vertexShader:`uniform float time;varying float fade;void main(){float age=fract(time*.18+position.x);fade=sin(age*3.14159)*(1.-age);vec3 p=vec3((position.y-.5)*35.+sin(age*8.+position.z*12.)*age*18.,12.+age*135.,(position.z-.5)*35.);vec4 view=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*view;gl_PointSize=clamp(550./max(1.,-view.z),1.,4.);}`,
       fragmentShader:'varying float fade;void main(){float a=1.-smoothstep(.1,.5,length(gl_PointCoord-.5));gl_FragColor=vec4(1.,.42,.08,a*fade);}'}));
     this.sparks.name='campfire-rising-embers';this.sparks.frustumCulled=false;this.group.add(this.sparks);
-    if(import.meta.env.DEV)this.group.traverse(object=>{
+    this.group.traverse(object=>{
       if(object instanceof THREE.Mesh||object instanceof THREE.Points)object.onBeforeRender=()=>{this.renderedDrawCalls++;};
     });
   }

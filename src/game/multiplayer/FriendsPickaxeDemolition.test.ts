@@ -160,7 +160,7 @@ describe('pickaxe demolition of player construction', () => {
     expect(guest.decode(host.motion('guest', sim.createSnapshot()))!.friends!.building!.pieces).toHaveLength(1);
     for (let sequence = 1; sequence <= 24; sequence++) {
       sim.setInput('host', { type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence, clientTime: sequence * 50, movement: 0,
-        aimAngle: quantizeAngle(0), aimPitch: quantizePitch(0), selectedSlot: 0, friendsTool: 2, firing: true, fireActionId: 1,
+        aimAngle: quantizeAngle(0), aimPitch: quantizePitch(-Math.atan2(24, 64)), selectedSlot: 0, friendsTool: 2, firing: true, fireActionId: 1,
         sprinting: false, sliding: false, reviving: false, jumpPressed: false, dashPressed: false });
       sim.tick(50);
       if (!sim.createSnapshot().friends!.building!.pieces.length) break;

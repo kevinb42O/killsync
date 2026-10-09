@@ -1,0 +1,4476 @@
+{
+  "revision": "ada4b40",
+  "method": "Exact Git revision, production build, local solo host, Chromium/Metal, 1100x740 CSS pixels, sequential feature ablation; elapsed RAF frames include simulation and rendering. Feature changes take effect only around world draw and are restored afterward.",
+  "errors": [],
+  "samples": [
+    {
+      "label": "spawn baseline",
+      "mode": "baseline",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 179,
+        "mean": 27.8391061452514,
+        "p50": 33.29999999999927,
+        "p95": 34.10000000000218,
+        "max": 83.29999999999927
+      },
+      "worldSubmitMs": {
+        "n": 180,
+        "mean": 5.490555555562282,
+        "p50": 5.400000000372529,
+        "p95": 6.600000000093132,
+        "max": 7.400000000372529
+      },
+      "drawCalls": {
+        "n": 180,
+        "mean": 500.48333333333335,
+        "p50": 419,
+        "p95": 713,
+        "max": 713
+      },
+      "triangles": {
+        "n": 180,
+        "mean": 340605.9888888889,
+        "p50": 301259,
+        "p95": 442932,
+        "max": 442956
+      },
+      "forest": {
+        "trees": 58,
+        "fallingTrees": 0,
+        "draws": 17,
+        "triangles": 100872
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 15,
+          "triangles": 6720
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 20,
+          "triangles": 12640
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 1,
+          "triangles": 1496
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 5,
+          "triangles": 3160
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 13,
+          "triangles": 10478
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 18,
+          "triangles": 34380
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 5,
+          "triangles": 710
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 2,
+          "triangles": 596
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 11,
+          "triangles": 9504
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 5,
+          "triangles": 1270
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 9,
+          "triangles": 8046
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 4,
+          "triangles": 1792
+        },
+        {
+          "name": "forest-autumnOak-wood-1-shadow",
+          "count": 2,
+          "triangles": 1788
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 3,
+          "triangles": 2592
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 1,
+          "triangles": 2984
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 1,
+          "triangles": 806
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 1,
+          "triangles": 1910
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 16171.68695373724,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17524.024850123667,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 13433444.254340583,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1354331.2390556624,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1374594.6676894163,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 420,
+        "triangles": 301261,
+        "geometries": 193,
+        "textures": 62,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 58,
+            "surfaceBytes": 10509096,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 161,
+            "volumeActive": 161,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp baseline",
+      "mode": "baseline",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 30,
+        "mean": 164.99666666666673,
+        "p50": 166.6999999999971,
+        "p95": 167.5,
+        "max": 167.60000000000582
+      },
+      "worldSubmitMs": {
+        "n": 31,
+        "mean": 153.941935483877,
+        "p50": 153.10000000009313,
+        "p95": 160.60000000009313,
+        "max": 165.5
+      },
+      "drawCalls": {
+        "n": 31,
+        "mean": 1560.4193548387098,
+        "p50": 1561,
+        "p95": 1569,
+        "max": 1569
+      },
+      "triangles": {
+        "n": 31,
+        "mean": 3213060.709677419,
+        "p50": 3214002,
+        "p95": 3215094,
+        "max": 3215094
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 10,
+          "triangles": 4480
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 9,
+          "triangles": 13464
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 7,
+          "triangles": 5642
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1225,
+          "triangles": 173950
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 470,
+          "triangles": 140060
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 41,
+          "triangles": 10414
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 5,
+          "triangles": 4470
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 1,
+          "triangles": 448
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 19603.094761523775,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17937.413692590464,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18100.410826429303,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 13948081.689376352,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1311974.2421721485,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1363622.0416963634,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1570,
+        "triangles": 3215096,
+        "geometries": 637,
+        "textures": 115,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp no fire",
+      "mode": "no-fire",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 88,
+        "mean": 56.81704545454556,
+        "p50": 50,
+        "p95": 66.69999999999709,
+        "max": 599.9000000000087
+      },
+      "worldSubmitMs": {
+        "n": 89,
+        "mean": 50.77191011239304,
+        "p50": 46.1999999997206,
+        "p95": 48.8000000002794,
+        "max": 581.7000000001863
+      },
+      "drawCalls": {
+        "n": 89,
+        "mean": 1433.112359550562,
+        "p50": 1566,
+        "p95": 1571,
+        "max": 1571
+      },
+      "triangles": {
+        "n": 89,
+        "mean": 3083958.0224719103,
+        "p50": 3214716,
+        "p95": 3215848,
+        "max": 3215848
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 10,
+          "triangles": 4480
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 9,
+          "triangles": 13464
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 7,
+          "triangles": 5642
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1225,
+          "triangles": 173950
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 470,
+          "triangles": 140060
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 41,
+          "triangles": 10414
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 5,
+          "triangles": 4470
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 1,
+          "triangles": 448
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 20434.36948608172,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17950.348143632444,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18028.859602544468,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 14401595.2285376,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1439580.3659722875,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1439968.1989470522,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1572,
+        "triangles": 3215850,
+        "geometries": 637,
+        "textures": 115,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp baseline repeat",
+      "mode": "baseline",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 30,
+        "mean": 162.21333333333314,
+        "p50": 166.60000000000582,
+        "p95": 167.40000000000873,
+        "max": 167.8000000000029
+      },
+      "worldSubmitMs": {
+        "n": 31,
+        "mean": 150.64193548391302,
+        "p50": 150.59999999962747,
+        "p95": 155.3000000002794,
+        "max": 157.10000000009313
+      },
+      "drawCalls": {
+        "n": 31,
+        "mean": 1607.5806451612902,
+        "p50": 1609,
+        "p95": 1621,
+        "max": 1621
+      },
+      "triangles": {
+        "n": 31,
+        "mean": 3221890.129032258,
+        "p50": 3222758,
+        "p95": 3223680,
+        "max": 3223806
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 10,
+          "triangles": 4480
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 9,
+          "triangles": 13464
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 7,
+          "triangles": 5642
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1225,
+          "triangles": 173950
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 470,
+          "triangles": 140060
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 41,
+          "triangles": 10414
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 5,
+          "triangles": 4470
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 1,
+          "triangles": 448
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 19823.646688827397,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18786.4467777709,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18317.03629174639,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 14526814.743089378,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1448547.8507366602,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1425752.3033416593,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1622,
+        "triangles": 3216656,
+        "geometries": 637,
+        "textures": 115,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp no forest",
+      "mode": "no-forest",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 31,
+        "mean": 160.7451612903223,
+        "p50": 166.5,
+        "p95": 167.6999999999971,
+        "max": 183.3000000000029
+      },
+      "worldSubmitMs": {
+        "n": 32,
+        "mean": 148.49374999999418,
+        "p50": 147.29999999981374,
+        "p95": 154.60000000009313,
+        "max": 156.10000000009313
+      },
+      "drawCalls": {
+        "n": 32,
+        "mean": 1643.90625,
+        "p50": 1649,
+        "p95": 1655,
+        "max": 1656
+      },
+      "triangles": {
+        "n": 32,
+        "mean": 1346792.0625,
+        "p50": 1345584,
+        "p95": 1353822,
+        "max": 1353942
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 10,
+          "triangles": 4480
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 9,
+          "triangles": 13464
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 7,
+          "triangles": 5642
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1225,
+          "triangles": 173950
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 470,
+          "triangles": 140060
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 41,
+          "triangles": 10414
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 5,
+          "triangles": 4470
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 1,
+          "triangles": 448
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 20528.761815393358,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 19180.000272756097,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17647.599510120963,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 14081280.01475622,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1479000.7036787837,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1431880.3387339858,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1657,
+        "triangles": 1343726,
+        "geometries": 656,
+        "textures": 117,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp no clouds",
+      "mode": "no-clouds",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 30,
+        "mean": 165.55333333333354,
+        "p50": 166.6999999999971,
+        "p95": 167.59999999999127,
+        "max": 167.6999999999971
+      },
+      "worldSubmitMs": {
+        "n": 31,
+        "mean": 153.26451612902324,
+        "p50": 153.29999999981374,
+        "p95": 156.29999999981374,
+        "max": 156.70000000018626
+      },
+      "drawCalls": {
+        "n": 31,
+        "mean": 1710.0645161290322,
+        "p50": 1710,
+        "p95": 1714,
+        "max": 1716
+      },
+      "triangles": {
+        "n": 31,
+        "mean": 3229563.35483871,
+        "p50": 3229130,
+        "p95": 3231790,
+        "max": 3231790
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 10,
+          "triangles": 4480
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 9,
+          "triangles": 13464
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 7,
+          "triangles": 5642
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1225,
+          "triangles": 173950
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 470,
+          "triangles": 140060
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 41,
+          "triangles": 10414
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 5,
+          "triangles": 4470
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 1,
+          "triangles": 448
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18529.482713403802,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17955.918696825178,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17118.895614770096,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 13514871.133379357,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1452061.174888933,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1479794.0710336221,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1711,
+        "triangles": 3226938,
+        "geometries": 685,
+        "textures": 123,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp no birds",
+      "mode": "no-birds",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 30,
+        "mean": 166.66333333333313,
+        "p50": 166.6999999999971,
+        "p95": 167.29999999998836,
+        "max": 183.79999999998836
+      },
+      "worldSubmitMs": {
+        "n": 31,
+        "mean": 154.22903225809756,
+        "p50": 154.10000000009313,
+        "p95": 158.60000000009313,
+        "max": 159.70000000018626
+      },
+      "drawCalls": {
+        "n": 31,
+        "mean": 1717.9032258064517,
+        "p50": 1719,
+        "p95": 1723,
+        "max": 1723
+      },
+      "triangles": {
+        "n": 31,
+        "mean": 3225415.5483870967,
+        "p50": 3225818,
+        "p95": 3227678,
+        "max": 3227678
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 10,
+          "triangles": 4480
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 9,
+          "triangles": 13464
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 7,
+          "triangles": 5642
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1225,
+          "triangles": 173950
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 470,
+          "triangles": 140060
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 41,
+          "triangles": 10414
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 5,
+          "triangles": 4470
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 1,
+          "triangles": 448
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 19879.145970295263,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18797.946137874824,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17066.267784483152,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 13579933.455558721,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1402835.4058372385,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1487068.0909958698,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1714,
+        "triangles": 3223804,
+        "geometries": 703,
+        "textures": 124,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp no sun shadows",
+      "mode": "no-shadows",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 27,
+        "mean": 185.18148148148234,
+        "p50": 183.20000000001164,
+        "p95": 216.30000000001746,
+        "max": 617.3999999999942
+      },
+      "worldSubmitMs": {
+        "n": 28,
+        "mean": 171.77142857144852,
+        "p50": 167,
+        "p95": 191.10000000009313,
+        "max": 622.1000000000931
+      },
+      "drawCalls": {
+        "n": 28,
+        "mean": 1459,
+        "p50": 1459,
+        "p95": 1459,
+        "max": 1459
+      },
+      "triangles": {
+        "n": 28,
+        "mean": 2977296,
+        "p50": 2977296,
+        "p95": 2977296,
+        "max": 2977296
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1716814
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 10,
+          "triangles": 4480
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 9,
+          "triangles": 13464
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 7,
+          "triangles": 5642
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1225,
+          "triangles": 173950
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 470,
+          "triangles": 140060
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 41,
+          "triangles": 10414
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 5,
+          "triangles": 4470
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 1,
+          "triangles": 448
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 19604.63468308437,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18267.450526863795,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17152.74811102568,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 13740924.386043683,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1340994.7192428496,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1370913.9024740187,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1460,
+        "triangles": 2977298,
+        "geometries": 703,
+        "textures": 124,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp render scale .7",
+      "mode": "baseline",
+      "buffer": [
+        1540,
+        1036
+      ],
+      "frameMs": {
+        "n": 50,
+        "mean": 99.33,
+        "p50": 100,
+        "p95": 115.89999999999418,
+        "max": 116.69999999998254
+      },
+      "worldSubmitMs": {
+        "n": 51,
+        "mean": 91.46078431373462,
+        "p50": 91.70000000018626,
+        "p95": 94.5,
+        "max": 98.70000000018626
+      },
+      "drawCalls": {
+        "n": 51,
+        "mean": 1667.764705882353,
+        "p50": 1680,
+        "p95": 1684,
+        "max": 1684
+      },
+      "triangles": {
+        "n": 51,
+        "mean": 3195868.470588235,
+        "p50": 3209682,
+        "p95": 3210114,
+        "max": 3210114
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1713410
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 8,
+          "triangles": 3584
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 8,
+          "triangles": 11968
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 6,
+          "triangles": 4836
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1227,
+          "triangles": 174234
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 472,
+          "triangles": 140656
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 42,
+          "triangles": 10668
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 3,
+          "triangles": 2682
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 2,
+          "triangles": 896
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 20230.522261259157,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18413.340352911597,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18423.169409369028,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 14222977.452711787,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1326712.884882295,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1351958.7038713305,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1681,
+        "triangles": 3209672,
+        "geometries": 703,
+        "textures": 124,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    },
+    {
+      "label": "camp final baseline",
+      "mode": "baseline",
+      "buffer": [
+        2200,
+        1480
+      ],
+      "frameMs": {
+        "n": 29,
+        "mean": 167.23448275862128,
+        "p50": 166.69999999998254,
+        "p95": 167.20000000001164,
+        "max": 183.30000000001746
+      },
+      "worldSubmitMs": {
+        "n": 30,
+        "mean": 156.4333333333023,
+        "p50": 157,
+        "p95": 167.1999999997206,
+        "max": 168.79999999981374
+      },
+      "drawCalls": {
+        "n": 30,
+        "mean": 1680.8333333333333,
+        "p50": 1681,
+        "p95": 1681,
+        "max": 1681
+      },
+      "triangles": {
+        "n": 30,
+        "mean": 3213976.1333333333,
+        "p50": 3213986,
+        "p95": 3213998,
+        "max": 3213998
+      },
+      "forest": {
+        "trees": 1787,
+        "fallingTrees": 0,
+        "draws": 18,
+        "triangles": 1715622
+      },
+      "forestBuckets": [
+        {
+          "name": "forest-pine-wood-1-far",
+          "count": 10,
+          "triangles": 4480
+        },
+        {
+          "name": "forest-pine-leaves-0-far",
+          "count": 1235,
+          "triangles": 780520
+        },
+        {
+          "name": "forest-pine-wood-0-shadow",
+          "count": 9,
+          "triangles": 13464
+        },
+        {
+          "name": "forest-pine-leaves-0-shadow",
+          "count": 10,
+          "triangles": 6320
+        },
+        {
+          "name": "forest-oak-wood-1-far",
+          "count": 7,
+          "triangles": 5642
+        },
+        {
+          "name": "forest-oak-leaves-0-far",
+          "count": 48,
+          "triangles": 91680
+        },
+        {
+          "name": "forest-pine-wood-2-far",
+          "count": 1225,
+          "triangles": 173950
+        },
+        {
+          "name": "forest-autumnOak-wood-2-far",
+          "count": 472,
+          "triangles": 140656
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-far",
+          "count": 478,
+          "triangles": 412992
+        },
+        {
+          "name": "forest-oak-wood-2-far",
+          "count": 41,
+          "triangles": 10414
+        },
+        {
+          "name": "forest-autumnOak-wood-1-far",
+          "count": 3,
+          "triangles": 2682
+        },
+        {
+          "name": "forest-pine-wood-1-shadow",
+          "count": 1,
+          "triangles": 448
+        },
+        {
+          "name": "forest-autumnOak-leaves-0-shadow",
+          "count": 6,
+          "triangles": 5184
+        },
+        {
+          "name": "forest-autumnOak-wood-0-shadow",
+          "count": 6,
+          "triangles": 17904
+        },
+        {
+          "name": "forest-oak-wood-1-shadow",
+          "count": 3,
+          "triangles": 2418
+        },
+        {
+          "name": "forest-oak-leaves-0-shadow",
+          "count": 10,
+          "triangles": 19100
+        },
+        {
+          "name": "forest-autumnOak-wood-0-far",
+          "count": 3,
+          "triangles": 8952
+        },
+        {
+          "name": "forest-oak-wood-0-shadow",
+          "count": 7,
+          "triangles": 18816
+        }
+      ],
+      "lights": [
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.1,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "AmbientLight",
+          "visible": true,
+          "intensity": 0.65,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 1.85,
+          "shadow": true
+        },
+        {
+          "name": "world-counter-rim",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0.19999999999999998,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 5,
+          "shadow": false
+        },
+        {
+          "name": "frontier-sky-fill",
+          "type": "HemisphereLight",
+          "visible": true,
+          "intensity": 0.6000000000000001,
+          "shadow": false
+        },
+        {
+          "name": "night-vision-infrared",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-0",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-1",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-2",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "shared-flashlight-3",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "scenic-headlight",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 80000,
+          "shadow": true
+        },
+        {
+          "name": "frontier-moonlight",
+          "type": "DirectionalLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "commons-campfire-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 18387.581581118855,
+          "shadow": false
+        },
+        {
+          "name": "stillwater-hanging-bulb-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "saltwind-camp-light",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17744.38884060441,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 17277.614279380447,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 14608845.214479005,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1375769.7860283153,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 1312322.465017355,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "held-flashlight-beam",
+          "type": "SpotLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": true
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        },
+        {
+          "name": "",
+          "type": "PointLight",
+          "visible": true,
+          "intensity": 0,
+          "shadow": false
+        }
+      ],
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "stats": {
+        "drawCalls": 1681,
+        "triangles": 3213924,
+        "geometries": 703,
+        "textures": 124,
+        "batchedEnemies": 0,
+        "enemyBatches": 0,
+        "enemyCount": 0,
+        "interaction": {
+          "fragments": 0,
+          "crackFaces": 0,
+          "draws": 0,
+          "terrain": {
+            "surfaceTiles": 59,
+            "surfaceBytes": 11295128,
+            "surfaceJobs": 0,
+            "pendingVoxels": 0,
+            "patchDraws": 0,
+            "volumeChunks": 175,
+            "volumeActive": 175,
+            "volumeJobs": 0,
+            "editMeshLatencyP95": 0,
+            "editMeshSamples": 0
+          }
+        }
+      },
+      "glError": 0
+    }
+  ],
+  "startup": {
+    "largestFrameMs": 1416.7000000000003,
+    "over100ms": 7,
+    "warmup": {
+      "submitted": 369,
+      "completed": 368,
+      "queued": 181,
+      "scanning": false,
+      "pending": true,
+      "pendingCount": 1,
+      "texturesQueued": 0,
+      "failures": 0,
+      "maxSubmitMs": 4.2000000001862645,
+      "maxReadinessMs": 81.5,
+      "maxScanMs": 2,
+      "maxTextureMs": 0
+    },
+    "preparation": {
+      "submitted": 117,
+      "completed": 117,
+      "queued": 0,
+      "scanning": false,
+      "pending": false,
+      "pendingCount": 0,
+      "texturesQueued": 0,
+      "failures": 0,
+      "maxSubmitMs": 84.5,
+      "maxReadinessMs": 23.09999999962747,
+      "maxScanMs": 2,
+      "maxTextureMs": 27.5,
+      "ready": true,
+      "fallback": false
+    }
+  }
+}

@@ -1,0 +1,53 @@
+import {createRequire} from 'node:module';
+import {homedir} from 'node:os';
+import {join} from 'node:path';
+import {writeFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const require=createRequire(import.meta.url);
+const {chromium}=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
+const dir=new URL('./',import.meta.url).pathname;
+const report={errors:[],checks:[]};
+const browser=await chromium.launch({headless:true,args:['--use-angle=metal']});
+try{
+ const page=await browser.newPage({viewport:{width:1100,height:740},deviceScaleFactor:2});page.setDefaultTimeout(120000);
+ page.on('pageerror',e=>report.errors.push(e.message));
+ await page.addInitScript(()=>localStorage.setItem('killsync.friends.menu.pause','true'));
+ await page.goto('http://127.0.0.1:3033/',{waitUntil:'domcontentloaded'});
+ async function options(){await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('tab',{name:'Graphics',exact:true}).click();}
+ await options();
+ await page.getByLabel('Render resolution',{exact:true}).selectOption('0.7');
+ await page.getByLabel('Anti-aliasing',{exact:true}).selectOption('0');
+ await page.getByLabel('Frame-rate limit',{exact:true}).selectOption('30');
+ assert.equal(await page.getByLabel('Render resolution',{exact:true}).inputValue(),'0.7');
+ await page.getByLabel('Frame-rate limit',{exact:true}).scrollIntoViewIfNeeded();
+ await page.screenshot({path:dir+'options-graphics.png'});
+ report.checks.push({label:'Options saves',preferences:await page.evaluate(()=>JSON.parse(localStorage.getItem('sunline.preferences.v1')))});
+ await page.getByRole('button',{name:'Back to menu',exact:true}).click();await options();
+ assert.equal(await page.getByLabel('Render resolution',{exact:true}).inputValue(),'0.7');
+ assert.equal(await page.getByLabel('Anti-aliasing',{exact:true}).inputValue(),'0');
+ assert.equal(await page.getByLabel('Frame-rate limit',{exact:true}).inputValue(),'30');
+ await page.reload({waitUntil:'domcontentloaded'});await options();
+ assert.equal(await page.getByLabel('Render resolution',{exact:true}).inputValue(),'0.7');
+ await page.setViewportSize({width:390,height:844});await page.getByLabel('Frame-rate limit',{exact:true}).scrollIntoViewIfNeeded();
+ await page.screenshot({path:dir+'options-graphics-mobile.png'});
+ assert.equal(await page.locator('.friends-graphics').evaluate(el=>el.scrollWidth>el.clientWidth),false);
+ await page.setViewportSize({width:1100,height:740});
+ await page.getByRole('button',{name:'Back to menu',exact:true}).click();
+ // The Friends launch screen is a separate route; storage must carry over to it.
+ await page.goto('http://127.0.0.1:3033/?mode=friends',{waitUntil:'domcontentloaded'});
+ await page.getByLabel('Your name',{exact:true}).fill('Options verification');await page.getByRole('button',{name:'Play on my own',exact:true}).click({noWaitAfter:true});await page.locator('.coop-arena').waitFor({state:'attached'});
+ await page.evaluate(()=>{const e=document.querySelector('.coop-arena');let f=e[Object.keys(e).find(k=>k.startsWith('__reactFiber'))];while(f){let h=f.memoizedState;while(h){const v=h.memoizedState?.current;if(v?.getFriendsTerrain&&v?.setFriendsTool)window.bridge=v;h=h.next;}f=f.return;}if(!window.bridge)throw Error('No bridge');});
+ await page.waitForFunction(()=>!bridge.friendsWorldArrival.sequence.active);await page.waitForTimeout(1000);
+ const initial=await page.evaluate(()=>({samples:bridge.renderer.nightVision.buffer.samples,pixelRatio:bridge.renderer.renderer.getPixelRatio(),gl:bridge.renderer.renderer.getContext().getError()}));
+ assert.equal(initial.samples,0);assert.equal(initial.pixelRatio,1.4);assert.equal(initial.gl,0);
+ await page.keyboard.press('Escape');await page.getByRole('tab',{name:'Graphics',exact:true}).click();
+ assert.equal(await page.getByLabel('Render resolution',{exact:true}).inputValue(),'0.7');
+ assert.equal(await page.getByLabel('Anti-aliasing',{exact:true}).inputValue(),'0');
+ assert.equal(await page.getByLabel('Frame-rate limit',{exact:true}).inputValue(),'30');
+ await page.getByLabel('Frame-rate limit',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:dir+'graphics-performance-controls.png'});
+ await page.getByLabel('Render resolution',{exact:true}).selectOption('1');await page.getByLabel('Anti-aliasing',{exact:true}).selectOption('4');await page.getByLabel('Frame-rate limit',{exact:true}).selectOption('120');
+ await page.getByRole('button',{name:/Back to island/}).click();await page.waitForTimeout(3000);
+ const high=await page.evaluate(()=>({samples:bridge.renderer.nightVision.buffer.samples,pixelRatio:bridge.renderer.renderer.getPixelRatio(),gl:bridge.renderer.renderer.getContext().getError()}));assert.equal(high.samples,4);assert.equal(high.pixelRatio,2);assert.equal(high.gl,0);
+ report.checks.push({label:'Options settings applied on entry and changed live',initial,high});
+ assert.equal(report.errors.length,0);report.passed=true;
+}catch(e){report.failure=String(e);throw e;}finally{await writeFile(dir+'options-verification.json',JSON.stringify(report,null,2));await browser.close();}

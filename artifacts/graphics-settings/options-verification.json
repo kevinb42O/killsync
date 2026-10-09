@@ -1,0 +1,30 @@
+{
+  "errors": [],
+  "checks": [
+    {
+      "label": "Options saves",
+      "preferences": {
+        "renderScale": 0.7,
+        "shadows": true,
+        "antialiasing": 0,
+        "frameLimit": 30,
+        "fieldOfView": 108,
+        "lookSensitivity": 1
+      }
+    },
+    {
+      "label": "Options settings applied on entry and changed live",
+      "initial": {
+        "samples": 0,
+        "pixelRatio": 1.4,
+        "gl": 0
+      },
+      "high": {
+        "samples": 4,
+        "pixelRatio": 2,
+        "gl": 0
+      }
+    }
+  ],
+  "passed": true
+}

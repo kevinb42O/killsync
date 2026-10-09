@@ -345,7 +345,12 @@ export class FriendsAudio {
     if (!buffer) {
       if (!this.underwaterDiveLoading) {
         this.underwaterDiveLoading = true;
-        void this.load(url).then(() => { this.underwaterDiveLoading = false; this.syncUnderwaterDive(); });
+        void this.load(url).then(() => {
+          this.underwaterDiveLoading = false;
+          // load() absorbs network/decode errors. Only continue after success;
+          // otherwise this callback starts an unbounded fetch/retry loop.
+          if (this.buffers.has(url)) this.syncUnderwaterDive();
+        });
       }
       return;
     }
@@ -660,7 +665,7 @@ export class FriendsAudio {
       for(const source of this.voices){try{source.stop();}catch{} }this.voices.clear(); this.effectVoices.clear();
       void this.context?.suspend().catch(() => {});
     }
-    else if (this.active && this.activated && this.context) { void this.context.resume().then(() => { this.syncMusic(); this.syncAmbience(); this.syncTrain(); this.syncWorld(); }).catch(() => {}); }
+    else if (this.active && this.activated && this.context) { void this.context.resume().then(() => { this.syncMusic(); this.syncAmbience(); this.syncTrain(); this.syncWorld(); this.syncUnderwaterDive(); }).catch(() => {}); }
   };
 }
 export const friendsAudio = new FriendsAudio();

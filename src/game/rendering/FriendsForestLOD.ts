@@ -35,6 +35,7 @@ export class FriendsForestLOD {
   private worker?: Worker;
   private disposed = false;
   private species: Species[] = [];
+  private multisampled = true;
   private natural?: FrontierTree[];
   private entries: Entry[] = [];
   private tiles: Tile[] = [];
@@ -112,7 +113,7 @@ export class FriendsForestLOD {
       if (!bark) leaves.union(new THREE.Box3().setFromObject(child));
       // Leaf cards retain the asset's alpha cutoff and depth writes. MSAA softens
       // coverage without transparency sorting or changing the canopy silhouette.
-      material.alphaToCoverage = !bark; material.transparent = false; material.depthWrite = true;
+      material.alphaToCoverage = !bark && this.multisampled; material.transparent = false; material.depthWrite = true;
       if (bark) material.side = THREE.FrontSide;
       this.shade(material);
       const geometry = [child.geometry], errors = [0];
@@ -134,6 +135,16 @@ export class FriendsForestLOD {
     return { parts, bounds, canopyHeight: box.max.y, canopy };
   }
   canopyHeight(tree: FrontierTree) { return this.species[KINDS.indexOf(tree.kind)]?.canopyHeight; }
+  setMultisampled(enabled: boolean) {
+    if (enabled === this.multisampled) return;
+    this.multisampled = enabled;
+    for (const species of this.species) for (const part of species.parts) {
+      const coverage = !part.bark && enabled;
+      if (part.material.alphaToCoverage !== coverage) {
+        part.material.alphaToCoverage = coverage; part.material.needsUpdate = true;
+      }
+    }
+  }
   canopy(tree: FrontierTree) { return this.species[KINDS.indexOf(tree.kind)]?.canopy; }
   private rebuild(trees: FrontierTree[], ground: (tree: FrontierTree) => boolean) {
     this.speciesCounts = this.species.map(() => 0);

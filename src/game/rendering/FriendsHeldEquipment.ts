@@ -55,8 +55,8 @@ export function loadFinishedFriendsTool(asset:FriendsAssetId) {
 
 export function frameHeldEquipment(root:THREE.Group,camera:THREE.PerspectiveCamera|undefined,left=false) {
   const aspect=camera?.aspect??16/9,fov=camera?.fov??98,tangent=Math.tan(THREE.MathUtils.degToRad(fov/2));
-  const depth=left ? .78 : .94,narrow=Math.min(1,aspect/1.25),scale=tangent/Math.tan(THREE.MathUtils.degToRad(49));
-  root.position.set((left?-.52:.46)*depth*tangent*aspect,-.60*depth*tangent,-depth);
+  const depth=left ? 1.00 : 1.18,narrow=Math.min(1,aspect/1.25),scale=tangent/Math.tan(THREE.MathUtils.degToRad(49));
+  root.position.set((left?-.43:.38)*depth*tangent*aspect,-.50*depth*tangent,-depth);
   root.scale.set(scale*narrow,scale*narrow,1);
 }
 

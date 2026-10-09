@@ -217,7 +217,7 @@ describe('separate Friends expedition', () => {
   it('preserves legacy progress on load without restoring the removed settlement', () => {
     const progress=normalizeFriendsProgress({signals:['garden','archive','wreck'],discovered:['depot'],restored:true});
     const s=new FriendsSimulation(seeds,22,progress);expect(s.createSnapshot().friends!.progress).toEqual(progress);
-    expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(2);
+    expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(3);
   });
   it('replicates expedition state through compact keyframes and deltas; interpolates decks with passengers', () => {
     const s = railSimulation(seeds, false), p = s['players'].get('host')!, v = s.createSnapshot().friends!.vehicles[0]; p.x = v.x; p.y = v.y; p.z = v.z;

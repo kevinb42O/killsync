@@ -30,7 +30,7 @@ describe('exact castle cargo support',()=>{
     const points=CASTLE_STAIRS.approach,from=points.length-20,goal=FRIENDS_HAULING_JOBS[1].goal;
     Object.assign(cargo,{...points[from],angle:Math.atan2(points[from-1].y-points[from].y,points[from-1].x-points[from].x)});
     Object.assign(player,{...points[from-14],verticalVelocity:0});
-    sim.setInput('host',input(1,{firing:true,fireActionId:1,aimAngle:quantizeAngle(Math.atan2(cargo.y-player.y,cargo.x-player.x)),aimPitch:quantizePitch(Math.atan2(cargo.z-player.z,Math.hypot(cargo.x-player.x,cargo.y-player.y)))}));sim.tick(50);
+    sim.setInput('host',input(1,{firing:true,fireActionId:1,aimAngle:quantizeAngle(Math.atan2(cargo.y-player.y,cargo.x-player.x)),aimPitch:quantizePitch(Math.atan2(cargo.z+24-player.z-50,Math.hypot(cargo.x-player.x,cargo.y-player.y)))}));sim.tick(50);
     expect(sim.createSnapshot().friends!.hauling!.ropes[0]?.cargoId).toBe('ridge-core');
     let target=from-17;
     for(let i=2;i<3602;i++){

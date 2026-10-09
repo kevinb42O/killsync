@@ -1,3 +1,4 @@
+import { firstPersonEyeZ } from './FirstPersonEye';
 import { sweepCrane } from './FriendsCraneSweep';
 import { FriendsPlayerCarry, rayCarryPlayer, type PlayerCarryRope } from './FriendsPlayerCarry';
 import { CRANE_MIN_LENGTH, CRANE_MAX_LENGTH, CRANE_SPEED, craneOutlet, craneHookInteraction, nearbyCrane, craneCandidate, craneCargoAnchor, type FriendsCraneState, type CraneAction } from './FriendsCrane';
@@ -24,7 +25,7 @@ export const ROPE_MIN_LENGTH=32;
 export const ROPE_OPERATOR_SPEED=160;
 const STEP = 8;
 type Point = { x: number; y: number; z: number };
-export type HaulingActor = Point & { id: string; lifeState: string; friendsDevFlight?: boolean; velocityX?: number; velocityY?: number; verticalVelocity?: number };
+export type HaulingActor = Point & { id: string; lifeState: string; friendsDevFlight?: boolean; sliding?: boolean; swimming?: boolean; velocityX?: number; velocityY?: number; verticalVelocity?: number };
 export type PhysicalCargo = Point & {
   id: string; angle: number; vx: number; vy: number; vz: number; spin: number;
   orientation?:[number,number,number,number]; angularVelocityX?:number; angularVelocityY?:number;
@@ -39,6 +40,7 @@ export type HaulingEnvironment = {
   operatorFloor?: HaulingEnvironment['floor'];
   collide: (point: { x: number; y: number }, z: number, radius: number, height: number, step: number) => boolean;
   blocked: (from: Point, to: Point) => boolean;
+  eyeCeiling?: (actor: Point) => number | undefined;
   vehicles: readonly FriendsVehicle[];
   builds?: readonly FriendsBuildPiece[];
   craneAccess?:(playerId:string)=>boolean;
@@ -262,7 +264,7 @@ export class FriendsHauling {
     if (this.playerCarry.release(player.id)) return;
     if (this.ropes.delete(player.id)) { this.tell(player.id, 'Rope released.', elapsed); return; }
     if (player.lifeState !== 'alive') return;
-    const origin = { x: player.x, y: player.y, z: player.z + 26 };
+    const origin = { x: player.x, y: player.y, z: firstPersonEyeZ(player, env.eyeCeiling?.(player)) };
     const hits = this.cargo.map(cargo => ({ cargo, hit: rayCargo(cargo, origin, direction) })).filter(h => h.hit).sort((a, b) => a.hit!.distance - b.hit!.distance);
     const h = hits[0];
     const teammate = players.filter(p => p.id !== player.id && p.lifeState === 'alive')
@@ -282,8 +284,8 @@ export class FriendsHauling {
     if (player.friendsDevFlight || env.vehicles.some(v => v.pilotId === player.id)) return;
     if (!h || env.blocked(origin, { x: origin.x + direction.x * h.hit!.distance, y: origin.y + direction.y * h.hit!.distance, z: origin.z + direction.z * h.hit!.distance })) { this.tell(player.id, 'Aim at the salvage core within 40m, with a clear rope path.', elapsed); return; }
     if (h.cargo.secured) { this.tell(player.id, 'Release the cargo straps with F before towing.', elapsed); return; }
-    const a = h.hit!.anchor;
-    this.ropes.set(player.id, { id: player.id, cargoId: h.cargo.id, anchorX: a.x, anchorY: a.y, anchorZ: a.z, length: Math.max(ROPE_MIN_LENGTH, h.hit!.distance + 8), tension: 0, blocked: false });
+    const a = h.hit!.anchor, attachment = cargoWorldPoint(h.cargo, a);
+    this.ropes.set(player.id, { id: player.id, cargoId: h.cargo.id, anchorX: a.x, anchorY: a.y, anchorZ: a.z, length: Math.max(ROPE_MIN_LENGTH, Math.hypot(player.x - attachment.x, player.y - attachment.y, player.z + 26 - attachment.z) + 8), tension: 0, blocked: false });
     this.tell(player.id, 'Attached. Walk to pull · hold aim to reel · crouch + aim feeds rope · primary action releases.', elapsed);
   }
   interact(player: HaulingActor, env: HaulingEnvironment, elapsed: number) {

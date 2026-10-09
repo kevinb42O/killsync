@@ -1,5 +1,7 @@
 import type { CoopGameMode } from './game/multiplayer/CoopGameMode';
 import { MainMenu } from './components/MainMenu';
+import { FriendsGraphicsSettings } from './components/FriendsGraphicsSettings';
+import { readGamePreferences, saveGamePreferences, normalizeGamePreferences, type LocalGamePreferences } from './game/LocalGamePreferences';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Skull, Trophy, Zap, Shield, Target, Activity, Coins, ArrowLeft, Lock, CheckCircle2, User, Crosshair, Maximize, Minimize, ExternalLink, Star, Sparkles, Crown, BookOpen, ChevronRight, Database, FileWarning, Heart, ArrowUpCircle, Wind, Keyboard, Settings2, Radio, Gamepad2, Smartphone } from 'lucide-react';
@@ -223,6 +225,14 @@ export default function App() {
     return (saved === 'full' || saved === 'subtle' || saved === 'off') ? saved : 'full';
   });
   const [settingsTab, setSettingsTab] = useState<'controls' | 'graphics'>('controls');
+  const [friendsGraphicsPreferences, setFriendsGraphicsPreferences] = useState(readGamePreferences);
+  useEffect(() => {
+    if (gameState === 'SETTINGS') setFriendsGraphicsPreferences(readGamePreferences());
+  }, [gameState]);
+  const changeFriendsGraphicsPreferences = (patch: Partial<LocalGamePreferences>) => {
+    const next = normalizeGamePreferences({ ...readGamePreferences(), ...patch });
+    saveGamePreferences(next); setFriendsGraphicsPreferences(next);
+  };
   const ADMIN_DASHBOARD_PASSWORD = 'pinakaaz420';
 
   const showCheatFeedback = useCallback((message: string) => {
@@ -1913,14 +1923,14 @@ export default function App() {
                         {settingsTab === 'controls' ? 'Input profile' : 'Visual fidelity'}
                       </div>
                       <h2 className="text-3xl font-black italic tracking-tight text-white sm:text-4xl">
-                        {settingsTab === 'controls' ? 'CONTROL SETTINGS' : 'POST-PROCESSING & VIGNETTE'}
+                        {settingsTab === 'controls' ? 'CONTROL SETTINGS' : 'GRAPHICS SETTINGS'}
                       </h2>
                     </div>
                   </div>
                   <p className="max-w-2xl text-sm leading-relaxed text-white/50">
                     {settingsTab === 'controls'
                       ? 'Choose a keyboard layout, gamepad, or mobile profile. Your choice is saved automatically; touch controls appear only on small touch devices.'
-                      : 'Configure GPU-accelerated atmospheric lens vignette, low-health arterial warnings, hit shockwave flashes, and tactical micro-textures.'}
+                      : 'Set the Friends island picture quality for this device, then choose your screen effects. Changes save automatically.'}
                   </p>
                 </div>
 
@@ -1949,12 +1959,17 @@ export default function App() {
                         : 'border border-transparent text-white/45 hover:text-white/80'
                     }`}
                   >
-                    <Sparkles size={14} /> Visual Effects & Vignette
+                    <Sparkles size={14} /> Graphics
                   </button>
                 </div>
 
                 {settingsTab === 'graphics' ? (
                   <div className="space-y-6">
+                    <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5 sm:p-7">
+                      <h3 className="text-lg font-bold text-white">Friends island graphics</h3>
+                      <p className="mt-2 mb-4 text-xs leading-relaxed text-white/50">These settings apply when you enter the island. During play, press Esc and open Graphics to adjust them immediately.</p>
+                      <FriendsGraphicsSettings preferences={friendsGraphicsPreferences} onPreferences={changeFriendsGraphicsPreferences}/>
+                    </section>
                     <div className="grid gap-4 md:grid-cols-3">
                       {[
                         {
@@ -1962,14 +1977,14 @@ export default function App() {
                           title: 'Full Atmosphere',
                           badge: 'Recommended',
                           description: 'Complete dynamic suite: subtle optical vignette framing, low-health arterial pulse, damage shockwave flashes, overdrive cyan halo, sprint kinetic focus, and offline micro-grain.',
-                          perf: '100% GPU Hardware Accelerated · 60+ FPS',
+                          perf: 'Screen effects · Independent of world quality',
                         },
                         {
                           id: 'subtle' as const,
                           title: 'Subtle',
                           badge: 'Minimalist',
                           description: 'Softer ambient lens falloff, gentler low-health pulse, and reduced peripheral contrast for players who prefer understated tactical cues.',
-                          perf: '100% GPU Hardware Accelerated · 60+ FPS',
+                          perf: 'Screen effects · Independent of world quality',
                         },
                         {
                           id: 'off' as const,
@@ -2037,11 +2052,10 @@ export default function App() {
                       style={{ clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))' }}
                     >
                       <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200">
-                        <Sparkles size={14} /> Zero-Overhead Performance Guarantee
+                        <Sparkles size={14} /> Choose quality for your device
                       </div>
                       <p className="mt-2 text-xs leading-relaxed text-white/55">
-                        Post-processing layers run entirely on isolated GPU compositor planes (<code className="font-mono text-cyan-300">transform: translateZ(0)</code>).
-                        They do not allocate fullscreen WebGL render targets or alter Three.js framebuffers, preserving silky-smooth 60+ FPS even on integrated GPUs and mobile devices.
+                        If the island feels slow, try 70% render resolution and anti-aliasing Off. A 30 FPS limit can reduce heat when your device has enough rendering headroom. Raise resolution and anti-aliasing for a sharper picture on faster devices.
                       </p>
                     </div>
                   </div>

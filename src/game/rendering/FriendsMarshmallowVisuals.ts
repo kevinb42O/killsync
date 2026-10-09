@@ -4,7 +4,7 @@ import { createCampfireFlames } from './FriendsCampfire';
 import { acquireEquipmentLighting, loadFriendsGrip } from './FriendsHeldEquipment';
 import { loadFriendsAsset } from './FriendsAssets';
 import { CAMPFIRE_SEATS, isCampfireSeat } from '../multiplayer/FriendsCampfireSeats';
-import type { CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
+import { MARSHMALLOW_FORWARD_REACH, type CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
 
@@ -140,7 +140,7 @@ export class FriendsMarshmallowVisuals {
       if(slot>=0){this.roastSpots.set(p.id,slot);used.add(slot);}
     }
   }
-  update(players:readonly CoopPlayerSnapshot[],state:CampfireSnapshot|undefined,localId:string,camera:THREE.Camera,seconds:number,dt:number,firstPerson=true,handPoint?:(id:string,out:THREE.Vector3)=>boolean,localRoastHeld=false){
+  update(players:readonly CoopPlayerSnapshot[],state:CampfireSnapshot|undefined,localId:string,camera:THREE.Camera,seconds:number,dt:number,firstPerson=true,handPoint?:(id:string,out:THREE.Vector3)=>boolean,localRoastHeld?:boolean){
     if(this.disposed)return;
     this.time.value=seconds;camera.getWorldPosition(this.cameraPosition);camera.getWorldQuaternion(this.cameraQuaternion);
     if(this.viewCamera){
@@ -159,6 +159,9 @@ export class FriendsMarshmallowVisuals {
       if(!(state?.equipped?state.equipped.includes(player.id):isCampfireSeat(player.friendsSeat))||player.lifeState!=='alive'||player.friendsDevFlight||player.motion?.swimming)continue;
       if(Math.hypot(this.cameraPosition.x-player.x,this.cameraPosition.z-player.y)>800)continue;
       const entry=this.actors.get(player.id)??this.create(player.id),roast=state?.roasts[player.id],local=firstPerson&&player.id===localId;
+      const seated=isCampfireSeat(player.friendsSeat);
+      const reaching=(local?(localRoastHeld??Boolean(roast?.reach||roast?.roasting)):Boolean(roast?.reach||roast?.roasting))&&!roast?.eatingMs&&!roast?.refillMs;
+      entry.pose+=(Number(reaching)-entry.pose)*(1-Math.exp(-Math.max(0,dt)*.009));
       const parent=local&&this.viewCamera?this.held:this.group;if(entry.group.parent!==parent)parent.add(entry.group);
       if(local)localVisible=true;
       if(local&&!entry.armRequested){
@@ -175,6 +178,11 @@ export class FriendsMarshmallowVisuals {
         // the centre of the view or detach the forearm from the screen edge.
         this.start.set(.48*24*tangent*aspect,-.64*24*tangent,-24).applyQuaternion(this.cameraQuaternion).add(this.cameraPosition);
         this.forward.set(0,0,-1).applyQuaternion(this.cameraQuaternion);this.right.set(1,0,0).applyQuaternion(this.cameraQuaternion);
+        if(!seated){
+          // Push the grip forward and inward with the arm instead of merely
+          // swinging a growing shaft toward a fixed campfire target.
+          this.start.addScaledVector(this.forward,12*entry.pose).addScaledVector(this.right,-.16*24*tangent*aspect*entry.pose);
+        }
       }else{
         if(!handPoint?.(player.id,this.start))this.start.set(player.x-Math.sin(player.angle)*8,player.z+18,player.y+Math.cos(player.angle)*8);
         this.forward.set(Math.cos(player.angle),0,Math.sin(player.angle));this.right.set(-Math.sin(player.angle),0,Math.cos(player.angle));
@@ -182,14 +190,17 @@ export class FriendsMarshmallowVisuals {
       this.rest.copy(this.start).addScaledVector(this.forward,64).addScaledVector(this.right,-9);this.rest.y+=40;
       this.target.set(FRIENDS_CAMPFIRE.x,FRIENDS_CAMPFIRE.z+48,FRIENDS_CAMPFIRE.y);
       const slot=this.roastSpots.get(player.id);
-      if(slot!==undefined){const angle=CAMPFIRE_SEATS[slot].angle;this.target.x+=Math.cos(angle)*23;this.target.z+=Math.sin(angle)*23;}
+      if(seated&&slot!==undefined){const angle=CAMPFIRE_SEATS[slot].angle;this.target.x+=Math.cos(angle)*23;this.target.z+=Math.sin(angle)*23;}
+      if(!seated){
+        if(local)this.target.copy(this.cameraPosition).addScaledVector(this.forward,MARSHMALLOW_FORWARD_REACH);
+        else if(roast?.reach)this.target.set(roast.reach.x,roast.reach.z,roast.reach.y);
+        else this.target.copy(this.rest);
+      }
       // The local stick reaches out as soon as LMB is held. Baking itself is
       // still host-authoritative and only advances when the marshmallow is
       // actually over the fire. Waiting for that accepted state here made the
       // standing stick stay in its raised rest pose while the player tried to
       // move it into the flames.
-      const reaching=local?localRoastHeld&&!roast?.eatingMs&&!roast?.refillMs:Boolean(roast?.roasting);
-      entry.pose+=(Number(reaching)-entry.pose)*(1-Math.exp(-Math.max(0,dt)*.009));
       this.target.lerpVectors(this.rest,this.target,entry.pose);
       entry.eatPose+=(Number(Boolean(roast?.eatingMs))-entry.eatPose)*(1-Math.exp(-Math.max(0,dt)*.012));
       if(local)this.mouth.set(0,-5,-7).applyQuaternion(this.cameraQuaternion).add(this.cameraPosition);
@@ -202,7 +213,7 @@ export class FriendsMarshmallowVisuals {
       this.matrix.makeBasis(this.side,this.forward,this.normal);this.quaternion.setFromRotationMatrix(this.matrix);
       // The shaft goes through the fingers and slightly through the far cap.
       entry.rod.position.copy(this.forward).multiplyScalar(-12);entry.rod.scale.y=length+19.25;entry.rod.quaternion.copy(this.quaternion);
-      if(entry.arm){entry.arm.visible=local;entry.arm.quaternion.copy(this.quaternion);}
+      if(entry.arm){entry.arm.visible=local;entry.arm.quaternion.copy(local&&!seated?this.cameraQuaternion:this.quaternion);}
       entry.food.position.copy(this.delta);entry.food.quaternion.copy(this.quaternion);entry.food.rotateY(seconds*.24);
       entry.food.visible=!roast?.refillMs&&(!roast?.eatingMs||roast.eatingMs>500);
       entry.fire.position.copy(this.delta);entry.fire.position.y+=2;entry.fire.visible=Boolean(roast&&roast.burningMs>0);

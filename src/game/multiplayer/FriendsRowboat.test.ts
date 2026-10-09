@@ -6,7 +6,7 @@ import { FriendsSimulation } from './FriendsSimulation';
 import { FRIENDS_RIVERS } from '../world/FriendsHydrology';
 import { friendsWaterAt } from '../world/FriendsWaterSurface';
 import { vehicleWorldPoint } from './FriendsVehiclePose';
-import { friendsVehicleCeiling } from './FriendsExpedition';
+import { friendsVehicleCeiling, friendsVehicleFloor } from './FriendsExpedition';
 const command=(sequence:number,extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence,clientTime:0,movement:0,aimAngle:0,aimPitch:32768,selectedSlot:0,firing:false,fireActionId:0,altFireActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
 const actor=(id:string)=>({id,x:13680,y:22560,z:136.5,angle:0,lifeState:'alive',friendsSeat:undefined as {vehicleId:string;index:number}|undefined,verticalVelocity:0,crouching:false});
 function crew(){const boat=new FriendsRowboat({x:12128,y:23600,angle:0}),a=actor('a'),b=actor('b');Object.assign(a,boat.vehicle());a.id='a';Object.assign(b,boat.vehicle());b.id='b';a.y+=20;b.y-=20;boat.update(50,0,[a,b],new Map([['a',command(0)],['b',command(0)]]));boat.interact(a,[a,b]);boat.interact(b,[a,b]);return {boat,a,b};}
@@ -64,12 +64,13 @@ describe('shared manual two-person rowboat',()=>{
     expect(Math.hypot(a.x-centred.x,a.y-centred.y)).toBeLessThan(.001);
     expect(b.friendsSeat).toBeUndefined();
   });
-  it('reserves exactly two opposing seats and releases them into clear water',()=>{
+  it('reserves exactly two opposing seats and releases them onto the clear deck',()=>{
     const {boat,a,b}=crew(),c=actor('c');Object.assign(c,boat.vehicle());c.id='c';
     expect(a.friendsSeat?.index).toBe(0);expect(b.friendsSeat?.index).toBe(1);expect(boat.interact(c,[a,b,c])).toBe(false);
     expect(friendsVehicleCeiling([boat.vehicle()],a.x,a.y,a.z)).toBeUndefined();
     expect(boat.interact(a,[a,b])).toBe(true);expect(a.friendsSeat).toBeUndefined();
-    expect(Math.hypot(a.x-boat.vehicle().x,a.y-boat.vehicle().y)).toBeGreaterThan(60);expect(friendsWaterAt(a.x,a.y)).toBeDefined();
+    expect(friendsVehicleFloor([boat.vehicle()],a.x,a.y,a.z)).toBeCloseTo(a.z);
+    expect(Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)).toBeGreaterThanOrEqual(38);
   });
   it('uses matched strokes for straight propulsion, differential strokes for turning and separate backwater edges',()=>{
     const straight=crew(),turn=crew(),reverse=crew();row(straight.boat,straight.a,straight.b,1,1);row(turn.boat,turn.a,turn.b,1,0);row(reverse.boat,reverse.a,reverse.b,1,1,true);

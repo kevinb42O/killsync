@@ -262,7 +262,8 @@ export class FriendsTerrain {
     const natural=baseTerrainHeight(x,y);let h=natural;
     for(const g of this.gradeTiles.get(`${Math.floor(x/512)},${Math.floor(y/512)}`) || []){const adjusted=grade(natural,x,y,g[0],g[1],g[2],g[3],320);h=natural<g[2]?Math.max(h,adjusted):Math.min(h,adjusted);}
     for(const cut of FRIENDS_DOCK_LANDSCAPE_CUTS){
-      const distance=Math.hypot(x-cut.x,y-cut.y);if(distance>=cut.core+cut.collar)continue;
+      const dx=x-cut.x,dy=y-cut.y,radius=cut.core+cut.collar;
+      if(Math.abs(dx)>=radius||Math.abs(dy)>=radius||dx*dx+dy*dy>=radius*radius)continue;
       h=Math.min(h,grade(h,x,y,cut.x,cut.y,cut.top,cut.core,cut.collar));
     }
     return scenicTransitSurface(x,y,gridHeight(h));

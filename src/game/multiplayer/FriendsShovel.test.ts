@@ -8,7 +8,7 @@ import { SnapshotDecoder, compactSnapshotWirePayload } from './snapshotReplicati
 const seeds = [{ id: 'host', label: 'Host', color: '#0ff' }, { id: 'guest', label: 'Guest', color: '#f0f' }];
 const input = (sequence: number, extra: Partial<MultiplayerInputFrame> = {}): MultiplayerInputFrame => ({
   type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence, clientTime: 0,
-  movement: 0, aimAngle: quantizeAngle(0), aimPitch: quantizePitch(-Math.atan2(26, 64)),
+  movement: 0, aimAngle: quantizeAngle(0), aimPitch: quantizePitch(-Math.atan2(50, 64)),
   selectedSlot: 0, firing: false, aiming: true, sprinting: false, sliding: false,
   reviving: false, jumpPressed: false, dashPressed: false, friendsTool: 3, ...extra,
 });

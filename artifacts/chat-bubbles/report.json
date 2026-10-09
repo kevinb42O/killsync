@@ -1,0 +1,36 @@
+{
+  "errors": [],
+  "review": {
+    "speakers": 3,
+    "bubbles": [
+      {
+        "visible": true,
+        "width": 492,
+        "height": 104,
+        "depthTest": true
+      },
+      {
+        "visible": true,
+        "width": 424,
+        "height": 140,
+        "depthTest": true
+      },
+      {
+        "visible": true,
+        "width": 490,
+        "height": 212,
+        "depthTest": true
+      }
+    ]
+  },
+  "production": {
+    "count": 1,
+    "textureDisposals": 1,
+    "glError": 0,
+    "pixelWidth": 180
+  },
+  "chatFeed": {
+    "message": "Chat reviewChat still works ✨",
+    "localBubble": true
+  }
+}

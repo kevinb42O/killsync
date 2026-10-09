@@ -42,9 +42,10 @@ describe('Friends Fun stones',()=>{
     const wall=fixture({...dry,blocked:(a,b)=>a.x<60&&b.x>=60});wall.players.push(actor('friend',100));wall.tap();wall.step(400);expect(wall.hits).toEqual([]);
   });
   it('cancels a charge when stowed, in a skiff, swimming, piloting, or input is stale',()=>{
-    for(const cancel of ['blocked','seat','swim','tool','stale','pilot']){
+    for(const cancel of ['blocked','seat','oppositeSeat','swim','tool','stale','pilot']){
       const f=fixture({...env,piloting:()=>cancel==='pilot'});f.command=input({fireActionId:1,firing:true});f.step();
       if(cancel==='seat')f.players[0].friendsSeat={vehicleId:'reedwater-skiff',index:0};
+      if(cancel==='oppositeSeat')f.players[0].friendsSeat={vehicleId:'deepmere-skiff',index:0};
       if(cancel==='swim')f.players[0].swimming=true;
       f.command={...f.command,firing:false,friendsFishingBlocked:cancel==='blocked',friendsTool:cancel==='tool'?6:8};
       if(cancel==='stale')f.stones.update(50,f.now+50,f.players,new Map(),env,()=>{});else f.step();

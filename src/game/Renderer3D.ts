@@ -1,3 +1,4 @@
+import { DEFAULT_GAME_PREFERENCES, FRIENDS_FOV_MAX } from './LocalGamePreferences';
 import { createFriendsEnvironment } from './rendering/FriendsWorldVisuals';
 import { FriendsVehicleCamera } from './rendering/FriendsVehicleCamera';
 import type { FriendsVehicle } from './multiplayer/FriendsExpedition';
@@ -18,7 +19,7 @@ import { getWorldDistrictAt, getWorldObstacles, WORLD_DISTRICTS, WORLD_SKYBRIDGE
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import { animateCoopEnemyRig, CoopEnemyBatchRenderer, createCoopEnemyRig, disposeCoopEnemyRig } from './rendering/coopEnemyVisuals';
 import { ENEMY_ATTACK_PROFILES } from './combat/enemyDomain';
-import { COOP_FIRST_PERSON_EYE_HEIGHT } from './multiplayer/playerMovement';
+import { firstPersonEyeHeight, FIRST_PERSON_CEILING_MARGIN } from './multiplayer/FirstPersonEye';
 import { createFloatingPlatformShell } from './rendering/floatingPlatformShell';
 import { getWorldDefinition, sampleWorldSurface, type WorldId, type WorldSurfaceKind } from './world/WorldDefinitions';
 import { FirstPersonCameraKinetics } from './rendering/FirstPersonCameraKinetics';
@@ -115,6 +116,7 @@ export class Renderer3D {
    * little invisible rendering detail for materially steadier frame pacing. */
   private readonly mobilePerformance: boolean;
 
+  friendsFieldOfView = DEFAULT_GAME_PREFERENCES.fieldOfView;
   private readonly WORLD_FOV = 108;
   private readonly WORLD_DASH_FOV = 118;
   private readonly ADS_FOV = 68;
@@ -127,6 +129,7 @@ export class Renderer3D {
   targetYaw: number = 0;
   targetPitch: number = 0;
   isPointerLocked: boolean = false;
+  private ignoreNextLockedMouseMove = false;
   sensitivity: number = 0.0022;
   lookSensitivityScale = 1;
   private activeViewMode: 'TOPDOWN_2D' | 'FIRST_PERSON' | 'THIRD_PERSON' = 'TOPDOWN_2D';
@@ -139,6 +142,8 @@ export class Renderer3D {
   presentationVerticalOffset: number = 0;
   presentationVehicle?: FriendsVehicle;
   presentationGrounded = false;
+  presentationSwimming = false;
+  presentationCeiling = Infinity;
   presentationWorldRender?: (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) => boolean;
   presentationViewmodelVisible = true;
   presentationPreparingWorld = false;
@@ -502,6 +507,12 @@ export class Renderer3D {
   }
 
   toggleFriendsNightVision() { return this.nightVision?.toggle() ?? false; }
+  setFriendsAntialiasing(quality: 'auto' | 0 | 2 | 4) {
+    const requested = quality === 'auto' ? (this.mobilePerformance ? 0 : 2) : quality;
+    const samples = Math.min(requested, this.renderer.capabilities.maxSamples);
+    this.nightVision?.setSamples(samples);
+    return samples;
+  }
   get usesMobilePerformanceProfile(){return this.mobilePerformance;}
   setFriendsFlashlightGlare(effect:FriendsFlashlightGlare){this.nightVision?.setFlashlightGlare(effect);}
 
@@ -2372,6 +2383,12 @@ export class Renderer3D {
     // First and third person share the same locked-mouse look contract. A
     // third-person camera must never require holding a mouse button to orbit.
     if (!this.isPointerLocked) return;
+    // Locking recenters the cursor. Some browsers report that warp as the
+    // first relative movement; it must not turn the player's camera.
+    if (this.ignoreNextLockedMouseMove) {
+      this.ignoreNextLockedMouseMove = false;
+      return;
+    }
     this.yaw -= e.movementX * this.sensitivity * this.lookSensitivityScale;
     this.pitch -= e.movementY * this.sensitivity * this.lookSensitivityScale;
     // Clamp pitch to avoid screen flipping
@@ -2413,7 +2430,9 @@ export class Renderer3D {
   };
 
   private onPointerLockChange = () => {
-    this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+    const locked = document.pointerLockElement === this.renderer.domElement;
+    if (locked && !this.isPointerLocked) this.ignoreNextLockedMouseMove = true;
+    this.isPointerLocked = locked;
     if (!this.isPointerLocked) {
       this.isShooting = false;
       this.isAimingDownSights = false;
@@ -2656,7 +2675,10 @@ export class Renderer3D {
 
     const adsDamp = 1 - this.adsProgress * 0.88;
 
-    const baseFov = engine.isDashing ? this.WORLD_DASH_FOV : this.WORLD_FOV + Math.max(this.presentationSprinting ? 7 : 0, this.presentationSuperjumpSpeed * 12);
+    const movementFovBoost = engine.isDashing ? this.WORLD_DASH_FOV - this.WORLD_FOV : Math.max(this.presentationSprinting ? 7 : 0, this.presentationSuperjumpSpeed * 12);
+    const baseFov = this.worldId === 'friends_frontier'
+      ? Math.min(FRIENDS_FOV_MAX, this.friendsFieldOfView + movementFovBoost)
+      : this.WORLD_FOV + movementFovBoost;
     const adsWorldFov = this.presentationScoped ? 28 : this.ADS_FOV;
     const adsViewmodelFov = this.presentationScoped ? 42 : this.VIEWMODEL_ADS_FOV;
     const targetWorldFov = THREE.MathUtils.lerp(baseFov, adsWorldFov, this.adsProgress);
@@ -2675,7 +2697,11 @@ export class Renderer3D {
       : this.presentationVerticalOffset - (this.presentationSliding ? 9 : 0);
     this.camera.position.set(
       player.position.x + kinetics.cameraTranslation.x + shakeX,
-      COOP_FIRST_PERSON_EYE_HEIGHT + eyeElevation + kinetics.cameraTranslation.y + shakeY,
+      Math.min(
+        firstPersonEyeHeight({ swimming: this.presentationSwimming }) + Math.min(eyeElevation, this.presentationVerticalOffset)
+          + kinetics.cameraTranslation.y + shakeY,
+        this.presentationCeiling - FIRST_PERSON_CEILING_MARGIN,
+      ),
       player.position.y + kinetics.cameraTranslation.z
     );
     this.camera.rotation.order = 'YXZ';
@@ -2796,7 +2822,7 @@ export class Renderer3D {
     this.playerPointLight.color.copy(primaryColor);
     this.playerPointLight.position.set(
       player.position.x,
-      COOP_FIRST_PERSON_EYE_HEIGHT + 6 + this.presentationVerticalOffset,
+      32 + this.presentationVerticalOffset, // Body light stays at its existing torso height.
       player.position.y,
     );
     this.vmGlowLight.color.copy(primaryColor);

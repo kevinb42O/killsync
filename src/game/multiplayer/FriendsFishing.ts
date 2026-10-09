@@ -62,7 +62,8 @@ export class FriendsFishing {
     this.makeRoom(now);
     const angle=input?input.aimAngle/65535*Math.PI*2:p?.angle??f.angle;
     const pitch=input?input.aimPitch/65535*Math.PI*.88-Math.PI*.44:0;
-    if(p){f.x=p.x+Math.cos(angle)*18;f.y=p.y+Math.sin(angle)*18;f.z=p.z+22;}
+    // Large catches must clear the ground before their first physics step.
+    if(p){f.x=p.x+Math.cos(angle)*18;f.y=p.y+Math.sin(angle)*18;f.z=p.z+22+FISH_GROUND_RADIUS*f.size;}
     f.phase='air';f.ownerId=undefined;f.heldTool=undefined;f.atMs=now;f.angle=angle;f.unattendedAt=undefined;
     const speed=throwing?210:12;f.vx=Math.cos(angle)*Math.cos(pitch)*speed;f.vy=Math.sin(angle)*Math.cos(pitch)*speed;f.vz=throwing?Math.sin(pitch)*speed+70:5;
   }

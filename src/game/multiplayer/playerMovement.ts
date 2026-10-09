@@ -20,7 +20,7 @@ export const COOP_JET_SOFT_CEILING = 120;
 export const COOP_JET_HARD_CEILING = 150;
 export const COOP_JET_THRUST_ACCELERATION = 2_400;
 /** Renderer contract used to keep jump arcs clear of visual-only overheads. */
-export const COOP_FIRST_PERSON_EYE_HEIGHT = 26;
+export { COOP_FIRST_PERSON_EYE_HEIGHT } from './FirstPersonEye';
 export const COOP_CAMERA_OVERHEAD_SAFETY_MARGIN = 90;
 export const PLAYER_COYOTE_MS = 100;
 export const PLAYER_JUMP_BUFFER_MS = 120;

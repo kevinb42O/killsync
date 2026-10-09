@@ -2,6 +2,7 @@ import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
 import { isCampfireSeat } from './FriendsCampfireSeats';
 import type { ScenicActor } from './FriendsScenicService';
 import type { MultiplayerInputFrame } from './protocol';
+import { firstPersonEyeZ } from './FirstPersonEye';
 
 export const CAMPFIRE_FUEL_PER_LOG = 30;
 export const CAMPFIRE_MAX_FUEL = 180;
@@ -11,7 +12,9 @@ export const MARSHMALLOW_TOOL = 10 as const;
 const CAMPFIRE_ROAST_REACH = 260;
 const CAMPFIRE_ROAST_RAY_LENGTH = 300;
 const CAMPFIRE_ROAST_HIT_RADIUS = 54;
-export type MarshmallowState = { toast:number; heat:number; roasting:boolean; burningMs:number; charred:boolean; serial:number; eatingMs?:number; refillMs?:number };
+export const MARSHMALLOW_FORWARD_REACH = 124;
+export type MarshmallowTip = { x:number; y:number; z:number };
+export type MarshmallowState = { toast:number; heat:number; roasting:boolean; burningMs:number; charred:boolean; serial:number; eatingMs?:number; refillMs?:number; reach?:MarshmallowTip };
 export type CampfireSnapshot = { equipped?:string[]; fuelSeconds:number; roasts:Record<string,MarshmallowState>; feedback?:Record<string,{message:string;until:number}> };
 export type CampfireAction = 'campfire_fuel'|'campfire_fresh'|'campfire_eat';
 const fresh=(serial=1):MarshmallowState=>({toast:0,heat:0,roasting:false,burningMs:0,charred:false,serial});
@@ -23,11 +26,12 @@ export function marshmallowLabel(state:MarshmallowState|undefined){
   return !state?'Fresh marshmallow':state.burningMs>0?'On fire!':state.charred?'Burnt to a crisp':state.toast>.78?'Dark brown':state.toast>.4?'Golden brown':state.toast>.12?'Getting toasty':'Fresh marshmallow';
 }
 export function aimingAtCampfire(player:ScenicActor,angle:number,pitch:number){
-  // Use the actual 3D aim ray against the fire volume. An angle-only check
-  // could accept a ray that passed well above/below the flames, while a
-  // horizontal cone was especially unreliable for standing players looking
-  // down at the fire. The eye and flame heights match the held-stick pose.
   if(!Number.isFinite(angle)||!Number.isFinite(pitch))return false;
+  if(!isCampfireSeat(player.friendsSeat)){
+    const tip=marshmallowReachTip(player,angle,pitch);
+    return Math.hypot(tip.x-FRIENDS_CAMPFIRE.x,tip.y-FRIENDS_CAMPFIRE.y,tip.z-(FRIENDS_CAMPFIRE.z+48))<=CAMPFIRE_ROAST_HIT_RADIUS;
+  }
+  // Preserve the seated aim-ray tolerance and its established roasting pose.
   const dx=Math.cos(angle)*Math.cos(pitch),dy=Math.sin(angle)*Math.cos(pitch),dz=Math.sin(pitch);
   const ox=player.x,oy=player.y,oz=player.z+45;
   const tx=FRIENDS_CAMPFIRE.x,ty=FRIENDS_CAMPFIRE.y,tz=FRIENDS_CAMPFIRE.z+42;
@@ -35,6 +39,12 @@ export function aimingAtCampfire(player:ScenicActor,angle:number,pitch:number){
   if(along<=0||along>CAMPFIRE_ROAST_RAY_LENGTH)return false;
   const missX=ox+dx*along-tx,missY=oy+dy*along-ty,missZ=oz+dz*along-tz;
   return missX*missX+missY*missY+missZ*missZ<=CAMPFIRE_ROAST_HIT_RADIUS*CAMPFIRE_ROAST_HIT_RADIUS;
+}
+/** Standing sticks follow the look direction at a finite reach. Rendering and
+ * cooking use this same tip, so looking at a distant fire cannot stretch it. */
+export function marshmallowReachTip(player:ScenicActor,angle:number,pitch:number):MarshmallowTip{
+  const horizontal=Math.cos(pitch)*MARSHMALLOW_FORWARD_REACH;
+  return {x:player.x+Math.cos(angle)*horizontal,y:player.y+Math.sin(angle)*horizontal,z:firstPersonEyeZ(player)+Math.sin(pitch)*MARSHMALLOW_FORWARD_REACH};
 }
 export function campfireRoastReach(player:ScenicActor){
   return campfireNearby(player)&&Math.abs(player.z-FRIENDS_CAMPFIRE.z)<64&&Math.hypot(player.x-FRIENDS_CAMPFIRE.x,player.y-FRIENDS_CAMPFIRE.y)<CAMPFIRE_ROAST_REACH;
@@ -66,7 +76,7 @@ export class FriendsCampfireSimulation {
     if(!marshmallowEquipped(player,tool)||player.lifeState!=='alive'||player.friendsDevFlight)return false;
     const state=this.roasts.get(player.id)??fresh();
     if(state.eatingMs||state.refillMs)return false;
-    state.eatingMs=CAMPFIRE_EAT_MS;state.roasting=false;state.burningMs=0;state.heat=0;
+    state.eatingMs=CAMPFIRE_EAT_MS;state.roasting=false;state.burningMs=0;state.heat=0;delete state.reach;
     this.roasts.set(player.id,state);return true;
   }
   update(dt:number,players:readonly (ScenicActor & {swimming?:boolean})[],inputs:ReadonlyMap<string,MultiplayerInputFrame>,now=0){
@@ -82,6 +92,7 @@ export class FriendsCampfireSimulation {
       const held=marshmallowEquipped(player,input?.friendsTool)&&!input?.friendsFishingBlocked&&!player.friendsDevFlight&&!player.swimming;
       if(held)this.equipped.push(player.id);
       let state=this.roasts.get(player.id);if(!state&&held){state=fresh();this.roasts.set(player.id,state);}if(!state)continue;
+      delete state.reach;
       if(state.refillMs){
         state.refillMs=Math.max(0,state.refillMs-seconds*1000);
         if(!state.refillMs)this.roasts.set(player.id,fresh(state.serial+1));
@@ -92,7 +103,9 @@ export class FriendsCampfireSimulation {
         if(!state.eatingMs){delete state.eatingMs;state.refillMs=CAMPFIRE_REFILL_MS;}
         continue;
       }
-      state.roasting=Boolean(held&&campfireRoastReach(player)&&input?.firing&&aimingAtCampfire(player,input.aimAngle/65535*Math.PI*2,input.aimPitch/65535*Math.PI*.88-Math.PI*.44));
+      const angle=(input?.aimAngle??0)/65535*Math.PI*2,pitch=(input?.aimPitch??32768)/65535*Math.PI*.88-Math.PI*.44;
+      if(held&&input?.firing&&!isCampfireSeat(player.friendsSeat))state.reach=marshmallowReachTip(player,angle,pitch);
+      state.roasting=Boolean(held&&campfireRoastReach(player)&&input?.firing&&aimingAtCampfire(player,angle,pitch));
       if(state.burningMs>0){state.burningMs=Math.max(0,state.burningMs-seconds*1000);if(!state.burningMs)state.charred=true;continue;}
       if(state.charred)continue;
       const target=state.roasting?campfireHeat(this.fuelSeconds):0;

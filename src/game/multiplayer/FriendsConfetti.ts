@@ -1,4 +1,5 @@
 import type { MultiplayerInputFrame } from './protocol';
+import { isRowboatSeat } from '../world/FriendsFishingDock';
 
 export const CONFETTI_TOOL = 11 as const;
 export type FriendsConfettiBurst = {
@@ -12,7 +13,7 @@ export type FriendsConfettiBurst = {
 };
 export type FriendsConfettiSnapshot = { bursts: FriendsConfettiBurst[] };
 
-type ConfettiActor = { id: string; x: number; y: number; z: number; lifeState: string; swimming?: boolean; friendsDevFlight?: boolean };
+type ConfettiActor = { id: string; x: number; y: number; z: number; lifeState: string; swimming?: boolean; friendsDevFlight?: boolean; friendsSeat?: {vehicleId:string;index:number} };
 const BURST_LIFETIME_MS = 3_800;
 const MAX_RECORDED_BURSTS = 24;
 
@@ -31,7 +32,7 @@ export class FriendsConfetti {
       const previous = this.lastFire.get(player.id) ?? 0;
       this.lastFire.set(player.id, Math.max(previous, action));
       if (action <= previous || input?.friendsTool !== CONFETTI_TOOL || player.lifeState !== 'alive'
-        || player.swimming || player.friendsDevFlight || input.friendsFishingBlocked) continue;
+        || player.swimming || player.friendsDevFlight || isRowboatSeat(player.friendsSeat) || input.friendsFishingBlocked) continue;
 
       // One burst per short interval prevents an input device from flooding snapshots.
       if (now - (this.lastBurstAt.get(player.id) ?? -Infinity) < 180) continue;

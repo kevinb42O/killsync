@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { firstPersonEyeZ } from './FirstPersonEye';
 import { FriendsHauling, cargoAnchor, collidePhysicalCargo, cargoFitsVehicle, cargoInDeliveryBay, haulingInteraction, securedCargoPose, ROPE_MAX_PULL, ROPE_MIN_LENGTH, type PhysicalCargo, type HaulingActor, type HaulingEnvironment } from './FriendsHauling';
 import { FRIENDS_DELIVERY_BAY as goal } from '../world/FriendsHaulingGoal';
 import type { FriendsVehicle } from './FriendsExpedition';
@@ -11,19 +12,26 @@ const environment = (extra:Partial<HaulingEnvironment>={}):HaulingEnvironment =>
 const system = (cargo=core(),delivered=false) => new FriendsHauling({version:1,cargo:[cargo],delivered});
 const deck = (extra:Partial<FriendsVehicle>={}):FriendsVehicle => ({id:'sunline-0',kind:'train',x:1000,y:1000,z:14,angle:0,length:180,width:112,...extra});
 
+// Aim at the same side-face attachment from the raised viewpoint.
+const aimAtCore = (p: HaulingActor, x: number) => {
+  const distance = Math.max(1, Math.abs(p.x - 1000) - 36);
+  const dz = (26 - firstPersonEyeZ(p)) / distance, length = Math.hypot(1, dz);
+  return { x: x / length, y: 0, z: dz / length };
+};
+
 describe('physical salvage hauling',()=>{
   it('adds the rope tool to the sanitized network schema',()=>{
     expect(clampInputFrame(input()).friendsTool).toBe(5);
-    expect(clampInputFrame(input({friendsTool:99 as 5})).friendsTool).toBe(10);
+    expect(clampInputFrame(input({friendsTool:99 as 5})).friendsTool).toBe(11);
   });
   it('attaches at the hit surface and releases on another primary action',()=>{
-    const h=system(),p=actor();h.shoot(p,{x:-1,y:0,z:0},environment(),0);
-    const r=h.snapshot().ropes[0];expect(r.anchorX).toBe(36);expect(r.anchorZ).toBe(26);
+    const h=system(),p=actor();h.shoot(p,aimAtCore(p,-1),environment(),0);
+    const r=h.snapshot().ropes[0];expect(r.anchorX).toBe(36);expect(r.anchorZ).toBeCloseTo(26);
     expect(cargoAnchor(h.getCargo()[0],r).x).toBe(1036);
-    h.shoot(p,{x:-1,y:0,z:0},environment(),1);expect(h.snapshot().ropes).toHaveLength(0);
+    h.shoot(p,aimAtCore(p,-1),environment(),1);expect(h.snapshot().ropes).toHaveLength(0);
   });
   it('does not push with a slack rope and never exceeds player pulling strength',()=>{
-    const h=system(),p=actor(),env=environment();h.shoot(p,{x:-1,y:0,z:0},env,0);
+    const h=system(),p=actor(),env=environment();h.shoot(p,aimAtCore(p,-1),env,0);
     h.update(50,50,[p],new Map([[p.id,input()]]),env);
     expect(h.getCargo()[0].x).toBeCloseTo(1000,1);expect(h.snapshot().ropes[0].tension).toBe(0);
     p.x+=100;h.update(50,100,[p],new Map([[p.id,input({sprinting:true})]]),env);
@@ -37,7 +45,7 @@ describe('physical salvage hauling',()=>{
   it('makes aligned teammates haul substantially faster than one player',()=>{
     const pull=(count:number)=>{
       const h=system(),env=environment(),players=Array.from({length:count},(_,i)=>actor(String(i),{y:1000+(count===1?0:i===0?-14:14)}));
-      for(const p of players)h.shoot(p,{x:-1,y:0,z:0},env,0);
+      for(const p of players)h.shoot(p,aimAtCore(p,-1),env,0);
       for(let t=0;t<2000;t+=50){for(const p of players)p.x+=18;h.update(50,t,players,new Map(players.map(p=>[p.id,input()])),env);}
       return h.getCargo()[0].x-1000;
     };
@@ -45,25 +53,25 @@ describe('physical salvage hauling',()=>{
   });
   it('cancels opposing pulls and turns when attached off centre',()=>{
     const h=system(),env=environment(),a=actor('a'),b=actor('b',{x:850});
-    h.shoot(a,{x:-1,y:0,z:0},env,0);h.shoot(b,{x:1,y:0,z:0},env,0);a.x+=40;b.x-=40;
+    h.shoot(a,aimAtCore(a,-1),env,0);h.shoot(b,aimAtCore(b,1),env,0);a.x+=40;b.x-=40;
     h.update(50,50,[a,b],new Map([[a.id,input()],[b.id,input()]]),env);expect(h.getCargo()[0].x).toBeCloseTo(1000,1);
-    const turn=system(),p=actor('c',{y:1020});turn.shoot(p,{x:-1,y:0,z:0},env,0);p.x+=40;
+    const turn=system(),p=actor('c',{y:1020});turn.shoot(p,aimAtCore(p,-1),env,0);p.x+=40;
     for(let t=0;t<500;t+=50){p.x+=12;turn.update(50,t,[p],new Map([[p.id,input()]]),env);}expect(Math.abs(turn.getCargo()[0].angle)).toBeGreaterThan(.001);
   });
   it('reels while aiming and keeps a positive minimum rope length',()=>{
-    const h=system(),p=actor(),env=environment();h.shoot(p,{x:-1,y:0,z:0},env,0);
+    const h=system(),p=actor(),env=environment();h.shoot(p,aimAtCore(p,-1),env,0);
     const initial=h.snapshot().ropes[0].length;
     for(let t=0;t<3000;t+=50)h.update(50,t,[p],new Map([[p.id,input({aiming:true})]]),env);
     expect(h.snapshot().ropes[0].length).toBeLessThan(initial);expect(h.snapshot().ropes[0].length).toBeGreaterThanOrEqual(ROPE_MIN_LENGTH);
-    const close=system();close.shoot(actor('near',{x:1040}),{x:-1,y:0,z:0},env,0);expect(close.snapshot().ropes[0].length).toBe(ROPE_MIN_LENGTH);
+    const close=system(),near=actor('near',{x:1040});close.shoot(near,aimAtCore(near,-1),env,0);expect(close.snapshot().ropes[0].length).toBe(ROPE_MIN_LENGTH);
   });
   it('feeds rope out while crouching and aiming, without exceeding its reach',()=>{
-    const h=system(),p=actor(),env=environment();h.shoot(p,{x:-1,y:0,z:0},env,0);const before=h.snapshot().ropes[0].length;
+    const h=system(),p=actor(),env=environment();h.shoot(p,aimAtCore(p,-1),env,0);const before=h.snapshot().ropes[0].length;
     h.update(50,50,[p],new Map([[p.id,input({aiming:true,sliding:true})]]),env);expect(h.snapshot().ropes[0].length).toBeGreaterThan(before);
     for(let t=100;t<8000;t+=50)h.update(50,t,[p],new Map([[p.id,input({aiming:true,sliding:true})]]),env);expect(h.snapshot().ropes[0].length).toBe(480);
   });
   it('stalls the reel under obstruction without winding up unlimited stretch or displacing a braced operator',()=>{
-    const h=system(),p=actor(),env=environment();h.shoot(p,{x:-1,y:0,z:0},env,0);
+    const h=system(),p=actor(),env=environment();h.shoot(p,aimAtCore(p,-1),env,0);
     const obstructed=environment({blocked:()=>true});
     for(let t=0;t<5000;t+=50)h.update(50,t,[p],new Map([[p.id,input({aiming:true})]]),obstructed);
     const rope=h.snapshot().ropes[0],anchor=cargoAnchor(h.getCargo()[0],rope);
@@ -78,13 +86,13 @@ describe('physical salvage hauling',()=>{
     h.interact({...p,x:before.x,y:before.y,z:46},environment({vehicles:[{...v,x:1050,z:46,angle:Math.PI/2}]}),100);expect(before.secured).toBeUndefined();
   });
   it('rejects shots through terrain and stops force when an attached rope is obstructed',()=>{
-    const h=system(),p=actor();h.shoot(p,{x:-1,y:0,z:0},environment({blocked:()=>true}),0);expect(h.snapshot().ropes).toHaveLength(0);
-    h.shoot(p,{x:-1,y:0,z:0},environment(),1);p.x+=40;
+    const h=system(),p=actor();h.shoot(p,aimAtCore(p,-1),environment({blocked:()=>true}),0);expect(h.snapshot().ropes).toHaveLength(0);
+    h.shoot(p,aimAtCore(p,-1),environment(),1);p.x+=40;
     h.update(50,50,[p],new Map([[p.id,input()]]),environment({blocked:()=>true}));
     expect(h.getCargo()[0].x).toBeCloseTo(1000,1);expect(h.snapshot().ropes[0]).toMatchObject({blocked:true,tension:0});
   });
   it('cannot tow a load through a solid wall',()=>{
-    const h=system(),p=actor(),env=environment({collide:point=>point.x>1040,colliders:()=>[{x:1056,y:1000,z:0,w:32,d:600,h:320}]});h.shoot(p,{x:-1,y:0,z:0},env,0);
+    const h=system(),p=actor(),env=environment({collide:point=>point.x>1040,colliders:()=>[{x:1056,y:1000,z:0,w:32,d:600,h:320}]});h.shoot(p,aimAtCore(p,-1),env,0);
     for(let t=0;t<2000;t+=50){p.x+=20;h.update(50,t,[p],new Map([[p.id,input()]]),env);}
     expect(h.getCargo()[0].x).toBeLessThanOrEqual(1005);
   });
@@ -100,7 +108,7 @@ describe('physical salvage hauling',()=>{
     expect(h.getCargo()[0].z).toBeCloseTo(-64,1);
   });
   it.each(['stale','disconnected','dead','flight','tool change','pilot'])('releases ropes for %s players',reason=>{
-    const h=system(),p=actor(),env=environment();h.shoot(p,{x:-1,y:0,z:0},env,0);
+    const h=system(),p=actor(),env=environment();h.shoot(p,aimAtCore(p,-1),env,0);
     if(reason==='dead')p.lifeState='eliminated';if(reason==='flight')p.friendsDevFlight=true;
     if(reason==='pilot')env.vehicles=[deck({kind:'aircraft',pilotId:p.id})];
     h.update(50,50,reason==='disconnected'?[]:[p],reason==='stale'?new Map():new Map([[p.id,input({friendsTool:reason==='tool change'?0:5})]]),env);

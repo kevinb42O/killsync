@@ -9,7 +9,7 @@ import { SALVAGE_CORE_SPAWN, securedCargoPose, cargoInDeliveryBay } from './Frie
 import { FRIENDS_DELIVERY_BAY } from '../world/FriendsHaulingGoal';
 import { LocalPlayerPrediction } from './LocalPlayerPrediction';
 const seeds=[{id:'host',label:'Host',color:'#fff'},{id:'guest',label:'Friend',color:'#f90'}];
-const input=(sequence:number,extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence,clientTime:0,movement:0,aimAngle:quantizeAngle(0),aimPitch:quantizePitch(0),friendsTool:5,selectedSlot:0,firing:false,fireActionId:0,interactActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
+const input=(sequence:number,extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence,clientTime:0,movement:0,aimAngle:quantizeAngle(0),aimPitch:quantizePitch(-Math.atan2(24,84)),friendsTool:5,selectedSlot:0,firing:false,fireActionId:0,interactActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
 function flatFixture(){
   const s=railSimulation(seeds),v=s.createSnapshot().friends!.vehicles[0],c=s['friends']!.hauling.getCargo()[0],p=s['players'].get('host')!;
   Object.assign(c,{x:v.x,y:v.y+200,z:0,angle:0,vx:0,vy:0,vz:0,spin:0,secured:undefined});

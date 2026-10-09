@@ -5,6 +5,7 @@ import { cloneFriendsCharacterModel, createFriendsCharacterGrip, createFriendsCh
 import { mountFriendsCharacter, updateFriendsCharacter, friendsCharacterHandPoint } from './FriendsCharacterVisuals';
 import { createCoopOperatorRig, disposeCoopOperatorRig } from './coopOperatorVisuals';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
+import { lengthenFirstPersonArms } from './FriendsFirstPersonArms';
 
 vi.mock('./FriendsCharacterModel',async importOriginal=>{
   const actual=await importOriginal<typeof import('./FriendsCharacterModel')>();
@@ -15,6 +16,29 @@ const create=(color:'yellow'|'red'='yellow')=>createFriendsCharacterModel(data,n
 const player=(overrides:Partial<CoopPlayerSnapshot>={})=>({id:'p',color:'#fbbf24',x:0,y:0,z:0,angle:0,lifeState:'alive',sprinting:false,crouching:false,sliding:false,weaponStates:[],selectedSlot:0,health:100,maxHealth:100,...overrides} as CoopPlayerSnapshot);
 
 describe('imported Big Walk characters',()=>{
+  it('keeps remote arm vertices intact when first-person arms are rebound',()=>{
+    const source=create(),remote=cloneFriendsCharacterModel(source),local=cloneFriendsCharacterModel(source);
+    const vertices=(model:ReturnType<typeof create>)=>{
+      model.root.updateMatrixWorld(true);
+      return [2,3].map(index=>{
+        const mesh=model.parts[index].children[0] as THREE.SkinnedMesh;
+        mesh.skeleton.update();
+        return Array.from({length:mesh.geometry.getAttribute('position').count},(_,i)=>mesh.getVertexPosition(i,new THREE.Vector3()).toArray());
+      });
+    };
+    const original=vertices(source),before=vertices(remote);
+    lengthenFirstPersonArms(local);
+    expect(vertices(source)).toEqual(original);
+    expect(vertices(remote)).toEqual(before);
+    expect(vertices(cloneFriendsCharacterModel(source))).toEqual(before);
+    for(const index of [2,3]){
+      const sourceMesh=source.parts[index].children[0] as THREE.SkinnedMesh;
+      const remoteMesh=remote.parts[index].children[0] as THREE.SkinnedMesh;
+      expect(remoteMesh.skeleton.boneInverses).not.toBe(sourceMesh.skeleton.boneInverses);
+      expect(remoteMesh.skeleton.boneInverses[0]).not.toBe(sourceMesh.skeleton.boneInverses[0]);
+      expect(remoteMesh.geometry).toBe(sourceMesh.geometry);
+    }
+  });
   it('gives both outward-facing pupils the opaque pupil atlas patch for every head colour',()=>{
     for(const colour of FRIENDS_CHARACTER_COLOURS){
       const model=createFriendsCharacterModel(data,new THREE.MeshStandardMaterial(),colour);

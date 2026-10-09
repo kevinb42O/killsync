@@ -1,3 +1,4 @@
+import { FRIENDS_FIRST_PERSON_ARM_REACH } from './FriendsFirstPersonArms';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -127,6 +128,11 @@ export function loadFriendsCharacterModel(head:FriendsCharacterColour='yellow') 
 /** Instances share immutable geometry/atlas, but every animated joint is local. */
 export function cloneFriendsCharacterModel(source:FriendsCharacterModel):FriendsCharacterModel {
   const root=cloneSkeleton(source.root) as THREE.Group,basis=root.children[0] as THREE.Group;
+  // SkeletonUtils clones bones but shares the inverse-bind array. Rebinding
+  // local first-person arms must not rewrite the source or another avatar.
+  root.traverse(node=>{
+    if(node instanceof THREE.SkinnedMesh)node.skeleton.boneInverses=node.skeleton.boneInverses.map(matrix=>matrix.clone());
+  });
   return {...source,root,basis,parts:basis.children as THREE.Group[]};
 }
 
@@ -137,6 +143,7 @@ export function createFriendsCharacterGrip(source:FriendsCharacterModel, side:'l
   const part=source.parts[side==='left'?2:3],geometry=(part.children[0] as THREE.Mesh).geometry.clone();
   const palm=new THREE.Vector3().fromArray(part.userData.palm),oldAxis=palm.clone().negate().normalize();
   const target=hold==='flashlight'?new THREE.Vector3(-.24,1.30,.55):new THREE.Vector3(hold==='inward'?.28:.34,-.55,1.35);
+  target.multiplyScalar(FRIENDS_FIRST_PERSON_ARM_REACH);
   const nextAxis=target.clone().normalize(),turn=new THREE.Quaternion().setFromUnitVectors(oldAxis,nextAxis),positions=geometry.getAttribute('position'),point=new THREE.Vector3();
   // Preserve the 3×3×3 hand. Only the connected limb behind its wrist is
   // lengthened; a whole-mesh stretch would turn the palm into a long plank.

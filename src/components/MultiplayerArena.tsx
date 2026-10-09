@@ -31,6 +31,7 @@ import { FriendsHUD } from './FriendsHUD';
 import { FriendsCampfireControls } from './FriendsCampfireControls';
 import { FriendsFishingCatchLog } from './FriendsFishingCatchLog';
 import { FriendsPauseMenu } from './FriendsPauseMenu';
+import { FriendsFramePacer } from '../game/rendering/FriendsFramePacer';
 import { neutralizeMenuInput, readGamePreferences, saveGamePreferences, type LocalGamePreferences } from '../game/LocalGamePreferences';
 import { friendsAudio } from '../game/FriendsAudio';
 import { FriendsHaulingBriefing } from './FriendsHaulingBriefing';
@@ -534,6 +535,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
 
   const addChatMessage = (message: CoopChatMessage) => {
     setChatMessages(history => appendCoopChatMessage(history, message));
+    if (launch.gameMode === 'friends') rendererRef.current?.showChatMessage(message);
   };
 
   const addAdminLog = (tone: 'input' | 'ok' | 'error' | 'info', text: string) => {
@@ -2518,6 +2520,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
 
     let animationFrame = 0;
     let lastTime = performance.now();
+    const renderPacer = new FriendsFramePacer(lastTime);
     let accumulator = 0;
     let stateAccumulator = 0;
     let inputAccumulator = 0;
@@ -2565,7 +2568,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     hostClock?.start();
     const frame = (now: number) => {
       const frameElapsed = now - lastTime;
-      const elapsed = Math.min(100, frameElapsed);
+      const elapsed = Math.max(0, Math.min(100, frameElapsed));
       lastTime = now;
       accumulator += elapsed;
       inputAccumulator += elapsed;
@@ -2684,16 +2687,19 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         Boolean(localJetpack?.lifeState === 'alive' && localJetpack.jetActive),
         (localJetpack?.jetFuel ?? 100) / 100,
       );
-      const renderStartedAt = performance.now();
-      renderer.setFriendsWorkPlane(inputRef.current.friendsWorkPlane);
-      renderer.setFriendsEffects(friendsEffectsRef.current);
-      if(!gesturesAllowed()){gestureControlsRef.current.clear();inputRef.current.friendsArms=0;}
-      renderer.setFriendsArms(inputRef.current.friendsArms||0);
-      const shovelInput = friendsToolInput(inputRef.current.friendsTool || 0, inputRef.current.firing, Boolean(inputRef.current.aiming));
-      const toolFiring=inputRef.current.friendsTool===MARSHMALLOW_TOOL?inputRef.current.firing:shovelInput.held;
-      renderer.setFriendsTool(buildModeRef.current ? 0 : inputRef.current.friendsTool || 0, toolFiring,launch.role==='host'||frameSnapshot?.friends?.building?.guestsCanBuild!==false,shovelInput.fill);
-      renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId, latestLifeState === 'alive', buildModeRef.current && launch.gameMode === 'friends');
-      if (performanceMonitor?.isVisible) performanceMonitor.recordFrame(frameElapsed, performance.now() - renderStartedAt, renderer.getPerformanceStats());
+      const renderElapsed = renderPacer.takeFrame(now, launch.gameMode === 'friends' ? preferencesRef.current.frameLimit ?? 0 : 0);
+      if (renderElapsed !== undefined) {
+        const renderStartedAt = performance.now();
+        renderer.setFriendsWorkPlane(inputRef.current.friendsWorkPlane);
+        renderer.setFriendsEffects(friendsEffectsRef.current);
+        if(!gesturesAllowed()){gestureControlsRef.current.clear();inputRef.current.friendsArms=0;}
+        renderer.setFriendsArms(inputRef.current.friendsArms||0);
+        const shovelInput = friendsToolInput(inputRef.current.friendsTool || 0, inputRef.current.firing, Boolean(inputRef.current.aiming));
+        const toolFiring=inputRef.current.friendsTool===MARSHMALLOW_TOOL?inputRef.current.firing:shovelInput.held;
+        renderer.setFriendsTool(buildModeRef.current ? 0 : inputRef.current.friendsTool || 0, toolFiring,launch.role==='host'||frameSnapshot?.friends?.building?.guestsCanBuild!==false,shovelInput.fill);
+        renderer.render(frameSnapshot, launch.localPlayerId, Math.min(100, renderElapsed), presentationTargetId, latestLifeState === 'alive', buildModeRef.current && launch.gameMode === 'friends');
+        if (performanceMonitor?.isVisible) performanceMonitor.recordFrame(renderElapsed, performance.now() - renderStartedAt, renderer.getPerformanceStats());
+      }
       if (damageFlashExpiresAtRef.current > 0 && now > damageFlashExpiresAtRef.current + 40) {
         damageFlashExpiresAtRef.current = 0;
         if (damageFlashTimerRef.current !== null) {

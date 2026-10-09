@@ -22,6 +22,38 @@ function setup() {
 }
 
 describe('Friends night vision goggles', () => {
+  it('switches HDR anti-aliasing at frame boundaries without resetting goggles or leaking targets', () => {
+    const { goggles, camera, renderer } = setup();
+    goggles.toggle(); goggles.beginFrame(renderer, camera, 100);
+    const initial = renderer.getRenderTarget()!;
+    const disposed = vi.fn(); initial.addEventListener('dispose', disposed);
+    expect(initial.samples).toBe(2);
+    goggles.setSamples(0); // Changing the preference cannot invalidate an active frame.
+    expect(disposed).not.toHaveBeenCalled();
+    goggles.endFrame(renderer);
+    const exposure = goggles['exposureTargets'][goggles['exposureIndex']];
+    goggles.beginFrame(renderer, camera, 16);
+    const singleSample = renderer.getRenderTarget()!;
+    expect(disposed).toHaveBeenCalledTimes(1);
+    expect(singleSample.samples).toBe(0); expect(singleSample).not.toBe(initial);
+    expect(goggles['exposureTargets'][goggles['exposureIndex']]).toBe(exposure);
+    expect(goggles['exposureInitialized']).toBe(true); expect(goggles.equipped).toBe(true);
+    goggles.endFrame(renderer);
+    goggles.setSamples(0); goggles.beginFrame(renderer, camera, 16);
+    expect(renderer.getRenderTarget()).toBe(singleSample); goggles.endFrame(renderer);
+    const released = vi.fn(); singleSample.addEventListener('dispose', released);
+    goggles.setSamples(4); goggles.beginFrame(renderer, camera, 16);
+    expect(renderer.getRenderTarget()!.samples).toBe(4); expect(released).toHaveBeenCalledTimes(1);
+    goggles.endFrame(renderer);
+    expect(renderer.initRenderTarget).toHaveBeenCalledTimes(2);
+    expect(renderer.getRenderTarget()).toBeNull(); goggles.dispose();
+  });
+  it('bounds requested anti-aliasing to the GPU capability', () => {
+    const { goggles, camera, renderer } = setup();
+    Object.assign(renderer, { capabilities: { maxSamples: 2 } });
+    goggles.setSamples(4); goggles.beginFrame(renderer, camera, 16);
+    expect(renderer.getRenderTarget()!.samples).toBe(2); goggles.endFrame(renderer); goggles.dispose();
+  });
   it('keeps a stable HDR path and zero illumination while unequipped, skipping inactive shadow/meter work', () => {
     const { goggles, camera, renderer, infrared } = setup();
     expect(goggles.equipped).toBe(false);

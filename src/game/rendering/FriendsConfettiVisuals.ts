@@ -105,6 +105,7 @@ export class FriendsConfettiVisuals {
   dispose() {
     this.disposed = true;
     this.mesh.removeFromParent();
+    this.mesh.dispose();
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
   }

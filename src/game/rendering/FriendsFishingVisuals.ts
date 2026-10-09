@@ -7,6 +7,7 @@ import { acquireEquipmentLighting, frameHeldEquipment, loadFriendsGrip } from '.
 import { createFishingFish, loadFishingFish, loadFishingRod } from './FriendsFishingAssets';
 import { FriendsFishingLine } from './FriendsFishingLine';
 import { friendsWaterAt } from '../world/FriendsWaterSurface';
+import { groundFishMotion } from './FriendsFishGroundAnimation';
 
 type Rod={root:THREE.Group;tip?:THREE.Object3D;mesh?:THREE.Mesh;arm?:THREE.Mesh;armRequested?:boolean;line:FriendsFishingLine;float:THREE.Group;ring:THREE.Mesh;phase:string;serial:number;local:boolean};
 type Fish={root:THREE.Group;model?:ReturnType<typeof createFishingFish>;action?:THREE.AnimationAction;clip?:string;id:number;phase:string;animationAt:number};
@@ -86,8 +87,14 @@ export class FriendsFishingVisuals {
     if(!f.model)return;
     const name=state?.phase==='dry'?'Out_Of_Water':state?.phase==='held'?'Swimming_Normal':'Swimming_Fast';
     if(name!==f.clip){
-      const clip=f.model.clips.find(c=>c.name.endsWith('|'+name));if(clip){f.action?.fadeOut(.12);f.action=f.model.mixer.clipAction(clip);f.action.reset().fadeIn(.12).play();f.action.setEffectiveTimeScale(state?.phase==='held'?.32:1);}f.clip=name;
+      const clip=f.model.clips.find(c=>c.name.endsWith('|'+name));if(clip){
+        // Stop airborne root motion immediately when the fish lands.
+        if(state?.phase==='dry')f.action?.stop();else f.action?.fadeOut(.12);
+        f.action=f.model.mixer.clipAction(clip);f.action.reset().setEffectiveWeight(state?.phase==='dry'?.45:1).fadeIn(.2).play();
+        f.action.setEffectiveTimeScale(state?.phase==='held'?.32:1);
+      }f.clip=name;
     }
+    if(state?.phase==='dry')f.action?.setEffectiveTimeScale(groundFishMotion(now,state.id).speed);
     const distance=f.root.parent===this.held?0:f.root.position.distanceTo(this.cameraPoint),interval=distance>900?125:distance>450?66:0;
     if(now-f.animationAt>=interval){f.model.mixer.update(Math.min(250,f.animationAt?now-f.animationAt:dt)/1000);f.animationAt=now;}
   }
@@ -129,15 +136,14 @@ export class FriendsFishingVisuals {
       if(local&&s.phase==='held'){
         if(f.root.parent!==this.held)this.held.add(f.root);this.held.visible=true;this.lighting.setVisible(true);
         const tangent=Math.tan(THREE.MathUtils.degToRad((this.camera?.fov??98)/2)),scale=tangent/Math.tan(THREE.MathUtils.degToRad(49)),narrow=Math.min(1,(this.camera?.aspect??16/9)/1.25);
-        this.held.position.set(0,-.46*scale*narrow,-1.08);this.held.scale.set(scale*narrow,scale*narrow,1);f.root.position.set(0,.035+Math.sin(now*.003)*.006,-.02);f.root.scale.setScalar(.022*s.size);f.root.rotation.set(.04,0,.025*Math.sin(now*.004));
+        this.held.position.set(0,-.46*scale*narrow,-1.08);this.held.scale.set(scale*narrow,scale*narrow,1);f.root.position.set(0,.11+Math.sin(now*.003)*.006,-.02);f.root.scale.setScalar(.022*s.size);f.root.rotation.set(.04,Math.PI/2,.025*Math.sin(now*.004));
       }else{
         if(f.root.parent!==this.group)this.group.add(f.root);
         if(owner){if(!handPoint(owner.id,this.end,true))this.end.set(owner.x,owner.z+25,owner.y);}
         else this.end.set(s.x,s.z,s.y);
-        if(f.phase!==s.phase||f.root.position.distanceTo(this.end)>100)f.root.position.copy(this.end);else f.root.position.lerp(this.end,1-Math.exp(-dt*.018));
+        if(s.phase==='dry'||f.phase!==s.phase||f.root.position.distanceTo(this.end)>100)f.root.position.copy(this.end);else f.root.position.lerp(this.end,1-Math.exp(-dt*.018));
         let fade=s.phase==='fading'?Math.max(.001,1-(now-s.atMs)/900):1;
-        f.root.scale.setScalar(s.size*fade);f.root.rotation.set(0,Math.PI/2-s.angle,s.phase==='dry'?Math.PI/2+.07*Math.sin(now*.015+s.id):s.phase==='air'?Math.sin(now*.012)*.35:0);
-        if(s.phase==='dry')f.root.position.y+=Math.pow(Math.max(0,Math.sin(now*.009+s.id)*Math.sin(now*.0037+s.id)),3)*3*s.size;
+        f.root.scale.setScalar(s.size*fade);f.root.rotation.set(0,Math.PI/2-s.angle,s.phase==='dry'?Math.PI/2+groundFishMotion(now,s.id).roll:s.phase==='air'?Math.sin(now*.012)*.35:0);
         if(s.phase==='dry'&&shadowCount<40){this.dropPosition.set(s.x,s.z-FISH_GROUND_RADIUS*s.size+.2,s.y);this.dropScale.set(28*s.size,1,22*s.size);this.dropMatrix.compose(this.dropPosition,this.dropRotation,this.dropScale);this.shadows.setMatrixAt(shadowCount++,this.dropMatrix);}
       }
       if(f.phase!==s.phase&&local&&s.phase==='held')friendsAudio.play('waterStep',.15,100);

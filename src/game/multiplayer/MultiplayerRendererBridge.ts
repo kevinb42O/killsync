@@ -1,3 +1,4 @@
+import { firstPersonEyeZ } from './FirstPersonEye';
 import { FriendsBirdVisuals } from '../rendering/FriendsBirdVisuals';
 import { FriendsStoneVisuals } from '../rendering/FriendsStoneVisuals';
 import { FriendsConfettiVisuals } from '../rendering/FriendsConfettiVisuals';
@@ -7,7 +8,7 @@ import { FriendsUnderwaterVisuals } from '../rendering/FriendsUnderwaterVisuals'
 import { isRowboatSeat, rowboatStrokePhase } from './FriendsRowboat';
 import { FriendsSwitchReach } from '../rendering/FriendsSwitchReach';
 import { FriendsGestureViewmodels } from '../rendering/FriendsGestureViewmodels';
-import { isQuietSeat, insideStillwater, RETREAT_SITES } from '../world/FriendsRetreatSites';
+import { isQuietSeat, insideStillwater, RETREAT_SITES, retreatCeiling } from '../world/FriendsRetreatSites';
 import { cargoBounds } from './FriendsCargoPose';
 import { craneCameraPose, DEFAULT_CRANE_CAMERA, type CraneCameraOptions } from './FriendsCraneCamera';
 import { FriendsInteractionVisuals } from '../rendering/FriendsInteractionVisuals';
@@ -23,9 +24,9 @@ import type { FriendsEnvironmentChange } from '../world/FriendsEnvironmentPrevie
 import { FriendsHaulingVisuals } from '../rendering/FriendsHaulingVisuals';
 import type { FrontierTool } from './FriendsFrontier';
 import { FriendsBuildVisuals } from '../rendering/FriendsBuildVisuals';
-import { getFriendsBuildPose, raycastFriendsBuild, friendsBuildFloor, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildPose } from './FriendsBuilding';
+import { getFriendsBuildPose, raycastFriendsBuild, friendsBuildFloor, friendsBuildCeiling, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildPose } from './FriendsBuilding';
 import { FriendsVehicleVisuals } from '../rendering/FriendsWorldVisuals';
-import { carryOnVehicle, friendsVehicleFloor, type FriendsVehicle } from './FriendsExpedition';
+import { carryOnVehicle, friendsVehicleFloor, friendsVehicleCeiling, type FriendsVehicle } from './FriendsExpedition';
 import { isCoopSpell } from '../combat/coopSpells';
 import { CoopArcanaVisuals } from '../rendering/CoopArcanaVisuals';
 import { RealityBreachVisuals } from '../rendering/RealityBreachVisuals';
@@ -56,6 +57,8 @@ import {
   disposeCoopOperatorRig,
 } from '../rendering/coopOperatorVisuals';
 import { FriendsRemoteToolVisuals } from '../rendering/FriendsRemoteToolVisuals';
+import { FriendsChatBubbles } from '../rendering/FriendsChatBubbles';
+import type { CoopChatMessage } from './CoopChat';
 import { mountFriendsCharacter, updateFriendsCharacter, friendsCharacterHandPoint } from '../rendering/FriendsCharacterVisuals';
 import { FriendsMarshmallowVisuals } from '../rendering/FriendsMarshmallowVisuals';
 import { MARSHMALLOW_TOOL } from './FriendsCampfireSimulation';
@@ -89,6 +92,11 @@ type PassiveMeshData = {
 };
 const FALL_PRESENTATION_MS = 5_000;
 const FALL_PRESENTATION_GRAVITY = 145;
+
+/** Confetti stays in the palm while sitting, even where other equipment is put away. */
+export function shouldShowFriendsGestureHands(tool: FrontierTool, seat: { vehicleId: string; index: number } | undefined) {
+  return tool === CONFETTI_TOOL || (tool === 6 && !isQuietSeat(seat));
+}
 
 /** The first-person owner normally has no world rig. Once their camera is
  * spectating a teammate, their own downed body must join the world rigs so it
@@ -186,6 +194,7 @@ export class MultiplayerRendererBridge {
   private readonly projectileImpactVisuals: ProjectileImpactVisuals;
   private readonly remoteTools = new FriendsRemoteToolVisuals();
   private readonly remotePlayers = new Map<string, CoopOperatorRig>();
+  private chatBubbles?: FriendsChatBubbles;
   private readonly passiveMeshes = new Map<string, THREE.Group>();
   private readonly arcanaVisuals = new CoopArcanaVisuals();
   private readonly localFirearm = new CoopFirearmVisualRig(true);
@@ -320,6 +329,9 @@ export class MultiplayerRendererBridge {
     const renderer = this.renderer.renderer;
     renderer.setPixelRatio(this.nativePixelRatio * settings.renderScale);
     if (this.worldId === 'friends_frontier') {
+      this.renderer.friendsFieldOfView = settings.fieldOfView;
+      const samples = this.renderer.setFriendsAntialiasing(settings.antialiasing ?? 'auto');
+      this.frontierVisuals?.setMultisampled(samples > 0);
       // The sun preference must not disable the depth atlas used by remote
       // flashlights (or the local beam's occlusion).
       renderer.shadowMap.enabled = true;
@@ -362,11 +374,20 @@ export class MultiplayerRendererBridge {
   getPerformanceStats() { return { ...this.renderer.getPerformanceStats(), campfireDrawCalls:this.frontierVisuals?.campfireDrawCalls??0, forestDrawCalls:this.frontierVisuals?.forestStats.draws??0, visibleForestTrees:this.frontierVisuals?.forestStats.trees??0, interaction: {...this.interactionVisuals.stats,terrain:this.frontierVisuals?.terrainStats} }; }
   setFriendsWorkPlane(plane: MiningWorkPlane | undefined) { this.workPlane=plane; }
   setFriendsEffects(profile: 'full' | 'subtle' | 'off') { this.interactionVisuals.setEffects(profile);this.frontierVisuals?.setEffects(profile); }
+  private friendsEyeCeiling(snapshot: CoopSnapshot | null, actor: { x: number; y: number; z: number }) {
+    if (!snapshot?.friends) return Infinity;
+    return Math.min(
+      friendsVehicleCeiling(snapshot.friends.vehicles, actor.x, actor.y, actor.z) ?? Infinity,
+      friendsBuildCeiling(snapshot.friends.building?.pieces || [], actor.x, actor.y, actor.z) ?? Infinity,
+      retreatCeiling(actor, snapshot.friends.retreats?.active || []) ?? Infinity,
+      this.getFriendsTerrain()?.ceiling(actor.x, actor.y, actor.z) ?? Infinity,
+    );
+  }
   private playerInteractionRay(snapshot: CoopSnapshot | null) {
     const actor = snapshot?.players.find(p => p.id === this.interactionPlayerId) || snapshot?.players[0];
     if (!actor) return this.creativeRay();
     const angle = this.getAimAngle(), pitch = this.getAimPitch();
-    return { x: actor.x, y: actor.y, z: actor.z + 26, dx: Math.cos(angle) * Math.cos(pitch), dy: Math.sin(angle) * Math.cos(pitch), dz: Math.sin(pitch) };
+    return { x: actor.x, y: actor.y, z: firstPersonEyeZ(actor, this.friendsEyeCeiling(snapshot, actor)), dx: Math.cos(angle) * Math.cos(pitch), dy: Math.sin(angle) * Math.cos(pitch), dz: Math.sin(pitch) };
   }
   private nearbyBuilds(snapshot: CoopSnapshot | null, reach = 600) {
     const ray = this.playerInteractionRay(snapshot);
@@ -774,6 +795,8 @@ export class MultiplayerRendererBridge {
     player.coins = local.coins; player.pendingDataCores = local.pendingDataCores;
     const fallingZ = localFall ? this.fallHeight(localFall) : undefined;
     this.renderer.presentationVerticalOffset = fallingZ ?? local.z;
+    this.renderer.presentationSwimming = Boolean(local.motion?.swimming);
+    this.renderer.presentationCeiling = this.friendsEyeCeiling(snapshot, { ...local, z: fallingZ ?? local.z });
     const currentZ = fallingZ ?? local.z;
     const jumpSequence = local.motion?.lastJumpSequence ?? -1;
     const wallJumpSequence = local.motion?.lastWallJumpSequence ?? -1;
@@ -1104,13 +1127,14 @@ export class MultiplayerRendererBridge {
     // Quiet seating puts held equipment away even if input selects a firearm.
     // Renderer3D reapplies weapon visibility during render, after prepareFrame.
     this.renderer.frontierToolActive = Boolean(this.switchReach?.forPlayer(localPlayerId)) || isQuietSeat(local.friendsSeat) || Boolean(snapshot.friends?.frontier && (this.friendsTool || this.frontierVisuals?.flashlightEquipped));
-    const holdingConfetti=this.friendsTool===CONFETTI_TOOL&&!creativeBuilding&&!this.interactionBlocked&&!isSpectating&&!useThirdPerson&&!pilotedVehicle
-      &&local.lifeState==='alive'&&!isQuietSeat(local.friendsSeat)&&!local.motion?.swimming;
+    const gestureHandsVisible=shouldShowFriendsGestureHands(this.friendsTool,local.friendsSeat)
+      &&!creativeBuilding&&!this.interactionBlocked&&!isSpectating&&!useThirdPerson&&!pilotedVehicle
+      &&local.lifeState==='alive'&&!local.motion?.swimming;
+    const holdingConfetti=this.friendsTool===CONFETTI_TOOL&&gestureHandsVisible;
     const localConfettiThrowAt=snapshot.friends?.confetti?.bursts.reduce<number|undefined>((latest,burst)=>burst.playerId===localPlayerId&&(!latest||burst.atMs>latest)?burst.atMs:latest,undefined);
     if(holdingConfetti){this.frontierVisuals?.hideHeldTool();this.localFirearm.group.visible=false;this.renderer.fpsWeaponGroup.visible=false;}
     this.gestureViewmodels?.update(this.friendsArms,this.getAimPitch(),deltaMs,
-      (this.friendsTool===6||this.friendsTool===CONFETTI_TOOL) && !creativeBuilding && !this.interactionBlocked && !isSpectating && !useThirdPerson && !pilotedVehicle
-      && local.lifeState==='alive' && !isQuietSeat(local.friendsSeat) && !local.motion?.swimming,holdingConfetti,localConfettiThrowAt,this.visualElapsedMs);
+      gestureHandsVisible,holdingConfetti,localConfettiThrowAt,this.visualElapsedMs);
     this.tacticalVisuals.update(snapshot, this.visualElapsedMs);
     this.realityBreachVisuals.update(snapshot.realityBreach, snapshot.elapsedMs, this.renderer.camera);
     this.renderer.setRealityBreach(snapshot.realityBreach, snapshot.elapsedMs);
@@ -1215,10 +1239,18 @@ export class MultiplayerRendererBridge {
       }
       this.friendsHaulingVisuals.update(snapshot, localPlayerId, this.friendsTool, snapshot.elapsedMs,
         point => this.renderer.projectViewmodelPointToWorld(point), !useThirdPerson);
+      this.chatBubbles?.update(this.renderer.camera, this.renderer.renderer.domElement.clientHeight, this.remotePlayers, snapshot.players);
     });
   }
 
+  showChatMessage(message: CoopChatMessage) {
+    if (this.worldId !== 'friends_frontier') return;
+    this.chatBubbles ??= new FriendsChatBubbles(this.renderer.scene);
+    this.chatBubbles.show(message);
+  }
+
   destroy() {
+    this.chatBubbles?.dispose();
     friendsAudio.clearSoundscape();
     soundManager.stopStationCapture();
     soundManager.stopTowerCharge();

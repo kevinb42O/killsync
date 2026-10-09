@@ -1,3 +1,4 @@
+import { firstPersonEyeZ } from './FirstPersonEye';
 import { isRowboatSeat } from './FriendsRowboat';
 import { FriendsEnvironmentPreview, type FriendsEnvironmentChange } from '../world/FriendsEnvironmentPreview';
 import { sanitizeFriendsArms, type FriendsHandsState } from './FriendsGestureControls';
@@ -1025,7 +1026,7 @@ export class CoopSimulation {
         if (this.friendsFrontier) {
           const pitch = player.aimPitch, a = player.angle;
           const shovelInput = friendsToolInput(input.friendsTool || 0, input.firing, Boolean(input.aiming));
-          this.friendsFrontier.advanceTool(player, input.friendsTool || 0, { x: player.x, y: player.y, z: player.z + 26, dx: Math.cos(a) * Math.cos(pitch), dy: Math.sin(a) * Math.cos(pitch), dz: Math.sin(pitch) }, this.elapsedMs, this.friendsBuilding!.getPieces(), !stale && !piloting && !isQuietSeat(player.friendsSeat) && shovelInput.held, player.id === this.friendsHostId || this.friendsBuilding!.getGuestAccess(), [...this.players.values(), ...physicalCargoBuildBodies(this.friends?.hauling.getCargo())],this.friendsBuilding!.getRevision(),input.friendsWorkPlane,shovelInput.fill);
+          this.friendsFrontier.advanceTool(player, input.friendsTool || 0, { x: player.x, y: player.y, z: firstPersonEyeZ(player, this.friendsOverhead(player)), dx: Math.cos(a) * Math.cos(pitch), dy: Math.sin(a) * Math.cos(pitch), dz: Math.sin(pitch) }, this.elapsedMs, this.friendsBuilding!.getPieces(), !stale && !piloting && !isQuietSeat(player.friendsSeat) && shovelInput.held, player.id === this.friendsHostId || this.friendsBuilding!.getGuestAccess(), [...this.players.values(), ...physicalCargoBuildBodies(this.friends?.hauling.getCargo())],this.friendsBuilding!.getRevision(),input.friendsWorkPlane,shovelInput.fill);
         }
         if (!piloting && !isQuietSeat(player.friendsSeat) && !(this.friendsFrontier && input.friendsTool) && input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
@@ -2708,6 +2709,7 @@ export class CoopSimulation {
     const terrain = this.friendsFrontier!.terrain, pieces = this.friendsBuilding!.getPieces(), vehicles = this.friends!.vehicles();
     const environment:HaulingEnvironment = {
       revision: `${terrain.revision}:${this.friendsBuilding!.getRevision()}:${this.friendsFrontier!.getRevision()}`,
+      eyeCeiling: actor => this.friendsOverhead(actor),
       vehicles, builds: pieces, releasePassenger:id=>this.friends!.releasePlayer(id), craneAccess:id=>id===this.friendsHostId||this.friendsBuilding!.getGuestAccess(),
       // Exact stair envelopes replace the hidden voxel backing. Sampling the
       // backing here creates 32-unit walls above the eight-unit fan paving.

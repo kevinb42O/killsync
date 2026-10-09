@@ -52,6 +52,15 @@ describe('terrain layer ownership', () => {
     const coverage=new THREE.DataTexture(new Uint8Array(94*94),94,94,THREE.RedFormat);
     const near=createIslandRuinMaterials(frontierMaterial('Rock030','#ffffff',true));
     const distant=new FriendsIslandVisuals(near,coverage,94);
+    for(const name of ['deepmere-fishing-dock','deepmere-detached-fishing-platform','deepmere-opposite-dock']){
+      const dock=distant.getObjectByName(name)!;
+      expect(dock.children.length).toBeLessThanOrEqual(6);
+      for(const child of dock.children){
+        const geometry=(child as THREE.Mesh).geometry;
+        expect(geometry.getAttribute('position').count).toBeGreaterThan(0);
+        expect([...geometry.getAttribute('position').array].every(Number.isFinite)).toBe(true);
+      }
+    }
     for(const m of near)configureTerrainCoverage(m,coverage,94,'near');
     const mesh=distant.getObjectByName('unified-voxel-masonry') as THREE.Mesh;
     const shader=compile((mesh.material as THREE.Material[])[0]);

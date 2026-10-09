@@ -1,5 +1,5 @@
 import { describe,it,expect } from 'vitest';
-import { FriendsCampfireSimulation, CAMPFIRE_MAX_FUEL, campfireHeat, MARSHMALLOW_TOOL } from './FriendsCampfireSimulation';
+import { FriendsCampfireSimulation, CAMPFIRE_MAX_FUEL, campfireHeat, MARSHMALLOW_TOOL, marshmallowReachTip } from './FriendsCampfireSimulation';
 import { CAMPFIRE_SEATS } from './FriendsCampfireSeats';
 import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
 import { FriendsSimulation } from './FriendsSimulation';
@@ -12,6 +12,33 @@ const player=(id='host')=>({...CAMPFIRE_SEATS[0],id,label:id,lifeState:'alive',f
 const input=(firing=true,angle=CAMPFIRE_SEATS[0].angle+Math.PI)=>({type:'input' as const,version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:0,aimAngle:quantizeAngle(angle),aimPitch:quantizePitch(0),selectedSlot:0,firing,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,friendsTool:MARSHMALLOW_TOOL});
 function advance(fire:FriendsCampfireSimulation,seconds:number,held=true){const p=player();for(let i=0;i<seconds*20;i++)fire.update(50,[p],new Map([[p.id,input(held)]]));return fire.snapshot().roasts.host;}
 describe('timber fuel and marshmallow roasting',()=>{
+  it.each([0,Math.PI/2,Math.PI,Math.PI*1.5])('roasts the standing tip over the fire from angle %s, and retracts on release',angle=>{
+    const fire=new FriendsCampfireSimulation(),p={...player(),friendsSeat:undefined,x:FRIENDS_CAMPFIRE.x-Math.cos(angle)*124,y:FRIENDS_CAMPFIRE.y-Math.sin(angle)*124,z:FRIENDS_CAMPFIRE.z};
+    const held={...input(true,angle),aimPitch:quantizePitch(Math.atan2(-2,124))};
+    for(let i=0;i<160;i++)fire.update(50,[p],new Map([[p.id,held]]));
+    expect(fire.snapshot().roasts.host).toMatchObject({roasting:true});
+    expect(fire.snapshot().roasts.host.toast).toBeGreaterThan(.3);
+    const tip=fire.snapshot().roasts.host.reach!;
+    expect(Math.hypot(tip.x-FRIENDS_CAMPFIRE.x,tip.y-FRIENDS_CAMPFIRE.y,tip.z-FRIENDS_CAMPFIRE.z-48)).toBeLessThan(1);
+    fire.update(50,[p],new Map([[p.id,{...held,firing:false}]]));
+    expect(fire.snapshot().roasts.host.roasting).toBe(false);expect(fire.snapshot().roasts.host.reach).toBeUndefined();
+  });
+  it('extends while walking or looking away, but cooks only when the finite standing tip reaches the flames',()=>{
+    const fire=new FriendsCampfireSimulation(),p={...player(),friendsSeat:undefined,x:FRIENDS_CAMPFIRE.x-240,y:FRIENDS_CAMPFIRE.y,z:FRIENDS_CAMPFIRE.z};
+    const check=(actor:typeof p,frame= input(true,0))=>{fire.update(50,[actor],new Map([[p.id,frame]]));return fire.snapshot().roasts.host;};
+    expect(check(p)).toMatchObject({roasting:false,toast:0}); // A ray hits, but the stick cannot reach.
+    expect(check(p).reach).toEqual(marshmallowReachTip(p,0,quantizePitch(0)/65535*Math.PI*.88-Math.PI*.44));
+    const nearby={...p,x:FRIENDS_CAMPFIRE.x-124};
+    expect(check(nearby,input(true,Math.PI))).toMatchObject({roasting:false,toast:0});
+    expect(check(nearby,{...input(true,0),aimPitch:quantizePitch(.8)})).toMatchObject({roasting:false,toast:0});
+    expect(check({...nearby,x:FRIENDS_CAMPFIRE.x-10})).toMatchObject({roasting:false,toast:0});
+    const roasting=check(nearby);expect(roasting.roasting).toBe(true);
+    const sim=new FriendsSimulation([{id:'host',label:'host',color:'#fff'}]);Object.assign(sim['players'].get('host')!,nearby);
+    sim.setInput('host',input(true,0));sim.tick(50);
+    expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(sim.createSnapshot()),1)!.friends!.campfire!.roasts.host.reach).toEqual(roasting.reach);
+    expect(fire.eat(nearby)).toBe(true);expect(fire.snapshot().roasts.host.reach).toBeUndefined();
+    expect(check(nearby).reach).toBeUndefined();
+  });
   it.each([['raw',0],['golden',10],['dark',16],['burning',20],['charred',26]] as const)('eats a %s marshmallow and waits five seconds before refilling',(_stage,seconds)=>{
     const fire=new FriendsCampfireSimulation(),p=player();advance(fire,seconds);
     const before=fire.snapshot().roasts.host;

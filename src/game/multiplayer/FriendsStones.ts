@@ -1,4 +1,5 @@
 import { friendsWaterAt } from '../world/FriendsWaterSurface';
+import { isRowboatSeat } from '../world/FriendsFishingDock';
 import type { FishingActor, FishingEnvironment, FishingPoint } from './FriendsFishing';
 import type { MultiplayerInputFrame } from './protocol';
 
@@ -34,7 +35,7 @@ export class FriendsStones {
       let hand=this.hands.get(p.id);
       if(!hand){hand={playerId:p.id,readyAt:0,fire:0};this.hands.set(p.id,hand);}
       const pressed=fire>hand.fire;hand.fire=Math.max(hand.fire,fire);
-      const allowed=input?.friendsTool===STONE_TOOL&&!input.friendsFishingBlocked&&p.lifeState==='alive'&&!p.swimming&&!p.friendsDevFlight&&p.friendsSeat?.vehicleId!=='reedwater-skiff'&&!env.piloting?.(p.id);
+      const allowed=input?.friendsTool===STONE_TOOL&&!input.friendsFishingBlocked&&p.lifeState==='alive'&&!p.swimming&&!p.friendsDevFlight&&!isRowboatSeat(p.friendsSeat)&&!env.piloting?.(p.id);
       if(!allowed){hand.chargeAt=undefined;continue;}
       if(pressed&&now>=hand.readyAt&&hand.chargeAt===undefined)hand.chargeAt=now;
       if(hand.chargeAt!==undefined&&!input.firing){
