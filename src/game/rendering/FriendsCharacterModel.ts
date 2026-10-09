@@ -36,8 +36,11 @@ function cubeGeometry(c:Cube, atlas:[number,number]) {
     const ids=quads[face],points=ids.map(id=>vertices[id]);
     normal.crossVectors(a.fromArray(points[1]).sub(b.fromArray(points[0])),b.fromArray(points[2]).sub(new THREE.Vector3().fromArray(points[0])));
     if(normal.lengthSq()<1e-12)continue;
-    const custom=c.faces?.[face];if(c.faces&&!custom)continue;
-    const [u1,v1,u2,v2]=custom??rects[face];
+    // Paper-thin pupils have two outward normals, but the atlas only paints
+    // their front patch. Reuse it on the reverse face instead of transparent UVs.
+    const eyeBack=dz===0&&face===3;
+    const custom=c.faces?.[eyeBack?2:face];if(c.faces&&!custom)continue;
+    const [u1,v1,u2,v2]=custom??rects[eyeBack?2:face];
     const quadUvs=custom?ids.map((_,i)=>{const j=(i+custom[4]+3)%4;return [j===0||j===1?u1:u2,j===0||j===3?v1:v2];}):[[u2,v1],[u1,v1],[u1,v2],[u2,v2]];
     for(const index of [0,1,2,0,2,3]){positions.push(...points[index]);uvs.push(quadUvs[index][0]/atlas[0],1-quadUvs[index][1]/atlas[1]);colors.push(color.r,color.g,color.b);}
   }

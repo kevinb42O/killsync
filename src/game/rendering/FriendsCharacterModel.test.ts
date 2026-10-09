@@ -15,6 +15,20 @@ const create=(color:'yellow'|'red'='yellow')=>createFriendsCharacterModel(data,n
 const player=(overrides:Partial<CoopPlayerSnapshot>={})=>({id:'p',color:'#fbbf24',x:0,y:0,z:0,angle:0,lifeState:'alive',sprinting:false,crouching:false,sliding:false,weaponStates:[],selectedSlot:0,health:100,maxHealth:100,...overrides} as CoopPlayerSnapshot);
 
 describe('imported Big Walk characters',()=>{
+  it('gives both outward-facing pupils the opaque pupil atlas patch for every head colour',()=>{
+    for(const colour of FRIENDS_CHARACTER_COLOURS){
+      const model=createFriendsCharacterModel(data,new THREE.MeshStandardMaterial(),colour);
+      const geometry=(model.parts[0].children[0] as THREE.Mesh).geometry,uv=geometry.getAttribute('uv');
+      // The final two authored meshes are the two flat pupil quads, 12
+      // vertices each. Both faces must sample the painted 227–230 × 8–11 patch.
+      for(let i=uv.count-24;i<uv.count;i++){
+        expect(uv.getX(i)*data.textureSize[0]).toBeGreaterThanOrEqual(227);
+        expect(uv.getX(i)*data.textureSize[0]).toBeLessThanOrEqual(230);
+        expect((1-uv.getY(i))*data.textureSize[1]).toBeGreaterThanOrEqual(8);
+        expect((1-uv.getY(i))*data.textureSize[1]).toBeLessThanOrEqual(11);
+      }
+    }
+  });
   it('resolves all 13 authored head layers, batches six limbs, and stands on the ground at the existing height',()=>{
     for(const color of FRIENDS_CHARACTER_COLOURS){
       const m=createFriendsCharacterModel(data,new THREE.MeshStandardMaterial(),color),bounds=new THREE.Box3().setFromObject(m.root);
