@@ -1,6 +1,7 @@
 import { describe,it,expect } from 'vitest';
 import { FriendsRetreats,retreatSwitchPrompt,retreatSeatPrompt } from './FriendsRetreats';
-import { RETREAT_SEATS,RETREAT_SITES,STILLWATER,RETREAT_SWITCH,retreatPoint,retreatFloor,retreatCeiling,collideRetreats } from '../world/FriendsRetreatSites';
+import { RETREAT_SEATS,RETREAT_SITES,STILLWATER,STILLWATER_DOOR,RETREAT_SWITCH,retreatPoint,retreatLocal,retreatFloor,retreatCeiling,collideRetreats } from '../world/FriendsRetreatSites';
+import { COOP_PLAYER_RADIUS } from './playerMovement';
 import { FriendsTerrain,TERRAIN_GENERATION } from '../world/FriendsTerrain';
 import { FriendsSimulation } from './FriendsSimulation';
 import { quantizeAngle,quantizePitch } from './CoopSimulation';
@@ -16,9 +17,27 @@ describe('quiet places',()=>{
   it('supports the room floor, real doorway, solid windows and ceiling with shared geometry',()=>{
     const floor=retreatPoint(STILLWATER,0,-12);expect(retreatFloor(floor,active)).toBe(STILLWATER.z);
     expect(retreatCeiling(floor,active)).toBe(STILLWATER.z+76);
-    const door=retreatPoint(STILLWATER,-72,-12);const open={x:door.x,y:door.y};expect(collideRetreats(open,door.z,13,active)).toBe(false);
+    for(const offset of [-6,0,6])for(let u=-100;u<=-48;u+=2){
+      const door=retreatPoint(STILLWATER,u,STILLWATER_DOOR.v+offset),open={x:door.x,y:door.y};
+      expect(collideRetreats(open,door.z,COOP_PLAYER_RADIUS,active),`door u=${u} offset=${offset}`).toBe(false);
+    }
     const pane=retreatPoint(STILLWATER,0,-56,20);expect(collideRetreats({...pane},pane.z,13,active)).toBe(true);
     expect(retreatFloor(floor,[])).toBeUndefined();
+  });
+  it('walks through the entrance and back out using the actual player controller',()=>{
+    const sim=new FriendsSimulation([{id:'walker',label:'Walker',color:'#fff'}]),p=sim['players'].get('walker')!;
+    const start=retreatPoint(STILLWATER,-112,STILLWATER_DOOR.v);
+    const approachFloor=retreatPathFloor({...start,z:start.z+40},active);expect(approachFloor).toBeDefined();
+    Object.assign(p,start,{z:approachFloor!,angle:STILLWATER.angle});
+    let sequence=0;
+    for(let i=0;i<15&&retreatLocal(STILLWATER,p).u<-48;i++){
+      sim.setInput(p.id,{...input(++sequence,STILLWATER.angle),movement:1});sim.tick(50);
+    }
+    expect(retreatLocal(STILLWATER,p).u).toBeGreaterThan(-48);expect(p.z).toBeCloseTo(STILLWATER.z,4);
+    for(let i=0;i<15&&retreatLocal(STILLWATER,p).u>-112;i++){
+      sim.setInput(p.id,{...input(++sequence,STILLWATER.angle+Math.PI),movement:1});sim.tick(50);
+    }
+    expect(retreatLocal(STILLWATER,p).u).toBeLessThan(-112);
   });
   it('claims adjacent seats atomically, keeps them off train snapshots, stands safely and releases on death',()=>{
     const sim=new FriendsSimulation([{id:'a',label:'A',color:'#fff'},{id:'b',label:'B',color:'#fff'}]);
@@ -73,7 +92,7 @@ describe('quiet-place approaches and protection',()=>{
       expect(path.points[0].z-path.points[0].ground).toBeLessThanOrEqual(8.001);
       for(let i=0;i<path.points.length;i++){
         const p=path.points[i];expect(retreatPathFloor(p,active)).toBeCloseTo(p.z,4);
-        expect(terrain.collide({x:p.x,y:p.y},p.z,13,50,8),`${path.siteId} point ${i}`).toBe(false);
+        expect(terrain.collide({x:p.x,y:p.y},p.z,COOP_PLAYER_RADIUS,50,8),`${path.siteId} point ${i}`).toBe(false);
         if(i)expect(Math.abs(p.z-path.points[i-1].z)).toBeLessThanOrEqual(8.001);
       }
       expect(retreatPathFloor(path.points[0],[])).toBeUndefined();

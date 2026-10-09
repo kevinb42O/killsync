@@ -1,29 +1,33 @@
 {
   "errors": [],
   "failedTextures": [],
+  "ceiling": {
+    "darkFraction": 0,
+    "glError": 0
+  },
   "switchHand": {
     "lightsOn": true,
     "by": "review",
     "visible": true,
     "palm": [
-      7628.960253833379,
+      7636.277875038409,
       1380,
-      21739.02260233002
+      21750.957945638853
     ],
     "bulbLoaded": true
   },
   "near": {
-    "calls": 283,
-    "triangles": 1572029,
-    "textures": 140,
-    "geometries": 918
+    "calls": 313,
+    "triangles": 2272580,
+    "textures": 139,
+    "geometries": 908
   },
-  "programsBefore": 154,
-  "programsAfter": 154,
+  "programsBefore": 174,
+  "programsAfter": 174,
   "glError": 0,
   "frameMs": {
-    "on": 6.5,
-    "off": 6.899999976158142
+    "on": 11.299999952316284,
+    "off": 15.800000071525574
   },
   "active": [
     "stillwater-house",
@@ -73,7 +77,7 @@
       "vehicleId": "stillwater-house",
       "index": 0
     },
-    "warm": 8.19401262398981e-40,
+    "warm": 8.194012623989803e-40,
     "glError": 0
   }
 }

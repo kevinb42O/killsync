@@ -51,6 +51,18 @@ home travel and disconnection clear occupancy. Host movement and prediction
 consume the same authored floor, wall, window, ceiling and approach geometry.
 Cargo collision includes the room shell and furniture.
 
+The entrance has 56 native units of clear width and 64 of headroom, with jambs
+outside the opening. This clears the real player diameter of 38 units and its
+50-unit standing collision height. The switch sits on the remaining wall beside
+the widened opening. Regression coverage walks the real controller in and out.
+
+The house shell renders the exposed union of its collision volumes, assigning
+oak, plaster and exterior timber to separate faces. It no longer overlays full
+timber boxes on plaster. Window trim corners meet without overlapping, support
+posts end below deck surfaces, and couch cushion seams avoid coplanar fronts.
+The boardwalk uses one strip with rounded bends and shared render/collision
+cross-sections, ending at the landing edge instead of overlapping the floor.
+
 Existing saved construction or terrain edits at a footprint or approach disable
 that destination. Player work wins and is not overwritten. Active room/support
 areas reject new obstructing builds and terrain work with a clear message.
@@ -62,6 +74,11 @@ illumination is admitted through window apertures. Sofa occlusion is analytic;
 there is no additional room shadow-map sampler. This avoids the full world's
 16-sampler limit with terrain and crew flashlights. Artificial fixture and
 bounce illumination fades out with the switch.
+
+Room-light bounds include a half-unit tolerance. Reconstructing a fragment's
+world position at the island's large coordinates otherwise put ceiling pixels
+alternately above and below the exact boundary, producing flickering black lines.
+The tolerance remains below the exterior roof top and retains light containment.
 
 The bulb's glass envelope has warm emission in addition to the model's textured
 filament. Its glow and glass opacity follow the same switch fade as the room
@@ -97,7 +114,7 @@ seat and frame-time report are in `artifacts/friends-retreats/`. Frame times are
 local, warmed, GPU-synchronised render measurements of matched on/off views;
 they do not measure a feature-disabled baseline or promise another device's FPS.
 
-Final checks on 9 October 2026:
+Initial implementation checks on 9 October 2026:
 
 - Full suite: **176 test files / 1,450 tests passed**, with four workers.
 - TypeScript and production build passed; Vite retains its existing large-bundle warning.
@@ -113,3 +130,19 @@ Final checks on 9 October 2026:
 The suite also caught two stale expectations for the independently added sixth
 Friends tool; its pause-menu label and network-clamp tests now reflect that
 current input schema. No tool-selection behavior was changed by this retreat.
+
+Entrance and surface correction checks on 9 October 2026:
+
+- Thirteen focused geometry and retreat tests passed, including walking the real
+  player controller through the entrance in both directions, doorway offsets,
+  exposed shell faces, and rendered boardwalk triangle/support agreement.
+- TypeScript and production build passed, with the existing bundle-size warning.
+- Production room-on/off and exterior captures showed the ceiling stripes gone,
+  the widened entrance, and a continuous landing. The lit-ceiling pixel check
+  contained zero clipped black pixels; no rendering or texture errors. The real
+  switch interaction still reached the rocker, and the second renderer received
+  the correct on/off state. Repeated toggles kept 174 GPU programs unchanged.
+- The broader suite passed 1,454 tests and hit four cargo-test timeouts. The three
+  incline cases passed on isolated rerun; the long castle-hauling case still
+  exceeded its deadline, including a temporary longer-deadline check. That
+  timeout remains an unconfirmed part of the broader verification.

@@ -3,6 +3,7 @@ export type RetreatPoint = {x:number;y:number;z:number};
 export type RetreatBox = RetreatPoint & {w:number;d:number;h:number;angle:number;siteId:string;surface:'floor'|'wall'|'roof'|'couch'|'glass'};
 export type RetreatSeat = RetreatPoint & {angle:number;exit:RetreatPoint;siteId:string;index:number};
 export const STILLWATER = {id:'stillwater-house',name:'Stillwater House',x:7680,y:21696,z:1352,angle:-.55,w:144,d:112,height:76} as const;
+export const STILLWATER_DOOR = {v:-12,width:56,height:64} as const;
 export const RETREAT_SITES = [
   {...STILLWATER,kind:'house',color:'#edc99b',detail:'A quiet room above Skyfalls lake. Sit on the couch; F at the wall switch changes the lights.'},
   {id:'skyfalls-bench',name:'Skyfalls Bench',x:8884,y:21100,z:904,angle:-1.88,w:80,d:72,kind:'bench',color:'#a0d5e3',detail:'Two seats together above the hanging lake. F to sit; F or jump to stand.'},
@@ -19,7 +20,7 @@ export function retreatLocal(site:{x:number;y:number;angle:number},p:{x:number;y
   const c=Math.cos(site.angle),s=Math.sin(site.angle),dx=p.x-site.x,dy=p.y-site.y;return {u:c*dx+s*dy,v:-s*dx+c*dy};
 }
 export const RETREAT_BULB = retreatPoint(STILLWATER,0,-8,62);
-export const RETREAT_SWITCH = retreatPoint(STILLWATER,-66,10,28);
+export const RETREAT_SWITCH = retreatPoint(STILLWATER,-66,24,28);
 export const RETREAT_SEATS:RetreatSeat[] = RETREAT_SITES.flatMap(site=>{
   const offsets=site.kind==='house'?[-30,0,30].map(u=>({u,v:25,angle:site.angle-Math.PI/2})):
     site.kind==='fire'?[{u:-30,v:35,angle:site.angle-Math.PI/2},{u:0,v:35,angle:site.angle-Math.PI/2},{u:42,v:0,angle:site.angle+Math.PI},{u:-44,v:0,angle:site.angle},{u:0,v:-43,angle:site.angle+Math.PI/2}]:
@@ -35,7 +36,7 @@ export function insideStillwater(p:RetreatPoint,active:readonly string[]=RETREAT
   const l=retreatLocal(STILLWATER,p);return active.includes(STILLWATER.id)&&Math.abs(l.u)<STILLWATER.w/2&&Math.abs(l.v)<STILLWATER.d/2&&p.z>=STILLWATER.z-2&&p.z<STILLWATER.z+STILLWATER.height;
 }
 export const RETREAT_APPROACHES=RETREAT_SITES.map(s=>({siteId:s.id,points:s.kind==='house'?
-  [{x:7740,y:23600},{x:7740,y:23080},{x:7800,y:22700},{x:7800,y:22380},{x:7750,y:22030},{x:7690,y:21860},retreatPoint(s,-92,-12)]:
+  [{x:7740,y:23600},{x:7740,y:23080},{x:7800,y:22700},{x:7800,y:22380},{x:7750,y:22030},{x:7690,y:21860},retreatPoint(s,-210,STILLWATER_DOOR.v),retreatPoint(s,-100,STILLWATER_DOOR.v)]:
   s.kind==='fire'?[retreatPoint(s,-s.w/2-80,64),retreatPoint(s,-s.w/2-40,64),retreatPoint(s,-s.w/2+4,0)]:[retreatPoint(s,-s.w/2-80,0),retreatPoint(s,-s.w/2+4,0)]}));
 export function retreatClearing(x:number,y:number){return RETREAT_SITES.some(s=>{const p=retreatLocal(s,{x,y});return Math.abs(p.u)<s.w/2+36&&Math.abs(p.v)<s.d/2+40;})||RETREAT_APPROACHES.some(r=>r.points.slice(1).some((b,i)=>{
   const a=r.points[i],dx=b.x-a.x,dy=b.y-a.y,f=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy)));
@@ -52,15 +53,17 @@ function createBoxes():RetreatBox[]{
       for(const u of [-67,67])add(u,-56,14,10,4,46,'wall');
       add(0,-56,14,124,2,46,'glass');
       add(0,56,0,144,4,76,'wall');
-      add(-72,-43,0,4,26,76,'wall');add(-72,31,0,4,50,76,'wall');add(-72,-12,58,4,36,18,'wall');
+      const door=STILLWATER_DOOR,low=door.v-door.width/2,high=door.v+door.width/2;
+      add(-72,(-56+low)/2,0,4,low+56,76,'wall');
+      add(-72,(56+high)/2,0,4,56-high,76,'wall');
+      add(-72,door.v,door.height,4,door.width,76-door.height,'wall');
       add(72,0,0,4,112,14,'wall');add(72,0,60,4,112,16,'wall');
       add(72,-42,14,4,28,46,'wall');add(72,42,14,4,28,46,'wall');
       add(72,0,14,2,56,46,'glass');
       add(0,0,76,152,120,4,'roof');
       add(0,30,0,112,29,14,'couch');add(0,43,14,112,7,28,'couch');
       for(const u of [-53,53])add(u,30,14,6,29,13,'couch');
-      add(-86,-12,-8,28,54,8,'floor');
-      add(-105,-12,-16,12,44,16,'floor');
+      add(-86,door.v,-8,28,76,8,'floor');
     }else if(s.kind==='fire'){
       add(-90,0,-16,12,44,8,'floor');
     }

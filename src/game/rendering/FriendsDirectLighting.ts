@@ -24,7 +24,10 @@ export function installRetreatLightBounds(){
   const c=Math.cos(STILLWATER.angle),s=Math.sin(STILLWATER.angle);
   const clip=`{vec3 retreatShellPoint=(transpose(mat3(viewMatrix))*geometryPosition+cameraPosition)-vec3(${STILLWATER.x},${STILLWATER.z},${STILLWATER.y});
     vec2 rp=mat2(${c},${-s},${s},${c})*retreatShellPoint.xz;
-    if(abs(rp.x)>74.||abs(rp.y)>58.||retreatShellPoint.y<-.5||retreatShellPoint.y>76.)directLight.color*=0.;}`;
+    // Leave a small tolerance around the shell's visible boundary. View-space
+    // reconstruction at island coordinates otherwise alternates either side
+    // of the exact ceiling plane, cutting the bulb light into flickering lines.
+    if(abs(rp.x)>74.5||abs(rp.y)>58.5||retreatShellPoint.y<-.5||retreatShellPoint.y>76.5)directLight.color*=0.;}`;
   THREE.ShaderChunk.lights_fragment_begin=THREE.ShaderChunk.lights_fragment_begin
     .replace('getPointLightInfo( pointLight, geometryPosition, directLight );',`getPointLightInfo( pointLight, geometryPosition, directLight );if((pointLight.distance==220.&&distance(pointLight.position,(viewMatrix*vec4(${RETREAT_BULB.x},${RETREAT_BULB.z},${RETREAT_BULB.y},1.)).xyz)<.1)||(pointLight.distance==91.25&&distance(pointLight.position,(viewMatrix*vec4(${STILLWATER.x},${STILLWATER.z+35},${STILLWATER.y},1.)).xyz)<.1))`+clip);
 }

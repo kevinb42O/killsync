@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { RETREAT_SITES, RETREAT_SEATS, RETREAT_BOXES, STILLWATER, RETREAT_BULB, retreatLocal, type RetreatState } from '../world/FriendsRetreatSites';
+import { RETREAT_SITES, RETREAT_SEATS, RETREAT_BOXES, STILLWATER, STILLWATER_DOOR, RETREAT_BULB, RETREAT_SWITCH, retreatLocal, type RetreatState } from '../world/FriendsRetreatSites';
 import { FriendsCampfire } from './FriendsCampfire';
 import { retreatPaths } from '../world/FriendsRetreatPaths';
 import { cullInactiveFriendsLights,installRetreatLightBounds } from './FriendsDirectLighting';
+import { retreatShellGeometry,retreatPathGeometry } from './FriendsRetreatGeometry';
 
 /** Locally bundled real PBR materials, shared between authored surfaces. */
 export class FriendsRetreatVisuals {
@@ -56,33 +57,23 @@ export class FriendsRetreatVisuals {
     };
     for(const s of RETREAT_SITES){
       const root=s.kind==='house'?this.house:new THREE.Group();root.name=s.id;root.position.set(s.x,s.z,s.y);root.rotation.y=-s.angle;this.group.add(root);this.sites.set(s.id,root);
+      if(s.kind==='house'){
+        const shell=new THREE.Mesh(retreatShellGeometry(s,RETREAT_BOXES.filter(b=>b.siteId===s.id)),[oak,plaster,boards]);
+        shell.name='stillwater-house-shell';shell.castShadow=true;shell.receiveShadow=true;root.add(shell);
+      }
       for(const b of RETREAT_BOXES.filter(b=>b.siteId===s.id)){
-        if(b.surface==='couch'||b.surface==='glass')continue;
+        if(s.kind==='house'||b.surface==='couch'||b.surface==='glass')continue;
         const p=retreatLocal(s,b),h=b.z-s.z+b.h/2;
-        if(b.surface==='roof'){
-          add(root,plaster,b.w,1,b.d,p.u,b.z-s.z+.5,p.v,18);
-          add(root,boards,b.w,b.h-1,b.d,p.u,b.z-s.z+1+(b.h-1)/2,p.v,12);
-        }else add(root,b.surface==='floor'?(s.kind==='house'?oak:boards):plaster,b.w,b.h,b.d,p.u,h,p.v,b.surface==='floor'?20.4:18);
-        // Exterior skin retains dark timber while the inner walls stay ivory.
-        if(s.kind==='house'&&b.surface==='wall'){
-          const exterior=new THREE.Vector2(p.u,p.v);if(Math.abs(p.u)>65)exterior.x+=Math.sign(p.u)*2.2;else exterior.y+=Math.sign(p.v)*2.2;
-          add(root,boards,b.w,b.h,b.d,exterior.x,h,exterior.y,12);
-        }
+        add(root,b.surface==='floor'?boards:plaster,b.w,b.h,b.d,p.u,h,p.v,b.surface==='floor'?20.4:18);
       }
       // Foundation posts support the terrace rather than flattening the hillside.
-      for(const u of [-s.w/2+5,s.w/2-5])for(const v of [-s.d/2+5,s.d/2-5])add(root,boards,5,72,5,u,-36,v,12);
+      for(const u of [-s.w/2+5,s.w/2-5])for(const v of [-s.d/2+5,s.d/2-5])add(root,boards,5,64,5,u,-40,v,12);
       const path=retreatPaths().find(p=>p.siteId===s.id)!;
-      const paving:THREE.BufferGeometry[]=[];
       for(let i=1;i<path.points.length;i++){
-        const a=path.points[i-1],b=path.points[i],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),positions:number[]=[],uv:number[]=[];
-        for(const depth of [0,-5])for(const p of [a,b])for(const side of [-1,1]){
-          const q=retreatLocal(s,{x:p.x-dy/d*side*path.width/2,y:p.y+dx/d*side*path.width/2});positions.push(q.u,p.z-s.z+depth,q.v);uv.push(side*path.width/40,(p===a?i-1:i)*d/20);
-        }
-        const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
-        g.setIndex([0,1,2,1,3,2,4,6,5,5,6,7,0,4,1,1,4,5,2,3,6,3,7,6,0,2,4,2,6,4,1,5,3,3,5,7]);g.computeVertexNormals();paving.push(g);
-        if(i%12===0&&a.z-a.ground>12){const q=retreatLocal(s,a);add(root,boards,4,a.z-a.ground,4,q.u,(a.z+a.ground)/2-s.z,q.v,12);}
+        const a=path.points[i-1];
+        if(i%12===0&&a.z-a.ground>12){const q=retreatLocal(s,a);add(root,boards,4,a.z-a.ground-5,4,q.u,(a.z-5+a.ground)/2-s.z,q.v,12);}
       }
-      const pathMesh=new THREE.Mesh(mergeGeometries(paving)!,boards);paving.forEach(g=>g.dispose());pathMesh.receiveShadow=true;root.add(pathMesh);
+      const pathMesh=new THREE.Mesh(retreatPathGeometry(s,path),boards);pathMesh.name=`${s.id}-approach`;pathMesh.receiveShadow=true;root.add(pathMesh);
       const seats=RETREAT_SEATS.filter(p=>p.siteId===s.id);
       if(s.kind!=='house'){
         const pairs=s.kind==='bench'?[{u:0,v:12,w:68}]:[{u:-15,v:35,w:68},{u:42,v:0,w:29},{u:-44,v:0,w:29},{u:0,v:-43,w:29}];
@@ -97,16 +88,16 @@ export class FriendsRetreatVisuals {
       }
     }
     // Solid couch with separate softly rounded cushions and visible seams.
-    add(this.house,wool,112,9,28,0,10,30,3.6,2);
-    for(const u of [-34,0,34]){add(this.house,wool,32,7,24,u,17,28,3.6,2);add(this.house,wool,32,23,8,u,29,43,3.6,2);}
+    add(this.house,wool,112,8,28,0,10,30,3.6,2);
+    for(const u of [-34,0,34]){add(this.house,wool,32,7,24,u,18,28,3.6,2);add(this.house,wool,32,23,8,u,29,43,3.6,2);}
     for(const u of [-54,54])add(this.house,wool,7,18,29,u,21,30,3.6,2);
     for(const u of [-46,46])for(const v of [20,40])add(this.house,trim,4,6,4,u,3,v,12);
     // Open picture and side windows; their near-invisible glass is a solid collider.
     const frontGlass=new THREE.Mesh(new THREE.PlaneGeometry(124,46),glass);frontGlass.position.set(0,37,-56);frontGlass.material.side=THREE.DoubleSide;this.house.add(frontGlass);
     const sideGlass=new THREE.Mesh(new THREE.PlaneGeometry(56,46),glass);sideGlass.rotation.y=Math.PI/2;sideGlass.position.set(72,37,0);this.house.add(sideGlass);
-    for(const y of [13,61]){add(this.house,trim,136,3,10,0,y,-56,12,1);add(this.house,trim,10,3,62,72,y,0,12,1);}
-    for(const u of [-63,63])add(this.house,trim,3,48,10,u,37,-56,12);
-    for(const v of [-29,29])add(this.house,trim,10,48,3,72,37,v,12);
+    for(const y of [13,61]){add(this.house,trim,136,3,10,0,y,-56,12);add(this.house,trim,10,3,62,72,y,0,12);}
+    for(const u of [-63,63])add(this.house,trim,3,45,10,u,37,-56,12);
+    for(const v of [-29,29])add(this.house,trim,10,45,3,72,37,v,12);
     // One bare incandescent bulb, suspended from an exposed black cord.
     const cord=new THREE.MeshStandardMaterial({color:0x211e19,roughness:.8});this.materials.add(cord);this.roomLighting(cord);
     const cable=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,10.5,10),cord);cable.name='stillwater-hanging-wire';cable.position.set(0,70.25,-8);this.house.add(cable);
@@ -131,14 +122,16 @@ export class FriendsRetreatVisuals {
       if(this.disposed){model.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});this.materials.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());return;}
       this.house.add(model);
     }).catch(error=>console.error('Stillwater bulb model failed to load',error));
-    add(this.house,trim,4,72,4,-69,36,-30);
-    add(this.house,trim,4,72,4,-69,36,6);
+    // Jambs sit beside the opening, preserving the full collision clearance.
+    for(const side of [-1,1])add(this.house,trim,2,STILLWATER_DOOR.height,2,-69,STILLWATER_DOOR.height/2,STILLWATER_DOOR.v+side*(STILLWATER_DOOR.width/2+1));
+    add(this.house,trim,2,2,STILLWATER_DOOR.width+4,-69,STILLWATER_DOOR.height+1,STILLWATER_DOOR.v);
     // Thin plate and physically moving rocker face into the room.
     const plate=new THREE.MeshStandardMaterial({color:0xf4ead8,roughness:.5});this.materials.add(plate);this.roomLighting(plate);
-    add(this.house,plate,1.6,12,8,-69,28,10,18,.4);
-    add(this.house,bronze,1.8,8.8,4.8,-68.4,28,10);
+    const switchPosition=retreatLocal(STILLWATER,RETREAT_SWITCH);
+    add(this.house,plate,1.6,12,8,-69,28,switchPosition.v,18,.4);
+    add(this.house,bronze,1.8,8.8,4.8,-68.4,28,switchPosition.v);
     this.rocker=new THREE.Mesh(new RoundedBoxGeometry(2.4,7.6,4.0,2,.4),new THREE.MeshStandardMaterial({color:0xeee3d1,roughness:.7}));
-    this.materials.add(this.rocker.material as THREE.Material);this.rocker.name='stillwater-light-switch';this.rocker.position.set(-67.1,28,10);this.roomLighting(this.rocker.material as THREE.MeshStandardMaterial);this.house.add(this.rocker);
+    this.materials.add(this.rocker.material as THREE.Material);this.rocker.name='stillwater-light-switch';this.rocker.position.set(-67.1,28,switchPosition.v);this.roomLighting(this.rocker.material as THREE.MeshStandardMaterial);this.house.add(this.rocker);
     for(const {material,geometries,group} of batches.values()){
       const g=mergeGeometries(geometries);geometries.forEach(g=>g.dispose());if(!g)continue;
       const mesh=new THREE.Mesh(g,material);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);

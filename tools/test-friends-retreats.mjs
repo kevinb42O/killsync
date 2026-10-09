@@ -58,6 +58,24 @@ try{
     // Clean room photo after the gameplay views above; hide the photo's held axe.
     bridge.frontierVisuals.hideHeldTool();bridge.localFirearm.group.visible=false;bridge.renderer.fpsWeaponGroup.visible=false;bridge.renderer.renderer.render(bridge.renderer.scene,bridge.renderer.camera);
   },on);await page.screenshot({path:`${out}/room-${on?'on':'off'}.png`});
+  if(on){
+   report.ceiling=await page.evaluate(()=>{
+    const r=bridge.renderer.renderer,gl=r.getContext(),pixels=new Uint8Array(80*40*4);r.render(bridge.renderer.scene,bridge.renderer.camera);
+    gl.readPixels(400,gl.drawingBufferHeight-120,80,40,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    let dark=0;for(let i=0;i<pixels.length;i+=4)if(Math.max(pixels[i],pixels[i+1],pixels[i+2])<45)dark++;
+    return {darkFraction:dark/(80*40),glError:gl.getError()};
+   });
+   assert.ok(report.ceiling.darkFraction<.01,'The lit ceiling must not contain clipped black stripes');assert.equal(report.ceiling.glError,0);
+  }
+ }
+ for(const [label,u,v,height]of [['house-entry',-126,-12,46],['house-exterior',-180,-110,72],['house-approach',-210,105,70]]){
+  await page.evaluate(({u,v,height})=>{
+   const p=sim.players.get('review');Object.assign(p,retreatPoint(STILLWATER,-112,-12,30));bridge.setFriendsEnvironment({hour:12,speed:0});
+   for(let i=0;i<5;i++){sim.tick(50);bridge.render(sim.createSnapshot(),'review',33);}
+   const camera=bridge.renderer.camera,a=retreatPoint(STILLWATER,u,v,height),b=retreatPoint(STILLWATER,-70,-12,27);
+   camera.position.set(a.x,a.z,a.y);camera.lookAt(b.x,b.z,b.y);
+   bridge.frontierVisuals.hideHeldTool();bridge.localFirearm.group.visible=false;bridge.renderer.fpsWeaponGroup.visible=false;bridge.renderer.renderer.render(bridge.renderer.scene,camera);
+  },{u,v,height});await page.screenshot({path:`${out}/${label}.png`});
  }
  // Exercise the real switch input and capture the palm touching the rocker.
  report.switchHand=await page.evaluate(async()=>{
