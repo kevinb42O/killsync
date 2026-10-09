@@ -27,310 +27,39 @@
     "robin4": "https://bigsoundbank.com/rouge-gorge-4-s1670.html",
     "robin7": "https://bigsoundbank.com/rouge-gorge-7-s1673.html",
     "blue": "https://freesound.org/people/naturenotesuk/sounds/830034/",
-    "sparrow": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg"
+    "sparrow": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+    "waterEntry": "https://pixabay.com/sound-effects/nature-water-splash-effect-443133/",
+    "swimStroke": "https://pixabay.com/sound-effects/nature-splashing-water-443136/",
+    "waterDive": "https://pixabay.com/sound-effects/cinematic-dive-underwater-467471/",
+    "waterBreathIn": "https://pixabay.com/sound-effects/people-inalare-274160/",
+    "stoneHurt": "https://pixabay.com/sound-effects/people-oof-2-580732/"
   },
   "assets": [
     {
-      "file": "footstep_grass_000.ogg",
-      "pack": "impact",
-      "original": "footstep_grass_000.ogg",
-      "sha256": "9d49497777405d78d7cf7f2888e28277f3a23192300cfd1d79d54876b20f479f"
+      "file": "bird_blue_tit_000.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "David / naturenotesuk",
+      "sourcePage": "https://freesound.org/people/naturenotesuk/sounds/830034/",
+      "source": "https://cdn.freesound.org/previews/830/830034_7455632-hq.mp3",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "8fd901be412337ef4c1886ac8c7b47bd8705e224d31303c4e6e0c9f04dd79c43",
+      "sha256": "3158912eb376346c514addb50c2b6afa241dee32d83e827241ed0fdcd89a7827",
+      "edit": "Excerpt 2.18-3.21s; mono 32 kHz Vorbis q5; highpass=f=900,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.99:d=0.04; linear gain 0.863197. Native pitch, no synthesis or looping. This edited audio retains the source license."
     },
     {
-      "file": "footstep_grass_001.ogg",
-      "pack": "impact",
-      "original": "footstep_grass_001.ogg",
-      "sha256": "fb28781bd22b2eefdc14077f1adf5c94d7fe9c3a130194633b55f3e0d39d9f04"
-    },
-    {
-      "file": "footstep_grass_002.ogg",
-      "pack": "impact",
-      "original": "footstep_grass_002.ogg",
-      "sha256": "73a520139f5be716a403bfe9c80e0e94d1e61d8e9de04a354b336392164b53dc"
-    },
-    {
-      "file": "footstep_wood_000.ogg",
-      "pack": "impact",
-      "original": "footstep_wood_000.ogg",
-      "sha256": "5f1c252942a220d658121bd9417448cd19649ded9fff2ff15f6e50899373ce8e"
-    },
-    {
-      "file": "footstep_wood_001.ogg",
-      "pack": "impact",
-      "original": "footstep_wood_001.ogg",
-      "sha256": "e4f68e1c9fd55b4dc8ca89ed2bbab6f200171bc54bdc18aa96b80d8e7336f462"
-    },
-    {
-      "file": "footstep_wood_002.ogg",
-      "pack": "impact",
-      "original": "footstep_wood_002.ogg",
-      "sha256": "9ff095b05cee5eec40b081defe3f0eef7232bb16d4865ce03b9f6dbab875cfdd"
-    },
-    {
-      "file": "footstep_concrete_000.ogg",
-      "pack": "impact",
-      "original": "footstep_concrete_000.ogg",
-      "sha256": "d7267e183067757c92c169de2a379abea592cfca6b39bb2e8feea15221ad79fe"
-    },
-    {
-      "file": "footstep_concrete_001.ogg",
-      "pack": "impact",
-      "original": "footstep_concrete_001.ogg",
-      "sha256": "507a75eb19b897087855a3be3cf11a12d7fa37d143ad535eeebe0b8031c7325d"
-    },
-    {
-      "file": "footstep_concrete_002.ogg",
-      "pack": "impact",
-      "original": "footstep_concrete_002.ogg",
-      "sha256": "b21fa546d74941196b25da8a20b7010abd8c05c4fcf93545d1f344e66a664e13"
-    },
-    {
-      "file": "footstep_snow_000.ogg",
-      "pack": "impact",
-      "original": "footstep_snow_000.ogg",
-      "sha256": "c05fa4a9dc9a7aabc04996466fb589537e49af76de9998d8f9e6270ec92dcef7"
-    },
-    {
-      "file": "footstep_snow_001.ogg",
-      "pack": "impact",
-      "original": "footstep_snow_001.ogg",
-      "sha256": "980fb9a1c9227aed7995067b0357f373053337f2416316db8ea0438418542fb4"
-    },
-    {
-      "file": "footstep_snow_002.ogg",
-      "pack": "impact",
-      "original": "footstep_snow_002.ogg",
-      "sha256": "db52bafdc66304f3b999f2c29227826c65993916e630ac2ffbca17d07b263178"
-    },
-    {
-      "file": "impactWood_medium_000.ogg",
-      "pack": "impact",
-      "original": "impactWood_medium_000.ogg",
-      "sha256": "1723a9fd25103ed41af06054814e84e65f4a772bac86ab2dc927da93d9592ff5"
-    },
-    {
-      "file": "impactWood_medium_001.ogg",
-      "pack": "impact",
-      "original": "impactWood_medium_001.ogg",
-      "sha256": "15271dbe8e2872dbb0ff1aeb7b12b2d2b92b7c1951c88532b9ab9158c36dfc73"
-    },
-    {
-      "file": "impactWood_medium_002.ogg",
-      "pack": "impact",
-      "original": "impactWood_medium_002.ogg",
-      "sha256": "3f3f1917428b828f733a963167833c707bf88296ff158e1559c57c5cb813d799"
-    },
-    {
-      "file": "impactMining_000.ogg",
-      "pack": "impact",
-      "original": "impactMining_000.ogg",
-      "sha256": "36b4ea107222d073c67ca64dde26944975609202d5090b2f2021213c1a7e35cd"
-    },
-    {
-      "file": "impactMining_001.ogg",
-      "pack": "impact",
-      "original": "impactMining_001.ogg",
-      "sha256": "61235a18de3f3d92118235398222dbf51d448f1be70b1c8bc962b10b86f2d9c6"
-    },
-    {
-      "file": "impactMining_002.ogg",
-      "pack": "impact",
-      "original": "impactMining_002.ogg",
-      "sha256": "059558ec751115ca6b1441e00f0adc837c1a3eeb0a066b109e0fd879fc5d0b0c"
-    },
-    {
-      "file": "impactSoft_medium_000.ogg",
-      "pack": "impact",
-      "original": "impactSoft_medium_000.ogg",
-      "sha256": "7d3ba0bb5e60a11b5d3e558c141303dcf494256675fbf753c0d252d2cf0481e3"
-    },
-    {
-      "file": "impactSoft_medium_001.ogg",
-      "pack": "impact",
-      "original": "impactSoft_medium_001.ogg",
-      "sha256": "7642a4fd43e547afe4f7adfadb3dabb681c0ff512f52c1674bae30a726841faf"
-    },
-    {
-      "file": "impactSoft_medium_002.ogg",
-      "pack": "impact",
-      "original": "impactSoft_medium_002.ogg",
-      "sha256": "5069e3571a77d7f7aae9ef71d0364aa245fb7d64a7c8cc9956f221d03088c089"
-    },
-    {
-      "file": "impactMetal_light_000.ogg",
-      "pack": "impact",
-      "original": "impactMetal_light_000.ogg",
-      "sha256": "33b5e6e37c6e9d54e07bf5a89b12c76e879f40c1ea83cdd82714df1d6f9fec6d"
-    },
-    {
-      "file": "impactMetal_light_001.ogg",
-      "pack": "impact",
-      "original": "impactMetal_light_001.ogg",
-      "sha256": "fba69c467ddd85da7b1d82e259f936b876d9ba6a3d6f1b24bdd10468e46bfe08"
-    },
-    {
-      "file": "impactMetal_light_002.ogg",
-      "pack": "impact",
-      "original": "impactMetal_light_002.ogg",
-      "sha256": "25a96f90a9a1f88a531e824e126f0519504625e5635e65a72e4f31611428db29"
-    },
-    {
-      "file": "handleCoins.ogg",
-      "pack": "rpg",
-      "original": "handleCoins.ogg",
-      "sha256": "8a91f969e932df709df80ee124d86a51389eed9b67f22e5e716bc2bbf60d8dab"
-    },
-    {
-      "file": "handleSmallLeather.ogg",
-      "pack": "rpg",
-      "original": "handleSmallLeather.ogg",
-      "sha256": "ae3cbf695aa0a8b98b5a80a835be5a3ccbd5446a24db2235cd4c3cd6fc92ed96"
-    },
-    {
-      "file": "cloth1.ogg",
-      "pack": "rpg",
-      "original": "cloth1.ogg",
-      "sha256": "ddb93a3671233f95da0e0b10367f082f7eb42fa6caaddcf776410aa8833c747d"
-    },
-    {
-      "file": "knifeSlice.ogg",
-      "pack": "rpg",
-      "original": "knifeSlice.ogg",
-      "sha256": "4cd96dc630bed9840c15f1dd2306da2cc56a4da26a5d3f1a03c5a7265ac5e54f"
-    },
-    {
-      "file": "bookOpen.ogg",
-      "pack": "rpg",
-      "original": "bookOpen.ogg",
-      "sha256": "953390534377222bee89ac8cd9e60a58fdc037c71a4d7c18c43cd647c7f34ba8"
-    },
-    {
-      "file": "click_001.ogg",
-      "pack": "interface",
-      "original": "click_001.ogg",
-      "sha256": "ccfb7fa0cccdd9faec0eb16033c732b1e308d139d80f799161495d58f7adcdb9"
-    },
-    {
-      "file": "select_001.ogg",
-      "pack": "interface",
-      "original": "select_001.ogg",
-      "sha256": "aec0c31ea934a35936ae0d2ab8fac8123c93aa5647f935853a58dbaf90278b7a"
-    },
-    {
-      "file": "confirmation_001.ogg",
-      "pack": "interface",
-      "original": "confirmation_001.ogg",
-      "sha256": "063564703b6094d70718a3e787a55cc9141611e4ecd6b6637f8828f79b4a8c3a"
-    },
-    {
-      "file": "error_001.ogg",
-      "pack": "interface",
-      "original": "error_001.ogg",
-      "sha256": "46e67425d16339772e8d328fb36a49426c9467418686e11beeb71ff84b0f6433"
-    },
-    {
-      "file": "glass_001.ogg",
-      "pack": "interface",
-      "original": "glass_001.ogg",
-      "sha256": "183eebee20eb0a532b0b85104d139cbf2673eb66d95c3cc733ac9ea98362e7e8"
-    },
-    {
-      "file": "wind_clean.ogg",
-      "author": "Luke.RUSTLTD",
-      "published": "2010-10-01",
-      "license": "CC0-1.0",
-      "sourcePage": "https://opengameart.org/content/wind1",
-      "source": "https://opengameart.org/sites/default/files/wind1.wav",
-      "sha256": "01fb3f5cf2136ced5691073b60f36968c7203c1a8d00f6d425e2ec6bfddacadb",
-      "originalSha256": "a2856f794fbf77e05f8241dc4adeade7f62fa21c3c9dc49f7725b6c6218060c3",
-      "edit": "12\u201348s excerpt; mono 32 kHz Vorbis quality 3; highpass=f=80,lowpass=f=4000,loudnorm=I=-24:TP=-3:LRA=8. Playback crossfades the loop seam. Originally made with conventional PureData synthesis in 2010; no AI, wildlife, or runtime synthesis."
-    },
-    {
-      "file": "crickets.ogg",
-      "author": "Augmentality (Brandon Morris)",
-      "sourcePage": "https://opengameart.org/content/random-sounds-samples",
-      "source": "https://opengameart.org/sites/default/files/cricket%20ambienc276.ogg",
-      "sha256": "31c93d0c6d7d73a9ed002a7f4434d0adee198e51c0d318b48ce1eeb4dea5a811",
-      "originalSha256": "0d672c93843afc5785cbf4eeb6df696a73188016724ff59bcbd9c623b8d223bf",
-      "edit": "0\u201312.27s excerpt; mono 32 kHz Vorbis quality 3; highpass=f=150,loudnorm=I=-24:TP=-3:LRA=8. Playback crossfades the loop seam."
-    },
-    {
-      "file": "shovel.ogg",
-      "author": "RavenWolfProds; edited by themightyglider",
-      "sourcePage": "https://opengameart.org/content/shovel-sound",
-      "source": "https://opengameart.org/sites/default/files/shovel_0.ogg",
-      "sha256": "1ad178afa5d959ecd4454c3d8388abb23451a1f43a028f476aa37aa3a944d195"
-    },
-    {
-      "file": "leaves.ogg",
-      "author": "Augmentality (Brandon Morris)",
-      "sourcePage": "https://opengameart.org/content/random-sounds-samples",
-      "source": "https://opengameart.org/sites/default/files/moving%20leaves%20stereo.ogg",
-      "sha256": "678c0da00ef1092f4be7c2d8c7b22c1c91c5fc8ca1f3f9570ce59de995c0138c"
-    },
-    {
-      "file": "landing.wav",
-      "author": "MentalSanityOff; submitted by qubodup",
-      "sourcePage": "https://opengameart.org/content/jump-landing-sound",
-      "source": "https://opengameart.org/sites/default/files/jumpland.wav",
-      "sha256": "b4d262eb5c048167cceca9f5d790f6ad9310c14588ce87f5466c0a978228a4ca"
-    },
-    {
-      "file": "cloth2.ogg",
-      "pack": "rpg",
-      "original": "cloth2.ogg",
-      "sha256": "8a7451193c38bc05483aec25dd193e163a15d44cf7fff04ac7912573231b0201"
-    },
-    {
-      "file": "cloth3.ogg",
-      "pack": "rpg",
-      "original": "cloth3.ogg",
-      "sha256": "a48632d17a4f1416541d261a32a31612e01267144c407fa3ecab3ff410f0085b"
-    },
-    {
-      "file": "cloth4.ogg",
-      "pack": "rpg",
-      "original": "cloth4.ogg",
-      "sha256": "e7ab9a6c4466dea874196c61f59bf1da05cfe58748f42fadd695d441a154a99b"
-    },
-    {
-      "file": "impactMining_003.ogg",
-      "pack": "impact",
-      "original": "impactMining_003.ogg",
-      "sha256": "4237fa2cd80364ad81cd0af44f67d7497f1c5edcc7bdb02cd22be2ba4580c83d"
-    },
-    {
-      "file": "impactMining_004.ogg",
-      "pack": "impact",
-      "original": "impactMining_004.ogg",
-      "sha256": "8ca3a99d85d845751ad8ce7b40509da58263a62e48cde70e5a30b5ccef4c9a3b"
-    },
-    {
-      "file": "impactWood_heavy_000.ogg",
-      "pack": "impact",
-      "original": "impactWood_heavy_000.ogg",
-      "sha256": "15ff82332f342c30e469215539e1cc57e11b221aa2cf7e11e811d313a9927f3d"
-    },
-    {
-      "file": "impactWood_heavy_001.ogg",
-      "pack": "impact",
-      "original": "impactWood_heavy_001.ogg",
-      "sha256": "f1b07a53ac10c615fff9ba470511fdeb722b5902e1a8520759fc20ad6f546015"
-    },
-    {
-      "file": "impactWood_heavy_002.ogg",
-      "pack": "impact",
-      "original": "impactWood_heavy_002.ogg",
-      "sha256": "ce1e06f2a05f2634c645cb72f6a1623e64bc2d92be34917430a61031fb6597d4"
-    },
-    {
-      "file": "surf.ogg",
-      "author": "transitking",
-      "sourcePage": "https://freesound.org/people/transitking/sounds/11505/",
-      "source": "https://cdn.freesound.org/previews/11/11505_31028-hq.mp3",
-      "originalSha256": "ea2a900f500c32330b6ecafcf7fe283d854048f5f7364ec115f267b7faf7b29f",
-      "edit": "36\u201376s excerpt of the publisher's high-quality MP3 preview of wavesound.wav; highpass 80 Hz, lowpass 8 kHz; -24 LUFS / -3 dBTP / LRA 8 normalization; stereo 32 kHz Vorbis quality 3. Playback crossfades the loop seam.",
-      "sha256": "44495445e0b7e270f327be14cef172ec2e97a7ac50ee9bd62a3f3b4f0d863870"
+      "file": "bird_blue_tit_001.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "David / naturenotesuk",
+      "sourcePage": "https://freesound.org/people/naturenotesuk/sounds/830034/",
+      "source": "https://cdn.freesound.org/previews/830/830034_7455632-hq.mp3",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "8fd901be412337ef4c1886ac8c7b47bd8705e224d31303c4e6e0c9f04dd79c43",
+      "sha256": "fa4f639d7dc60fbec7bb37d318e8487d5c66b0ff631fd97ce29341caf6c1a8a6",
+      "edit": "Excerpt 3.50-4.40s; mono 32 kHz Vorbis q5; highpass=f=900,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.86:d=0.04; linear gain 5.312342. Native pitch, no synthesis or looping. This edited audio retains the source license."
     },
     {
       "file": "bird_call_000.ogg",
@@ -369,137 +98,140 @@
       "sha256": "d99b2a2427bc6b447f1283d2d08625dc34e489ef4dc479f180ea25cee4d0fc3f"
     },
     {
-      "file": "train_drive.ogg",
-      "author": "xo9rh11o3w",
-      "sourcePage": "https://freesound.org/people/xo9rh11o3w/sounds/199828/",
-      "source": "https://cdn.freesound.org/previews/199/199828_2814100-hq.mp3",
-      "originalSha256": "c2b224ab9e3969a5289eb46813ed46867090cd55bd709f79ae6f837ad7077e73",
-      "edit": "0\u201319.076s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8. Recorded source; no generation.",
-      "sha256": "5d45c6407f7d51c2989e3008b72c770e70f844f9dc530b27a1913d7d414426c3"
-    },
-    {
-      "file": "train_rail.ogg",
-      "author": "MeijstroAudio / jordir",
-      "sourcePage": "https://freesound.org/people/MeijstroAudio/sounds/402074/",
-      "source": "https://cdn.freesound.org/previews/402/402074_3513022-hq.mp3",
-      "originalSha256": "72b0997c7dcc2b39933c987b6f5496c55cbc216a83c3e33df6fcfc68f15f8205",
-      "edit": "0\u20135.75s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8. Recorded source; no generation.",
-      "sha256": "5abd6a2f7e916a10c1ece2ea1909247e06e52c9930507fc94235a0fdc2322bb5"
-    },
-    {
-      "file": "train_depart.ogg",
-      "author": "keithpeter",
-      "sourcePage": "https://freesound.org/people/keithpeter/sounds/125211/",
-      "source": "https://cdn.freesound.org/previews/125/125211_1848966-hq.mp3",
-      "originalSha256": "39850849b3234e8ba3400ad51285a0d8a4df569bdd1cec84e71088c9d9a0bbe4",
-      "edit": "24\u201328s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
-      "sha256": "a700a46792aa683671996ec0a4c2e60889d7a7fd2133776493372589683728cc"
-    },
-    {
-      "file": "train_brake.ogg",
-      "author": "craigsmith / USC Cinema",
-      "sourcePage": "https://freesound.org/people/craigsmith/sounds/438765/",
-      "source": "https://cdn.freesound.org/previews/438/438765_2524442-hq.mp3",
-      "originalSha256": "4044e2ccefc6b04ca934e466b9280cec675bf6ccd7064ebeb095bec778033667",
-      "edit": "34\u201338s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
-      "sha256": "10a234912b3dad8924245b9c406f1bcf2d1b154899254ea7bc241036e7ff09b6"
-    },
-    {
-      "file": "train_stop.ogg",
-      "author": "craigsmith / USC Cinema",
-      "sourcePage": "https://freesound.org/people/craigsmith/sounds/438765/",
-      "source": "https://cdn.freesound.org/previews/438/438765_2524442-hq.mp3",
-      "originalSha256": "4044e2ccefc6b04ca934e466b9280cec675bf6ccd7064ebeb095bec778033667",
-      "edit": "81\u201385s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
-      "sha256": "4678d85d3632cfe140635813890cbe305a778c6ef43af7e29dbe8d71d9e05345"
-    },
-    {
-      "file": "train_horn.ogg",
-      "author": "Bidone",
-      "sourcePage": "https://freesound.org/people/Bidone/sounds/71778/",
-      "source": "https://cdn.freesound.org/previews/71/71778_706955-hq.mp3",
-      "originalSha256": "42c528eda2c2038fa3dce9ae32c430acce64dec23bc58886307a333c597d8d8c",
-      "edit": "0\u20133.201s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=2.801:d=0.4. Recorded source; no generation.",
-      "sha256": "4ef8d74de0124c996d0d016e87e6d04e637eeaab5133d5fc80db20a5701e7053"
-    },
-    {
-      "file": "jump.ogg",
-      "pack": "jump",
-      "author": "mieki256",
-      "published": "2013-09-18",
+      "file": "bird_robin_000.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "Joseph Sardin",
+      "sourcePage": "https://bigsoundbank.com/robin-1-s1667.html",
+      "source": "https://bigsoundbank.com/UPLOAD/ogg/1667.ogg",
       "license": "CC0-1.0",
-      "original": "https://opengameart.org/sites/default/files/jump.flac",
-      "originalSha256": "abdb4e59452a15557fbac3660626619a783e8da59b757f464a052ff74c7e7870",
-      "sha256": "a4226b8dd0774823f5f946da3a5a187d852df76c32929129a04b5b9a834c222c",
-      "processing": "Full dedicated jump clip; mono 32 kHz Vorbis quality 4; high-pass 100 Hz, low-pass 3200 Hz; -10 dB gain; 3 ms opening fade and 16 ms closing fade from 0.052 s. Runtime takeoff gain 0.12, air-jump gain 0.1."
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "5e11cc2a77253a9a32c7c6053af7c1411632bebdb9f4a58745ee785d1666ce84",
+      "sha256": "c6cbe5ab65317bfc4540f44edc1b6265efad27edeb4d30af14bc10619d24d69b",
+      "edit": "Excerpt 0.00-2.28s; mono 32 kHz Vorbis q5; highpass=f=800,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=2.2399999999999998:d=0.04; linear gain 0.663822. Native pitch, no synthesis or looping. This edited audio retains the source license."
     },
     {
-      "file": "eat.ogg",
-      "pack": "eat",
-      "author": "R1nkata",
+      "file": "bird_robin_001.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "Joseph Sardin",
+      "sourcePage": "https://bigsoundbank.com/rouge-gorge-4-s1670.html",
+      "source": "https://bigsoundbank.com/UPLOAD/ogg/1670.ogg",
       "license": "CC0-1.0",
-      "sourcePage": "https://freesound.org/people/R1nkata/sounds/723600/",
-      "source": "https://cdn.freesound.org/previews/723/723600_15636637-lq.ogg",
-      "original": "Soft Chicken Chomp 3",
-      "processing": "Full 1.439-second public Vorbis preview, unchanged. Runtime gain 0.22.",
-      "sha256": "842c076049f9ba2c2730385b318946427c1f10a362792468bf5f92f3ba6faa27"
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "c4d8372ce96b6b507cb2bd7ff90d58c8e9e147e30dc6bca16db384088f05af8d",
+      "sha256": "a6173fd562d687f6a6d4cfd84163648a99e66b503940a0bd4759c1671be02d75",
+      "edit": "Excerpt 0.00-3.11s; mono 32 kHz Vorbis q5; highpass=f=800,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=3.07:d=0.04; linear gain 0.708565. Native pitch, no synthesis or looping. This edited audio retains the source license."
     },
     {
-      "file": "flight_foliage_000.ogg",
-      "pack": "flightFoliage",
-      "original": "rustle/rustle01.flac",
-      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
-      "sourceSha256": "9c5da19eb8d37b59890c0be1171c40fe4dd16177e7a97558a156c1036b7bed05",
-      "sha256": "f43ea045ad6f83133bd1a9e88aea81d61bd4d0a831d3e3b4a051b2628d709cf6",
-      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+      "file": "bird_robin_002.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "Joseph Sardin",
+      "sourcePage": "https://bigsoundbank.com/rouge-gorge-7-s1673.html",
+      "source": "https://bigsoundbank.com/UPLOAD/ogg/1673.ogg",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "7e4602e1b27912a075d307cba76152d963d2c4669739f05a0c8df8c93b5d0cd6",
+      "sha256": "03b6857578c08111f29a12d353a36bfee808f7fbc0c07b5eda29ee4fafae41dc",
+      "edit": "Excerpt 0.00-2.64s; mono 32 kHz Vorbis q5; highpass=f=800,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=2.6:d=0.04; linear gain 0.678249. Native pitch, no synthesis or looping. This edited audio retains the source license."
     },
     {
-      "file": "flight_foliage_001.ogg",
-      "pack": "flightFoliage",
-      "original": "rustle/rustle02.flac",
-      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
-      "sourceSha256": "1e01e752b2165d78482bd91ef8b859541601ae4de6b7cf6178e935cce0036c69",
-      "sha256": "95811b2566c3c176d3099574b6030a931f1fd425c6627a872461b1440c3599a8",
-      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+      "file": "bird_sparrow_000.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "Jonathon Jongsma",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "license": "CC-BY-SA-3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
+      "sha256": "7471b7e6236f34c0aaf716917df3ce01951c74955022d809c66d424969633505",
+      "edit": "Excerpt 0.16-1.56s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=1.3599999999999999:d=0.04; linear gain 1.132307. Native pitch, no synthesis or looping. This edited audio retains the source license."
     },
     {
-      "file": "flight_foliage_002.ogg",
-      "pack": "flightFoliage",
-      "original": "rustle/rustle03.flac",
-      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
-      "sourceSha256": "517bbf429a21d3a0cd39f6f7bf9be1894615091fa07c4926f8cf69bbbfa05366",
-      "sha256": "d3cac88f05f98e351f1cd1f849d31b7b6d377341a2e8eb0e9a28ecefb035540e",
-      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+      "file": "bird_sparrow_001.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "Jonathon Jongsma",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "license": "CC-BY-SA-3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
+      "sha256": "53a290aad963b11b94c63e8fbd9be925082d8f29cff557ede2dae2284bd09056",
+      "edit": "Excerpt 3.32-4.74s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=1.38:d=0.04; linear gain 1.464837. Native pitch, no synthesis or looping. This edited audio retains the source license."
     },
     {
-      "file": "castle.ogg",
-      "pack": "castleMusic",
-      "original": "audio_9116a3530e.mp3",
-      "download": "https://cdn.pixabay.com/audio/2025/07/10/audio_9116a3530e.mp3",
-      "license": "Pixabay Content License",
-      "sourceSha256": "fe865b50a8103169106f4df2e85b2cc6be3aab25ddc00b5cbe3c072460d52655",
-      "sha256": "785a5007fb2e4461975d7046c180146108ad4a23a659c782f5c336c1d48d3fcb",
-      "processing": "Stereo 44.1 kHz Vorbis q5; full track; -18 LUFS / -3 dBTP / LRA 8; four-second runtime seam crossfade.",
-      "author": "Sonic289",
-      "title": "Game Music_ Soundtrack_Exploration _ Peaceful Area",
-      "publisherLabels": [
-        "AI generated",
-        "Content ID Registered"
-      ],
-      "licenseUrl": "https://pixabay.com/service/license-summary/"
+      "file": "bird_sparrow_002.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "Jonathon Jongsma",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "license": "CC-BY-SA-3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
+      "sha256": "aa46145993934d1c85d5e5c6ef9d470ed1551a7af2caf826f67e7f770cea26df",
+      "edit": "Excerpt 7.20-8.74s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=1.5:d=0.04; linear gain 1.178125. Native pitch, no synthesis or looping. This edited audio retains the source license."
     },
     {
-      "file": "exploration.ogg",
-      "pack": "mainMusic",
-      "original": "audio_766da5bfec.mp3",
-      "download": "https://cdn.pixabay.com/audio/2025/11/19/audio_766da5bfec.mp3",
-      "license": "Pixabay Content License",
-      "licenseUrl": "https://pixabay.com/service/license-summary/",
-      "title": "Cornerian Flight Academy, VGM Yume - Minecraft Title Theme Lofi",
-      "publisherAccount": "51383504",
-      "sourceSha256": "9fa324d5482181db3d8301d61abf5847476a21c77d3046bf0488d1aa77083506",
-      "sha256": "d276933e2f3c8a76afb625fff5f3815903f2ee3c8bc57ba03d661fef675fc954",
-      "processing": "Stereo 44.1 kHz Vorbis q5; full track; -18 LUFS / -3 dBTP / LRA 8; four-second runtime seam crossfade."
+      "file": "bird_startled_000.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "Jonathon Jongsma",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "license": "CC-BY-SA-3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
+      "sha256": "5f84d78a7c518713868d7f754e018fba7cd698245cc6ccc433b3e0678330ce50",
+      "edit": "Excerpt 0.22-0.82s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.5599999999999999:d=0.04; linear gain 1.572299. Native pitch, no synthesis or looping. This edited audio retains the source license."
+    },
+    {
+      "file": "bird_startled_001.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "Jonathon Jongsma",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
+      "license": "CC-BY-SA-3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
+      "sha256": "3dbca68bc185b8eb11a856905f0cc88b6a422f0d9cc69247ada63b96d5cdbb47",
+      "edit": "Excerpt 4.23-4.88s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.61:d=0.04; linear gain 1.501602. Native pitch, no synthesis or looping. This edited audio retains the source license."
+    },
+    {
+      "file": "bird_wings_000.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "David / naturenotesuk",
+      "sourcePage": "https://freesound.org/people/naturenotesuk/sounds/830034/",
+      "source": "https://cdn.freesound.org/previews/830/830034_7455632-hq.mp3",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "8fd901be412337ef4c1886ac8c7b47bd8705e224d31303c4e6e0c9f04dd79c43",
+      "sha256": "ce430c185bc5a73338b1155d8973543b66222d78f389e1e132c58509bdafd771",
+      "edit": "Excerpt 7.40-8.34s; mono 32 kHz Vorbis q5; highpass=f=180,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.8999999999999999:d=0.04; linear gain 6.968361. Native pitch, no synthesis or looping. This edited audio retains the source license."
+    },
+    {
+      "file": "bird_wings_001.ogg",
+      "pack": "birdFieldRecordings",
+      "author": "David / naturenotesuk",
+      "sourcePage": "https://freesound.org/people/naturenotesuk/sounds/830034/",
+      "source": "https://cdn.freesound.org/previews/830/830034_7455632-hq.mp3",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "downloaded": "2026-10-09",
+      "originalSha256": "8fd901be412337ef4c1886ac8c7b47bd8705e224d31303c4e6e0c9f04dd79c43",
+      "sha256": "860f92cd709dd6cb6f3befcd8438a3f588cf87158ac3c3fa4c61e3521f2950f3",
+      "edit": "Excerpt 10.48-11.18s; mono 32 kHz Vorbis q5; highpass=f=180,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.6599999999999999:d=0.04; linear gain 8.000000. Native pitch, no synthesis or looping. This edited audio retains the source license."
+    },
+    {
+      "file": "bookOpen.ogg",
+      "pack": "rpg",
+      "original": "bookOpen.ogg",
+      "sha256": "953390534377222bee89ac8cd9e60a58fdc037c71a4d7c18c43cd647c7f34ba8"
     },
     {
       "file": "campfire_woods.ogg",
@@ -535,6 +267,23 @@
       "sourceSha256": "0fcf893ad32e5bb65dec291f8d94f6850489f15a3e8ec9d78d2f8f02941f3957",
       "sha256": "6f46a04bffbef5a90d446039b0c59eb009200daf77e8b5a0458d8c0a49fdd603",
       "processing": "Mono 32 kHz Vorbis q4; excerpt 0.250\u20130.912s; highpass 70 Hz / lowpass 8500 Hz; Linear RMS target -21 dBFS, bounded by -5 dBFS oversampled peaks; 6 ms opening / 50 ms closing fades."
+    },
+    {
+      "file": "castle.ogg",
+      "pack": "castleMusic",
+      "original": "audio_9116a3530e.mp3",
+      "download": "https://cdn.pixabay.com/audio/2025/07/10/audio_9116a3530e.mp3",
+      "license": "Pixabay Content License",
+      "sourceSha256": "fe865b50a8103169106f4df2e85b2cc6be3aab25ddc00b5cbe3c072460d52655",
+      "sha256": "785a5007fb2e4461975d7046c180146108ad4a23a659c782f5c336c1d48d3fcb",
+      "processing": "Stereo 44.1 kHz Vorbis q5; full track; -18 LUFS / -3 dBTP / LRA 8; four-second runtime seam crossfade.",
+      "author": "Sonic289",
+      "title": "Game Music_ Soundtrack_Exploration _ Peaceful Area",
+      "publisherLabels": [
+        "AI generated",
+        "Content ID Registered"
+      ],
+      "licenseUrl": "https://pixabay.com/service/license-summary/"
     },
     {
       "file": "cave_air.ogg",
@@ -647,6 +396,92 @@
       "processing": "Mono 32 kHz Vorbis q4; excerpt 0.000\u20132.544s; highpass 70 Hz / lowpass 8500 Hz; Linear RMS target -21 dBFS, bounded by -5 dBFS oversampled peaks; 6 ms opening / 50 ms closing fades."
     },
     {
+      "file": "cinematic_dive_underwater.mp3",
+      "pack": "approvedPixabay",
+      "sourcePage": "https://pixabay.com/sound-effects/cinematic-dive-underwater-467471/",
+      "download": "https://cdn.pixabay.com/download/audio/2026/01/16/audio_4cff38a0a9.mp3?filename=dragon-studio-cinematic-dive-underwater-467471.mp3",
+      "license": "Pixabay Content License",
+      "licenseUrl": "https://pixabay.com/service/license-summary/",
+      "sourceSha256": "0fd657f52db6a41eed9bca208fd54acc8782f716f404fe7e210996d111ab7b27",
+      "sha256": "0fd657f52db6a41eed9bca208fd54acc8782f716f404fe7e210996d111ab7b27",
+      "processing": "Bundled original 48 kHz stereo MP3 unchanged (2.04 s); runtime playback limits each event to a short splash or dive cue."
+    },
+    {
+      "file": "click_001.ogg",
+      "pack": "interface",
+      "original": "click_001.ogg",
+      "sha256": "ccfb7fa0cccdd9faec0eb16033c732b1e308d139d80f799161495d58f7adcdb9"
+    },
+    {
+      "file": "cloth1.ogg",
+      "pack": "rpg",
+      "original": "cloth1.ogg",
+      "sha256": "ddb93a3671233f95da0e0b10367f082f7eb42fa6caaddcf776410aa8833c747d"
+    },
+    {
+      "file": "cloth2.ogg",
+      "pack": "rpg",
+      "original": "cloth2.ogg",
+      "sha256": "8a7451193c38bc05483aec25dd193e163a15d44cf7fff04ac7912573231b0201"
+    },
+    {
+      "file": "cloth3.ogg",
+      "pack": "rpg",
+      "original": "cloth3.ogg",
+      "sha256": "a48632d17a4f1416541d261a32a31612e01267144c407fa3ecab3ff410f0085b"
+    },
+    {
+      "file": "cloth4.ogg",
+      "pack": "rpg",
+      "original": "cloth4.ogg",
+      "sha256": "e7ab9a6c4466dea874196c61f59bf1da05cfe58748f42fadd695d441a154a99b"
+    },
+    {
+      "file": "confirmation_001.ogg",
+      "pack": "interface",
+      "original": "confirmation_001.ogg",
+      "sha256": "063564703b6094d70718a3e787a55cc9141611e4ecd6b6637f8828f79b4a8c3a"
+    },
+    {
+      "file": "crickets.ogg",
+      "author": "Augmentality (Brandon Morris)",
+      "sourcePage": "https://opengameart.org/content/random-sounds-samples",
+      "source": "https://opengameart.org/sites/default/files/cricket%20ambienc276.ogg",
+      "sha256": "31c93d0c6d7d73a9ed002a7f4434d0adee198e51c0d318b48ce1eeb4dea5a811",
+      "originalSha256": "0d672c93843afc5785cbf4eeb6df696a73188016724ff59bcbd9c623b8d223bf",
+      "edit": "0\u201312.27s excerpt; mono 32 kHz Vorbis quality 3; highpass=f=150,loudnorm=I=-24:TP=-3:LRA=8. Playback crossfades the loop seam."
+    },
+    {
+      "file": "eat.ogg",
+      "pack": "eat",
+      "author": "R1nkata",
+      "license": "CC0-1.0",
+      "sourcePage": "https://freesound.org/people/R1nkata/sounds/723600/",
+      "source": "https://cdn.freesound.org/previews/723/723600_15636637-lq.ogg",
+      "original": "Soft Chicken Chomp 3",
+      "processing": "Full 1.439-second public Vorbis preview, unchanged. Runtime gain 0.22.",
+      "sha256": "842c076049f9ba2c2730385b318946427c1f10a362792468bf5f92f3ba6faa27"
+    },
+    {
+      "file": "error_001.ogg",
+      "pack": "interface",
+      "original": "error_001.ogg",
+      "sha256": "46e67425d16339772e8d328fb36a49426c9467418686e11beeb71ff84b0f6433"
+    },
+    {
+      "file": "exploration.ogg",
+      "pack": "mainMusic",
+      "original": "audio_766da5bfec.mp3",
+      "download": "https://cdn.pixabay.com/audio/2025/11/19/audio_766da5bfec.mp3",
+      "license": "Pixabay Content License",
+      "licenseUrl": "https://pixabay.com/service/license-summary/",
+      "title": "Cornerian Flight Academy, VGM Yume - Minecraft Title Theme Lofi",
+      "publisherAccount": "51383504",
+      "sourceSha256": "9fa324d5482181db3d8301d61abf5847476a21c77d3046bf0488d1aa77083506",
+      "sha256": "d276933e2f3c8a76afb625fff5f3815903f2ee3c8bc57ba03d661fef675fc954",
+      "processing": "Stereo 44.1 kHz Vorbis q5; full track; -18 LUFS / -3 dBTP / LRA 8; four-second runtime seam crossfade."
+    },
+    {
       "file": "flashlight.ogg",
       "pack": "approvedPixabay",
       "sourcePage": "https://pixabay.com/sound-effects/film-special-effects-flashlight-click-46073/",
@@ -658,6 +493,249 @@
       "processing": "Mono 32 kHz Vorbis q4; excerpt 0.400\u20130.792s; highpass 70 Hz / lowpass 8500 Hz; Linear RMS target -21 dBFS, bounded by -5 dBFS oversampled peaks; 6 ms opening / 50 ms closing fades."
     },
     {
+      "file": "flight_foliage_000.ogg",
+      "pack": "flightFoliage",
+      "original": "rustle/rustle01.flac",
+      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
+      "sourceSha256": "9c5da19eb8d37b59890c0be1171c40fe4dd16177e7a97558a156c1036b7bed05",
+      "sha256": "f43ea045ad6f83133bd1a9e88aea81d61bd4d0a831d3e3b4a051b2628d709cf6",
+      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+    },
+    {
+      "file": "flight_foliage_001.ogg",
+      "pack": "flightFoliage",
+      "original": "rustle/rustle02.flac",
+      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
+      "sourceSha256": "1e01e752b2165d78482bd91ef8b859541601ae4de6b7cf6178e935cce0036c69",
+      "sha256": "95811b2566c3c176d3099574b6030a931f1fd425c6627a872461b1440c3599a8",
+      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+    },
+    {
+      "file": "flight_foliage_002.ogg",
+      "pack": "flightFoliage",
+      "original": "rustle/rustle03.flac",
+      "download": "https://opengameart.org/sites/default/files/qubodup-rustle.7z",
+      "sourceSha256": "517bbf429a21d3a0cd39f6f7bf9be1894615091fa07c4926f8cf69bbbfa05366",
+      "sha256": "d3cac88f05f98e351f1cd1f849d31b7b6d377341a2e8eb0e9a28ecefb035540e",
+      "processing": "Mono 32 kHz Vorbis q4; highpass 70 Hz, lowpass 8500 Hz; -20 LUFS / -3 dBTP / LRA 8. Full leaf rustle; 12 ms opening / 60 ms closing fades."
+    },
+    {
+      "file": "footstep_concrete_000.ogg",
+      "pack": "impact",
+      "original": "footstep_concrete_000.ogg",
+      "sha256": "d7267e183067757c92c169de2a379abea592cfca6b39bb2e8feea15221ad79fe"
+    },
+    {
+      "file": "footstep_concrete_001.ogg",
+      "pack": "impact",
+      "original": "footstep_concrete_001.ogg",
+      "sha256": "507a75eb19b897087855a3be3cf11a12d7fa37d143ad535eeebe0b8031c7325d"
+    },
+    {
+      "file": "footstep_concrete_002.ogg",
+      "pack": "impact",
+      "original": "footstep_concrete_002.ogg",
+      "sha256": "b21fa546d74941196b25da8a20b7010abd8c05c4fcf93545d1f344e66a664e13"
+    },
+    {
+      "file": "footstep_grass_000.ogg",
+      "pack": "impact",
+      "original": "footstep_grass_000.ogg",
+      "sha256": "9d49497777405d78d7cf7f2888e28277f3a23192300cfd1d79d54876b20f479f"
+    },
+    {
+      "file": "footstep_grass_001.ogg",
+      "pack": "impact",
+      "original": "footstep_grass_001.ogg",
+      "sha256": "fb28781bd22b2eefdc14077f1adf5c94d7fe9c3a130194633b55f3e0d39d9f04"
+    },
+    {
+      "file": "footstep_grass_002.ogg",
+      "pack": "impact",
+      "original": "footstep_grass_002.ogg",
+      "sha256": "73a520139f5be716a403bfe9c80e0e94d1e61d8e9de04a354b336392164b53dc"
+    },
+    {
+      "file": "footstep_snow_000.ogg",
+      "pack": "impact",
+      "original": "footstep_snow_000.ogg",
+      "sha256": "c05fa4a9dc9a7aabc04996466fb589537e49af76de9998d8f9e6270ec92dcef7"
+    },
+    {
+      "file": "footstep_snow_001.ogg",
+      "pack": "impact",
+      "original": "footstep_snow_001.ogg",
+      "sha256": "980fb9a1c9227aed7995067b0357f373053337f2416316db8ea0438418542fb4"
+    },
+    {
+      "file": "footstep_snow_002.ogg",
+      "pack": "impact",
+      "original": "footstep_snow_002.ogg",
+      "sha256": "db52bafdc66304f3b999f2c29227826c65993916e630ac2ffbca17d07b263178"
+    },
+    {
+      "file": "footstep_wood_000.ogg",
+      "pack": "impact",
+      "original": "footstep_wood_000.ogg",
+      "sha256": "5f1c252942a220d658121bd9417448cd19649ded9fff2ff15f6e50899373ce8e"
+    },
+    {
+      "file": "footstep_wood_001.ogg",
+      "pack": "impact",
+      "original": "footstep_wood_001.ogg",
+      "sha256": "e4f68e1c9fd55b4dc8ca89ed2bbab6f200171bc54bdc18aa96b80d8e7336f462"
+    },
+    {
+      "file": "footstep_wood_002.ogg",
+      "pack": "impact",
+      "original": "footstep_wood_002.ogg",
+      "sha256": "9ff095b05cee5eec40b081defe3f0eef7232bb16d4865ce03b9f6dbab875cfdd"
+    },
+    {
+      "file": "glass_001.ogg",
+      "pack": "interface",
+      "original": "glass_001.ogg",
+      "sha256": "183eebee20eb0a532b0b85104d139cbf2673eb66d95c3cc733ac9ea98362e7e8"
+    },
+    {
+      "file": "handleCoins.ogg",
+      "pack": "rpg",
+      "original": "handleCoins.ogg",
+      "sha256": "8a91f969e932df709df80ee124d86a51389eed9b67f22e5e716bc2bbf60d8dab"
+    },
+    {
+      "file": "handleSmallLeather.ogg",
+      "pack": "rpg",
+      "original": "handleSmallLeather.ogg",
+      "sha256": "ae3cbf695aa0a8b98b5a80a835be5a3ccbd5446a24db2235cd4c3cd6fc92ed96"
+    },
+    {
+      "file": "impactMetal_light_000.ogg",
+      "pack": "impact",
+      "original": "impactMetal_light_000.ogg",
+      "sha256": "33b5e6e37c6e9d54e07bf5a89b12c76e879f40c1ea83cdd82714df1d6f9fec6d"
+    },
+    {
+      "file": "impactMetal_light_001.ogg",
+      "pack": "impact",
+      "original": "impactMetal_light_001.ogg",
+      "sha256": "fba69c467ddd85da7b1d82e259f936b876d9ba6a3d6f1b24bdd10468e46bfe08"
+    },
+    {
+      "file": "impactMetal_light_002.ogg",
+      "pack": "impact",
+      "original": "impactMetal_light_002.ogg",
+      "sha256": "25a96f90a9a1f88a531e824e126f0519504625e5635e65a72e4f31611428db29"
+    },
+    {
+      "file": "impactMining_000.ogg",
+      "pack": "impact",
+      "original": "impactMining_000.ogg",
+      "sha256": "36b4ea107222d073c67ca64dde26944975609202d5090b2f2021213c1a7e35cd"
+    },
+    {
+      "file": "impactMining_001.ogg",
+      "pack": "impact",
+      "original": "impactMining_001.ogg",
+      "sha256": "61235a18de3f3d92118235398222dbf51d448f1be70b1c8bc962b10b86f2d9c6"
+    },
+    {
+      "file": "impactMining_002.ogg",
+      "pack": "impact",
+      "original": "impactMining_002.ogg",
+      "sha256": "059558ec751115ca6b1441e00f0adc837c1a3eeb0a066b109e0fd879fc5d0b0c"
+    },
+    {
+      "file": "impactMining_003.ogg",
+      "pack": "impact",
+      "original": "impactMining_003.ogg",
+      "sha256": "4237fa2cd80364ad81cd0af44f67d7497f1c5edcc7bdb02cd22be2ba4580c83d"
+    },
+    {
+      "file": "impactMining_004.ogg",
+      "pack": "impact",
+      "original": "impactMining_004.ogg",
+      "sha256": "8ca3a99d85d845751ad8ce7b40509da58263a62e48cde70e5a30b5ccef4c9a3b"
+    },
+    {
+      "file": "impactSoft_medium_000.ogg",
+      "pack": "impact",
+      "original": "impactSoft_medium_000.ogg",
+      "sha256": "7d3ba0bb5e60a11b5d3e558c141303dcf494256675fbf753c0d252d2cf0481e3"
+    },
+    {
+      "file": "impactSoft_medium_001.ogg",
+      "pack": "impact",
+      "original": "impactSoft_medium_001.ogg",
+      "sha256": "7642a4fd43e547afe4f7adfadb3dabb681c0ff512f52c1674bae30a726841faf"
+    },
+    {
+      "file": "impactSoft_medium_002.ogg",
+      "pack": "impact",
+      "original": "impactSoft_medium_002.ogg",
+      "sha256": "5069e3571a77d7f7aae9ef71d0364aa245fb7d64a7c8cc9956f221d03088c089"
+    },
+    {
+      "file": "impactWood_heavy_000.ogg",
+      "pack": "impact",
+      "original": "impactWood_heavy_000.ogg",
+      "sha256": "15ff82332f342c30e469215539e1cc57e11b221aa2cf7e11e811d313a9927f3d"
+    },
+    {
+      "file": "impactWood_heavy_001.ogg",
+      "pack": "impact",
+      "original": "impactWood_heavy_001.ogg",
+      "sha256": "f1b07a53ac10c615fff9ba470511fdeb722b5902e1a8520759fc20ad6f546015"
+    },
+    {
+      "file": "impactWood_heavy_002.ogg",
+      "pack": "impact",
+      "original": "impactWood_heavy_002.ogg",
+      "sha256": "ce1e06f2a05f2634c645cb72f6a1623e64bc2d92be34917430a61031fb6597d4"
+    },
+    {
+      "file": "impactWood_medium_000.ogg",
+      "pack": "impact",
+      "original": "impactWood_medium_000.ogg",
+      "sha256": "1723a9fd25103ed41af06054814e84e65f4a772bac86ab2dc927da93d9592ff5"
+    },
+    {
+      "file": "impactWood_medium_001.ogg",
+      "pack": "impact",
+      "original": "impactWood_medium_001.ogg",
+      "sha256": "15271dbe8e2872dbb0ff1aeb7b12b2d2b92b7c1951c88532b9ab9158c36dfc73"
+    },
+    {
+      "file": "impactWood_medium_002.ogg",
+      "pack": "impact",
+      "original": "impactWood_medium_002.ogg",
+      "sha256": "3f3f1917428b828f733a963167833c707bf88296ff158e1559c57c5cb813d799"
+    },
+    {
+      "file": "jump.ogg",
+      "pack": "jump",
+      "author": "mieki256",
+      "published": "2013-09-18",
+      "license": "CC0-1.0",
+      "original": "https://opengameart.org/sites/default/files/jump.flac",
+      "originalSha256": "abdb4e59452a15557fbac3660626619a783e8da59b757f464a052ff74c7e7870",
+      "sha256": "a4226b8dd0774823f5f946da3a5a187d852df76c32929129a04b5b9a834c222c",
+      "processing": "Full dedicated jump clip; mono 32 kHz Vorbis quality 4; high-pass 100 Hz, low-pass 3200 Hz; -10 dB gain; 3 ms opening fade and 16 ms closing fade from 0.052 s. Runtime takeoff gain 0.12, air-jump gain 0.1."
+    },
+    {
+      "file": "knifeSlice.ogg",
+      "pack": "rpg",
+      "original": "knifeSlice.ogg",
+      "sha256": "4cd96dc630bed9840c15f1dd2306da2cc56a4da26a5d3f1a03c5a7265ac5e54f"
+    },
+    {
+      "file": "landing.wav",
+      "author": "MentalSanityOff; submitted by qubodup",
+      "sourcePage": "https://opengameart.org/content/jump-landing-sound",
+      "source": "https://opengameart.org/sites/default/files/jumpland.wav",
+      "sha256": "b4d262eb5c048167cceca9f5d790f6ad9310c14588ce87f5466c0a978228a4ca"
+    },
+    {
       "file": "lava.ogg",
       "pack": "approvedPixabay",
       "sourcePage": "https://pixabay.com/sound-effects/nature-lava-loop-3-28887/",
@@ -667,6 +745,13 @@
       "sourceSha256": "d7e03e5c58139d690494cd85e1368dbd3b5f6649d8672566c1f5fd60d03300bd",
       "sha256": "8f3ca377c497522cf0a10170836730ca6d3eebda5af84b05f7811dcbdd2a79ba",
       "processing": "Mono 32 kHz Vorbis q4; excerpt 0.000\u201316.000s; highpass 35 Hz / lowpass 8500 Hz; Linear RMS target -28 dBFS, bounded by -5 dBFS oversampled peaks; 6 ms opening / 50 ms closing fades."
+    },
+    {
+      "file": "leaves.ogg",
+      "author": "Augmentality (Brandon Morris)",
+      "sourcePage": "https://opengameart.org/content/random-sounds-samples",
+      "source": "https://opengameart.org/sites/default/files/moving%20leaves%20stereo.ogg",
+      "sha256": "678c0da00ef1092f4be7c2d8c7b22c1c91c5fc8ca1f3f9570ce59de995c0138c"
     },
     {
       "file": "mining_break.ogg",
@@ -755,6 +840,30 @@
       "sourceSha256": "39994d86ba802eb27a8fab3a19c2ed8c0ede5477a2423b8e484a6680043e54af",
       "sha256": "0f6714c1cacabb015a404e5696fb1bf89a2faa18505a980f4144f0a94a6f85e0",
       "processing": "Mono 32 kHz Vorbis q4; excerpt 4.590\u20135.240s; highpass 70 Hz / lowpass 8500 Hz; Linear RMS target -21 dBFS, bounded by -5 dBFS oversampled peaks; 6 ms opening / 50 ms closing fades."
+    },
+    {
+      "file": "select_001.ogg",
+      "pack": "interface",
+      "original": "select_001.ogg",
+      "sha256": "aec0c31ea934a35936ae0d2ab8fac8123c93aa5647f935853a58dbaf90278b7a"
+    },
+    {
+      "file": "shovel.ogg",
+      "author": "RavenWolfProds; edited by themightyglider",
+      "sourcePage": "https://opengameart.org/content/shovel-sound",
+      "source": "https://opengameart.org/sites/default/files/shovel_0.ogg",
+      "sha256": "1ad178afa5d959ecd4454c3d8388abb23451a1f43a028f476aa37aa3a944d195"
+    },
+    {
+      "file": "splashing_water.mp3",
+      "pack": "approvedPixabay",
+      "sourcePage": "https://pixabay.com/sound-effects/nature-splashing-water-443136/",
+      "download": "https://cdn.pixabay.com/download/audio/2025/11/26/audio_afaa108f43.mp3?filename=dragon-studio-splashing-water-443136.mp3",
+      "license": "Pixabay Content License",
+      "licenseUrl": "https://pixabay.com/service/license-summary/",
+      "sourceSha256": "c79162c6c7ea79f0525be06cf7ff66f8f4cd5eb7ffbbefed5e905605e80aa2f5",
+      "sha256": "c79162c6c7ea79f0525be06cf7ff66f8f4cd5eb7ffbbefed5e905605e80aa2f5",
+      "processing": "Bundled original 48 kHz stereo MP3 unchanged (2.04 s); runtime playback limits each event to a short splash or dive cue."
     },
     {
       "file": "steam.ogg",
@@ -856,6 +965,69 @@
       "processing": "Mono 32 kHz Vorbis q4; excerpt 50.570\u201351.070s; highpass 70 Hz / lowpass 8500 Hz; Linear RMS target -21 dBFS, bounded by -5 dBFS oversampled peaks; 6 ms opening / 50 ms closing fades."
     },
     {
+      "file": "surf.ogg",
+      "author": "transitking",
+      "sourcePage": "https://freesound.org/people/transitking/sounds/11505/",
+      "source": "https://cdn.freesound.org/previews/11/11505_31028-hq.mp3",
+      "originalSha256": "ea2a900f500c32330b6ecafcf7fe283d854048f5f7364ec115f267b7faf7b29f",
+      "edit": "36\u201376s excerpt of the publisher's high-quality MP3 preview of wavesound.wav; highpass 80 Hz, lowpass 8 kHz; -24 LUFS / -3 dBTP / LRA 8 normalization; stereo 32 kHz Vorbis quality 3. Playback crossfades the loop seam.",
+      "sha256": "44495445e0b7e270f327be14cef172ec2e97a7ac50ee9bd62a3f3b4f0d863870"
+    },
+    {
+      "file": "train_brake.ogg",
+      "author": "craigsmith / USC Cinema",
+      "sourcePage": "https://freesound.org/people/craigsmith/sounds/438765/",
+      "source": "https://cdn.freesound.org/previews/438/438765_2524442-hq.mp3",
+      "originalSha256": "4044e2ccefc6b04ca934e466b9280cec675bf6ccd7064ebeb095bec778033667",
+      "edit": "34\u201338s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
+      "sha256": "10a234912b3dad8924245b9c406f1bcf2d1b154899254ea7bc241036e7ff09b6"
+    },
+    {
+      "file": "train_depart.ogg",
+      "author": "keithpeter",
+      "sourcePage": "https://freesound.org/people/keithpeter/sounds/125211/",
+      "source": "https://cdn.freesound.org/previews/125/125211_1848966-hq.mp3",
+      "originalSha256": "39850849b3234e8ba3400ad51285a0d8a4df569bdd1cec84e71088c9d9a0bbe4",
+      "edit": "24\u201328s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
+      "sha256": "a700a46792aa683671996ec0a4c2e60889d7a7fd2133776493372589683728cc"
+    },
+    {
+      "file": "train_drive.ogg",
+      "author": "xo9rh11o3w",
+      "sourcePage": "https://freesound.org/people/xo9rh11o3w/sounds/199828/",
+      "source": "https://cdn.freesound.org/previews/199/199828_2814100-hq.mp3",
+      "originalSha256": "c2b224ab9e3969a5289eb46813ed46867090cd55bd709f79ae6f837ad7077e73",
+      "edit": "0\u201319.076s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8. Recorded source; no generation.",
+      "sha256": "5d45c6407f7d51c2989e3008b72c770e70f844f9dc530b27a1913d7d414426c3"
+    },
+    {
+      "file": "train_horn.ogg",
+      "author": "Bidone",
+      "sourcePage": "https://freesound.org/people/Bidone/sounds/71778/",
+      "source": "https://cdn.freesound.org/previews/71/71778_706955-hq.mp3",
+      "originalSha256": "42c528eda2c2038fa3dce9ae32c430acce64dec23bc58886307a333c597d8d8c",
+      "edit": "0\u20133.201s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=2.801:d=0.4. Recorded source; no generation.",
+      "sha256": "4ef8d74de0124c996d0d016e87e6d04e637eeaab5133d5fc80db20a5701e7053"
+    },
+    {
+      "file": "train_rail.ogg",
+      "author": "MeijstroAudio / jordir",
+      "sourcePage": "https://freesound.org/people/MeijstroAudio/sounds/402074/",
+      "source": "https://cdn.freesound.org/previews/402/402074_3513022-hq.mp3",
+      "originalSha256": "72b0997c7dcc2b39933c987b6f5496c55cbc216a83c3e33df6fcfc68f15f8205",
+      "edit": "0\u20135.75s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8. Recorded source; no generation.",
+      "sha256": "5abd6a2f7e916a10c1ece2ea1909247e06e52c9930507fc94235a0fdc2322bb5"
+    },
+    {
+      "file": "train_stop.ogg",
+      "author": "craigsmith / USC Cinema",
+      "sourcePage": "https://freesound.org/people/craigsmith/sounds/438765/",
+      "source": "https://cdn.freesound.org/previews/438/438765_2524442-hq.mp3",
+      "originalSha256": "4044e2ccefc6b04ca934e466b9280cec675bf6ccd7064ebeb095bec778033667",
+      "edit": "81\u201385s public high-quality MP3 preview excerpt; mono 32 kHz Vorbis quality 4; highpass=f=90,lowpass=f=7000,loudnorm=I=-23:TP=-3:LRA=8,afade=t=in:d=0.06,afade=t=out:st=3.6:d=0.4. Recorded source; no generation.",
+      "sha256": "4678d85d3632cfe140635813890cbe305a778c6ef43af7e29dbe8d71d9e05345"
+    },
+    {
       "file": "volcano.ogg",
       "pack": "approvedPixabay",
       "sourcePage": "https://pixabay.com/sound-effects/nature-volcano-71156/",
@@ -865,6 +1037,28 @@
       "sourceSha256": "3bec9695761c4b27d12156565bdc7dc6239c99acff6bd3c525dcaa5933cb93cb",
       "sha256": "5691a621391475f1ea1561fbe6f20b9c270f19220b11b90c911f2804c218b640",
       "processing": "Mono 32 kHz Vorbis q4; excerpt 0.000\u201318.000s; highpass 35 Hz / lowpass 8500 Hz; Linear RMS target -24 dBFS, bounded by -5 dBFS oversampled peaks; 6 ms opening / 50 ms closing fades."
+    },
+    {
+      "file": "water_breath_in.mp3",
+      "pack": "approvedPixabay",
+      "sourcePage": "https://pixabay.com/sound-effects/people-inalare-274160/",
+      "download": "https://cdn.pixabay.com/download/audio/2024/12/08/audio_4973c7d61c.mp3?filename=pensieri_profondi_scuba-inalare-274160.mp3",
+      "license": "Pixabay Content License",
+      "licenseUrl": "https://pixabay.com/service/license-summary/",
+      "sourceSha256": "d5d2b95759915b00584a59a47a4608f030d0a7335b6ca9a3c74940b267280ad5",
+      "sha256": "d5d2b95759915b00584a59a47a4608f030d0a7335b6ca9a3c74940b267280ad5",
+      "processing": "Bundled original 44.1 kHz mono MP3 unchanged (1.12 s); played as a short inhale after a resurfacing splash."
+    },
+    {
+      "file": "water_splash_effect.mp3",
+      "pack": "approvedPixabay",
+      "sourcePage": "https://pixabay.com/sound-effects/nature-water-splash-effect-443133/",
+      "download": "https://cdn.pixabay.com/download/audio/2025/11/26/audio_0267789f35.mp3?filename=dragon-studio-water-splash-effect-443133.mp3",
+      "license": "Pixabay Content License",
+      "licenseUrl": "https://pixabay.com/service/license-summary/",
+      "sourceSha256": "51b391719d208f51db037a63aa0f881f15ee6aa9947bf19bf9f0c2cd62b57b0c",
+      "sha256": "51b391719d208f51db037a63aa0f881f15ee6aa9947bf19bf9f0c2cd62b57b0c",
+      "processing": "Bundled original 48 kHz stereo MP3 unchanged (2.04 s); runtime playback limits each event to a short splash or dive cue."
     },
     {
       "file": "waterfall.ogg",
@@ -878,160 +1072,26 @@
       "processing": "Mono 32 kHz Vorbis q4; excerpt 0.000\u201315.000s; highpass 70 Hz / lowpass 8500 Hz; Linear RMS target -28 dBFS, bounded by -5 dBFS oversampled peaks; 6 ms opening / 50 ms closing fades."
     },
     {
-      "file": "bird_robin_000.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "Joseph Sardin",
-      "sourcePage": "https://bigsoundbank.com/robin-1-s1667.html",
-      "source": "https://bigsoundbank.com/UPLOAD/ogg/1667.ogg",
+      "file": "wind_clean.ogg",
+      "author": "Luke.RUSTLTD",
+      "published": "2010-10-01",
       "license": "CC0-1.0",
-      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "5e11cc2a77253a9a32c7c6053af7c1411632bebdb9f4a58745ee785d1666ce84",
-      "sha256": "c6cbe5ab65317bfc4540f44edc1b6265efad27edeb4d30af14bc10619d24d69b",
-      "edit": "Excerpt 0.00-2.28s; mono 32 kHz Vorbis q5; highpass=f=800,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=2.2399999999999998:d=0.04; linear gain 0.663822. Native pitch, no synthesis or looping. This edited audio retains the source license."
+      "sourcePage": "https://opengameart.org/content/wind1",
+      "source": "https://opengameart.org/sites/default/files/wind1.wav",
+      "sha256": "01fb3f5cf2136ced5691073b60f36968c7203c1a8d00f6d425e2ec6bfddacadb",
+      "originalSha256": "a2856f794fbf77e05f8241dc4adeade7f62fa21c3c9dc49f7725b6c6218060c3",
+      "edit": "12\u201348s excerpt; mono 32 kHz Vorbis quality 3; highpass=f=80,lowpass=f=4000,loudnorm=I=-24:TP=-3:LRA=8. Playback crossfades the loop seam. Originally made with conventional PureData synthesis in 2010; no AI, wildlife, or runtime synthesis."
     },
     {
-      "file": "bird_robin_001.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "Joseph Sardin",
-      "sourcePage": "https://bigsoundbank.com/rouge-gorge-4-s1670.html",
-      "source": "https://bigsoundbank.com/UPLOAD/ogg/1670.ogg",
-      "license": "CC0-1.0",
-      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "file": "stone_oof.mp3",
+      "title": "Oof 2",
+      "author": "u_b9zlfeiqje",
+      "sourcePage": "https://pixabay.com/sound-effects/people-oof-2-580732/",
+      "original": "u_b9zlfeiqje-oof-2-580732.mp3",
+      "license": "Pixabay Content License",
+      "licenseUrl": "https://pixabay.com/service/license-summary/",
       "downloaded": "2026-10-09",
-      "originalSha256": "c4d8372ce96b6b507cb2bd7ff90d58c8e9e147e30dc6bca16db384088f05af8d",
-      "sha256": "a6173fd562d687f6a6d4cfd84163648a99e66b503940a0bd4759c1671be02d75",
-      "edit": "Excerpt 0.00-3.11s; mono 32 kHz Vorbis q5; highpass=f=800,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=3.07:d=0.04; linear gain 0.708565. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_robin_002.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "Joseph Sardin",
-      "sourcePage": "https://bigsoundbank.com/rouge-gorge-7-s1673.html",
-      "source": "https://bigsoundbank.com/UPLOAD/ogg/1673.ogg",
-      "license": "CC0-1.0",
-      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "7e4602e1b27912a075d307cba76152d963d2c4669739f05a0c8df8c93b5d0cd6",
-      "sha256": "03b6857578c08111f29a12d353a36bfee808f7fbc0c07b5eda29ee4fafae41dc",
-      "edit": "Excerpt 0.00-2.64s; mono 32 kHz Vorbis q5; highpass=f=800,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=2.6:d=0.04; linear gain 0.678249. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_blue_tit_000.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "David / naturenotesuk",
-      "sourcePage": "https://freesound.org/people/naturenotesuk/sounds/830034/",
-      "source": "https://cdn.freesound.org/previews/830/830034_7455632-hq.mp3",
-      "license": "CC-BY-4.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "8fd901be412337ef4c1886ac8c7b47bd8705e224d31303c4e6e0c9f04dd79c43",
-      "sha256": "3158912eb376346c514addb50c2b6afa241dee32d83e827241ed0fdcd89a7827",
-      "edit": "Excerpt 2.18-3.21s; mono 32 kHz Vorbis q5; highpass=f=900,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.99:d=0.04; linear gain 0.863197. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_blue_tit_001.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "David / naturenotesuk",
-      "sourcePage": "https://freesound.org/people/naturenotesuk/sounds/830034/",
-      "source": "https://cdn.freesound.org/previews/830/830034_7455632-hq.mp3",
-      "license": "CC-BY-4.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "8fd901be412337ef4c1886ac8c7b47bd8705e224d31303c4e6e0c9f04dd79c43",
-      "sha256": "fa4f639d7dc60fbec7bb37d318e8487d5c66b0ff631fd97ce29341caf6c1a8a6",
-      "edit": "Excerpt 3.50-4.40s; mono 32 kHz Vorbis q5; highpass=f=900,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.86:d=0.04; linear gain 5.312342. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_sparrow_000.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "Jonathon Jongsma",
-      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "license": "CC-BY-SA-3.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
-      "sha256": "7471b7e6236f34c0aaf716917df3ce01951c74955022d809c66d424969633505",
-      "edit": "Excerpt 0.16-1.56s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=1.3599999999999999:d=0.04; linear gain 1.132307. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_sparrow_001.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "Jonathon Jongsma",
-      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "license": "CC-BY-SA-3.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
-      "sha256": "53a290aad963b11b94c63e8fbd9be925082d8f29cff557ede2dae2284bd09056",
-      "edit": "Excerpt 3.32-4.74s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=1.38:d=0.04; linear gain 1.464837. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_sparrow_002.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "Jonathon Jongsma",
-      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "license": "CC-BY-SA-3.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
-      "sha256": "aa46145993934d1c85d5e5c6ef9d470ed1551a7af2caf826f67e7f770cea26df",
-      "edit": "Excerpt 7.20-8.74s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=1.5:d=0.04; linear gain 1.178125. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_wings_000.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "David / naturenotesuk",
-      "sourcePage": "https://freesound.org/people/naturenotesuk/sounds/830034/",
-      "source": "https://cdn.freesound.org/previews/830/830034_7455632-hq.mp3",
-      "license": "CC-BY-4.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "8fd901be412337ef4c1886ac8c7b47bd8705e224d31303c4e6e0c9f04dd79c43",
-      "sha256": "ce430c185bc5a73338b1155d8973543b66222d78f389e1e132c58509bdafd771",
-      "edit": "Excerpt 7.40-8.34s; mono 32 kHz Vorbis q5; highpass=f=180,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.8999999999999999:d=0.04; linear gain 6.968361. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_wings_001.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "David / naturenotesuk",
-      "sourcePage": "https://freesound.org/people/naturenotesuk/sounds/830034/",
-      "source": "https://cdn.freesound.org/previews/830/830034_7455632-hq.mp3",
-      "license": "CC-BY-4.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "8fd901be412337ef4c1886ac8c7b47bd8705e224d31303c4e6e0c9f04dd79c43",
-      "sha256": "860f92cd709dd6cb6f3befcd8438a3f588cf87158ac3c3fa4c61e3521f2950f3",
-      "edit": "Excerpt 10.48-11.18s; mono 32 kHz Vorbis q5; highpass=f=180,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.6599999999999999:d=0.04; linear gain 8.000000. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_startled_000.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "Jonathon Jongsma",
-      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "license": "CC-BY-SA-3.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
-      "sha256": "5f84d78a7c518713868d7f754e018fba7cd698245cc6ccc433b3e0678330ce50",
-      "edit": "Excerpt 0.22-0.82s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.5599999999999999:d=0.04; linear gain 1.572299. Native pitch, no synthesis or looping. This edited audio retains the source license."
-    },
-    {
-      "file": "bird_startled_001.ogg",
-      "pack": "birdFieldRecordings",
-      "author": "Jonathon Jongsma",
-      "sourcePage": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "source": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Passer_domesticus_-_House_Sparrow_-_XC86749.ogg",
-      "license": "CC-BY-SA-3.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
-      "downloaded": "2026-10-09",
-      "originalSha256": "599d13fd1dc58bd49fb37fc0e2ba0900c4cc5c17af7305a110d3fb068d58f81a",
-      "sha256": "3dbca68bc185b8eb11a856905f0cc88b6a422f0d9cc69247ada63b96d5cdbb47",
-      "edit": "Excerpt 4.23-4.88s; mono 32 kHz Vorbis q5; highpass=f=1000,lowpass=f=11000,afade=t=in:d=0.02,afade=t=out:st=0.61:d=0.04; linear gain 1.501602. Native pitch, no synthesis or looping. This edited audio retains the source license."
+      "sha256": "13ff710163adf952793767405a1991d900999892bfef2708f2f8a3fed127dec3"
     }
   ],
   "defaultLicense": "CC0-1.0",

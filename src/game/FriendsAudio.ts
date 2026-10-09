@@ -8,6 +8,8 @@ const QUIET_SOUNDSCAPE: FriendsSoundscapeMix = { wind: 0, birds: 0, crickets: 0,
 
 export type SurfaceCue = 'grass' | 'woodStep' | 'stoneStep' | 'snow' | 'waterStep' | 'mudStep';
 export type FriendsCue = SurfaceCue | 'wood' | 'stone' | 'soil' | 'ore' | 'dig' | 'landing' | 'leaves' | 'treeBreak' | 'birdCall'
+  | 'stoneThrow' | 'stoneImpact' | 'stoneHurt'
+  | 'waterEntry' | 'swimStroke' | 'waterDive' | 'waterBreathIn'
   | 'birdRobin' | 'birdBlueTit' | 'birdSparrow' | 'birdWings' | 'birdStartled'
   | 'trainDepart' | 'trainBrake' | 'trainStop' | 'trainHorn' | 'flightFoliage'
   | 'click' | 'hover' | 'success' | 'error' | 'collect' | 'pack' | 'jump' | 'swing' | 'chest' | 'chime'
@@ -21,6 +23,11 @@ const variants = (stem: string, count = 3) => Array.from({ length: count }, (_, 
 export const FRIENDS_CUE_ASSETS: Readonly<Record<Cue, readonly string[]>> = {
   grass: variants('footstep_grass'), woodStep: variants('footstep_wood'), stoneStep: variants('footstep_concrete'), snow: variants('footstep_snow'),
   waterStep: variants('step_water', 4), mudStep: variants('step_mud', 4),
+  waterEntry: [ROOT + 'water_splash_effect.mp3', ROOT + 'splashing_water.mp3'],
+  swimStroke: [ROOT + 'splashing_water.mp3', ROOT + 'water_splash_effect.mp3'],
+  waterDive: [ROOT + 'cinematic_dive_underwater.mp3'],
+  waterBreathIn: [ROOT + 'water_breath_in.mp3'],
+  stoneThrow: [ROOT + 'knifeSlice.ogg'], stoneImpact: variants('impactMining', 5), stoneHurt: [ROOT + 'stone_oof.mp3'],
   wood: variants('impactWood_medium'), stone: variants('impactMining', 5), soil: variants('impactSoft_medium'), ore: variants('impactMetal_light'),
   dig: [ROOT + 'shovel.ogg'], landing: [ROOT + 'landing.wav'], leaves: [ROOT + 'leaves.ogg'], treeBreak: variants('impactWood_heavy'),
   birdCall: variants('bird_call', 4),
@@ -95,6 +102,11 @@ export class FriendsAudio {
   private nextDrip = 0;
   private dripSource?: string;
   private dripVoice?: AudioBufferSourceNode;
+  private underwaterDiveRequested = false;
+  private underwaterDiveLoading = false;
+  private underwaterDiveVoice?: { source: AudioBufferSourceNode; gain: GainNode };
+  private resurfaceBreathTimer?: ReturnType<typeof setTimeout>;
+  private resurfaceBreathGeneration = 0;
   private nextSteam = 0;
   private reflectionInput?: GainNode;
   private reflectionDelays: DelayNode[] = [];
@@ -147,6 +159,7 @@ export class FriendsAudio {
     this.syncAmbience();
     this.syncTrain();
     this.syncWorld();
+    this.syncUnderwaterDive();
     this.listeners.forEach(listener => listener());
   }
   /** Reference counting keeps the same theme alive across menu → world and
@@ -173,6 +186,7 @@ export class FriendsAudio {
         document.removeEventListener('visibilitychange', this.onVisibility);
         this.stopMusic();
         this.clearSoundscape();
+        this.underwaterDiveRequested = false; this.stopUnderwaterDive(false); this.cancelResurfaceBreath();
         for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } voice.disconnect(); }
         this.voices.clear(); this.effectVoices.clear();
         this.lastCue.clear();
@@ -188,7 +202,7 @@ export class FriendsAudio {
     window.removeEventListener('pointerdown', this.activate, true);
     window.removeEventListener('keydown', this.activate, true);
     document.removeEventListener('visibilitychange', this.onVisibility);
-    this.stopMusic(); this.clearSoundscape();
+    this.stopMusic(); this.clearSoundscape(); this.underwaterDiveRequested = false; this.stopUnderwaterDive(false); this.cancelResurfaceBreath();
     for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } voice.disconnect(); }
     this.voices.clear(); this.effectVoices.clear(); this.buffers.clear(); this.bufferTrims.clear(); this.musicOffsets.clear();
     this.outputGuard?.disconnect(); this.outputGuard = undefined;
@@ -222,12 +236,13 @@ export class FriendsAudio {
         unlock.connect(this.effectsGain); unlock.onended = () => unlock.disconnect(); unlock.start();
       }
       this.activated = true;
-      if (this.context.state === 'suspended') void this.context.resume().then(() => { this.syncMusic(); this.syncAmbience(); this.syncTrain(); this.syncWorld(); }).catch(() => {});
+      if (this.context.state === 'suspended') void this.context.resume().then(() => { this.syncMusic(); this.syncAmbience(); this.syncTrain(); this.syncWorld(); this.syncUnderwaterDive(); }).catch(() => {});
       this.preload();
       this.syncMusic();
       this.syncAmbience();
       this.syncTrain();
       this.syncWorld();
+      this.syncUnderwaterDive();
     } catch { /* Audio must never block world input. */ }
   };
   preload() {
@@ -252,7 +267,7 @@ export class FriendsAudio {
     this.loads.set(url, promise);
     return promise;
   }
-  play(cue: Cue, volume = .3, cooldownMs = 80, rate = 1, duration?: number, options?: { ambience?: boolean; pan?: number; delay?: number; offset?: number }) {
+  play(cue: Cue, volume = .3, cooldownMs = 80, rate = 1, duration?: number, options?: { ambience?: boolean; pan?: number; delay?: number; offset?: number; fadeOutSeconds?: number }) {
     const context = this.context;
     if (!this.active || !context || context.state !== 'running' || document.hidden || this.settings.muted || !(options?.ambience ? this.settings.ambience : this.settings.effects) || this.voices.size >= 20) return;
     const now = context.currentTime, start = now + Math.max(0, Math.min(2, options?.delay ?? 0));
@@ -276,7 +291,8 @@ export class FriendsAudio {
     gain.gain.value = level;
     if (duration !== undefined) {
       const end = start + length / source.playbackRate.value;
-      gain.gain.setValueAtTime(level, Math.max(start, end - .025));
+      const fadeOutSeconds = Math.min(length / source.playbackRate.value, Math.max(0, options?.fadeOutSeconds ?? .025));
+      gain.gain.setValueAtTime(level, Math.max(start, end - fadeOutSeconds));
       gain.gain.linearRampToValueAtTime(0, end);
     }
     const pan = options?.pan && context.createStereoPanner ? context.createStereoPanner() : undefined;
@@ -289,6 +305,75 @@ export class FriendsAudio {
     source.onended = () => { this.voices.delete(source); this.effectVoices.delete(source); if (this.birdVoice === source) this.birdVoice = undefined; if (this.dripVoice === source) this.dripVoice = undefined; source.disconnect(); gain.disconnect(); pan?.disconnect(); };
     source.start(start, offset, length);
     return source;
+  }
+  /** Play the dive recording from its splash, then loop only its final second underwater. */
+  setUnderwaterDive(enabled: boolean) {
+    this.cancelResurfaceBreath();
+    this.underwaterDiveRequested = enabled;
+    this.syncUnderwaterDive();
+  }
+  /** Let the water-entry splash clear, then breathe in if the player stays surfaced. */
+  resurfaceFromDive() {
+    this.setUnderwaterDive(false);
+    this.play('waterEntry', .13, 450, 1.08, .9, { fadeOutSeconds: .14 });
+    this.cancelResurfaceBreath();
+    this.resurfaceBreathTimer = setTimeout(() => {
+      this.resurfaceBreathTimer = undefined;
+      const generation = this.resurfaceBreathGeneration;
+      const url = CUES.waterBreathIn[0];
+      const playBreath = () => {
+        if (generation === this.resurfaceBreathGeneration && !this.underwaterDiveRequested && this.buffers.has(url)) {
+          this.play('waterBreathIn', .28, 350, 1, undefined);
+        }
+      };
+      if (this.buffers.has(url)) playBreath();
+      else void this.load(url).then(playBreath);
+    }, 420);
+  }
+  private cancelResurfaceBreath() {
+    this.resurfaceBreathGeneration++;
+    clearTimeout(this.resurfaceBreathTimer);
+    this.resurfaceBreathTimer = undefined;
+  }
+  private syncUnderwaterDive() {
+    const context = this.context;
+    if (!this.underwaterDiveRequested || !this.active || !this.activated || !context || this.settings.muted || !this.settings.effects) {
+      this.stopUnderwaterDive(); return;
+    }
+    if (document.hidden || context.state !== 'running' || this.underwaterDiveVoice) return;
+    const url = CUES.waterDive[0], buffer = this.buffers.get(url);
+    if (!buffer) {
+      if (!this.underwaterDiveLoading) {
+        this.underwaterDiveLoading = true;
+        void this.load(url).then(() => { this.underwaterDiveLoading = false; this.syncUnderwaterDive(); });
+      }
+      return;
+    }
+    const source = context.createBufferSource(), gain = context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    source.loopStart = Math.max(0, buffer.duration - 1);
+    source.loopEnd = buffer.duration;
+    gain.gain.value = 0;
+    source.connect(gain); gain.connect(this.effectsGain!);
+    source.onended = () => {
+      if (this.underwaterDiveVoice?.source === source) this.underwaterDiveVoice = undefined;
+      source.disconnect(); gain.disconnect();
+    };
+    this.underwaterDiveVoice = { source, gain };
+    source.start(context.currentTime, 0);
+    gain.gain.setTargetAtTime(.22 * (this.bufferTrims.get(url) ?? 1), context.currentTime, .08);
+  }
+  private stopUnderwaterDive(fade = true) {
+    const voice = this.underwaterDiveVoice, context = this.context;
+    if (!voice) return;
+    this.underwaterDiveVoice = undefined;
+    try {
+      if (fade && context?.state === 'running') {
+        voice.gain.gain.setTargetAtTime(0, context.currentTime, .055);
+        voice.source.stop(context.currentTime + .2);
+      } else voice.source.stop();
+    } catch { /* Already stopped. */ }
   }
   material(kind: string, volume = .32, rate = 1) { this.play(kind === 'wood' || kind === 'timber' ? 'wood' : kind === 'soil' || kind === 'grass' ? 'soil' : kind === 'ore' || kind === 'iron' || kind === 'copper' || kind === 'teal' ? 'ore' : 'stone', volume, 90, rate); }
   takeoff() { this.play('jump', .12, 100); }

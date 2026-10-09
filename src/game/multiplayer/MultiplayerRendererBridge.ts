@@ -1,5 +1,7 @@
 import { FriendsBirdVisuals } from '../rendering/FriendsBirdVisuals';
 import { FriendsStoneVisuals } from '../rendering/FriendsStoneVisuals';
+import { FriendsConfettiVisuals } from '../rendering/FriendsConfettiVisuals';
+import { CONFETTI_TOOL } from './FriendsConfetti';
 import { FriendsFishingVisuals } from '../rendering/FriendsFishingVisuals';
 import { FriendsUnderwaterVisuals } from '../rendering/FriendsUnderwaterVisuals';
 import { isRowboatSeat, rowboatStrokePhase } from './FriendsRowboat';
@@ -56,6 +58,7 @@ import {
 import { FriendsRemoteToolVisuals } from '../rendering/FriendsRemoteToolVisuals';
 import { mountFriendsCharacter, updateFriendsCharacter, friendsCharacterHandPoint } from '../rendering/FriendsCharacterVisuals';
 import { FriendsMarshmallowVisuals } from '../rendering/FriendsMarshmallowVisuals';
+import { MARSHMALLOW_TOOL } from './FriendsCampfireSimulation';
 import { isCampfireSeat } from './FriendsCampfireSeats';
 import { OperatorTrailSystem } from '../rendering/OperatorTrailSystem';
 import type { CoopTextKey, CoopTextParams } from './i18n';
@@ -107,6 +110,10 @@ export function shouldPresentGroundJump(
     && jumpSequence >= 0 && jumpSequence !== lastPresentedJumpSequence;
 }
 
+export function shouldPlayResurfaceBreath(wasSubmerged: boolean, friendsWorld: boolean, spectating: boolean, alive: boolean) {
+  return wasSubmerged && friendsWorld && !spectating && alive;
+}
+
 /**
  * Presents the network snapshot through the established production Renderer3D.
  * This deliberately does not own a second 3D world, weapon model, camera, or
@@ -115,6 +122,7 @@ export function shouldPresentGroundJump(
  */
 export class MultiplayerRendererBridge {
   private craneControlView?:{id:number;options:CraneCameraOptions};
+  private rowboatCameraId?:string;
   private readonly renderer: Renderer3D;
   private worldId: WorldId;
   private readonly tacticalVisuals: CoopTacticalVisuals;
@@ -128,12 +136,16 @@ export class MultiplayerRendererBridge {
   private flashlightOcclusionIndex=new FriendsBuildSpatialIndex();
   private readonly birdVisuals?:FriendsBirdVisuals;
   private readonly stoneVisuals?:FriendsStoneVisuals;
+  private readonly confettiVisuals?:FriendsConfettiVisuals;
   private readonly fishingVisuals?:FriendsFishingVisuals;
   private readonly marshmallows?:FriendsMarshmallowVisuals;
   private readonly friendsSpawnVisuals?: FriendsSpawnVisuals;
   private readonly friendsWorldArrival?: FriendsWorldArrival;
   private footstepTravel = 0;
   private localSurfaceCue: SurfaceCue = 'grass';
+  private localWasSwimming = false;
+  private localWasSubmerged = false;
+  private nextSwimStrokeMs = 0;
   private soundscape = new FriendsSoundscape();
   private retreatSwitchSerial?:number;
   private readonly switchReach?:FriendsSwitchReach;
@@ -250,7 +262,7 @@ export class MultiplayerRendererBridge {
     });
     if(worldId==='friends_frontier')this.scenicRailVisuals=new FriendsScenicRailwayVisuals(this.renderer.scene);
     if(worldId==='friends_frontier')this.gestureViewmodels=new FriendsGestureViewmodels(this.renderer.viewmodelScene);
-    if(worldId==='friends_frontier'){this.birdVisuals=new FriendsBirdVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.stoneVisuals=new FriendsStoneVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.fishingVisuals=new FriendsFishingVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.marshmallows=new FriendsMarshmallowVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.switchReach=new FriendsSwitchReach(this.renderer.scene);}
+    if(worldId==='friends_frontier'){this.birdVisuals=new FriendsBirdVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.stoneVisuals=new FriendsStoneVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.confettiVisuals=new FriendsConfettiVisuals(this.renderer.scene);this.fishingVisuals=new FriendsFishingVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.marshmallows=new FriendsMarshmallowVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.switchReach=new FriendsSwitchReach(this.renderer.scene);}
     this.friendsBuildVisuals = new FriendsBuildVisuals(this.renderer.scene);
     this.interactionVisuals = new FriendsInteractionVisuals(this.renderer.scene);
     this.tacticalVisuals = new CoopTacticalVisuals(this.renderer.scene);
@@ -347,7 +359,7 @@ export class MultiplayerRendererBridge {
     }
     return offscreen;
   }
-  getPerformanceStats() { return { ...this.renderer.getPerformanceStats(), interaction: {...this.interactionVisuals.stats,terrain:this.frontierVisuals?.terrainStats} }; }
+  getPerformanceStats() { return { ...this.renderer.getPerformanceStats(), campfireDrawCalls:this.frontierVisuals?.campfireDrawCalls??0, forestDrawCalls:this.frontierVisuals?.forestStats.draws??0, visibleForestTrees:this.frontierVisuals?.forestStats.trees??0, interaction: {...this.interactionVisuals.stats,terrain:this.frontierVisuals?.terrainStats} }; }
   setFriendsWorkPlane(plane: MiningWorkPlane | undefined) { this.workPlane=plane; }
   setFriendsEffects(profile: 'full' | 'subtle' | 'off') { this.interactionVisuals.setEffects(profile);this.frontierVisuals?.setEffects(profile); }
   private playerInteractionRay(snapshot: CoopSnapshot | null) {
@@ -643,6 +655,37 @@ export class MultiplayerRendererBridge {
     const local = (isSpectating ? snapshot.players.find(player => player.id === spectatorTargetId) : undefined)
       || snapshot.players.find(player => player.id === localPlayerId) || snapshot.players[0];
     if (!local) return;
+    const swimming = Boolean(snapshot.friends && !isSpectating && local.lifeState === 'alive' && local.motion?.swimming);
+    const submerged = swimming && Boolean(local.motion?.swimSubmerged);
+    if (swimming && !this.localWasSwimming) {
+      friendsAudio.play('waterEntry', .28, 350, .94, 1.05, { fadeOutSeconds: .14 });
+      this.nextSwimStrokeMs = snapshot.elapsedMs + 1150;
+    } else if (snapshot.friends && !isSpectating && local.lifeState === 'alive' && !swimming && this.localWasSwimming) {
+      friendsAudio.play('waterEntry', .17, 350, .9, .9, { fadeOutSeconds: .14 });
+      this.nextSwimStrokeMs = 0;
+    }
+    if (submerged !== this.localWasSubmerged) {
+      if (submerged) {
+        friendsAudio.setUnderwaterDive(true);
+        this.nextSwimStrokeMs = snapshot.elapsedMs + 850;
+      } else {
+        if (shouldPlayResurfaceBreath(this.localWasSubmerged, Boolean(snapshot.friends), isSpectating, local.lifeState === 'alive')) {
+          friendsAudio.resurfaceFromDive();
+          if (swimming) this.nextSwimStrokeMs = snapshot.elapsedMs + 650;
+        } else friendsAudio.setUnderwaterDive(false);
+      }
+    }
+    if (swimming) {
+      const swimSpeed = Math.hypot(local.motion?.velocityX ?? 0, local.motion?.velocityY ?? 0);
+      if (swimSpeed > 35 && snapshot.elapsedMs >= this.nextSwimStrokeMs) {
+        const intensity = Math.min(1, .5 + swimSpeed / 300);
+        friendsAudio.play('swimStroke', (submerged ? .15 : .25) * intensity, 420,
+          submerged ? .82 : .98, submerged ? .48 : .62, { fadeOutSeconds: .14 });
+        this.nextSwimStrokeMs = snapshot.elapsedMs + (submerged ? 850 : 720);
+      }
+    } else if (snapshot.friends && !isSpectating && local.lifeState !== 'alive') this.nextSwimStrokeMs = 0;
+    this.localWasSwimming = swimming;
+    this.localWasSubmerged = submerged;
     const arrivals = this.friendsSpawnVisuals?.update(snapshot.players, snapshot.combatEvents, deltaMs);
     if(arrivals?.has(localPlayerId)&&!isSpectating)this.friendsWorldArrival?.start(local.x,local.y,local.z);
     const resetCamera = this.lastPresentedLocalX === undefined || Boolean(arrivals?.has(local.id));
@@ -842,16 +885,20 @@ export class MultiplayerRendererBridge {
     // We also drive renderer.yaw from the network angle so the camera faces
     // the direction the spectated player is actually moving/looking.
     const pilotedVehicle = snapshot.friends?.vehicles.find(v => v.kind === 'aircraft' && v.pilotId === localPlayerId);
-    this.renderer.presentationVehicle = !isSpectating && !isFallingLocal ? pilotedVehicle : undefined;
+    const rowboatVehicle=!isSpectating&&isRowboatSeat(local.friendsSeat)?snapshot.friends?.vehicles.find(v=>v.id===local.friendsSeat!.vehicleId):undefined;
+    const cameraVehicle=pilotedVehicle??rowboatVehicle;
+    if(rowboatVehicle&&this.rowboatCameraId!==rowboatVehicle.id)this.renderer.yaw=Math.atan2(-Math.cos(rowboatVehicle.angle),-Math.sin(rowboatVehicle.angle));
+    this.rowboatCameraId=rowboatVehicle?.id;
+    this.renderer.presentationVehicle = !isSpectating && !isFallingLocal ? cameraVehicle : undefined;
     const craneView=this.craneControlView,snapshotCrane=craneView&&snapshot.friends?.hauling?.cranes?.find(c=>c.pieceId===craneView.id);
     const loadView=snapshotCrane&&craneCameraPose(snapshotCrane,snapshot.friends?.hauling?.cargo.find(c=>c.id===snapshotCrane.cargoId),craneView!.options,(target,eye)=>{
       const length=Math.hypot(eye.x-target.x,eye.y-target.y,eye.z-target.z),ray={...target,dx:(eye.x-target.x)/length,dy:(eye.y-target.y)/length,dz:(eye.z-target.z)/length};
       const terrainHit=this.frontierVisuals?.terrain.raycast(ray,length),buildHit=raycastFriendsBuild(snapshot.friends?.building?.pieces??[],ray,length);
       const distance=Math.min(terrainHit?.distance??Infinity,buildHit?.distance??Infinity);return Number.isFinite(distance)?distance:undefined;
     });
-    const useThirdPerson = isSpectating || isFallingLocal || Boolean(pilotedVehicle) || Boolean(loadView);
+    const useThirdPerson = isSpectating || isFallingLocal || Boolean(cameraVehicle) || Boolean(loadView);
     this.renderer.presentationSpectating = useThirdPerson;
-    if (useThirdPerson && !pilotedVehicle) {
+    if (useThirdPerson && !cameraVehicle) {
       this.renderer.yaw = Math.atan2(-Math.cos(presentedAngle), -Math.sin(presentedAngle));
     }
     this.renderState.viewMode = useThirdPerson ? 'THIRD_PERSON' : 'FIRST_PERSON';
@@ -912,12 +959,13 @@ export class MultiplayerRendererBridge {
     // Always pass the true localPlayerId so every teammate (including the
     // spectated player) gets their rich CoopOperatorRig rendered. The caller
     // no longer uses the old thirdPersonPlayerGroup for spectating.
-    this.syncRemotePlayers(snapshot, localPlayerId, isSpectating || Boolean(pilotedVehicle) || Boolean(loadView));
+    this.syncRemotePlayers(snapshot, localPlayerId, isSpectating || Boolean(cameraVehicle) || Boolean(loadView));
     this.structureVisuals.update(snapshot.structures || [], snapshot.elapsedMs);
     this.friendsVehicleVisuals.update(snapshot.friends, snapshot.elapsedMs);
-    const skiff=snapshot.friends?.vehicles.find(v=>v.kind==='rowboat');
-    if(skiff?.rowing){const volume=.17*Math.max(0,1-Math.hypot(local.x-skiff.x,local.y-skiff.y,local.z-skiff.z)/500);
-      [skiff.rowing.left,skiff.rowing.right].forEach((stroke,i)=>{if(stroke.atMs!==this.oarTimes[i]&&stroke.atMs>=0&&snapshot.elapsedMs-stroke.atMs<1200&&volume>0)friendsAudio.play('waterStep',volume,60);this.oarTimes[i]=stroke.atMs;});
+    this.confettiVisuals?.update(snapshot.friends?.confetti, this.visualElapsedMs, this.renderer.camera);
+    const skiff=snapshot.friends?.vehicles.filter(v=>v.kind==='rowboat').sort((a,b)=>Math.hypot(local.x-a.x,local.y-a.y)-Math.hypot(local.x-b.x,local.y-b.y))[0];
+    if(skiff?.rowing){const volume=.17*Math.max(0,1-Math.hypot(local.x-skiff.x,local.y-skiff.y,local.z-skiff.z)/500),sounded=new Set<number>();
+      [skiff.rowing.left,skiff.rowing.right].forEach((stroke,i)=>{if(stroke.atMs!==this.oarTimes[i]&&stroke.atMs>=0&&snapshot.elapsedMs-stroke.atMs<1200&&volume>0&&!sounded.has(stroke.atMs)){friendsAudio.play('waterStep',volume,60);sounded.add(stroke.atMs);}this.oarTimes[i]=stroke.atMs;});
     }
     this.scenicRailVisuals?.update(this.renderer.camera,Boolean(snapshot.friends?.scenicRailway));
     this.friendsBuildVisuals.update(snapshot.friends?.building);
@@ -1056,9 +1104,13 @@ export class MultiplayerRendererBridge {
     // Quiet seating puts held equipment away even if input selects a firearm.
     // Renderer3D reapplies weapon visibility during render, after prepareFrame.
     this.renderer.frontierToolActive = Boolean(this.switchReach?.forPlayer(localPlayerId)) || isQuietSeat(local.friendsSeat) || Boolean(snapshot.friends?.frontier && (this.friendsTool || this.frontierVisuals?.flashlightEquipped));
+    const holdingConfetti=this.friendsTool===CONFETTI_TOOL&&!creativeBuilding&&!this.interactionBlocked&&!isSpectating&&!useThirdPerson&&!pilotedVehicle
+      &&local.lifeState==='alive'&&!isQuietSeat(local.friendsSeat)&&!local.motion?.swimming;
+    const localConfettiThrowAt=snapshot.friends?.confetti?.bursts.reduce<number|undefined>((latest,burst)=>burst.playerId===localPlayerId&&(!latest||burst.atMs>latest)?burst.atMs:latest,undefined);
+    if(holdingConfetti){this.frontierVisuals?.hideHeldTool();this.localFirearm.group.visible=false;this.renderer.fpsWeaponGroup.visible=false;}
     this.gestureViewmodels?.update(this.friendsArms,this.getAimPitch(),deltaMs,
-      this.friendsTool===6 && !creativeBuilding && !this.interactionBlocked && !isSpectating && !useThirdPerson && !pilotedVehicle
-      && local.lifeState==='alive' && !isQuietSeat(local.friendsSeat) && !local.motion?.swimming);
+      (this.friendsTool===6||this.friendsTool===CONFETTI_TOOL) && !creativeBuilding && !this.interactionBlocked && !isSpectating && !useThirdPerson && !pilotedVehicle
+      && local.lifeState==='alive' && !isQuietSeat(local.friendsSeat) && !local.motion?.swimming,holdingConfetti,localConfettiThrowAt,this.visualElapsedMs);
     this.tacticalVisuals.update(snapshot, this.visualElapsedMs);
     this.realityBreachVisuals.update(snapshot.realityBreach, snapshot.elapsedMs, this.renderer.camera);
     this.renderer.setRealityBreach(snapshot.realityBreach, snapshot.elapsedMs);
@@ -1094,7 +1146,7 @@ export class MultiplayerRendererBridge {
     }
     if(this.switchReach?.update(deltaMs,this.renderer.camera,localPlayerId,snapshot.players,!useThirdPerson)){friendsAudio.play('flashlight',.1,1000);}
     if(this.switchReach?.forPlayer(localPlayerId)){this.gestureViewmodels!.root.visible=false;this.frontierVisuals?.hideHeldTool();this.localFirearm.group.visible=false;this.renderer.fpsWeaponGroup.visible=false;}
-    this.marshmallows?.update(snapshot.players,snapshot.friends?.campfire,localPlayerId,this.renderer.camera,this.visualElapsedMs/1000,deltaMs,!useThirdPerson,(id,out)=>{const rig=this.remotePlayers.get(id);if(!rig||!friendsCharacterHandPoint(rig,out))return false;rig.root.localToWorld(out);return true;});
+    this.marshmallows?.update(snapshot.players,snapshot.friends?.campfire,localPlayerId,this.renderer.camera,this.visualElapsedMs/1000,deltaMs,!useThirdPerson,(id,out)=>{const rig=this.remotePlayers.get(id);if(!rig||!friendsCharacterHandPoint(rig,out))return false;rig.root.localToWorld(out);return true;},this.friendsTool===MARSHMALLOW_TOOL&&this.friendsToolFiring&&!this.interactionBlocked&&!isSpectating&&!useThirdPerson&&local.lifeState==='alive'&&!local.motion?.swimming);
     if(snapshot.friends?.campfire?.equipped?.includes(localPlayerId)){this.frontierVisuals?.hideHeldTool();this.localFirearm.group.visible=false;this.renderer.fpsWeaponGroup.visible=false;if(this.gestureViewmodels)this.gestureViewmodels.root.visible=false;}
     this.birdVisuals?.update(snapshot.friends?.birds,snapshot.players,localPlayerId,this.friendsTool,this.renderer.camera,snapshot.elapsedMs,!useThirdPerson,this.interactionBlocked||creativeBuilding||isSpectating,(id,out)=>{const rig=this.remotePlayers.get(id);if(!rig||!friendsCharacterHandPoint(rig,out))return false;rig.root.localToWorld(out);return true;},point=>this.renderer.projectViewmodelPointToWorld(point));
     if(this.birdVisuals?.held.visible){this.frontierVisuals?.hideHeldTool();this.localFirearm.group.visible=false;this.renderer.fpsWeaponGroup.visible=false;if(this.gestureViewmodels)this.gestureViewmodels.root.visible=false;}
@@ -1180,7 +1232,7 @@ export class MultiplayerRendererBridge {
     this.friendsHaulingVisuals.dispose();
     this.friendsBuildVisuals.dispose();
     this.interactionVisuals.dispose();this.remoteTools.dispose();
-    this.birdVisuals?.dispose();this.stoneVisuals?.dispose();this.fishingVisuals?.dispose();this.marshmallows?.dispose();this.gestureViewmodels?.dispose();this.switchReach?.dispose();
+    this.birdVisuals?.dispose();this.stoneVisuals?.dispose();this.confettiVisuals?.dispose();this.fishingVisuals?.dispose();this.marshmallows?.dispose();this.gestureViewmodels?.dispose();this.switchReach?.dispose();
     this.frontierVisuals?.dispose();
     this.sharedFlashlights?.dispose();
     this.friendsSpawnVisuals?.dispose();
@@ -1447,12 +1499,16 @@ export class MultiplayerRendererBridge {
   }
 
   private presentCombatEvent(event: CoopCombatEvent, localPlayerId: string, now: number) {
-    if (event.kind === 'player_damaged' && event.playerId === localPlayerId) {
-      this.presentationShake = Math.max(this.presentationShake, 3.4);
-      if (now - this.lastHitSoundAt > 180) {
-        soundManager.playDamage();
+    if (event.kind === 'player_damaged' && event.stoneHit) {
+      if(event.playerId===localPlayerId)this.presentationShake = Math.max(this.presentationShake, 3.4);
+      const camera=this.renderer.camera.getWorldPosition(new THREE.Vector3()),distance=Math.hypot(camera.x-event.x,camera.z-event.y);
+      if (distance<900&&now - this.lastHitSoundAt > 180) {
+        friendsAudio.play('stoneHurt',event.playerId===localPlayerId ? .42 : .32*(1-distance/900),120,.92,.65);
         this.lastHitSoundAt = now;
       }
+    } else if (event.kind === 'player_damaged' && event.playerId === localPlayerId) {
+      this.presentationShake = Math.max(this.presentationShake, 3.4);
+      if (now - this.lastHitSoundAt > 180) { soundManager.playDamage(); this.lastHitSoundAt = now; }
     } else if (event.kind === 'player_downed') {
       this.spawnBurst(event.x, event.y, '#fb7185', 14, 800, 5);
       if (event.playerId === localPlayerId) this.presentationShake = Math.max(this.presentationShake, 9);
@@ -1898,7 +1954,7 @@ export class MultiplayerRendererBridge {
         updateCoopOperatorRig(remote, player, snapshot.elapsedMs, 16.666, undefined, floor !== undefined && Math.abs(player.z - floor) < 2);
       }
       if(this.worldId==='friends_frontier'){
-        const rowing=isRowboatSeat(player.friendsSeat)?snapshot.friends?.vehicles.find(v=>v.kind==='rowboat')?.rowing:undefined;
+        const rowing=isRowboatSeat(player.friendsSeat)?snapshot.friends?.vehicles.find(v=>v.id===player.friendsSeat!.vehicleId)?.rowing:undefined;
         const stroke=player.friendsSeat?.index===0?rowing?.left:rowing?.right;
         updateFriendsCharacter(remote,player,this.visualElapsedMs,snapshot.friends?.frontier?.interaction?.actions[player.id],Boolean(fall),stroke?rowboatStrokePhase(stroke,snapshot.elapsedMs):undefined,snapshot.friends?.fishing?.fish.some(f=>f.ownerId===player.id)?'fish':snapshot.friends?.fishing?.equipped.includes(player.id)?'rod':snapshot.friends?.stones?.equipped.some(h=>h.playerId===player.id)?'stone':snapshot.friends?.birds?.equipped.some(h=>h.playerId===player.id)?'seeds':snapshot.friends?.campfire?.equipped?.includes(player.id)?'marshmallow':undefined,snapshot.friends?.stones?.equipped.find(h=>h.playerId===player.id),snapshot.friends?.birds?.equipped.find(h=>h.playerId===player.id));
         this.switchReach?.poseRemote(remote,player);

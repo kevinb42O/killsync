@@ -10,6 +10,8 @@ export const FISHING_WAIT_MAX_MS = 28000;
 export const FISHING_RANGE = 520;
 export const LOOSE_FISH_LIMIT = 32;
 export const FISH_GROUND_RADIUS = 8;
+export const FISH_SIZE_MIN = 0.45;
+export const FISH_SIZE_MAX = 4.2;
 export type FishingPoint = { x:number; y:number; z:number };
 export type FishingActor = FishingPoint & { id:string; angle:number; lifeState:string; swimming?:boolean; friendsDevFlight?:boolean; friendsSeat?:{vehicleId:string;index:number} };
 export type FishingCast = FishingPoint & { id:number; playerId:string; phase:'casting'|'waiting'|'bite'|'reeling'; empty?:boolean; atMs:number; biteAt:number; from:FishingPoint; target:FishingPoint; size:number };
@@ -51,7 +53,7 @@ export class FriendsFishing {
       if(w&&z<=w.level+2&&from.z>w.level){target={x,y,z:w.level+2};break;}
     }
     if(!target||env.blocked(from,{...target,z:target.z+4}))return;
-    const cast:FishingCast={id:++this.serial,playerId:p.id,...from,from,target,phase:'casting',atMs:now,biteAt:now+FISHING_CAST_MS+FISHING_WAIT_MIN_MS+this.random()*(FISHING_WAIT_MAX_MS-FISHING_WAIT_MIN_MS),size:.75+Math.pow(this.random(),1.5)*1.05};
+    const cast:FishingCast={id:++this.serial,playerId:p.id,...from,from,target,phase:'casting',atMs:now,biteAt:now+FISHING_CAST_MS+FISHING_WAIT_MIN_MS+this.random()*(FISHING_WAIT_MAX_MS-FISHING_WAIT_MIN_MS),size:FISH_SIZE_MIN+this.random()*(FISH_SIZE_MAX-FISH_SIZE_MIN)};
     let previous=from;
     for(let i=1;i<=12;i++){const point=fishingCastPoint(cast,now+FISHING_CAST_MS*i/12);if(env.blocked(previous,point))return;previous=point;}
     this.casts.set(p.id,cast);

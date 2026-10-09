@@ -1,7 +1,7 @@
 import { SEEDS_TOOL } from '../game/multiplayer/FriendsBirds';
 import { FriendsFunBar } from './FriendsFunBar';
 import { STONE_TOOL, STONE_CHARGE_MS } from '../game/multiplayer/FriendsStones';
-import { isRowboatSeat, ROWBOAT_ID } from '../game/multiplayer/FriendsRowboat';
+import { isRowboatSeat } from '../game/multiplayer/FriendsRowboat';
 import { EMPTY_HANDS, FriendsGestureControls, friendsGestureKey, friendsNumberSlot } from '../game/multiplayer/FriendsGestureControls';
 import { durableBuildPieces } from '../game/multiplayer/FriendsAssemblyPose';
 import { campfireSeatPrompt, isCampfireSeat } from '../game/multiplayer/FriendsCampfireSeats';
@@ -16,7 +16,7 @@ import { FriendsCommandOutbox, nextFriendsRequestId, validFriendsCommand } from 
 import { physicalCargoBuildBodies } from '../game/multiplayer/FriendsHauling';
 import { FriendsFieldPack, FriendsToolbelt } from './FriendsFieldPack';
 import { useFriendsToolbelt } from './useFriendsToolbelt';
-import { cycleFriendsFun, cycleFriendsTool, friendsToolInput, FRIENDS_TOOL_ORDER, FriendsToolWheel } from '../game/multiplayer/FriendsToolControls';
+import { cycleFriendsFun, cycleFriendsTool, friendsToolInput, FRIENDS_TOOL_ORDER, FriendsToolWheel, CONFETTI_TOOL } from '../game/multiplayer/FriendsToolControls';
 import { buildCost, canAfford, packKey, MATERIAL_NAMES, type FrontierRequest, type FrontierResult, type FrontierTool } from '../game/multiplayer/FriendsFrontier';
 import './frontier.css';
 import { assignBuildSlot, BuildWheelGesture, cycleBuildToolbar, readBuildToolbar, saveBuildToolbar } from '../game/multiplayer/FriendsBuildControls';
@@ -29,6 +29,7 @@ import { FriendsPresentationTimeline } from '../game/multiplayer/FriendsPresenta
 import { friendsCockpitInteraction } from '../game/multiplayer/FriendsExpedition';
 import { FriendsHUD } from './FriendsHUD';
 import { FriendsCampfireControls } from './FriendsCampfireControls';
+import { FriendsFishingCatchLog } from './FriendsFishingCatchLog';
 import { FriendsPauseMenu } from './FriendsPauseMenu';
 import { neutralizeMenuInput, readGamePreferences, saveGamePreferences, type LocalGamePreferences } from '../game/LocalGamePreferences';
 import { friendsAudio } from '../game/FriendsAudio';
@@ -310,14 +311,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const gestureControlsRef = useRef(new FriendsGestureControls());
   const lastHeldToolRef = useRef<FrontierTool>(1);
   const selectFrontierTool = (tool: FrontierTool) => {
-    if (isCampfireSeat(snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.friendsSeat) && tool!==SEEDS_TOOL && tool!==STONE_TOOL && tool!==MARSHMALLOW_TOOL && tool!==EMPTY_HANDS) return;
+    if (isCampfireSeat(snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.friendsSeat) && tool!==SEEDS_TOOL && tool!==STONE_TOOL && tool!==MARSHMALLOW_TOOL && tool!==CONFETTI_TOOL && tool!==EMPTY_HANDS) return;
     if (tool !== inputRef.current.friendsTool) {gestureReleaseRef.current=gestureControlsRef.current.mask||inputRef.current.friendsArms||0;clearControlsRef.current();}
     gestureControlsRef.current.clear();
     if (tool !== EMPTY_HANDS) lastHeldToolRef.current = tool;
     if (tool !== inputRef.current.friendsTool) friendsAudio.play('pack', .12, 80);
     inputRef.current = { ...inputRef.current, friendsTool: tool, friendsArms: 0, firing: false, aiming: false, friendsWorkPlane:undefined };
     setMiningWorkLocked(false); setFrontierTool(tool);
-    funModeRef.current=tool===STONE_TOOL||tool===SEEDS_TOOL||tool===MARSHMALLOW_TOOL;setFunMode(funModeRef.current);
+    funModeRef.current=tool===STONE_TOOL||tool===SEEDS_TOOL||tool===MARSHMALLOW_TOOL||tool===CONFETTI_TOOL;setFunMode(funModeRef.current);
     if(funModeRef.current)revealFunBar();else revealFrontierToolbelt();
   };
   const previousCampfireSeatRef=useRef(false);
@@ -2207,7 +2208,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           selectBuildType(COOP_BUILD_TYPES[Number(numberKey) - 1]);
           return;
         }
-        if (launch.gameMode === 'friends' && funModeRef.current) { if(!event.repeat){if(numberKey==='1')selectFrontierTool(STONE_TOOL);if(numberKey==='2')selectFrontierTool(SEEDS_TOOL);if(numberKey==='3')selectFrontierTool(MARSHMALLOW_TOOL);} return; }
+        if (launch.gameMode === 'friends' && funModeRef.current) { if(!event.repeat){if(numberKey==='1')selectFrontierTool(STONE_TOOL);if(numberKey==='2')selectFrontierTool(SEEDS_TOOL);if(numberKey==='3')selectFrontierTool(MARSHMALLOW_TOOL);if(numberKey==='4')selectFrontierTool(CONFETTI_TOOL);} return; }
         if (launch.gameMode === 'friends' && Number(numberKey) <= FRIENDS_TOOL_ORDER.length) { if(!event.repeat)selectFrontierTool(FRIENDS_TOOL_ORDER[Number(numberKey) - 1]); return; }
         inputRef.current = { ...inputRef.current, selectedSlot: Number(numberKey) - 1 };
         setHud(current => ({ ...current, selectedSlot: Number(numberKey) - 1 }));
@@ -2470,11 +2471,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       }
 
       if (firePressed && !emptyGestures && !gestureReleaseRef.current && !buildModeRef.current) {
-        fireActionId++;
-        const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
-        const weapon = local?.weaponStates[inputRef.current.selectedSlot];
-        if (!isCampfireSeat(local?.friendsSeat) && !isRowboatSeat(local?.friendsSeat) && !(launch.gameMode === 'friends' && inputRef.current.friendsTool) && weapon && local?.lifeState === 'alive' && weapon.state === 'ready' && canPredictCoopCast(weapon.weaponId, weapon.magazineAmmo, local?.mana) && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
-          renderer.predictLocalFire(weapon.weaponId, fireActionId);
+        if(launch.gameMode==='friends'&&inputRef.current.friendsTool===CONFETTI_TOOL)fireActionId++;
+        else {
+          fireActionId++;
+          const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
+          const weapon = local?.weaponStates[inputRef.current.selectedSlot];
+          if (!isCampfireSeat(local?.friendsSeat) && !isRowboatSeat(local?.friendsSeat) && !(launch.gameMode === 'friends' && inputRef.current.friendsTool) && weapon && local?.lifeState === 'alive' && weapon.state === 'ready' && canPredictCoopCast(weapon.weaponId, weapon.magazineAmmo, local?.mana) && weapon.nextFireAtMs <= (snapshotRef.current?.elapsedMs || 0)) {
+            renderer.predictLocalFire(weapon.weaponId, fireActionId);
+          }
         }
       }
       // Slot four is the operator artifact weapon. Mouse right-click already
@@ -2485,7 +2489,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (specialPressed && !buildModeRef.current) altFireActionId++;
       if (interactPressed && !(buildModeRef.current && launch.gameMode === 'friends')) triggerContextualInteract();
       if (reloadPressed || jumpPressed || interactPressed || firePressed || specialPressed) sequence++;
-      firing = buildModeRef.current || emptyGestures || gestureReleaseRef.current ? false : fireHeld;
+      firing = buildModeRef.current || emptyGestures || gestureReleaseRef.current || inputRef.current.friendsTool===CONFETTI_TOOL ? false : fireHeld;
       inputRef.current = {
         ...inputRef.current,
         sequence,
@@ -2493,7 +2497,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         movement: gamepadMovementMask(gamepad),
         aimAngle: quantizeAngle(renderer.getAimAngle()),
         aimPitch: quantizePitch(renderer.getAimPitch()),
-        firing: buildModeRef.current || emptyGestures || gestureReleaseRef.current ? false : fireHeld,
+        firing: buildModeRef.current || emptyGestures || gestureReleaseRef.current || inputRef.current.friendsTool===CONFETTI_TOOL ? false : fireHeld,
         friendsArms: emptyGestures ? gamepadMask : 0,
         fireActionId,
         altFireActionId,
@@ -2544,7 +2548,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const simulationFinishedAt = performance.now();
       clearJumpInput();
       const snapshot = simulation.createSnapshot();
-      performanceMonitor?.recordHostWork(simulationFinishedAt - simulationStartedAt, performance.now() - simulationFinishedAt);
+      if (performanceMonitor?.isVisible) performanceMonitor.recordHostWork(simulationFinishedAt - simulationStartedAt, performance.now() - simulationFinishedAt);
       publishSnapshot(snapshot, now);
       accumulator = 0;
       stateAccumulator += INPUT_INTERVAL_MS;
@@ -2686,9 +2690,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if(!gesturesAllowed()){gestureControlsRef.current.clear();inputRef.current.friendsArms=0;}
       renderer.setFriendsArms(inputRef.current.friendsArms||0);
       const shovelInput = friendsToolInput(inputRef.current.friendsTool || 0, inputRef.current.firing, Boolean(inputRef.current.aiming));
-      renderer.setFriendsTool(buildModeRef.current ? 0 : inputRef.current.friendsTool || 0, shovelInput.held,launch.role==='host'||frameSnapshot?.friends?.building?.guestsCanBuild!==false,shovelInput.fill);
+      const toolFiring=inputRef.current.friendsTool===MARSHMALLOW_TOOL?inputRef.current.firing:shovelInput.held;
+      renderer.setFriendsTool(buildModeRef.current ? 0 : inputRef.current.friendsTool || 0, toolFiring,launch.role==='host'||frameSnapshot?.friends?.building?.guestsCanBuild!==false,shovelInput.fill);
       renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId, latestLifeState === 'alive', buildModeRef.current && launch.gameMode === 'friends');
-      performanceMonitor?.recordFrame(frameElapsed, performance.now() - renderStartedAt, renderer.getPerformanceStats());
+      if (performanceMonitor?.isVisible) performanceMonitor.recordFrame(frameElapsed, performance.now() - renderStartedAt, renderer.getPerformanceStats());
       if (damageFlashExpiresAtRef.current > 0 && now > damageFlashExpiresAtRef.current + 40) {
         damageFlashExpiresAtRef.current = 0;
         if (damageFlashTimerRef.current !== null) {
@@ -2855,8 +2860,16 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   }, [launch.localPlayerId]);
 
   const localSnapshot = matchSnapshot?.players.find(player => player.id === (isSpectator ? spectatorTargetRef.current : launch.localPlayerId));
-  const rowboat=matchSnapshot?.friends?.vehicles.find(v=>v.id===ROWBOAT_ID);
   const rowboatSeated=isRowboatSeat(localSnapshot?.friendsSeat);
+  const rowboats=matchSnapshot?.friends?.vehicles.filter(v=>v.kind==='rowboat')??[];
+  const rowboat=rowboats.find(v=>v.id===localSnapshot?.friendsSeat?.vehicleId)??rowboats.filter(v=>localSnapshot&&Math.hypot(v.x-localSnapshot.x,v.y-localSnapshot.y)<140&&Math.abs(v.z-localSnapshot.z)<90).sort((a,b)=>Math.hypot(a.x-localSnapshot!.x,a.y-localSnapshot!.y)-Math.hypot(b.x-localSnapshot!.x,b.y-localSnapshot!.y))[0];
+  const rowboatCrew=matchSnapshot?.players.filter(player=>player.friendsSeat?.vehicleId===rowboat?.id&&player.lifeState==='alive').length??0;
+  const rowboatBindings=getMovementBindings(controlScheme),rowboatKey=(key:string)=>({arrowup:'↑',arrowdown:'↓',arrowleft:'←',arrowright:'→'}[key]??key.toUpperCase());
+  const rowboatBoardControl=showMobileTouchControls?'USE':isGamepadControlScheme(controlScheme)?'Y':'F';
+  const rowboatSteerControl=showMobileTouchControls||isGamepadControlScheme(controlScheme)?'left stick ← / →':`${rowboatBindings.left.map(rowboatKey).join('/')} / ${rowboatBindings.right.map(rowboatKey).join('/')}`;
+  const rowboatControls=showMobileTouchControls?`Tap FIRE to ${rowboatCrew===1?'row both':'row your oar'} · AIM to reverse · drag to look · USE to leave`
+    :isGamepadControlScheme(controlScheme)?`${rowboatCrew===1?'RT both oars':'RT your oar'} · LT reverse · right stick look${rowboatCrew===1?' · left stick ← / → steer':''} · Y / A leave`
+    :`${rowboatBindings.up.map(rowboatKey).join('/')} or LMB ${rowboatCrew===1?'both oars':'your oar'} · ${rowboatBindings.down.map(rowboatKey).join('/')} or RMB reverse · ${rowboatCrew===1?`${rowboatSteerControl} one oar to steer · `:''}mouse look · F / Space leave`;
   const rowboatNearby=Boolean(rowboat&&localSnapshot&&!localSnapshot.friendsSeat&&Math.hypot(rowboat.x-localSnapshot.x,rowboat.y-localSnapshot.y)<140&&Math.abs(rowboat.z-localSnapshot.z)<90);
   useEffect(()=>{if(craneControlsOpen!==null && (!localSnapshot || !matchSnapshot?.friends || !nearbyCrane((matchSnapshot.friends.building?.pieces??[]).filter(p=>p.id===craneControlsOpen||p.craneRootId===craneControlsOpen),localSnapshot))) {craneControlsOpenRef.current=null;setCraneControlsOpen(null);rendererRef.current?.setCraneControlView(null);}},[craneControlsOpen,localSnapshot,matchSnapshot?.friends]);
   useEffect(()=>{if(trainControlsOpen&&(!localSnapshot||!matchSnapshot?.friends||!scenicControlNearby(localSnapshot,matchSnapshot.friends.vehicles)))setTrainControlsPanelOpen(false);},[trainControlsOpen,localSnapshot,matchSnapshot?.friends]);
@@ -2994,6 +3007,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const activeWeaponId = hud.weapons[hud.selectedSlot]?.weaponId;
   const activeWeapon = COOP_WEAPON_DETAILS[activeWeaponId];
   const activeWeaponState = hud.weapons[hud.selectedSlot];
+  const showCombatReticle = launch.gameMode !== 'friends'
+    || (!buildMode && (frontierTool === 0 || frontierTool === 5 || frontierTool === STONE_TOOL));
   const spectatedSquadmate = matchSnapshot?.players.find(p => p.id === downedSpectatorTarget?.id);
   const activeReviver = hud.reviverId ? matchSnapshot?.players.find(p => p.id === hud.reviverId) : undefined;
   const squadmates = hud.squad.filter(player => player.id !== launch.localPlayerId);
@@ -3302,7 +3317,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       {isSpectator && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span>{tr('hud.spectating')}</span><b>{spectatorTarget?.label || tr('hud.acquireTarget')}</b><small>{tr('hud.nextPlayer')}</small></div>}
       {!isSpectator && !fallCinematicActive && (hud.lifeState === 'downed' || hud.lifeState === 'eliminated' || hud.lifeState === 'extracted') && <div className="coop-spectating pointer-events-none absolute z-50" style={{ top: objectiveHud ? '82px' : '28px' }}><span className={hud.lifeState === 'downed' ? 'text-amber-300 font-black' : hud.lifeState === 'extracted' ? 'text-emerald-300 font-black' : 'text-rose-300 font-black'}>● {hud.lifeState === 'extracted' ? 'EXTRACTED · SPECTATING' : tr(hud.lifeState === 'downed' ? 'hud.downedSpectating' : 'hud.eliminatedSpectating')}</span><b style={{ color: spectatedSquadmate?.color || '#f0abfc' }}>{spectatedSquadmate?.label || downedSpectatorTarget?.label || tr('hud.squad')}</b><small>{tr('hud.cycleSquad')}</small></div>}
       {!funMode && !campfireSeated && craneControlsOpen===null && matchSnapshot?.friends?.frontier && localSnapshot && !buildMode && !backpackOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsToolbelt onFun={()=>{setBuildMode(false);selectFrontierTool(localSnapshot.friendsSeat?SEEDS_TOOL:STONE_TOOL);}} workLocked={miningWorkLocked} onWorkPlane={toggleMiningPlane} showProgress={preferences.miningProgress===true} frontier={matchSnapshot.friends.frontier} player={localSnapshot} tool={frontierTool} visible={frontierToolbeltVisible} onTool={selectFrontierTool} onPack={() => { rendererRef.current?.exitPointerLock(); setBackpackPanelOpen(true); }} elapsed={matchSnapshot.elapsedMs} />}
-      {launch.gameMode==='friends'&&funMode&&!interactionBlocked&&!buildMode&&localSnapshot?.lifeState==='alive'&&<FriendsFunBar visible={funBarVisible} tool={frontierTool} onStone={()=>selectFrontierTool(STONE_TOOL)} onSeeds={()=>selectFrontierTool(SEEDS_TOOL)} onMarshmallow={()=>selectFrontierTool(MARSHMALLOW_TOOL)} onClose={()=>selectFrontierTool(EMPTY_HANDS)}/>}
+      {launch.gameMode==='friends'&&funMode&&!interactionBlocked&&!buildMode&&localSnapshot?.lifeState==='alive'&&<FriendsFunBar visible={funBarVisible} tool={frontierTool} onStone={()=>selectFrontierTool(STONE_TOOL)} onSeeds={()=>selectFrontierTool(SEEDS_TOOL)} onMarshmallow={()=>selectFrontierTool(MARSHMALLOW_TOOL)} onConfetti={()=>selectFrontierTool(CONFETTI_TOOL)} onClose={()=>selectFrontierTool(EMPTY_HANDS)}/>}
       {launch.gameMode==='friends'&&!interactionBlocked&&!buildMode&&frontierTool===SEEDS_TOOL&&localSnapshot?.lifeState==='alive'&&!localSnapshot.motion?.swimming&&<div className="friends-fishing-controls" data-toolbelt-visible={funBarVisible} aria-label="Bird feeding controls" onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()}>
         <button type="button" onClick={()=>{mobileInputHandlerRef.current?.({type:'hold',control:'fire',pressed:true});mobileInputHandlerRef.current?.({type:'hold',control:'fire',pressed:false});}}><kbd>{showMobileTouchControls?'Tap':isGamepadControlScheme(controlScheme)?'RT':'LMB'}</kbd>Scatter</button>
         <button type="button" aria-pressed={Boolean(matchSnapshot?.friends?.birds?.equipped.find(h=>h.playerId===launch.localPlayerId)?.holding)} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);mobileInputHandlerRef.current?.({type:'hold',control:'aim',pressed:true});}} onPointerUp={()=>mobileInputHandlerRef.current?.({type:'hold',control:'aim',pressed:false})} onPointerCancel={()=>mobileInputHandlerRef.current?.({type:'hold',control:'aim',pressed:false})}><kbd>{showMobileTouchControls?'Hold':isGamepadControlScheme(controlScheme)?'LT':'RMB'}</kbd>Hold</button>
@@ -3315,12 +3330,13 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         <button type="button" onClick={()=>{mobileInputHandlerRef.current?.({type:'hold',control:'fire',pressed:true});mobileInputHandlerRef.current?.({type:'hold',control:'fire',pressed:false});}}><kbd>{showMobileTouchControls?'Tap':isGamepadControlScheme(controlScheme)?'RT':'LMB'}</kbd>{matchSnapshot?.friends?.fishing?.fish.some(f=>f.ownerId===launch.localPlayerId)?'Throw':matchSnapshot?.friends?.fishing?.casts.some(c=>c.playerId===launch.localPlayerId)?'Reel':'Cast'}</button>
         <button type="button" onClick={()=>{mobileInputHandlerRef.current?.({type:'hold',control:'aim',pressed:true});mobileInputHandlerRef.current?.({type:'hold',control:'aim',pressed:false});}}><kbd>{showMobileTouchControls?'Tap':isGamepadControlScheme(controlScheme)?'LT':'RMB'}</kbd>{matchSnapshot?.friends?.fishing?.fish.some(f=>f.ownerId===launch.localPlayerId)?'Drop':'Retrieve'}</button>
       </div>}
+      {launch.gameMode==='friends'&&matchSnapshot?.friends?.fishing&&<FriendsFishingCatchLog fish={matchSnapshot.friends.fishing.fish} localId={launch.localPlayerId} visible={!interactionBlocked&&!buildMode&&!backpackOpen&&!tacticalMapOpen&&localSnapshot?.lifeState==='alive'&&!localSnapshot.friendsSeat&&!localSnapshot.motion?.swimming&&frontierTool===7}/>}
       {pauseOpen && launch.gameMode === 'friends' && <FriendsPauseMenu host={launch.role === 'host'} controlScheme={controlScheme} onControlScheme={scheme => { clearControlsRef.current(); onControlSchemeChange?.(scheme); }} cinematicProfile={resolvedProfile} onCinematicProfile={profile => onCinematicProfileChange?.(profile)} preferences={preferences} onPreferences={patch => setPreferences(current => ({ ...current, ...patch }))} onResume={closePauseMenu} onExit={onExit}/>}
       {matchSnapshot?.friends && craneControlsOpen===null && !friendsDevOpen && !tacticalMapOpen && !stationOpen && !foundryOpen && !adminOpen && <FriendsHUD snapshot={matchSnapshot} player={localSnapshot} interactionLabel={interactionControlLabel} tool={frontierTool} toolbeltVisible={frontierToolbeltVisible && !buildMode && !backpackOpen} resumeControlVisible={showResumeControl} />}
       {(rowboatSeated||rowboatNearby||localSnapshot?.motion?.swimming)&&!interactionBlocked&&!tacticalMapOpen&&<div className="absolute bottom-24 left-1/2 z-[86] -translate-x-1/2 rounded-xl border border-teal-200/30 bg-[#102c2e]/90 px-5 py-3 text-center text-xs text-teal-50 shadow-xl backdrop-blur-md">
-        <strong>{rowboatSeated?`${localSnapshot?.friendsSeat?.index===0?'LEFT':'RIGHT'} OAR · REEDWATER SKIFF`:rowboatNearby?'REEDWATER SKIFF · TWO ROWERS':localSnapshot?.motion?.swimSubmerged?'DIVING':'SWIMMING'}</strong>
-        <div className="mt-1 text-[11px] text-teal-100/75">{rowboatSeated?'Click / tap forward: one stroke · Right-click / tap backward: backwater · F / Space: leave':rowboatNearby?'F: take an oar · Each rower controls their own side':'Ctrl / crouch: dive · Space: surface · Look + move: swim · Shift: swim faster'}</div>
-        {rowboatSeated&&<div className="mt-1 text-[11px] text-amber-100">{rowboat?.rowing?.left.playerId&&rowboat.rowing.right.playerId?'Both oars crewed · Match your rhythm to go straight':'One oar crewed · Bring a friend for the other side'}</div>}
+        <strong>{rowboatSeated?`${rowboatCrew===1?'BOTH OARS':localSnapshot?.friendsSeat?.index===0?'LEFT OAR':'RIGHT OAR'} · REEDWATER SKIFF`:rowboatNearby?'REEDWATER SKIFF · TWO SEATS':localSnapshot?.motion?.swimSubmerged?'DIVING':'SWIMMING'}</strong>
+        <div className="mt-1 text-[11px] text-teal-100/75">{rowboatSeated?rowboatControls:rowboatNearby?`${rowboatBoardControl}: take a seat · Row solo or invite a second rower`:localSnapshot?.motion?.swimming?'Ctrl / crouch: dive · Space: surface · Look + move: swim · Shift: swim faster':''}</div>
+        {rowboatSeated&&<div className="mt-1 text-[11px] text-amber-100">{rowboatCrew===1?`Solo · ${rowboatSteerControl} strokes one oar to steer; matched strokes go straight`:'Two rowers · each person controls their own side'}</div>}
       </div>}
       {launch.gameMode==='friends' && frontierTool===MARSHMALLOW_TOOL && localSnapshot?.lifeState==='alive' && !localSnapshot.motion?.swimming && !buildMode && !interactionBlocked && <FriendsCampfireControls visible={funBarVisible} nearFire={campfireRoastReach(localSnapshot)} seated={Boolean(localSnapshot.friendsSeat)}
         touch={showMobileTouchControls} gamepad={isGamepadControlScheme(controlScheme)}
@@ -3363,7 +3379,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         </div>)}
       </div>}
       {!campfireSeated && revivingTarget && <div className="pointer-events-none absolute left-1/2 top-[56%] z-20 w-[min(330px,calc(100vw-2rem))] -translate-x-1/2 border border-cyan-300/55 bg-black/80 px-4 py-3 text-center shadow-[0_0_24px_rgba(34,211,238,.18)] backdrop-blur-md"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">{tr('hud.holdRevive', { name: revivingTarget.label })}</div><div className="mt-2 h-2 overflow-hidden bg-cyan-950/80"><div className="h-full bg-cyan-300 transition-[width] duration-100" style={{ width: `${Math.max(0, revivingTarget.reviveProgressMs / 3000 * 100)}%` }} /></div><div className="mt-1 text-[9px] font-mono text-cyan-100/70">{Math.round(revivingTarget.reviveProgressMs / 3000 * 100)}%</div></div>}
-      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && <CoopCombatReticle mode={classOperator.id === 'royal_inferno' ? 'spell' : reticleMode} />}
+      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && showCombatReticle && <CoopCombatReticle mode={classOperator.id === 'royal_inferno' ? 'spell' : reticleMode} />}
       {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && matchSnapshot && localSnapshot && (
         <CoopOffscreenThreats
           snapshot={matchSnapshot}
@@ -3371,7 +3387,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           renderer={rendererRef.current}
         />
       )}
-      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && matchSnapshot && localSnapshot && (
+      {!campfireSeated && craneControlsOpen===null && !isSpectator && hud.lifeState === 'alive' && showCombatReticle && matchSnapshot && localSnapshot && (
         <CoopReticleCompass
           localPlayer={localSnapshot}
           players={matchSnapshot.players}
@@ -3434,7 +3450,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         onExport={exportWorld} onImport={() => friendsImportRef.current?.click()} />}
 
       <input ref={friendsImportRef} type="file" accept=".json,application/json" hidden onChange={e => { void importWorld(e.target.files?.[0]); }} />
-      {!campfireSeated && craneControlsOpen===null && matchSnapshot && localSnapshot && !tacticalMapOpen && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} language={launch.language} />}
+      {launch.gameMode !== 'friends' && !campfireSeated && craneControlsOpen===null && matchSnapshot && localSnapshot && !tacticalMapOpen && <CoopMinimap snapshot={matchSnapshot} localPlayer={localSnapshot} language={launch.language} />}
       {tacticalMapOpen && matchSnapshot && localSnapshot && <EnhancedCoopTacticalMap snapshot={matchSnapshot} localPlayer={localSnapshot} onPingMission={pingMissionFromMap} onClose={() => { setTacticalMapPanelOpen(false); resumeGameplayInteraction(); }} />}
       {stationOpen && nearbyStation && <div onMouseDown={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} className="absolute inset-0 z-[80] bg-black/55 backdrop-blur-[2px]" aria-hidden="true" />}
       {!campfireSeated && nearbyStation && !stationOpen && <div onMouseDown={event => event.stopPropagation()} className="coop-station-prompt absolute bottom-5 left-5 z-[85] w-[min(420px,calc(100vw-2.5rem))] border border-cyan-300/35 bg-[#07111b]/95 p-4 shadow-[0_0_28px_rgba(34,211,238,.14)] backdrop-blur-md">

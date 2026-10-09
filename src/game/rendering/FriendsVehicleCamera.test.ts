@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FriendsVehicleCamera } from './FriendsVehicleCamera';
 import { FriendsExpedition } from '../multiplayer/FriendsExpedition';
+import { vehicleWorldPoint } from '../multiplayer/FriendsVehiclePose';
 
-describe('Sunskiff pilot chase camera', () => {
+describe('Friends vehicle chase camera', () => {
   it('frames the full aircraft from behind and above, including the rotors', () => {
     const camera = new THREE.PerspectiveCamera(72, 16 / 9, .05, 32000), rig = new FriendsVehicleCamera(), plane = new FriendsExpedition().vehicles().find(v=>v.kind==='aircraft')!;
     rig.update(camera, plane, -Math.PI / 2, 0, 16.67); camera.updateMatrixWorld();
@@ -21,5 +22,19 @@ describe('Sunskiff pilot chase camera', () => {
     expect(camera.position.x - previous.x).toBeCloseTo(100); expect(camera.position.z - previous.z).toBeCloseTo(80); expect(camera.position.y - previous.y).toBeCloseTo(500);
     const beforeTurn = camera.position.clone(); rig.update(camera, plane, 0, 0, 16.67);
     expect(camera.position.distanceTo(beforeTurn)).toBeLessThan(150); expect(camera.position.x).toBeLessThan(plane.x - 500);
+  });
+  it('frames the rowboat and both seats at a close, elevated navigation distance',()=>{
+    const camera=new THREE.PerspectiveCamera(70,16/9,.05,32000),rig=new FriendsVehicleCamera(),boat=new FriendsExpedition().vehicles().find(v=>v.kind==='rowboat')!;
+    const yaw=Math.atan2(-Math.cos(boat.angle),-Math.sin(boat.angle));
+    rig.update(camera,boat,yaw,0,16.67);camera.updateMatrixWorld(true);
+    expect(camera.position.distanceTo(new THREE.Vector3(boat.x,boat.z,boat.y))).toBeGreaterThan(200);
+    expect(camera.position.distanceTo(new THREE.Vector3(boat.x,boat.z,boat.y))).toBeLessThan(280);
+    expect(camera.position.y).toBeGreaterThan(boat.z+70);
+    for(const x of [-boat.length/2,boat.length/2])for(const y of [-boat.width/2,boat.width/2]){
+      const point=vehicleWorldPoint(boat,{x,y,z:0}),screen=new THREE.Vector3(point.x,point.z,point.y).project(camera);
+      expect(Math.abs(screen.x)).toBeLessThan(.9);expect(Math.abs(screen.y)).toBeLessThan(.9);expect(screen.z).toBeLessThan(1);
+    }
+    const rowerHead=vehicleWorldPoint(boat,{x:8,y:0,z:62}),headScreen=new THREE.Vector3(rowerHead.x,rowerHead.z,rowerHead.y).project(camera);
+    expect(Math.abs(headScreen.x)).toBeLessThan(.9);expect(Math.abs(headScreen.y)).toBeLessThan(.9);expect(headScreen.z).toBeLessThan(1);
   });
 });

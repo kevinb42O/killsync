@@ -6,6 +6,7 @@ import { friendsVehicleFloor, pointOnGangway, trainGangways, gangwayHeight, type
 import type { CoopGrenadeSnapshot } from '../combat/coopGrenades';
 import { securedCargoPose } from './FriendsHauling';
 import { interpolateCargoRotation } from './FriendsCargoPose';
+import { isRowboatSeat, rowboatSeatPoint } from './FriendsRowboat';
 import { CoopEnemySnapshot, CoopPlayerSnapshot, CoopProjectileSnapshot, CoopSnapshot } from './CoopSimulation';
 
 /** Teleports are discontinuities, including a nearby Return Home. */
@@ -261,6 +262,11 @@ function interpolatePassengers(previous: CoopSnapshot, current: CoopSnapshot, fr
     const before = passengerAnchor(previous.friends!.vehicles, old,previous.friends!.building?.pieces), after = passengerAnchor(current.friends!.vehicles, next,current.friends!.building?.pieces);
     if (!before || !after || before.id !== after.id) continue;
     const frame = friends.vehicles.find(v => v.id === after.id)!;
+    if(isRowboatSeat(next.friendsSeat)){
+      const crew=current.players.filter(player=>player.friendsSeat?.vehicleId===next.friendsSeat!.vehicleId&&player.lifeState==='alive').length;
+      Object.assign(target,rowboatSeatPoint(frame,next.friendsSeat!.index,crew===1));target.angle=frame.angle+Math.PI;
+      continue;
+    }
     if(next.friendsSeat){
       const seat=SCENIC_SEATS[next.friendsSeat.index];if(seat)Object.assign(target,vehicleWorldPoint(frame,seat));
       continue;

@@ -6,9 +6,10 @@ export const STONE_TOOL = 8 as const;
 export const STONE_CHARGE_MS = 900;
 export const STONE_REFILL_MS = 450;
 export type ThrownStone = FishingPoint & { id:number; ownerId:string; vx:number; vy:number; vz:number; atMs:number; skips:number };
+export type RestingStone = FishingPoint & { id:number; atMs:number };
 export type StoneSplash = FishingPoint & { id:number; atMs:number; skip:number };
 export type StoneHand = { playerId:string; chargeAt?:number; readyAt:number; throwAt?:number };
-export type StonesSnapshot = { equipped:StoneHand[]; stones:ThrownStone[]; splashes:StoneSplash[] };
+export type StonesSnapshot = { equipped:StoneHand[]; stones:ThrownStone[]; landed:RestingStone[]; splashes:StoneSplash[] };
 type Hand = StoneHand & { fire:number };
 
 /** A shallow, fast impact skips; steep throws and slow stones sink. */
@@ -21,6 +22,7 @@ export class FriendsStones {
   private serial=0;
   private hands=new Map<string,Hand>();
   private stones:ThrownStone[]=[];
+  private landed:RestingStone[]=[];
   private splashes:StoneSplash[]=[];
   private equipped:StoneHand[]=[];
 
@@ -55,7 +57,7 @@ export class FriendsStones {
       for(let i=0;i<count;i++){
         const from={x:stone.x,y:stone.y,z:stone.z};stone.vz-=230*step;
         const next={x:stone.x+stone.vx*step,y:stone.y+stone.vy*step,z:stone.z+stone.vz*step};
-        if(env.blocked(from,next))return false;
+        if(env.blocked(from,next)){this.landed.push({...from,id:++this.serial,atMs:now});return false;}
         const dx=next.x-from.x,dy=next.y-from.y,dz=next.z-from.z,length=dx*dx+dy*dy+dz*dz;
         let target:FishingActor|undefined,nearest=Infinity;
         for(const p of players){
@@ -73,12 +75,13 @@ export class FriendsStones {
           this.splashes.push({...point,id:++this.serial,atMs:now,skip:skip?stone.skips+1:0});
           if(!skip)return false;
           stone.skips++;stone.vx*=.80;stone.vy*=.80;stone.vz=Math.min(58,Math.max(20,-stone.vz*.72));Object.assign(stone,{...point,z:point.z+.6});
-        }else if(floor!==undefined&&next.z<=floor+2)return false;
+        }else if(floor!==undefined&&next.z<=floor+2){this.landed.push({x:next.x,y:next.y,z:floor+1.5,id:++this.serial,atMs:now});return false;}
         else Object.assign(stone,next);
       }
       return stone.z> -1000;
     });
     this.splashes=this.splashes.filter(s=>now-s.atMs<800).slice(-40);
+    this.landed=this.landed.filter(s=>now-s.atMs<5000).slice(-40);
   }
-  snapshot():StonesSnapshot{return {equipped:this.equipped.map(h=>({...h})),stones:this.stones.map(s=>({...s})),splashes:this.splashes.map(s=>({...s}))};}
+  snapshot():StonesSnapshot{return {equipped:this.equipped.map(h=>({...h})),stones:this.stones.map(s=>({...s})),landed:this.landed.map(s=>({...s})),splashes:this.splashes.map(s=>({...s}))};}
 }

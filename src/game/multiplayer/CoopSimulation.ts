@@ -358,6 +358,8 @@ export interface CoopCombatEvent {
   color?: string;
   itemType?: ItemType;
   weaponId?: CoopWeaponId;
+  /** A zero-damage Friends stone hit uses its own playful hurt voice. */
+  stoneHit?: boolean;
   killedByPlayerId?: string;
   ammoType?: AmmoType;
   actionId?: number;
@@ -1039,7 +1041,7 @@ export class CoopSimulation {
       const fishingEnvironment=this.haulingEnvironment();
       this.friends.hauling.update(dt, this.elapsedMs, [...this.players.values()], validInputs, fishingEnvironment);
       this.friends.fishing.update(dt,this.elapsedMs,[...this.players.values()],validInputs,{...fishingEnvironment,piloting:id=>this.friends!.vehicles().some(v=>v.pilotId===id)});
-      this.friends.stones.update(dt,this.elapsedMs,[...this.players.values()],validInputs,{...fishingEnvironment,piloting:id=>this.friends!.vehicles().some(v=>v.pilotId===id)||this.friends!.hauling.playerCarry.isCarried(id)},(playerId,point)=>this.emitCombatEvent({kind:'player_damaged',x:point.x,y:point.y,playerId,amount:0,color:'#fb7185'}));
+      this.friends.stones.update(dt,this.elapsedMs,[...this.players.values()],validInputs,{...fishingEnvironment,piloting:id=>this.friends!.vehicles().some(v=>v.pilotId===id)||this.friends!.hauling.playerCarry.isCarried(id)},(playerId,point)=>this.emitCombatEvent({kind:'player_damaged',x:point.x,y:point.y,playerId,amount:0,color:'#fb7185',stoneHit:true}));
       this.friends.birds.update(dt,this.elapsedMs,[...this.players.values()],validInputs,{...fishingEnvironment,outdoors:p=>!Number.isFinite(this.friendsOverhead(p)),piloting:id=>this.friends!.vehicles().some(v=>v.pilotId===id)||this.friends!.hauling.playerCarry.isCarried(id)});
       for(const [id,angle] of this.friends.hauling.getCraneAngles())if(!this.friends.hauling.craneArmIsMoving(id))this.friendsBuilding?.parkCrane(id,angle);
     }

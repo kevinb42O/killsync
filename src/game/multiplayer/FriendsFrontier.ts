@@ -13,8 +13,8 @@ import { FRIENDS_BUILD_CATALOG, friendsShapeBoxes, worldBox, type FriendsBuildPi
 export const MATERIAL_NAMES = { wood: 'Timber', soil: 'Soil', stone: 'Stone', copper: 'Copper ore', iron: 'Iron ore', planks: 'Planks', ingots: 'Ingots', saplings: 'Saplings' } as const;
 export type Resource = keyof typeof MATERIAL_NAMES;
 export type Materials = Record<Resource, number>;
-export type FrontierTool = 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10;
-export const FRONTIER_TOOLS = { 0: 'Combat', 1: 'Axe', 2: 'Pickaxe', 3: 'Shovel', 5: 'Rope', 6: 'Empty hands', 7: 'Fishing rod', 8: 'Stone', 9: 'Bird seeds', 10: 'Marshmallow' } as const;
+export type FrontierTool = 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+export const FRONTIER_TOOLS = { 0: 'Combat', 1: 'Axe', 2: 'Pickaxe', 3: 'Shovel', 5: 'Rope', 6: 'Empty hands', 7: 'Fishing rod', 8: 'Stone', 9: 'Bird seeds', 10: 'Marshmallow', 11: 'Confetti' } as const;
 export const PACK_CAPACITY = 160;
 export const FRIENDS_TEST_MODE = true; // Temporary playtest rules: free construction and uncapped inventories.
 export const emptyMaterials = (): Materials => ({ wood: 0, soil: 0, stone: 0, copper: 0, iron: 0, planks: 0, ingots: 0, saplings: 0 });

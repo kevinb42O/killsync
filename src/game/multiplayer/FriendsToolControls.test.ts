@@ -8,9 +8,9 @@ describe('Friends wheel tools', () => {
       expect(cycleFriendsTool(FRIENDS_TOOL_ORDER[i], -1)).toBe(FRIENDS_TOOL_ORDER[(i + FRIENDS_TOOL_ORDER.length - 1) % FRIENDS_TOOL_ORDER.length]);
     }
   });
-  it('cycles stones, seeds and marshmallows in both directions',()=>{
-    expect(FRIENDS_FUN_ORDER).toEqual([8,9,10]);
-    for(let i=0;i<3;i++){expect(cycleFriendsFun(FRIENDS_FUN_ORDER[i],1)).toBe(FRIENDS_FUN_ORDER[(i+1)%3]);expect(cycleFriendsFun(FRIENDS_FUN_ORDER[i],-1)).toBe(FRIENDS_FUN_ORDER[(i+2)%3]);}
+  it('cycles stones, seeds, marshmallows and confetti in both directions',()=>{
+    expect(FRIENDS_FUN_ORDER).toEqual([8,9,10,11]);
+    for(let i=0;i<FRIENDS_FUN_ORDER.length;i++){expect(cycleFriendsFun(FRIENDS_FUN_ORDER[i],1)).toBe(FRIENDS_FUN_ORDER[(i+1)%FRIENDS_FUN_ORDER.length]);expect(cycleFriendsFun(FRIENDS_FUN_ORDER[i],-1)).toBe(FRIENDS_FUN_ORDER[(i+FRIENDS_FUN_ORDER.length-1)%FRIENDS_FUN_ORDER.length]);}
   });
   it('keeps one shovel slot and maps secondary input to filling only for that tool', () => {
     expect(FRIENDS_TOOL_ORDER).toEqual([6, 1, 2, 3, 0, 5, 7]);

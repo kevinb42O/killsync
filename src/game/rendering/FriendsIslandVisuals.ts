@@ -20,6 +20,74 @@ import { FriendsCastleTorches } from './FriendsCastleTorches';
 import { FriendsCastleStairVisuals } from './FriendsCastleStairVisuals';
 import { FriendsRiverVisuals } from './FriendsRiverVisuals';
 import { friendsWaterAt, friendsWaterDepth } from '../world/FriendsWaterSurface';
+import { FRIENDS_FISHING_DOCK, FRIENDS_FISHING_PLATFORM, FRIENDS_OPPOSITE_DOCK } from '../world/FriendsFishingDock';
+
+function createTimberPier(name:string,x:number,y:number,angle:number,deck:number,length:number,width:number,weathered=false,approachLength=0,mooringSide:-1|1=-1) {
+  const group = new THREE.Group();
+  group.name = name;
+  group.position.set(x, deck, y);
+  group.rotation.y = -angle;
+  const wood = new THREE.MeshStandardMaterial({ color: weathered?0x745238:0x805435, roughness: .86 });
+  const planks = new THREE.MeshStandardMaterial({ color: weathered?0x987453:0xa87549, roughness: .82 });
+  const darkWood = new THREE.MeshStandardMaterial({ color: 0x49372b, roughness: .9 });
+  const rope = new THREE.MeshStandardMaterial({ color: 0xd1b887, roughness: .9 });
+  const bronze = new THREE.MeshStandardMaterial({ color: 0x8e6841, metalness: .52, roughness: .43 });
+  const lamp = new THREE.MeshStandardMaterial({ color: 0xffcf7b, emissive: 0xf29a36, emissiveIntensity: 1.15, roughness: .32 });
+  const box = (w:number,h:number,d:number,px:number,py:number,pz:number,mat:THREE.Material) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); mesh.position.set(px,py,pz); group.add(mesh); return mesh;
+  };
+  box(length,8,width,0,-4,0,darkWood);
+  if(approachLength)box(approachLength,8,width+20,-length/2-approachLength/2,-4,0,darkWood);
+  for(let px=-length/2-approachLength+12;px<=length/2-12;px+=22){box(19,1.5,width+(px<-length/2?12:-8),px,.75,0,planks);box(.8,1.6,width+(px<-length/2?12:-8),px+10,.7,0,darkWood);}
+  for(const px of [-length/2-approachLength+14,-length/2+132,length/2-132,length/2-14])for(const pz of [-width/2+10,width/2-10]){
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(9,12,68,8),darkWood);post.position.set(px,-42,pz);group.add(post);
+    const shoe=new THREE.Mesh(new THREE.CylinderGeometry(12,14,8,8),bronze);shoe.position.set(px,-72,pz);group.add(shoe);
+  }
+  // Short rope rails mark the bank entrance; the lake-facing tip stays open for boarding.
+  for(const side of [-1,1])for(const px of [-length/2-approachLength+16,-length/2-approachLength+112]){
+    const z=side*(width/2-9),post=new THREE.Mesh(new THREE.CylinderGeometry(3.5,4.4,48,8),wood);post.position.set(px,24,z);group.add(post);
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(4.5,10,8),bronze);cap.position.set(px,49,z);group.add(cap);
+  }
+  for(const side of [-1,1])box(90+approachLength,3,3,-length/2-approachLength/2+64,38,side*(width/2-9),rope);
+  // Mooring cleats are on the side that faces the skiff.
+  for(const px of [-34,56]){
+    const z=mooringSide*(width/2-10);
+    const bollard=new THREE.Mesh(new THREE.CylinderGeometry(4,5,12,8),bronze);bollard.position.set(px,8,z);group.add(bollard);
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(4.5,10,8),wood);cap.position.set(px,15,z);group.add(cap);
+  }
+  // Warm lanterns at the water end make the mooring readable at dusk.
+  for(const side of [-1,1]){
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(3,4,42,8),bronze);post.position.set(length/2-24,21,side*(width/2-12));group.add(post);
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(7,12,8),lamp);glow.position.set(length/2-24,44,side*(width/2-12));group.add(glow);
+  }
+  return group;
+}
+
+function createDeepmereFishingPlatform(){
+  const p=FRIENDS_FISHING_PLATFORM,group=new THREE.Group();group.name='deepmere-detached-fishing-platform';
+  group.position.set(p.x,p.deck,p.y);group.rotation.y=-p.angle;
+  const wood=new THREE.MeshStandardMaterial({color:0x805435,roughness:.86}),plank=new THREE.MeshStandardMaterial({color:0xb28354,roughness:.82}),dark=new THREE.MeshStandardMaterial({color:0x49372b,roughness:.9}),rope=new THREE.MeshStandardMaterial({color:0xd1b887,roughness:.9}),brass=new THREE.MeshStandardMaterial({color:0x8e6841,metalness:.52,roughness:.43}),amber=new THREE.MeshStandardMaterial({color:0xffcf7b,emissive:0xf29a36,emissiveIntensity:1.15,roughness:.32});
+  const box=(w:number,h:number,d:number,x:number,y:number,z:number,m:THREE.Material)=>{const q=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);q.position.set(x,y,z);group.add(q);return q;};
+  box(p.length,8,p.width,0,-4,0,dark);
+  for(let x=-p.length/2+9;x<=p.length/2-9;x+=18){box(15,1.5,p.width-8,x,.75,0,plank);box(.7,1.6,p.width-8,x+8,.7,0,dark);}
+  for(const x of [-p.length/2+12,p.length/2-12])for(const z of [-p.width/2+12,p.width/2-12]){
+    const pile=new THREE.Mesh(new THREE.CylinderGeometry(8,11,60,8),dark);pile.position.set(x,-37,z);group.add(pile);
+  }
+  // A low bench faces the water; rods and warm lamps stay back from the casting edge.
+  box(74,7,18,-25,13,31,wood);for(const x of [-54,4])for(const z of [26,36])box(5,18,5,x,3,z,dark);
+  for(const z of [-24,-4,16]){
+    const holder=new THREE.Mesh(new THREE.CylinderGeometry(4,4,12,8),brass);holder.position.set(42,6,z);group.add(holder);
+    const rod=new THREE.Mesh(new THREE.CylinderGeometry(1,1.8,104,6),dark);rod.position.set(52,56,z);rod.rotation.z=-.2;group.add(rod);
+    const tip=new THREE.Mesh(new THREE.SphereGeometry(2,8,6),amber);tip.position.set(62,108,z);group.add(tip);
+  }
+  for(const z of [-p.width/2+16,p.width/2-16]){
+    const railPost=new THREE.Mesh(new THREE.CylinderGeometry(3,4,32,8),wood);railPost.position.set(p.length/2-18,16,z);group.add(railPost);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(6,12,8),amber);lamp.position.set(p.length/2-18,34,z);group.add(lamp);
+  }
+  box(2,2,p.width-32,p.length/2-18,27,0,rope);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(12,2.5,8,28),rope);ring.position.set(-48,16,-p.width/2+24);group.add(ring);
+  return group;
+}
 
 export function islandOceanDepth(x:number,y:number){
   // Deep inland water can lie below sea level. It must not acquire a second
@@ -172,6 +240,11 @@ export class FriendsIslandVisuals extends THREE.Group {
       const m=ruinMaterials[i].clone();m.onBeforeCompile=ruinMaterials[i].onBeforeCompile;m.customProgramCacheKey=ruinMaterials[i].customProgramCacheKey;
       configureTerrainCoverage(m,coverage,grid,'horizon');return [tint,m];
     })) as Record<'stone'|'dark'|'copper'|'glow',THREE.MeshStandardMaterial>;
+    this.add(
+      createTimberPier('deepmere-fishing-dock',FRIENDS_FISHING_DOCK.x,FRIENDS_FISHING_DOCK.y,FRIENDS_FISHING_DOCK.angle,FRIENDS_FISHING_DOCK.deck,FRIENDS_FISHING_DOCK.length,FRIENDS_FISHING_DOCK.pierWidth),
+      createDeepmereFishingPlatform(),
+      createTimberPier('deepmere-opposite-dock',FRIENDS_OPPOSITE_DOCK.x,FRIENDS_OPPOSITE_DOCK.y,FRIENDS_OPPOSITE_DOCK.angle,FRIENDS_OPPOSITE_DOCK.deck,FRIENDS_OPPOSITE_DOCK.length,FRIENDS_OPPOSITE_DOCK.width,true,80,1),
+    );
     this.masonry=new FriendsIslandMasonry(['stone','dark','copper','glow'].map(t=>materials[t]));this.add(this.masonry);
     // Rune faces sit just outside solid stone and stay visible at every LOD.
     const glow=new THREE.MeshBasicMaterial({color:'#71fff0',toneMapped:false});

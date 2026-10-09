@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { crossfadeLoop, FriendsAudio, friendsAudio } from './FriendsAudio';
+import { crossfadeLoop, FRIENDS_CUE_ASSETS, FriendsAudio, friendsAudio } from './FriendsAudio';
 import { SoundManager } from './SoundManager';
 import { effectCalibration } from './FriendsAudioMix';
 import { QUIET_WORLD_SOUND } from './FriendsWorldSound';
@@ -156,6 +156,56 @@ describe('downloaded Friends audio', () => {
     expect(gains.at(-1).gain.value).toBeCloseTo(.22*effectCalibration(decoded,'eat'));expect(gains.at(-1).connect).toHaveBeenCalledWith(gains[0]);
     context.currentTime+=6;audio.setSettings({effects:0});audio.play('eat',.22,1000);expect(sources).toHaveLength(initial+1);
     audio.setSettings({effects:.65,muted:true});audio.play('eat',.22,1000);expect(sources).toHaveLength(initial+1);
+  });
+  it('fades trimmed water strokes smoothly instead of cutting off the splash tail', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    const before = sources.length;
+    audio.play('swimStroke', .25, 0, 1, .62, { fadeOutSeconds: .14 });
+    expect(sources).toHaveLength(before + 1);
+    expect(sources.at(-1).start).toHaveBeenCalledWith(context.currentTime, 0, .62);
+    const [strokeLevel, fadeStart] = gains.at(-1).gain.setValueAtTime.mock.calls[0];
+    expect(strokeLevel).toBeGreaterThan(0);
+    expect(fadeStart).toBeCloseTo(context.currentTime + .48);
+    const [fadeLevel, fadeEnd] = gains.at(-1).gain.linearRampToValueAtTime.mock.calls[0];
+    expect(fadeLevel).toBe(0);
+    expect(fadeEnd).toBeCloseTo(context.currentTime + .62);
+  });
+  it('plays the dive splash once and loops only its final second until resurfacing', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    const before = sources.length;
+    audio.setUnderwaterDive(true);
+    expect(sources).toHaveLength(before + 1);
+    const dive = sources.at(-1);
+    expect(dive.loop).toBe(true);
+    expect(dive.loopStart).toBe(decoded.duration - 1);
+    expect(dive.loopEnd).toBe(decoded.duration);
+    expect(dive.start).toHaveBeenCalledWith(context.currentTime, 0);
+    audio.setUnderwaterDive(false);
+    expect(dive.stop).toHaveBeenCalledWith(context.currentTime + .2);
+  });
+  it('plays a short inhale after the resurfacing splash and cancels it if diving again', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    audio.resurfaceFromDive();
+    expect((audio as any).lastCue.has('waterEntry')).toBe(true);
+    vi.advanceTimersByTime(419);
+    expect((audio as any).lastCue.has('waterBreathIn')).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect((audio as any).lastCue.has('waterBreathIn')).toBe(true);
+    context.currentTime += 1;
+    audio.resurfaceFromDive();
+    const breathsBefore = (audio as any).lastCue.get('waterBreathIn');
+    vi.advanceTimersByTime(200);
+    audio.setUnderwaterDive(true);
+    vi.advanceTimersByTime(300);
+    expect((audio as any).lastCue.get('waterBreathIn')).toBe(breathsBefore);
+  });
+  it('waits for the inhale asset if it has not finished preloading at the resurfacing cue', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    (audio as any).buffers.delete(FRIENDS_CUE_ASSETS.waterBreathIn[0]);
+    audio.resurfaceFromDive();
+    vi.advanceTimersByTime(420);
+    await load();
+    expect((audio as any).lastCue.has('waterBreathIn')).toBe(true);
   });
   it('prepares flight rustles only in dev flight, rotates recordings and respects effects volume', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
@@ -411,8 +461,8 @@ describe('asset provenance and the music seam', () => {
     const manifest = JSON.parse(readFileSync(resolve(root, 'sources.json'), 'utf8'));
     expect(manifest.defaultLicense).toBe('CC0-1.0');
     const approved = manifest.assets.filter((asset: { pack?: string }) => asset.pack === 'approvedPixabay');
-    expect(approved).toHaveLength(33);
-    expect(new Set(approved.map((asset: { sourcePage: string }) => asset.sourcePage)).size).toBe(21);
+    expect(approved).toHaveLength(37);
+    expect(new Set(approved.map((asset: { sourcePage: string }) => asset.sourcePage)).size).toBe(25);
     expect(approved.every((asset: { license: string }) => asset.license === 'Pixabay Content License')).toBe(true);
     for (const asset of manifest.assets) expect(createHash('sha256').update(readFileSync(resolve(root, asset.file))).digest('hex')).toBe(asset.sha256);
   });

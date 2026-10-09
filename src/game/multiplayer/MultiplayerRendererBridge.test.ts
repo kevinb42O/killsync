@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { MultiplayerRendererBridge, shouldPresentGroundJump, shouldRenderPlayerRig } from './MultiplayerRendererBridge';
+import { MultiplayerRendererBridge, shouldPlayResurfaceBreath, shouldPresentGroundJump, shouldRenderPlayerRig } from './MultiplayerRendererBridge';
 import { DEFAULT_GAME_PREFERENCES } from '../LocalGamePreferences';
 
 describe('Friends lighting preferences', () => {
@@ -42,5 +42,15 @@ describe('MultiplayerRendererBridge jump presentation', () => {
     expect(shouldPresentGroundJump(true, false, 12, 14, 13)).toBe(false);
     expect(shouldPresentGroundJump(false, true, 12, 14, 13)).toBe(false);
     expect(shouldPresentGroundJump(false, false, 0, 14, 13)).toBe(false);
+  });
+});
+
+describe('MultiplayerRendererBridge resurfacing audio', () => {
+  it('plays the breath when an alive local player surfaces, even if swimming ends on that frame', () => {
+    expect(shouldPlayResurfaceBreath(true, true, false, true)).toBe(true);
+    expect(shouldPlayResurfaceBreath(false, true, false, true)).toBe(false);
+    expect(shouldPlayResurfaceBreath(true, true, false, false)).toBe(false);
+    expect(shouldPlayResurfaceBreath(true, true, true, true)).toBe(false);
+    expect(shouldPlayResurfaceBreath(true, false, false, true)).toBe(false);
   });
 });

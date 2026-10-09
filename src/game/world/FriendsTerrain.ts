@@ -8,6 +8,7 @@ import { castleTerrainHeight, HIGHFALL_CASTLE } from './FriendsCastle';
 import { createCastleStairs, type CastleStairs } from './FriendsCastleStairs';
 import { hydrologyTerrainHeight, hydrologyProtected, hydrologyWaterLevel, HYDROLOGY_SITES, RIVER_CROSSING } from './FriendsHydrology';
 import { createRiverBridge, type RiverBridge } from './FriendsRiverBridge';
+import { FRIENDS_DOCK_LANDSCAPE_CUTS, friendsFishingDockSurface } from './FriendsFishingDock';
 let riverBridgeField:RiverBridge|undefined;
 let castleStairsField:CastleStairs|undefined;
 /** Deterministic, editable volumetric ground. Simulation, prediction and mesh
@@ -260,6 +261,10 @@ export class FriendsTerrain {
     const platform=friendsFixedPlatformAt(x,y);if(platform)return platform.top;
     const natural=baseTerrainHeight(x,y);let h=natural;
     for(const g of this.gradeTiles.get(`${Math.floor(x/512)},${Math.floor(y/512)}`) || []){const adjusted=grade(natural,x,y,g[0],g[1],g[2],g[3],320);h=natural<g[2]?Math.max(h,adjusted):Math.min(h,adjusted);}
+    for(const cut of FRIENDS_DOCK_LANDSCAPE_CUTS){
+      const distance=Math.hypot(x-cut.x,y-cut.y);if(distance>=cut.core+cut.collar)continue;
+      h=Math.min(h,grade(h,x,y,cut.x,cut.y,cut.top,cut.core,cut.collar));
+    }
     return scenicTransitSurface(x,y,gridHeight(h));
   }
   addGrade(g: TerrainGrade, revise=true) {
@@ -336,6 +341,8 @@ export class FriendsTerrain {
     const stair=CASTLE_STAIRS.floor(x,y,z,step);
     const rail=scenicRailFloor(x,y,z,step);
     let best=Math.max(stair??-Infinity,rail??-Infinity,RIVER_BRIDGE.floor(x,y,z,step)??-Infinity);
+    const dock=friendsFishingDockSurface(x,y);
+    if(dock!==undefined&&dock<=z+step&&dock>=z-32)best=Math.max(best,dock);
     const vx = Math.floor(x / VOXEL_SIZE), vy = Math.floor(y / VOXEL_SIZE);
     for (let vz = Math.floor((z + step) / VOXEL_SIZE) - 1; vz >= -16; vz--) {
       if (this.exposedMaterial(vx, vy, vz) && !this.exposedMaterial(vx, vy, vz + 1)) {best=Math.max(best,(vz+1)*VOXEL_SIZE);break;}
@@ -343,6 +350,7 @@ export class FriendsTerrain {
     return Number.isFinite(best)?best:undefined;
   }
   supports(x: number, y: number, z: number) {
+    const dock=friendsFishingDockSurface(x,y);if(dock!==undefined&&Math.abs(dock-z)<.001)return true;
     const bridge=RIVER_BRIDGE.floor(x,y,z,0);if(bridge!==undefined&&Math.abs(bridge-z)<.001)return true;
     const stair=CASTLE_STAIRS.floor(x,y,z,0);if(stair!==undefined&&Math.abs(stair-z)<.001)return true;
     const top=Math.round(z/VOXEL_SIZE);if(Math.abs(top*VOXEL_SIZE-z)>=1)return false;

@@ -5,7 +5,7 @@ import type { FriendsVehicle } from '../multiplayer/FriendsExpedition';
 
 const wood=()=>new THREE.MeshStandardMaterial({color:0x95633d,roughness:.84});
 function plank(root:THREE.Group,x:number,y:number,z:number,w:number,h:number,d:number,material:THREE.Material){
-  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;root.add(m);return m;
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=false;root.add(m);return m;
 }
 /** The original CC0 hull is 118 triangles. Its static paddle pair is hidden
  * and replaced with independent articulated oars, two rowlocks and a bench. */
@@ -15,13 +15,13 @@ export function createRowboatVisual(){
   const fallback=new THREE.Group();root.add(fallback);
   const shape=new THREE.Shape();shape.moveTo(82,0);shape.lineTo(50,34);shape.lineTo(-42,34);shape.lineTo(-78,21);shape.lineTo(-78,-21);shape.lineTo(-42,-34);shape.lineTo(50,-34);shape.closePath();
   const hole=new THREE.Path();hole.moveTo(65,0);hole.lineTo(43,-28);hole.lineTo(-38,-28);hole.lineTo(-70,-17);hole.lineTo(-70,17);hole.lineTo(-38,28);hole.lineTo(43,28);hole.closePath();shape.holes.push(hole);
-  const hull=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:28,bevelEnabled:false}),cream);hull.rotation.x=-Math.PI/2;hull.position.y=-18;hull.castShadow=hull.receiveShadow=true;fallback.add(hull);
+  const hull=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:28,bevelEnabled:false}),cream);hull.rotation.x=-Math.PI/2;hull.position.y=-18;hull.castShadow=true;hull.receiveShadow=false;fallback.add(hull);
   plank(fallback,0,-17,0,125,3,48,timber);
   void loadFriendsAsset('rowboat').then(source=>{
     if(root.userData.disposed)return;
     const hullSource=source.clone(true);hullSource.getObjectByName('paddles')?.removeFromParent();
     const model=fitFriendsAsset(hullSource,{x:164,y:34,z:82},Math.PI/2);model.position.y=-20;
-    model.traverse(o=>{if(o instanceof THREE.Mesh){o.castShadow=o.receiveShadow=true;(o.material as THREE.MeshStandardMaterial).roughness=.86;}});
+    model.traverse(o=>{if(o instanceof THREE.Mesh){o.castShadow=true;o.receiveShadow=false;(o.material as THREE.MeshStandardMaterial).roughness=.86;}});
     root.add(model);fallback.visible=false;
   }).catch(()=>{/* The watertight authored hull remains available offline. */});
   plank(root,8,15,0,14,4,66,timber);

@@ -248,3 +248,12 @@ In-game calls are individual phrases with quiet gaps; wing flutters accompany
 arrival and departure. Calls use the visible species, stereo direction and
 distance, and the player's Ambience volume. The short startled cue is a recorded
 sparrow chirp used for the campfire reaction. Audio assets stay local during play.
+
+## Stone throwing
+
+- The throw swish reuses `knifeSlice.ogg` from Kenney's RPG Audio pack, and
+  landing impacts reuse the stone impacts from Kenney's Impact Sounds pack.
+  Both packs are [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+- `stone_oof.mp3` is **Oof 2** by **u_b9zlfeiqje**, bundled under the
+  [Pixabay Content License](https://pixabay.com/service/license-summary/).
+  [Source page](https://pixabay.com/sound-effects/people-oof-2-580732/).

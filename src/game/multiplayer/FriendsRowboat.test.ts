@@ -12,6 +12,58 @@ const actor=(id:string)=>({id,x:13680,y:22560,z:136.5,angle:0,lifeState:'alive',
 function crew(){const boat=new FriendsRowboat({x:12128,y:23600,angle:0}),a=actor('a'),b=actor('b');Object.assign(a,boat.vehicle());a.id='a';Object.assign(b,boat.vehicle());b.id='b';a.y+=20;b.y-=20;boat.update(50,0,[a,b],new Map([['a',command(0)],['b',command(0)]]));boat.interact(a,[a,b]);boat.interact(b,[a,b]);return {boat,a,b};}
 function row(boat:FriendsRowboat,a:ReturnType<typeof actor>,b:ReturnType<typeof actor>,left:number,right:number,back=false){for(let n=1;n<=120;n++){const stroke=Math.floor((n-1)/20)+1;boat.update(50,n*50,[a,b],new Map([['a',command(n,back?{altFireActionId:left?stroke:0}:{fireActionId:left?stroke:0})],['b',command(n,back?{altFireActionId:right?stroke:0}:{fireActionId:right?stroke:0})]]));}}
 describe('shared manual two-person rowboat',()=>{
+  it('centres a solo rower and uses each stroke to drive both oars straight',()=>{
+    const boat=new FriendsRowboat({x:12128,y:23600,angle:0}),a=actor('a');
+    Object.assign(a,boat.vehicle());a.id='a';
+    expect(boat.interact(a,[a])).toBe(true);
+    expect(a.friendsSeat?.vehicleId).toBe(ROWBOAT_ID);
+    expect(Math.hypot(a.x-rowboatSeatPoint(boat.vehicle(),a.friendsSeat!.index,true).x,a.y-rowboatSeatPoint(boat.vehicle(),a.friendsSeat!.index,true).y)).toBeLessThan(.001);
+    for(let n=1;n<=120;n++)boat.update(50,n*50,[a],new Map([['a',command(n,{fireActionId:Math.floor((n-1)/20)+1})]]));
+    const v=boat.vehicle();
+    expect(v.x).toBeGreaterThan(12128);
+    expect(Math.abs(v.angle)).toBeLessThan(.001);
+    expect(v.rowing!.left.atMs).toBe(v.rowing!.right.atMs);
+    expect(v.rowing!.left.playerId).toBe('a');expect(v.rowing!.right.playerId).toBe('a');
+    expect(Math.hypot(a.x-rowboatSeatPoint(v,a.friendsSeat!.index,true).x,a.y-rowboatSeatPoint(v,a.friendsSeat!.index,true).y)).toBeLessThan(.001);
+    expect(boat.interact(a,[a])).toBe(true);
+    expect(boat.vehicle().rowing!.left.playerId).toBeUndefined();expect(boat.vehicle().rowing!.right.playerId).toBeUndefined();
+  });
+  it('lets a solo rower tap either side oar to turn independently',()=>{
+    const leftBoat=new FriendsRowboat({x:12128,y:23600,angle:0}),leftRower=actor('left');Object.assign(leftRower,leftBoat.vehicle());leftRower.id='left';
+    expect(leftBoat.interact(leftRower,[leftRower])).toBe(true);
+    for(let n=1;n<=24;n++)leftBoat.update(50,n*50,[leftRower],new Map([['left',command(n,{movement:n===1?4:0})]]));
+    const leftStrokes=leftBoat.vehicle().rowing!;
+    expect(leftStrokes.left.atMs).toBe(50);expect(leftStrokes.right.atMs).toBe(-10000);expect(leftBoat.vehicle().angle).toBeLessThan(-.1);
+    const rightBoat=new FriendsRowboat({x:12128,y:23600,angle:0}),rightRower=actor('right');Object.assign(rightRower,rightBoat.vehicle());rightRower.id='right';
+    expect(rightBoat.interact(rightRower,[rightRower])).toBe(true);
+    for(let n=1;n<=24;n++)rightBoat.update(50,n*50,[rightRower],new Map([['right',command(n,{movement:n===1?8:0})]]));
+    const rightStrokes=rightBoat.vehicle().rowing!;
+    expect(rightStrokes.right.atMs).toBe(50);expect(rightStrokes.left.atMs).toBe(-10000);expect(rightBoat.vehicle().angle).toBeGreaterThan(.1);
+    const reverseBoat=new FriendsRowboat({x:12128,y:23600,angle:0}),reverseRower=actor('reverse');Object.assign(reverseRower,reverseBoat.vehicle());reverseRower.id='reverse';
+    expect(reverseBoat.interact(reverseRower,[reverseRower])).toBe(true);
+    reverseBoat.update(50,50,[reverseRower],new Map([['reverse',command(1,{movement:6})]]));
+    expect(reverseBoat.vehicle().rowing!.left.direction).toBe(-1);expect(reverseBoat.vehicle().rowing!.right.atMs).toBe(-10000);
+  });
+  it('splits control when a second rower boards, then recentres the remaining rower when one leaves',()=>{
+    const boat=new FriendsRowboat({x:12128,y:23600,angle:0}),a=actor('a'),b=actor('b');
+    Object.assign(a,boat.vehicle());a.id='a';Object.assign(b,boat.vehicle());b.id='b';
+    expect(boat.interact(a,[a,b])).toBe(true);
+    b.x=boat.vehicle().x;b.y=boat.vehicle().y;b.z=boat.vehicle().z;
+    expect(boat.interact(b,[a,b])).toBe(true);
+    const aIndex=a.friendsSeat!.index,bIndex=b.friendsSeat!.index;
+    expect(aIndex).not.toBe(bIndex);
+    boat.update(50,50,[a,b],new Map([['a',command(1,{fireActionId:1,movement:4})],['b',command(1)]]));
+    const v=boat.vehicle(),aSeat=rowboatSeatPoint(v,aIndex),bSeat=rowboatSeatPoint(v,bIndex);
+    expect(Math.hypot(a.x-aSeat.x,a.y-aSeat.y)).toBeLessThan(.001);
+    expect(Math.hypot(b.x-bSeat.x,b.y-bSeat.y)).toBeLessThan(.001);
+    expect(aIndex===0?v.rowing!.left.atMs:v.rowing!.right.atMs).toBe(50);
+    expect(aIndex===0?v.rowing!.right.atMs:v.rowing!.left.atMs).toBe(-10000);
+    expect(boat.interact(b,[a,b])).toBe(true);
+    boat.update(50,100,[a,b],new Map([['a',command(2)],['b',command(2)]]));
+    const centred=rowboatSeatPoint(boat.vehicle(),aIndex,true);
+    expect(Math.hypot(a.x-centred.x,a.y-centred.y)).toBeLessThan(.001);
+    expect(b.friendsSeat).toBeUndefined();
+  });
   it('reserves exactly two opposing seats and releases them into clear water',()=>{
     const {boat,a,b}=crew(),c=actor('c');Object.assign(c,boat.vehicle());c.id='c';
     expect(a.friendsSeat?.index).toBe(0);expect(b.friendsSeat?.index).toBe(1);expect(boat.interact(c,[a,b,c])).toBe(false);

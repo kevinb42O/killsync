@@ -39,6 +39,7 @@ export class FriendsCampfire {
   private flame:THREE.Mesh;
   private sparks:THREE.Points;
   private disposed=false;
+  private renderedDrawCalls=0;
   private fuel=0;
   private size=1;
   private spatialScale=1;
@@ -125,9 +126,14 @@ export class FriendsCampfire {
       vertexShader:`uniform float time;varying float fade;void main(){float age=fract(time*.18+position.x);fade=sin(age*3.14159)*(1.-age);vec3 p=vec3((position.y-.5)*35.+sin(age*8.+position.z*12.)*age*18.,12.+age*135.,(position.z-.5)*35.);vec4 view=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*view;gl_PointSize=clamp(550./max(1.,-view.z),1.,4.);}`,
       fragmentShader:'varying float fade;void main(){float a=1.-smoothstep(.1,.5,length(gl_PointCoord-.5));gl_FragColor=vec4(1.,.42,.08,a*fade);}'}));
     this.sparks.name='campfire-rising-embers';this.sparks.frustumCulled=false;this.group.add(this.sparks);
+    if(import.meta.env.DEV)this.group.traverse(object=>{
+      if(object instanceof THREE.Mesh||object instanceof THREE.Points)object.onBeforeRender=()=>{this.renderedDrawCalls++;};
+    });
   }
+  get drawCalls(){return this.renderedDrawCalls;}
   update(seconds:number,camera:THREE.Camera,daylight:number,enabled=true){
     if(this.disposed)return;
+    this.renderedDrawCalls=0;
     const target=1+(campfireHeat(this.fuel)-1);
     this.size+=(target-this.size)*.06;
     this.flame.scale.set(Math.sqrt(this.size),this.size,Math.sqrt(this.size));

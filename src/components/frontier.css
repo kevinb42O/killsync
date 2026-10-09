@@ -85,9 +85,24 @@
 .friends-fishing-controls[data-toolbelt-visible=true]{bottom:92px}
 .friends-fishing-controls button{padding:4px 0;background:none;border:0;color:inherit;font:inherit;pointer-events:auto;cursor:pointer}
 .friends-fishing-controls kbd{font-size:8px;opacity:.65;margin-right:5px}
+.friends-fishing-log{position:absolute;z-index:74;left:max(14px,env(safe-area-inset-left));top:50%;width:154px;transform:translateY(-50%);padding:10px 11px;border:1px solid #d8d4b52b;border-radius:8px;background:#13251fd9;color:#eee8d8;font:10px Inter,system-ui,sans-serif;box-shadow:0 5px 22px #0003;backdrop-filter:blur(10px);pointer-events:none;transition:opacity .2s ease,visibility .2s ease}
+.friends-fishing-log[data-visible=false]{opacity:0;visibility:hidden}
+.friends-fishing-log header{display:flex;align-items:center;gap:6px;color:#d6c797;font-size:8px;letter-spacing:.12em}
+.friends-fishing-log header b{margin-left:auto;color:#f4e9c9;font:14px Georgia,serif;letter-spacing:0}
+.friends-fishing-log__record{display:flex;justify-content:space-between;align-items:center;margin-top:7px;padding:6px 0;border-top:1px solid #ffffff16;color:#aebdae;font-size:9px}
+.friends-fishing-log__record strong{color:#f3dda5;font:13px Georgia,serif}
+.friends-fishing-log ol{display:grid;gap:4px;margin:2px 0 0;padding:0;list-style:none}
+.friends-fishing-log li{display:flex;justify-content:space-between;align-items:center;color:#c3ccbd;font-size:9px}
+.friends-fishing-log li strong{color:#f1e6c6;font:11px Georgia,serif}
+.friends-fishing-log p{margin:8px 0 1px;color:#aebdae;font-size:9px}
 
 .friends-fun-bar .friends-fun-label{align-self:center;padding:0 9px;color:#e8cf94;font-size:9px;letter-spacing:.15em}
 .friends-fun-bar .friends-fun-close{width:32px;min-height:46px;font-size:22px;color:#b5c0ad}
+.friends-fun-bar .friends-confetti-slot{color:#ffe5a5;background:linear-gradient(150deg,#ea4f9740,#8b5bff33 62%,#40d6c326);border-color:#f8c15f55;box-shadow:inset 0 0 18px #ff76b419,0 0 14px #e67aff1c;animation:friends-confetti-idle 2.5s ease-in-out infinite}
+.friends-fun-bar .friends-confetti-slot[aria-pressed=true]{color:#fff2be;border-color:#ffe07b;background:linear-gradient(150deg,#f3428b58,#9455ff50 62%,#32dbc54a);box-shadow:inset 0 0 20px #fff5bd22,0 0 22px #f74fb65c}
+.friends-fun-bar .friends-confetti-slot svg{filter:drop-shadow(0 0 5px #ffce7b88)}
+@keyframes friends-confetti-idle{50%{filter:brightness(1.2);box-shadow:inset 0 0 18px #ff76b426,0 0 18px #e67aff33}}
+@media(prefers-reduced-motion:reduce){.friends-fun-bar .friends-confetti-slot{animation:none}}
 .friends-stone-controls{align-items:center}
 .friends-stone-controls progress{width:52px;height:3px;border:0;border-radius:3px;accent-color:#e8cf94;overflow:hidden}
 .friends-stone-controls progress::-webkit-progress-bar{background:#ffffff26}

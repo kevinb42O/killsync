@@ -7,6 +7,8 @@ const profile = (attackDb: number, peakDb = -4): Profile => ({ attackDb, peakDb 
 const STEP = profile(-20, -3), IMPACT = profile(-17, -3), SMALL = profile(-22, -6);
 const PROFILES: Record<FriendsCue, Profile | undefined> = {
   grass: STEP, woodStep: STEP, stoneStep: STEP, snow: STEP, waterStep: STEP, mudStep: STEP,
+  waterEntry: profile(-18, -3), swimStroke: profile(-20, -4), waterDive: profile(-18, -3), waterBreathIn: profile(-20, -4),
+  stoneThrow: undefined, stoneImpact: IMPACT, stoneHurt: profile(-17, -3),
   wood: IMPACT, stone: IMPACT, ore: IMPACT, soil: profile(-20, -3), dig: IMPACT,
   landing: IMPACT, treeBreak: profile(-16, -3), miningBreak: IMPACT, cargoStone: IMPACT, cargoWood: IMPACT,
   collect: SMALL, pack: SMALL, eat: SMALL, jump: SMALL,

@@ -8,6 +8,9 @@ export const CAMPFIRE_MAX_FUEL = 180;
 export const CAMPFIRE_EAT_MS = 1000;
 export const CAMPFIRE_REFILL_MS = 5000;
 export const MARSHMALLOW_TOOL = 10 as const;
+const CAMPFIRE_ROAST_REACH = 260;
+const CAMPFIRE_ROAST_RAY_LENGTH = 300;
+const CAMPFIRE_ROAST_HIT_RADIUS = 54;
 export type MarshmallowState = { toast:number; heat:number; roasting:boolean; burningMs:number; charred:boolean; serial:number; eatingMs?:number; refillMs?:number };
 export type CampfireSnapshot = { equipped?:string[]; fuelSeconds:number; roasts:Record<string,MarshmallowState>; feedback?:Record<string,{message:string;until:number}> };
 export type CampfireAction = 'campfire_fuel'|'campfire_fresh'|'campfire_eat';
@@ -20,11 +23,21 @@ export function marshmallowLabel(state:MarshmallowState|undefined){
   return !state?'Fresh marshmallow':state.burningMs>0?'On fire!':state.charred?'Burnt to a crisp':state.toast>.78?'Dark brown':state.toast>.4?'Golden brown':state.toast>.12?'Getting toasty':'Fresh marshmallow';
 }
 export function aimingAtCampfire(player:ScenicActor,angle:number,pitch:number){
-  const target=Math.atan2(FRIENDS_CAMPFIRE.y-player.y,FRIENDS_CAMPFIRE.x-player.x);
-  return Math.cos(angle-target)>.85&&pitch>-.45&&pitch<.55;
+  // Use the actual 3D aim ray against the fire volume. An angle-only check
+  // could accept a ray that passed well above/below the flames, while a
+  // horizontal cone was especially unreliable for standing players looking
+  // down at the fire. The eye and flame heights match the held-stick pose.
+  if(!Number.isFinite(angle)||!Number.isFinite(pitch))return false;
+  const dx=Math.cos(angle)*Math.cos(pitch),dy=Math.sin(angle)*Math.cos(pitch),dz=Math.sin(pitch);
+  const ox=player.x,oy=player.y,oz=player.z+45;
+  const tx=FRIENDS_CAMPFIRE.x,ty=FRIENDS_CAMPFIRE.y,tz=FRIENDS_CAMPFIRE.z+42;
+  const along=(tx-ox)*dx+(ty-oy)*dy+(tz-oz)*dz;
+  if(along<=0||along>CAMPFIRE_ROAST_RAY_LENGTH)return false;
+  const missX=ox+dx*along-tx,missY=oy+dy*along-ty,missZ=oz+dz*along-tz;
+  return missX*missX+missY*missY+missZ*missZ<=CAMPFIRE_ROAST_HIT_RADIUS*CAMPFIRE_ROAST_HIT_RADIUS;
 }
 export function campfireRoastReach(player:ScenicActor){
-  return campfireNearby(player)&&Math.abs(player.z-FRIENDS_CAMPFIRE.z)<64&&Math.hypot(player.x-FRIENDS_CAMPFIRE.x,player.y-FRIENDS_CAMPFIRE.y)<160;
+  return campfireNearby(player)&&Math.abs(player.z-FRIENDS_CAMPFIRE.z)<64&&Math.hypot(player.x-FRIENDS_CAMPFIRE.x,player.y-FRIENDS_CAMPFIRE.y)<CAMPFIRE_ROAST_REACH;
 }
 export function marshmallowEquipped(player:ScenicActor,tool:number|undefined){
   return tool===MARSHMALLOW_TOOL||(tool===undefined&&isCampfireSeat(player.friendsSeat));

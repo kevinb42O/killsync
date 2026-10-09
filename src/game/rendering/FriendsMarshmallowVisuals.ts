@@ -140,7 +140,7 @@ export class FriendsMarshmallowVisuals {
       if(slot>=0){this.roastSpots.set(p.id,slot);used.add(slot);}
     }
   }
-  update(players:readonly CoopPlayerSnapshot[],state:CampfireSnapshot|undefined,localId:string,camera:THREE.Camera,seconds:number,dt:number,firstPerson=true,handPoint?:(id:string,out:THREE.Vector3)=>boolean){
+  update(players:readonly CoopPlayerSnapshot[],state:CampfireSnapshot|undefined,localId:string,camera:THREE.Camera,seconds:number,dt:number,firstPerson=true,handPoint?:(id:string,out:THREE.Vector3)=>boolean,localRoastHeld=false){
     if(this.disposed)return;
     this.time.value=seconds;camera.getWorldPosition(this.cameraPosition);camera.getWorldQuaternion(this.cameraQuaternion);
     if(this.viewCamera){
@@ -183,7 +183,13 @@ export class FriendsMarshmallowVisuals {
       this.target.set(FRIENDS_CAMPFIRE.x,FRIENDS_CAMPFIRE.z+48,FRIENDS_CAMPFIRE.y);
       const slot=this.roastSpots.get(player.id);
       if(slot!==undefined){const angle=CAMPFIRE_SEATS[slot].angle;this.target.x+=Math.cos(angle)*23;this.target.z+=Math.sin(angle)*23;}
-      entry.pose+=(Number(Boolean(roast?.roasting))-entry.pose)*(1-Math.exp(-Math.max(0,dt)*.009));
+      // The local stick reaches out as soon as LMB is held. Baking itself is
+      // still host-authoritative and only advances when the marshmallow is
+      // actually over the fire. Waiting for that accepted state here made the
+      // standing stick stay in its raised rest pose while the player tried to
+      // move it into the flames.
+      const reaching=local?localRoastHeld&&!roast?.eatingMs&&!roast?.refillMs:Boolean(roast?.roasting);
+      entry.pose+=(Number(reaching)-entry.pose)*(1-Math.exp(-Math.max(0,dt)*.009));
       this.target.lerpVectors(this.rest,this.target,entry.pose);
       entry.eatPose+=(Number(Boolean(roast?.eatingMs))-entry.eatPose)*(1-Math.exp(-Math.max(0,dt)*.012));
       if(local)this.mouth.set(0,-5,-7).applyQuaternion(this.cameraQuaternion).add(this.cameraPosition);

@@ -26,11 +26,16 @@ export class FriendsStoneVisuals {
   private lighting:ReturnType<typeof acquireEquipmentLighting>;
   private disposed=false;
   private heard=new Set<number>();
+  private lastThrowAt=new Map<string,number>();
+  private lastStones=new Map<number,{x:number;y:number;z:number;atMs:number}>();
   constructor(scene:THREE.Scene,viewmodel:THREE.Scene){
     this.group.name='friends-stones';scene.add(this.group);this.held.name='stone-in-your-hand';this.held.visible=false;
     const parent=viewmodel.getObjectByProperty('type','PerspectiveCamera')||viewmodel;
     if(parent instanceof THREE.PerspectiveCamera)this.camera=parent;parent.add(this.held);
-    this.pebble.scale.setScalar(.082);this.pebble.position.set(0,.085,-.025);this.held.add(this.pebble);
+    // Keep the pebble comfortably larger than the palm's small grip geometry,
+    // and lift it just above the hand so the held pose reads as a stone resting
+    // on the palm instead of disappearing inside it.
+    this.pebble.scale.setScalar(.14);this.pebble.position.set(0,.14,.012);this.held.add(this.pebble);
     this.lighting=acquireEquipmentLighting(viewmodel);
     void loadFriendsGrip('right').then(arm=>{if(!this.disposed)this.held.add(arm.clone());}).catch(()=>{});
     this.droplets.frustumCulled=false;this.droplets.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.group.add(this.droplets);
@@ -38,6 +43,20 @@ export class FriendsStoneVisuals {
   update(state:StonesSnapshot|undefined,players:readonly CoopPlayerSnapshot[],localId:string,tool:number,camera:THREE.Camera,now:number,firstPerson:boolean,blocked:boolean,handPoint:(id:string,out:THREE.Vector3)=>boolean){
     camera.getWorldPosition(this.cameraPoint);
     const hand=state?.equipped.find(h=>h.playerId===localId);
+    const equippedIds=new Set<string>();
+    for(const equipped of state?.equipped??[]){
+      equippedIds.add(equipped.playerId);
+      const throwAt=equipped.throwAt??-1,previous=this.lastThrowAt.get(equipped.playerId);
+      if(previous!==undefined&&throwAt>=0&&throwAt!==previous){
+        const player=players.find(p=>p.id===equipped.playerId);
+        if(player){
+          const distance=this.cameraPoint.distanceTo(this.point.set(player.x,player.z,player.y));
+          if(distance<900)friendsAudio.play('stoneThrow',.2*(1-distance/900),70,.94+Math.random()*.12,.32);
+        }
+      }
+      this.lastThrowAt.set(equipped.playerId,throwAt);
+    }
+    for(const id of this.lastThrowAt.keys())if(!equippedIds.has(id))this.lastThrowAt.delete(id);
     this.held.visible=Boolean(firstPerson&&!blocked&&tool===STONE_TOOL&&hand);
     this.lighting.setVisible(this.held.visible);
     if(this.held.visible&&hand){
@@ -59,9 +78,20 @@ export class FriendsStoneVisuals {
       const m=mesh('hand:'+h.playerId);if(!handPoint(h.playerId,this.point))this.point.set(p.x,p.z+26,p.y);
       m.position.copy(this.point);m.position.y+=2.5;m.scale.setScalar(3);m.rotation.set(.15,-p.angle,.15);
     }
+    const currentStones=new Map<number,{x:number;y:number;z:number;atMs:number}>();
     for(const s of state?.stones??[]){
+      currentStones.set(s.id,{x:s.x,y:s.y,z:s.z,atMs:s.atMs});
       const m=mesh('air:'+s.id);m.position.set(s.x,s.z,s.y);m.scale.setScalar(3);m.rotation.set((now-s.atMs)*.014,0,(now-s.atMs)*.009);
     }
+    for(const s of state?.landed??[]){
+      const m=mesh('landed:'+s.id);m.position.set(s.x,s.z,s.y);m.scale.setScalar(3);m.rotation.set(.12,s.id*.73,.08);
+    }
+    for(const [id,stone]of this.lastStones){
+      if(currentStones.has(id)||now-stone.atMs>5500)continue;
+      const position=this.point.set(stone.x,stone.z,stone.y),distance=this.cameraPoint.distanceTo(position);
+      if(distance<1000)friendsAudio.play('stoneImpact',.22*(1-distance/1000),25,.88+Math.random()*.24,.7);
+    }
+    this.lastStones=currentStones;
     for(const [key,m]of this.meshes)if(!active.has(key)){m.removeFromParent();this.meshes.delete(key);}
     let drops=0;const splashIds=new Set<number>();
     for(const s of state?.splashes??[]){

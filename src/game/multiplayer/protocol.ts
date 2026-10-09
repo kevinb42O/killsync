@@ -7,10 +7,10 @@ import { sanitizeFriendsArms } from './FriendsGestureControls';
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v57 adds lingering bird companions and shared campfire ignition. Incrementing this makes
+/** v59 adds shared confetti bursts. Incrementing this makes
  * a stale tab fail the handshake cleanly instead of silently misreading the
  * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 57;
+export const MULTIPLAYER_PROTOCOL_VERSION = 59;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
@@ -32,7 +32,7 @@ export interface MultiplayerInputFrame {
   aimAngle: number;
   /** Quantized camera pitch. Zero is the lowest valid look angle. */
   aimPitch: number;
-  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10;
+  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
   /** Menus/building stow fishing equipment without changing the selected slot. */
   friendsFishingBlocked?: boolean;
   /** Four held arm buttons; validated by the host, never persisted. */
@@ -216,7 +216,7 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   movement: boundedInteger(frame.movement, 15),
   aimAngle: boundedInteger(frame.aimAngle, 65535),
   aimPitch: boundedInteger(frame.aimPitch, 65535),
-  friendsTool: (boundedInteger(frame.friendsTool, 10) === 4 ? 0 : boundedInteger(frame.friendsTool, 10)) as 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10,
+  friendsTool: (boundedInteger(frame.friendsTool, 11) === 4 ? 0 : boundedInteger(frame.friendsTool, 11)) as 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11,
   friendsFishingBlocked: Boolean(frame.friendsFishingBlocked),
   friendsArms: sanitizeFriendsArms(frame.friendsArms),
   friendsFlashlight: frame.friendsFlashlight === true ? true : undefined,
