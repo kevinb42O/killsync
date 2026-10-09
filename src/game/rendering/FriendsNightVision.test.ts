@@ -22,6 +22,16 @@ function setup() {
 }
 
 describe('Friends night vision goggles', () => {
+  it('composites the recovery imprint even after direct glare and flares stop',()=>{
+    const {goggles}=setup(),afterimage=new THREE.Vector4(.3,.6,.2,0);
+    goggles.setFlashlightGlare({glare:0,flares:[],afterimage});
+    const uniforms=goggles['material'].uniforms;
+    expect(uniforms.flashlightEffects.value).toBe(true);
+    expect(uniforms.flashlightAfterimage.value).toEqual(afterimage);
+    afterimage.z=0;expect(uniforms.flashlightAfterimage.value.z).toBe(.2);
+    goggles.setFlashlightGlare({glare:0,flares:[],afterimage});
+    expect(uniforms.flashlightEffects.value).toBe(false);goggles.dispose();
+  });
   it('switches HDR anti-aliasing at frame boundaries without resetting goggles or leaking targets', () => {
     const { goggles, camera, renderer } = setup();
     goggles.toggle(); goggles.beginFrame(renderer, camera, 100);

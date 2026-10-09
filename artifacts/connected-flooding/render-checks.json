@@ -1,0 +1,89 @@
+{
+  "errors": [],
+  "views": [
+    {
+      "gl": 0,
+      "floodDrawCalls": 1,
+      "floodGeometryBytes": 1728,
+      "floodMaskBytes": 4500000,
+      "wet": 54,
+      "calls": 363
+    },
+    {
+      "gl": 0,
+      "floodDrawCalls": 1,
+      "floodGeometryBytes": 1728,
+      "floodMaskBytes": 4500000,
+      "wet": 54,
+      "calls": 169
+    },
+    {
+      "gl": 0,
+      "floodDrawCalls": 1,
+      "floodGeometryBytes": 1728,
+      "floodMaskBytes": 4500000,
+      "wet": 54,
+      "calls": 363
+    }
+  ],
+  "cycles": [
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 4
+    }
+  ],
+  "performance": {
+    "sceneCpuSubmitMs": 0.45500000001241764,
+    "sceneGpuMs": 6.537625,
+    "gpuTimerSupported": true,
+    "floodDrawCalls": 1,
+    "floodGeometryBytes": 1728,
+    "floodMaskBytes": 4500000
+  }
+}

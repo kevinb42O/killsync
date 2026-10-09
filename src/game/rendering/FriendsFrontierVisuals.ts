@@ -1,3 +1,6 @@
+import { emberRetreatTreeClearance } from '../world/FriendsRetreatSites';
+import { lavaRiverTreeClearance } from '../world/FriendsLavaRiver';
+import { FriendsFloodWaterVisuals } from './FriendsFloodWaterVisuals';
 import { FriendsRetreatVisuals } from './FriendsRetreatVisuals';
 import type { RetreatState } from '../world/FriendsRetreatSites';
 import { FriendsTerrainEditFeedback } from './FriendsTerrainEditFeedback';
@@ -94,6 +97,7 @@ export class FriendsFrontierVisuals {
   private vegetationStamp = '';
   private vegetationDirty = new Set<string>();
   private knownPlanted = new Set<string>();
+  private floodWater:FriendsFloodWaterVisuals;
   private coast: FriendsIslandOcean;
   private island: FriendsIslandVisuals;
   private epoch = 0;
@@ -156,6 +160,7 @@ export class FriendsFrontierVisuals {
     this.coast=createIslandOcean();this.group.add(this.coast);
     this.clouds.setAtmosphere(this.atmosphere);
     this.coast.setAtmosphere(this.atmosphere);
+    this.floodWater=new FriendsFloodWaterVisuals(this.terrain,this.atmosphere);this.group.add(this.floodWater);this.floodWater.bindNatural(this.island);this.floodWater.bindNatural(this.coast);
     this.island.setAtmosphere(this.atmosphere);
     // Survey flags make regional destinations readable from the air and ground.
     for (const site of FRONTIER_SITES) {
@@ -192,13 +197,13 @@ export class FriendsFrontierVisuals {
     this.treasures.update(openedTreasures,this.camera,elapsed/1000);
     this.atmosphere.update(this.environmentPreview.time(worldElapsedMs,elapsed),elapsed);
     this.campfire.update(elapsed/1000,this.camera,this.atmosphere.state.daylight);
-    this.far.update(); this.island.update(elapsed/1000,this.camera.position);this.clouds.update(this.environmentPreview.windSeconds,elapsed/1000,this.camera);
+    this.far.update(); this.floodWater.update(elapsed/1000);this.island.update(elapsed/1000,this.camera.position);this.clouds.update(this.environmentPreview.windSeconds,elapsed/1000,this.camera);
     this.coast.update(elapsed/1000,this.camera.position);
     if (f.terrain.revision !== this.revision) {
       const gradeStamp=JSON.stringify(f.terrain.grades || []);if(gradeStamp!==this.gradeStamp){this.far.setGrades(f.terrain.grades);this.surface.setGrades(f.terrain.grades);this.gradeStamp=gradeStamp;for(const key of this.chunks.keys())this.dirty.add(key);for(const key of this.groves.keys())this.vegetationDirty.add(key);
         for(const g of [...this.terrain.snapshot().grades || [],...f.terrain.grades || []]){const r=g[3]+320;for(let a=Math.floor((g[0]-r)/512);a<=Math.floor((g[0]+r)/512);a++)for(let b=Math.floor((g[1]-r)/512);b<=Math.floor((g[1]+r)/512);b++)this.vegetationDirty.add(`${a},${b}`);}}
       if(this.revision>=0)for(const e of f.terrain.edits){const key=e.slice(0,3).join(',');if(e[3]===0&&this.previousEdits.get(key)!==0&&this.terrain.exposedMaterial(e[0],e[1],e[2]))this.editFeedback.add(e[0],e[1],e[2]);}
-      this.terrain.restore(f.terrain);this.editFeedback.refresh(this.terrain); this.revision = f.terrain.revision; this.epoch++;
+      this.terrain.restore(f.terrain);this.floodWater.sync();this.editFeedback.refresh(this.terrain); this.revision = f.terrain.revision; this.epoch++;
       this.pending.clear();this.completed=[];
       this.worker?.postMessage({ snapshot: f.terrain, epoch: this.epoch });
       const nextEdits = new Map(f.terrain.edits.map(e => [e.slice(0, 3).join(','), e[3]]));
@@ -282,7 +287,7 @@ export class FriendsFrontierVisuals {
     groveCells.sort((a,b)=>Math.hypot(a[0]-cx,a[1]-cy)-Math.hypot(b[0]-cx,b[1]-cy));
     for (const [a,b] of groveCells) {
       if (Math.hypot((a+.5)*512-x,(b+.5)*512-y)>FOREST_DETAIL_END+250 || a < 0 || b < 0 || a > 93 || b > 93 || grovesCreated >= 3 || this.groves.has(`${a},${b}`)) continue;
-      const trees = [...frontierTrees(a, b), ...f.planted.filter(t => Math.floor(t.x / 512) === a && Math.floor(t.y / 512) === b)].filter(t => !harvested.has(t.id) && this.terrain.supports(t.x,t.y,t.z));
+      const trees = [...frontierTrees(a, b), ...f.planted.filter(t => Math.floor(t.x / 512) === a && Math.floor(t.y / 512) === b)].filter(t => !lavaRiverTreeClearance(t.x,t.y) && !emberRetreatTreeClearance(t.x,t.y) && !harvested.has(t.id) && this.terrain.supports(t.x,t.y,t.z));
       const grove = new THREE.Group(); grove.userData.treeIds = trees.map(t => t.id); grovesCreated++; this.group.add(grove); this.groves.set(`${a},${b}`, grove);
       const plants = trees.flatMap(t => Array.from({ length: 2 }, (_, i) => { const px = t.x + Math.cos(i * 2.4) * 60, py = t.y + Math.sin(i * 2.4) * 60; return { x: px, y: this.terrain.surfaceHeight(px, py), z: py, rotation: i, scale: .6 + terrainHash(px, py) }; }));
       addFriendsAssetInstances(grove, 'frontierBush', { x: 24, y: 18, z: 24 }, plants);
@@ -300,7 +305,7 @@ export class FriendsFrontierVisuals {
   setMultisampled(enabled: boolean) { this.forestLOD.setMultisampled(enabled); }
   get campfireDrawCalls(){return this.campfire.drawCalls;}
   get cloudStats(){return this.clouds.stats;}
-  get terrainStats(){return {...this.surface.stats,...this.editFeedback.stats,volumeChunks:this.chunks.size,volumeActive:[...this.chunks.values()].filter(m=>m.visible).length,volumeJobs:this.pending.size+this.completed.length,editMeshLatencyP95:this.meshLatencies.length?[...this.meshLatencies].sort((a,b)=>a-b)[Math.floor((this.meshLatencies.length-1)*.95)]:0,editMeshSamples:this.meshLatencies.length};}
+  get terrainStats(){return {...this.floodWater.stats,...this.surface.stats,...this.editFeedback.stats,volumeChunks:this.chunks.size,volumeActive:[...this.chunks.values()].filter(m=>m.visible).length,volumeJobs:this.pending.size+this.completed.length,editMeshLatencyP95:this.meshLatencies.length?[...this.meshLatencies].sort((a,b)=>a-b)[Math.floor((this.meshLatencies.length-1)*.95)]:0,editMeshSamples:this.meshLatencies.length};}
   arrivalReadiness(x:number,y:number){
     const cx=Math.floor(x/512),cy=Math.floor(y/512);
     const ground=Boolean(this.fineData[cy*this.fineGrid+cx] || this.blockData[cy*this.fineGrid+cx]);
@@ -316,7 +321,7 @@ export class FriendsFrontierVisuals {
   get flashlightShining(){return this.flashlight.shining;}
   get flashlightAngle(){return this.flashlight.beamAngle;}
   setRetreatState(state:RetreatState|undefined){this.retreats.setState(state);}
-  setCampfireState(state:CampfireSnapshot|undefined){this.campfire.setState(state);}
+  setCampfireState(state:CampfireSnapshot|undefined){this.campfire.setState(state);this.retreats.setCampfireState(state);}
   hideHeldTool(){this.tools.hide();}
   setCraneCameraLight(enabled:boolean) {this.flashlight.setMonitor(enabled);}
   syncFlashlightWithCamera() { this.flashlight.syncWithCamera(); }
@@ -330,6 +335,7 @@ export class FriendsFrontierVisuals {
   setEnvironment(change:FriendsEnvironmentChange){this.localEnvironmentPreview=!change.reset;this.environmentPreview.change(change);}
   toggleFlashlight() { this.flashlight.toggle(); }
   dispose() {
+    this.floodWater.dispose();
     this.campfire.dispose();this.retreats.dispose();
     this.birds.dispose();
     this.editFeedback.dispose();this.worker?.terminate();this.completed=[];this.surface.dispose();this.blockMaterial.dispose();this.blockCoverage.dispose(); islandBiomeTexture().dispose(); this.forestLOD.dispose();this.fineCoverage.dispose(); for (const mesh of this.chunks.values()) mesh.geometry.dispose(); for (const grove of this.groves.values()) disposeGroup(grove);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FRIENDS_RIVERS, riverSampleAt, type River, type RiverPoint } from '../world/FriendsHydrology';
 import { ISLAND_SEA_LEVEL } from '../world/FriendsIsland';
-import { friendsWaterDepth } from '../world/FriendsWaterSurface';
+import { friendsWaterRenderDepth } from '../world/FriendsWaterSurface';
 import { RIVER_BRIDGE, skyfallWaterLevelAt } from '../world/FriendsTerrain';
 
 type WaterFactory=(cx:number,cy:number,w:number,h:number,level:number,depth:(x:number,y:number)=>number,ocean?:boolean,resolution?:number)=>THREE.Mesh<THREE.BufferGeometry,THREE.ShaderMaterial>;
@@ -27,18 +27,18 @@ export class FriendsRiverVisuals extends THREE.Group{
         const list=buckets.get(key)||[];list.push([a,b]);buckets.set(key,list);
       }
       for(const [key,segments] of buckets){
-        const points=segments.flat(),pad=Math.max(...points.map(p=>p.width))*.75+64;
+        const points=segments.flat(),pad=Math.max(...points.map(p=>p.width))*.8+64;
         const minX=Math.min(...points.map(p=>p.x))-pad,maxX=Math.max(...points.map(p=>p.x))+pad;
         const minY=Math.min(...points.map(p=>p.y))-pad,maxY=Math.max(...points.map(p=>p.y))+pad;
         const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
         const mesh=water(cx,cy,maxX-minX,maxY-minY,0,
-          (x,y)=>friendsWaterDepth(x,y,river.id),false,Math.ceil(Math.max(maxX-minX,maxY-minY)/24));
+          (x,y)=>friendsWaterRenderDepth(x,y,river.id),false,Math.ceil(Math.max(maxX-minX,maxY-minY)/24));
         mesh.geometry.dispose();mesh.rotation.set(0,0,0);mesh.position.set(cx,0,cy);
         const pos:number[]=[],uv:number[]=[],flow:number[]=[],tangent:number[]=[],indices:number[]=[];
         for(const [a,b] of segments){
           const start=pos.length/3;
           for(const p of [a,b])for(const side of [-1,-.5,0,.5,1]){
-            const offset=side*p.width*.72;
+            const offset=side*p.width*.8;
             const x=p.x-p.ty*offset,y=p.y+p.tx*offset,level=(river.id.startsWith('skyfall-cascade')?skyfallWaterLevelAt(x,y):riverSampleAt(x,y))?.level??p.z;
             pos.push(x-cx,level,y-cy);
             uv.push((side+1)/2,p.distance/64);flow.push(p.distance,side,p.roughness,level);tangent.push(p.tx,p.ty);

@@ -7,19 +7,24 @@ import { sanitizeFriendsArms } from './FriendsGestureControls';
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v59 adds shared confetti bursts. Incrementing this makes
+/** v60 adds throwable dynamite and shared blast impulses. Incrementing this makes
  * a stale tab fail the handshake cleanly instead of silently misreading the
  * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 59;
+export const MULTIPLAYER_PROTOCOL_VERSION = 61;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
  * until replication is moved to a dedicated relay or game server. */
 export const COOP_MAX_PLAYERS = 5;
+export const FRIENDS_MAX_PLAYERS = 6;
+export function multiplayerPlayerLimit(gameMode?: 'friends' | 'survival'): number {
+  return gameMode === 'friends' ? FRIENDS_MAX_PLAYERS : COOP_MAX_PLAYERS;
+}
 
 /** Stable, high-contrast guest identities for roster cards, world markers,
  * and late joins. The host always keeps the cyan identity. */
 export const COOP_GUEST_COLORS = ['#f472b6', '#a78bfa', '#fbbf24', '#34d399'] as const;
+export const FRIENDS_GUEST_COLORS = [...COOP_GUEST_COLORS, '#fb923c'] as const;
 
 export type MultiplayerRole = 'host' | 'guest';
 
@@ -32,7 +37,7 @@ export interface MultiplayerInputFrame {
   aimAngle: number;
   /** Quantized camera pitch. Zero is the lowest valid look angle. */
   aimPitch: number;
-  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   /** Menus/building stow fishing equipment without changing the selected slot. */
   friendsFishingBlocked?: boolean;
   /** Four held arm buttons; validated by the host, never persisted. */
@@ -216,7 +221,7 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   movement: boundedInteger(frame.movement, 15),
   aimAngle: boundedInteger(frame.aimAngle, 65535),
   aimPitch: boundedInteger(frame.aimPitch, 65535),
-  friendsTool: (boundedInteger(frame.friendsTool, 11) === 4 ? 0 : boundedInteger(frame.friendsTool, 11)) as 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11,
+  friendsTool: (boundedInteger(frame.friendsTool, 12) === 4 ? 0 : boundedInteger(frame.friendsTool, 12)) as 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12,
   friendsFishingBlocked: Boolean(frame.friendsFishingBlocked),
   friendsArms: sanitizeFriendsArms(frame.friendsArms),
   friendsFlashlight: frame.friendsFlashlight === true ? true : undefined,

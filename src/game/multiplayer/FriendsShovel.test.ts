@@ -92,11 +92,11 @@ describe('combined shovel secondary action', () => {
     expect(frontier.snapshot().interaction!.actions.guest).toBeUndefined();
   });
 
-  it('preserves aiming for other tools and rejects the removed Earthwork id on the wire', () => {
+  it('allows firearm aiming, keeps peaceful tools out of survival ADS, and rejects the removed Earthwork id on the wire', () => {
     for (const tool of [0, 1, 2] as const) {
       const { sim, frontier } = fixture();
       hold(sim, 'host', { friendsTool: tool });
-      expect(sim.createSnapshot().players[0].isAiming).toBe(true);
+      expect(sim.createSnapshot().players[0].isAiming).toBe(tool===0);
       expect(frontier.terrain.material(250, 250, 0)).toBe(0);
       expect(frontier.snapshot().mined).toBe(0);
     }

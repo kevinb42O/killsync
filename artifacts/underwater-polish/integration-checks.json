@@ -1,0 +1,32 @@
+{
+  "errors": [],
+  "lamp": {
+    "brighterPixels": 234150,
+    "shafts": false,
+    "motes": true,
+    "gl": 0
+  },
+  "flood": [
+    {
+      "state": "wet",
+      "underwater": true,
+      "motes": true,
+      "wetCells": 54,
+      "gl": 0
+    },
+    {
+      "state": "sealed",
+      "underwater": false,
+      "motes": false,
+      "wetCells": 0,
+      "gl": 0
+    },
+    {
+      "state": "reopened",
+      "underwater": true,
+      "motes": true,
+      "wetCells": 54,
+      "gl": 0
+    }
+  ]
+}

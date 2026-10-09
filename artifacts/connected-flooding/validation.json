@@ -1,0 +1,42 @@
+{
+  "typescript": "passed",
+  "productionBuild": "passed",
+  "focusedTests": {
+    "files": 4,
+    "passed": 51,
+    "failed": 0
+  },
+  "fullSuite": {
+    "files": 213,
+    "passed": 1702,
+    "failed": 2,
+    "failures": [
+      {
+        "test": "FriendsModeSetup: host launch capacity",
+        "reason": "Existing assertion expects Room for 4 more; current UI says Room for 5 more. Reproduced with flood simulation integrations disabled."
+      },
+      {
+        "test": "FriendsCastleCargo: Watchfire solo haul",
+        "reason": "Explicit 20-second timeout under broad concurrent load; targeted run passes."
+      }
+    ]
+  },
+  "browser": "passed; zero WebGL errors and stable resources over ten seal/reopen cycles",
+  "incrementalParity": "300 deterministic edits compared with fresh full solves",
+  "polish": {
+    "focusedTests": {
+      "files": 5,
+      "passed": 36,
+      "failed": 0
+    },
+    "typescript": "passed",
+    "productionBuild": "passed",
+    "browser": "passed; daylight/nighttime/inside views and ten stable seal/reopen cycles",
+    "changes": [
+      "Avoid throwaway dense geometry on flood chunk rebuilds",
+      "Enable overlap mask for natural meshes bound after flood allocation",
+      "Clip side faces against lower partial neighbour water",
+      "Canonical side-face order preserves equivalent geometry cache entries"
+    ]
+  }
+}

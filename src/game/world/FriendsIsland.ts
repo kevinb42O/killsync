@@ -1,3 +1,4 @@
+import { lavaRiverAt } from './FriendsLavaRiver';
 import { createHighfallCastle, HIGHFALL_CASTLE } from './FriendsCastle';
 import { ISLAND_SEA_LEVEL, ISLAND_LAKES, waterBasinRadius } from './FriendsWaterBodies';
 import { hydrologyTerrainHeight, riverSampleAt } from './FriendsHydrology';
@@ -21,11 +22,11 @@ export const ISLAND_SEA_STACKS = [
   {x:32384,y:22016,radius:672,height:1664},
   {x:1056,y:31360,radius:416,height:1856},
 ] as const;
-export function islandSeaStackHeight(x:number,y:number) {
-  let height=-352;
+export function islandSeaStackHeight(x:number,y:number,bed=-352) {
+  let height=bed;
   for(const p of ISLAND_SEA_STACKS){const r=Math.hypot(x-p.x,y-p.y)/p.radius;if(r>=1.35)continue;
     const shoulder=1-islandSmooth((r-.58)/.70),summit=1-islandSmooth(r/.82);
-    height=Math.max(height,-352+shoulder*(p.height*.70+summit*p.height*.30+352));
+    height=Math.max(height,bed+shoulder*(p.height*.70+summit*p.height*.30-bed));
   }
   return height;
 }
@@ -92,6 +93,7 @@ export function islandClimate(x:number,y:number):[number,number,number,number]{
 }
 export function islandSurfaceBiome(x:number,y:number,height:number){
   const [coast,wet,volcanic,glacier]=islandClimate(x,y);
+  const molten=lavaRiverAt(x,y);if(molten)return molten.side<molten.width/2?'lava':'basalt';
   if(volcanic>.5)return islandVolcanoRadius(x,y)<850?'lava':'basalt';
   if(height>3300)return glacier>.3?'ice':'snow';
   if(height>1700)return 'stone';
@@ -132,7 +134,7 @@ export const ISLAND_LANDMARK_SITES = [
   { id: 'arch', name: 'THE WORLD GATE', x: 16992, y: 11264, detail: 'A colossal natural arch through Highfall. Fly through the mountain or land beneath its stone vault.', color: '#a7d8e5' },
   { id: 'citadel', name: 'CROWN OF HIGHFALL', x: HIGHFALL_CASTLE.x - 256, y: HIGHFALL_CASTLE.y + 800, detail: 'A torchlit mountain fortress with a great hall, open courtyard and battlement walks. Follow the continuous stone viaduct up from the eastern ridge.', color: '#edd6a7' },
   { id: 'portal', name: 'THE TIDAL SANCTUM', x: 27008, y: 19456, detail: 'An ancient stepped monument and a luminous ruined gateway overlooking the eastern ocean.', color: '#83e4dc' },
-  { id:'volcano',name:'EMBER CALDERA',x:34240,y:33792,detail:'A fractured volcanic rim above a molten crater, black lava fields and ash beaches.',color:'#ff9560' },
+  { id:'volcano',name:'EMBER CALDERA',x:34240,y:33792,detail:'A molten river winds from the fractured crater to a steaming ocean delta. Rest at Ember Lookout beside the flow.',color:'#ff9560' },
   { id: 'falls', name: 'THE SKYFALLS', x: 6912, y: 19584, detail: 'Twin waterfalls plunge from the western alpine wall into a turquoise hanging basin.', color: '#a0d5e3' },
 ] as const;
 export type IslandStoneBox = { x: number; y: number; z: number; w: number; d: number; h: number; tint: 'stone' | 'dark' | 'copper' | 'glow'; detail?:'stair-core'|'stair-pier' };

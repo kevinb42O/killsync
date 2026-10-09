@@ -83,7 +83,7 @@ describe('connected frontier rivers', () => {
     for(const p of FRIENDS_RIVERS[0].points.filter(p=>p.x>7300&&p.x<8400&&Math.abs(p.z-442.5)<.05))for(const side of [-1,1]){
       const x=p.x-p.ty*p.width*.635*side,y=p.y+p.tx*p.width*.635*side;
       expect(baseTerrainHeight(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16)).toBeGreaterThan(p.z+2);
-      expect(terrain.floor(x,y,480,0)).toBeGreaterThan(p.z+2);
+      expect(terrain.floor(x,y,friendsWaterGround(x,y)+32,0)).toBeGreaterThan(p.z+2);
       expect(friendsWaterLevel(x,y)).toBeUndefined();
     }
   });

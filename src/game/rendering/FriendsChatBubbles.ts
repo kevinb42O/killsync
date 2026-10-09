@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { COOP_CHAT_HISTORY_LIMIT, type CoopChatMessage } from '../multiplayer/CoopChat';
-import type { CoopOperatorRig } from './coopOperatorVisuals';
+import type { PlayerVisualRig } from './coopOperatorVisuals';
 
 const FONT = '500 13px system-ui, -apple-system, sans-serif';
 const LINE_HEIGHT = 18;
@@ -106,7 +106,7 @@ export class FriendsChatBubbles {
     this.bubbles.set(message.playerId, { sprite, texture, width: width + 8, height: height + 12, startedAt: now, duration: friendsChatDuration(message.text) });
   }
 
-  update(camera: THREE.PerspectiveCamera, viewportHeight: number, rigs: ReadonlyMap<string, CoopOperatorRig>, players: readonly { id: string }[], now = performance.now()) {
+  update(camera: THREE.PerspectiveCamera, viewportHeight: number, rigs: ReadonlyMap<string, PlayerVisualRig>, players: readonly { id: string }[], now = performance.now()) {
     if (!this.bubbles.size) return;
     for (const [id, bubble] of this.bubbles) {
       const age = now - bubble.startedAt;

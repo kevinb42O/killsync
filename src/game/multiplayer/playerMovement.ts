@@ -61,6 +61,7 @@ export interface PlayerMovementEnvironment {
   devFlightAllowed?: boolean;
   devSuperjumpAllowed?: boolean;
   volumetric?: boolean;
+  waterAt?: (x:number,y:number,z:number)=>{level:number}|undefined;
   ceiling: number;
   stepHeight?: number;
   overhead?: (position: PlayerMotionState) => number | undefined;

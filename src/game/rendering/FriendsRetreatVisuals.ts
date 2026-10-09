@@ -1,3 +1,5 @@
+import type { CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
+import { baseTerrainHeight } from '../world/FriendsTerrain';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -23,7 +25,7 @@ export class FriendsRetreatVisuals {
   private sun={value:new THREE.Vector3()};
   private bulbMaterials:THREE.MeshStandardMaterial[]=[];
   private rocker:THREE.Mesh;
-  private fire:FriendsCampfire;
+  private fires:{id:string;fire:FriendsCampfire}[]=[];
   private state?:RetreatState;
   private disposed=false;
   private lastSeconds=0;
@@ -43,6 +45,7 @@ export class FriendsRetreatVisuals {
     const trim=boards.clone();this.materials.add(trim);this.roomLighting(trim);
     const glass=new THREE.MeshStandardMaterial({color:0xc9e8e6,transparent:true,opacity:.045,roughness:.18,metalness:0,depthWrite:false});this.materials.add(glass);
     const bronze=new THREE.MeshStandardMaterial({color:0x776044,metalness:.55,roughness:.4});this.materials.add(bronze);
+    const lantern=new THREE.MeshStandardMaterial({color:0xffd59a,emissive:0xffa23b,emissiveIntensity:2,roughness:.3});this.materials.add(lantern);
 
     const batches=new Map<string,{material:THREE.Material;geometries:THREE.BufferGeometry[];group:THREE.Group}>();
     const add=(parent:THREE.Group,m:THREE.Material,w:number,h:number,d:number,x:number,y:number,z:number,tile=18,rounded=0)=>{
@@ -67,7 +70,19 @@ export class FriendsRetreatVisuals {
         add(root,b.surface==='floor'?boards:plaster,b.w,b.h,b.d,p.u,h,p.v,b.surface==='floor'?20.4:18);
       }
       // Foundation posts support the terrace rather than flattening the hillside.
-      for(const u of [-s.w/2+5,s.w/2-5])for(const v of [-s.d/2+5,s.d/2-5])add(root,boards,5,64,5,u,-40,v,12);
+      for(const u of [-s.w/2+5,s.w/2-5])for(const v of [-s.d/2+5,s.d/2-5]){
+        const c=Math.cos(s.angle),sn=Math.sin(s.angle),ground=baseTerrainHeight(s.x+c*u-sn*v,s.y+sn*u+c*v);
+        const height=s.id.startsWith('ember')?Math.max(64,s.z-ground+32):64;
+        add(root,boards,7,height,7,u,-8-height/2,v,12);
+      }
+      if(s.id==='ember-lookout'){
+        // Open river-facing edge, low rails behind the seats and brass lanterns.
+        for(const u of [-s.w/2+6,0,s.w/2-6])add(root,boards,5,40,5,u,20,s.d/2-6,12);
+        add(root,boards,s.w-12,4,4,0,34,s.d/2-6,12);
+        for(const u of [-s.w/2+10,s.w/2-10]){add(root,bronze,5,5,5,u,42,s.d/2-6);add(root,lantern,6,8,6,u,49,s.d/2-6);add(root,bronze,9,2,9,u,54,s.d/2-6);
+          for(const side of [-1,1])add(root,bronze,1,9,8,u+side*3.5,49,s.d/2-6);}
+        for(let u=-s.w/2+12;u<s.w/2;u+=16)add(root,boards,13,1,s.d-8,u,.5,0,12);
+      }
       const path=retreatPaths().find(p=>p.siteId===s.id)!;
       for(let i=1;i<path.points.length;i++){
         const a=path.points[i-1];
@@ -146,10 +161,10 @@ export class FriendsRetreatVisuals {
     const glow=new THREE.Vector3(0,37,-53).applyAxisAngle(new THREE.Vector3(0,1,0),-STILLWATER.angle);
     this.windowGlow.position.set(STILLWATER.x+glow.x,STILLWATER.z+glow.y,STILLWATER.y+glow.z);
     scene.add(this.lamp,this.fill,this.windowGlow);
-    const camp=RETREAT_SITES.find(s=>s.kind==='fire')!;
-    // A second instance uses the same renderer, with a small baseline fire and no roasting UI.
-    this.fire=new FriendsCampfire(scene,{id:camp.id,x:camp.x,y:camp.y,z:camp.z,scale:.27,seats:false});
-    this.fire.group.position.copy(this.sites.get(camp.id)!.position);
+    for(const camp of RETREAT_SITES.filter(s=>s.kind==='fire')){
+      const fire=new FriendsCampfire(scene,{id:camp.id,x:camp.x,y:camp.y,z:camp.z,scale:.27,seats:false});
+      fire.group.position.copy(this.sites.get(camp.id)!.position);this.fires.push({id:camp.id,fire});
+    }
   }
   private roomLighting(m:THREE.MeshStandardMaterial){
     m.onBeforeCompile=shader=>{
@@ -182,6 +197,7 @@ export class FriendsRetreatVisuals {
     };
     m.customProgramCacheKey=()=> 'stillwater-room-lighting-v1';m.fog=false;
   }
+  setCampfireState(state:CampfireSnapshot|undefined){for(const {id,fire} of this.fires)fire.setState({fuelSeconds:state?.siteFuelSeconds?.[id]??0,roasts:{}});}
   setState(state:RetreatState|undefined){if(state&&!this.state)this.warm.value=Number(state.lightsOn);this.state=state;}
   update(seconds:number,camera:THREE.Camera,daylight:number,sunDirection:readonly number[],_players:readonly {x:number;y:number;z:number}[]=[]){
     const dt=Math.max(0,Math.min(.1,seconds-this.lastSeconds));this.lastSeconds=seconds;
@@ -194,12 +210,12 @@ export class FriendsRetreatVisuals {
       if(m.name.includes('glass'))m.opacity=.24+.6*this.warm.value;
     }
     this.lamp.intensity=near?this.warm.value*3400:0;this.fill.intensity=near?this.warm.value*180:0;this.windowGlow.intensity=near?this.warm.value*130:0;
-    this.fire.update(seconds,camera,daylight,active.includes('saltwind-camp'));
+    for(const {id,fire} of this.fires)fire.update(seconds,camera,daylight,active.includes(id as any));
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;
     this.group.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});
-    this.materials.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());this.fire.dispose();
+    this.materials.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());this.fires.forEach(({fire})=>fire.dispose());
     this.group.removeFromParent();for(const o of [this.lamp,this.fill,this.windowGlow])o.removeFromParent();this.lamp.dispose();
   }
 }

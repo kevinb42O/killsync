@@ -22,7 +22,7 @@ const aimAtCore = (p: HaulingActor, x: number) => {
 describe('physical salvage hauling',()=>{
   it('adds the rope tool to the sanitized network schema',()=>{
     expect(clampInputFrame(input()).friendsTool).toBe(5);
-    expect(clampInputFrame(input({friendsTool:99 as 5})).friendsTool).toBe(11);
+    expect(clampInputFrame(input({friendsTool:99 as 5})).friendsTool).toBe(12);
   });
   it('attaches at the hit surface and releases on another primary action',()=>{
     const h=system(),p=actor();h.shoot(p,aimAtCore(p,-1),environment(),0);

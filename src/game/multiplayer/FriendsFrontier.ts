@@ -1,3 +1,5 @@
+import { emberRetreatTreeClearance } from '../world/FriendsRetreatSites';
+import { lavaRiverTreeClearance } from '../world/FriendsLavaRiver';
 import { friendsCampfireContains } from '../world/FriendsTerrain';
 import { scenicTransitProtected } from '../world/FriendsRailInfrastructure';
 import { FRIENDS_MINING_REACH, friendsTreeWithinReach, friendsInteractionTarget, FriendsBuildSpatialIndex, type MiningWorkPlane, type InteractionTarget } from './FriendsInteractionTargeting';
@@ -13,7 +15,7 @@ import { FRIENDS_BUILD_CATALOG, friendsShapeBoxes, worldBox, type FriendsBuildPi
 export const MATERIAL_NAMES = { wood: 'Timber', soil: 'Soil', stone: 'Stone', copper: 'Copper ore', iron: 'Iron ore', planks: 'Planks', ingots: 'Ingots', saplings: 'Saplings' } as const;
 export type Resource = keyof typeof MATERIAL_NAMES;
 export type Materials = Record<Resource, number>;
-export type FrontierTool = 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+export type FrontierTool = 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 export const FRONTIER_TOOLS = { 0: 'Combat', 1: 'Axe', 2: 'Pickaxe', 3: 'Shovel', 5: 'Rope', 6: 'Empty hands', 7: 'Fishing rod', 8: 'Stone', 9: 'Bird seeds', 10: 'Marshmallow', 11: 'Confetti' } as const;
 export const PACK_CAPACITY = 160;
 export const FRIENDS_TEST_MODE = true; // Temporary playtest rules: free construction and uncapped inventories.
@@ -99,6 +101,8 @@ export class FriendsFrontier {
     if (saved && isFrontierSave(saved)) {
       this.state = { ...this.state, ...structuredClone(saved), feedback: {}, damage: undefined, interaction: undefined };
       this.harvested = new Set(saved.harvested);
+      this.state.planted = this.state.planted.filter(t => !lavaRiverTreeClearance(t.x, t.y) && !emberRetreatTreeClearance(t.x, t.y));
+      if (this.state.planted.length !== saved.planted.length) this.changed();
     }
   }
   private get capacity() { return this.testing ? Infinity : PACK_CAPACITY; }
@@ -220,6 +224,18 @@ export class FriendsFrontier {
     pack[resource] += amount; this.state.mined++; this.changed();
     this.contact(work, elapsed, true, MATERIAL_NAMES[resource], amount);
   }
+  /** One bounded voxel sphere; every material uses the same durable terrain edit path. */
+  blastTerrain(center:{x:number;y:number;z:number},radius:number) {
+    let destroyed=0;
+    for(let x=Math.floor((center.x-radius)/32);x<=Math.floor((center.x+radius)/32);x++)
+      for(let y=Math.floor((center.y-radius)/32);y<=Math.floor((center.y+radius)/32);y++)
+        for(let z=Math.floor((center.z-radius)/32);z<=Math.floor((center.z+radius)/32);z++) {
+          if(Math.hypot((x+.5)*32-center.x,(y+.5)*32-center.y,(z+.5)*32-center.z)>radius || !this.terrain.material(x,y,z))continue;
+          if(this.terrain.set(x,y,z,0)){destroyed++;this.damage.delete([x,y,z].join(','));}
+        }
+    if(destroyed){this.state.mined+=destroyed;this.changed();}
+    return destroyed;
+  }
   collideTrees(position: { x: number; y: number }, z: number, radius: number) {
     let collided = false;
     for (const tree of this.treesNear(position.x, position.y)) {
@@ -260,6 +276,8 @@ export class FriendsFrontier {
     if (request.action === 'plant') {
       if (!pack.saplings) return result(false, 'Cut a tree to collect a sapling.');
       const x = actor.x + 100, y = actor.y, z = this.terrain.floor(x, y, actor.z + 64);
+      if (emberRetreatTreeClearance(x,y)) return result(false, 'Keep the lookout and campfire views clear of trees.');
+      if (lavaRiverTreeClearance(x,y)) return result(false, 'Plant trees away from the lava river and its hot banks.');
       if (z === undefined || z < 0 || scenicTransitProtected(x,y,z) || scenicTransitProtected(x,y,z+360) || terrainProtected(x, y) || this.treesNear(x, y).some(t => Math.hypot(t.x - x, t.y - y) < 90) || pieces.some(p => Math.hypot(p.x - x, p.y - y) < 100) || this.state.planted.length >= 256) return result(false, 'Find an open patch of earth away from your builds.');
       pack.saplings--; this.state.planted.push({ id: `planted:${this.state.revision}`, x, y, z, kind: 'pine', scale: .75 }); return result(true, 'A new cedar planted. Your forest can grow again.');
     }

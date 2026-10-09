@@ -1,44 +1,51 @@
 {
-  "date": "2026-10-07T20:45:32.203Z",
-  "origin": "http://localhost:3001",
+  "date": "2026-10-09T22:45:59.900Z",
+  "origin": "http://127.0.0.1:3032",
   "browser": "151.0.7922.34",
   "checks": [
     {
-      "name": "four simultaneous playable late joins",
+      "name": "5 simultaneous playable late joins",
       "detail": [
         {
-          "id": "friend-1321331c808aa1a52ecd9faeb1afe4d2",
+          "id": "friend-b67bd452d82420d942bd4558c4ff3de5",
           "label": "Network Host",
           "x": 5965,
           "y": 5710,
           "z": 736
         },
         {
-          "id": "friend-49ead609cbd33abc6283a90e4650cd81",
+          "id": "friend-a0ad9e1c33a4552c9f2846f149882f18",
+          "label": "Friend 5",
+          "x": 5932.5,
+          "y": 5766.291651245989,
+          "z": 736
+        },
+        {
+          "id": "friend-54b7a261305c90c99b1fa1d5dae48253",
           "label": "Friend 3",
-          "x": 5920.086104634372,
-          "y": 5771.818673559185,
+          "x": 5867.5,
+          "y": 5766.291651245989,
           "z": 736
         },
         {
-          "id": "friend-a23431cf83389f851c88e14b09f2c6b5",
+          "id": "friend-7afb8bcd679048712f70807b5bc2dfb0",
           "label": "Friend 1",
-          "x": 5847.413895365628,
-          "y": 5748.206041399011,
+          "x": 5835,
+          "y": 5710,
           "z": 736
         },
         {
-          "id": "friend-4fd62e74758a734f69a601925fd691a0",
+          "id": "friend-839485e94c3f8a91250df8e0d0cb8e83",
           "label": "Friend 4",
-          "x": 5847.413895365628,
-          "y": 5671.793958600989,
+          "x": 5867.5,
+          "y": 5653.708348754011,
           "z": 736
         },
         {
-          "id": "friend-37af4e0bce9bef57c3530a81f293fcfc",
+          "id": "friend-d5d418ef46674bf97b076073d1ede8b4",
           "label": "Friend 2",
-          "x": 5920.086104634372,
-          "y": 5648.181326440815,
+          "x": 5932.5,
+          "y": 5653.708348754011,
           "z": 736
         }
       ]
@@ -46,28 +53,29 @@
     {
       "name": "distinct crew identities",
       "detail": [
-        "friend-a23431cf83389f851c88e14b09f2c6b5",
-        "friend-37af4e0bce9bef57c3530a81f293fcfc",
-        "friend-49ead609cbd33abc6283a90e4650cd81",
-        "friend-4fd62e74758a734f69a601925fd691a0"
+        "friend-7afb8bcd679048712f70807b5bc2dfb0",
+        "friend-d5d418ef46674bf97b076073d1ede8b4",
+        "friend-54b7a261305c90c99b1fa1d5dae48253",
+        "friend-839485e94c3f8a91250df8e0d0cb8e83",
+        "friend-a0ad9e1c33a4552c9f2846f149882f18"
       ]
     },
     {
       "name": "guest input reaches authority",
       "detail": {
         "before": {
-          "id": "friend-a23431cf83389f851c88e14b09f2c6b5",
+          "id": "friend-7afb8bcd679048712f70807b5bc2dfb0",
           "label": "Friend 1",
-          "x": 5847.413895365628,
-          "y": 5748.206041399011,
+          "x": 5835,
+          "y": 5710,
           "z": 736
         },
         "after": {
-          "id": "friend-a23431cf83389f851c88e14b09f2c6b5",
+          "id": "friend-7afb8bcd679048712f70807b5bc2dfb0",
           "label": "Friend 1",
-          "x": 6139.696895139678,
-          "y": 5748.206041399011,
-          "z": 672
+          "x": 6007.500000000289,
+          "y": 5710,
+          "z": 736
         }
       }
     },
@@ -79,7 +87,7 @@
     },
     {
       "name": "host editing permissions reject guest mutations",
-      "detail": "The host needs to enable building for guests."
+      "detail": "The host needs to press C and enable Friends can build."
     },
     {
       "name": "building retries commit exactly one shared piece",
@@ -94,7 +102,7 @@
       "detail": "Field workbench placed."
     },
     {
-      "name": "shared construction converges on all four guests"
+      "name": "shared construction converges on all guests"
     },
     {
       "name": "crafting retry spends materials once",
@@ -138,8 +146,8 @@
     {
       "name": "rejoin with renamed crew restores identity",
       "detail": {
-        "oldId": "friend-a23431cf83389f851c88e14b09f2c6b5",
-        "newId": "friend-a23431cf83389f851c88e14b09f2c6b5"
+        "oldId": "friend-7afb8bcd679048712f70807b5bc2dfb0",
+        "newId": "friend-7afb8bcd679048712f70807b5bc2dfb0"
       }
     },
     {
@@ -155,7 +163,7 @@
     {
       "name": "IndexedDB recovers corrupt current and previous mirrors",
       "detail": {
-        "world": "world-856fa6f428d0bd7abdab527e53eaa729",
+        "world": "world-e085788ef3427dc67f15c8a38a1514dd",
         "pieces": 2,
         "mirror": true
       }
@@ -168,14 +176,15 @@
       }
     },
     {
-      "name": "five-player populated-world soak continues under motion faults",
+      "name": "6-player populated-world soak continues under motion faults",
       "detail": {
-        "durationMs": 60000,
+        "durationMs": 15000,
         "ticks": [
-          1865,
-          1886,
-          1887,
-          1887
+          1001,
+          1020,
+          1020,
+          1020,
+          1020
         ]
       }
     },
@@ -194,14 +203,14 @@
       "name": "Survival input still moves the authoritative player",
       "detail": {
         "before": {
-          "id": "bf9385d6-b0bc-4ee4-815b-d48a9fd4b7eb",
+          "id": "cf408a8b-dc79-43e7-abd5-2b3f5cce9b26",
           "label": "Survival Guest",
           "x": 6030.901699437495,
           "y": 6095.105651629516,
           "z": 0
         },
         "after": {
-          "id": "bf9385d6-b0bc-4ee4-815b-d48a9fd4b7eb",
+          "id": "cf408a8b-dc79-43e7-abd5-2b3f5cce9b26",
           "label": "Survival Guest",
           "x": 6330.901699437495,
           "y": 6095.105651629516,
@@ -217,33 +226,24 @@
       "state": "succeeded",
       "nominated": true,
       "localCandidateType": "host",
-      "remoteCandidateType": "host",
-      "bytesSent": 7066,
-      "bytesReceived": 2526
+      "remoteCandidateType": "srflx",
+      "bytesSent": 23870,
+      "bytesReceived": 142213
     },
     {
       "type": "candidate-pair",
       "state": "succeeded",
-      "nominated": false,
+      "nominated": true,
       "localCandidateType": "srflx",
       "remoteCandidateType": "srflx",
       "bytesSent": 0,
       "bytesReceived": 0
     },
     {
-      "type": "candidate-pair",
-      "state": "succeeded",
-      "nominated": true,
-      "localCandidateType": "host",
-      "remoteCandidateType": "srflx",
-      "bytesSent": 17762,
-      "bytesReceived": 142824
-    },
-    {
       "type": "data-channel",
       "state": "open",
       "label": "input",
-      "bytesSent": 12227,
+      "bytesSent": 13277,
       "bytesReceived": 0
     },
     {
@@ -251,21 +251,25 @@
       "state": "open",
       "label": "state",
       "bytesSent": 0,
-      "bytesReceived": 25529
+      "bytesReceived": 22665
     },
     {
       "type": "data-channel",
       "state": "open",
       "label": "reliable",
       "bytesSent": 622,
-      "bytesReceived": 1755
+      "bytesReceived": 2011
     },
     {
       "type": "data-channel",
       "state": "open",
       "label": "friends-world",
       "bytesSent": 0,
-      "bytesReceived": 107987
+      "bytesReceived": 108121
+    },
+    {
+      "type": "local-candidate",
+      "candidateType": "host"
     },
     {
       "type": "local-candidate",
@@ -277,7 +281,7 @@
     },
     {
       "type": "local-candidate",
-      "candidateType": "host"
+      "candidateType": "srflx"
     }
   ],
   "route": [
@@ -286,33 +290,24 @@
       "state": "succeeded",
       "nominated": true,
       "localCandidateType": "host",
-      "remoteCandidateType": "host",
-      "bytesSent": 7066,
-      "bytesReceived": 2526
+      "remoteCandidateType": "srflx",
+      "bytesSent": 209112,
+      "bytesReceived": 656383
     },
     {
       "type": "candidate-pair",
       "state": "succeeded",
-      "nominated": false,
+      "nominated": true,
       "localCandidateType": "srflx",
       "remoteCandidateType": "srflx",
       "bytesSent": 0,
       "bytesReceived": 0
     },
     {
-      "type": "candidate-pair",
-      "state": "succeeded",
-      "nominated": true,
-      "localCandidateType": "host",
-      "remoteCandidateType": "srflx",
-      "bytesSent": 704990,
-      "bytesReceived": 2328920
-    },
-    {
       "type": "data-channel",
       "state": "open",
       "label": "input",
-      "bytesSent": 567837,
+      "bytesSent": 173972,
       "bytesReceived": 0
     },
     {
@@ -320,21 +315,25 @@
       "state": "open",
       "label": "state",
       "bytesSent": 0,
-      "bytesReceived": 2053967
+      "bytesReceived": 507937
     },
     {
       "type": "data-channel",
       "state": "open",
       "label": "reliable",
       "bytesSent": 622,
-      "bytesReceived": 1755
+      "bytesReceived": 2011
     },
     {
       "type": "data-channel",
       "state": "open",
       "label": "friends-world",
       "bytesSent": 0,
-      "bytesReceived": 107987
+      "bytesReceived": 108121
+    },
+    {
+      "type": "local-candidate",
+      "candidateType": "host"
     },
     {
       "type": "local-candidate",
@@ -346,7 +345,7 @@
     },
     {
       "type": "local-candidate",
-      "candidateType": "host"
+      "candidateType": "srflx"
     }
   ]
 }

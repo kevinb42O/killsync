@@ -1,3 +1,4 @@
+import { cookingFireFor,isRoastingSeat } from '../world/FriendsCookingFires';
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createCampfireFlames } from './FriendsCampfire';
@@ -156,10 +157,10 @@ export class FriendsMarshmallowVisuals {
     this.assignRoastSpots(players);let localVisible=false;
     for(const entry of this.actors.values())entry.group.visible=false;
     for(const player of players){
-      if(!(state?.equipped?state.equipped.includes(player.id):isCampfireSeat(player.friendsSeat))||player.lifeState!=='alive'||player.friendsDevFlight||player.motion?.swimming)continue;
+      if(!(state?.equipped?state.equipped.includes(player.id):isRoastingSeat(player.friendsSeat))||player.lifeState!=='alive'||player.friendsDevFlight||player.motion?.swimming)continue;
       if(Math.hypot(this.cameraPosition.x-player.x,this.cameraPosition.z-player.y)>800)continue;
       const entry=this.actors.get(player.id)??this.create(player.id),roast=state?.roasts[player.id],local=firstPerson&&player.id===localId;
-      const seated=isCampfireSeat(player.friendsSeat);
+      const seated=isRoastingSeat(player.friendsSeat);
       const reaching=(local?(localRoastHeld??Boolean(roast?.reach||roast?.roasting)):Boolean(roast?.reach||roast?.roasting))&&!roast?.eatingMs&&!roast?.refillMs;
       entry.pose+=(Number(reaching)-entry.pose)*(1-Math.exp(-Math.max(0,dt)*.009));
       const parent=local&&this.viewCamera?this.held:this.group;if(entry.group.parent!==parent)parent.add(entry.group);
@@ -188,7 +189,11 @@ export class FriendsMarshmallowVisuals {
         this.forward.set(Math.cos(player.angle),0,Math.sin(player.angle));this.right.set(-Math.sin(player.angle),0,Math.cos(player.angle));
       }
       this.rest.copy(this.start).addScaledVector(this.forward,64).addScaledVector(this.right,-9);this.rest.y+=40;
-      this.target.set(FRIENDS_CAMPFIRE.x,FRIENDS_CAMPFIRE.z+48,FRIENDS_CAMPFIRE.y);
+      const fire=cookingFireFor(player);
+      this.target.set(fire?.x??player.x,fire?fire.z+48*fire.scale:player.z+40,fire?.y??player.y);
+      if(seated&&fire&&fire.id!==FRIENDS_CAMPFIRE.id){
+        const a=Math.atan2(player.y-fire.y,player.x-fire.x);this.target.x+=Math.cos(a)*6;this.target.z+=Math.sin(a)*6;
+      }
       const slot=this.roastSpots.get(player.id);
       if(seated&&slot!==undefined){const angle=CAMPFIRE_SEATS[slot].angle;this.target.x+=Math.cos(angle)*23;this.target.z+=Math.sin(angle)*23;}
       if(!seated){

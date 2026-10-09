@@ -19,7 +19,7 @@ export class FriendsFishingLine extends THREE.Mesh<THREE.BufferGeometry,THREE.Me
     const indices:number[]=[];for(let i=0;i<N-1;i++){const a=i*2;indices.push(a,a+1,a+2,a+1,a+3,a+2);}geometry.setIndex(indices);
     super(geometry,new THREE.MeshBasicMaterial({color:'#d8e9db',transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false}));this.name='fishing-line';this.frustumCulled=false;
   }
-  update(from:THREE.Vector3,to:THREE.Vector3,slack:number,dt:number,camera:THREE.Vector3){
+  update(from:THREE.Vector3,to:THREE.Vector3,slack:number,dt:number,camera:THREE.Vector3,waterLevel?:number){
     const distance=from.distanceTo(to),length=distance+Math.max(1,slack),step=length/(N-1);
     if(!this.initialized||this.start.distanceTo(from)>120||this.end.distanceTo(to)>140){
       for(let i=0;i<N;i++){this.points[i].lerpVectors(from,to,i/(N-1));this.points[i].y-=Math.sin(i/(N-1)*Math.PI)*slack*.35;this.previous[i].copy(this.points[i]);}this.initialized=true;this.accumulator=0;
@@ -36,6 +36,11 @@ export class FriendsFishingLine extends THREE.Mesh<THREE.BufferGeometry,THREE.Me
         this.points[0].copy(from);this.points[N-1].copy(to);
         for(let j=0;j<N-1;j++){const i=pass%2?N-2-j:j,a=this.points[i],b=this.points[i+1];this.delta.subVectors(b,a);const d=this.delta.length();if(d<1e-6)continue;this.delta.multiplyScalar((d-step)/d);
           if(i===0)b.sub(this.delta);else if(i===N-2)a.add(this.delta);else{a.addScaledVector(this.delta,.5);b.addScaledVector(this.delta,-.5);}}
+      }
+      if(waterLevel!==undefined)for(let i=1;i<N-1;i++){
+        // Surface drag keeps loose filament floating instead of hanging far
+        // below the lake. Damp the wet nodes without losing the pinned tip.
+        const p=this.points[i];if(p.y<waterLevel){p.y=waterLevel;this.previous[i].lerp(p,.25);}
       }
     }
     this.points[0].copy(from);this.points[N-1].copy(to);

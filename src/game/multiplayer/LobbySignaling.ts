@@ -1,5 +1,5 @@
 import { DEFAULT_PUBLIC_STUN_SERVERS, ManualWebRTCSession, decodeSignal } from './ManualWebRTCSession';
-import { COOP_MAX_PLAYERS } from './protocol';
+import { multiplayerPlayerLimit } from './protocol';
 import type { CoopGameMode } from './CoopGameMode';
 import {
   AutoHostedLobby,
@@ -163,7 +163,7 @@ export class HostedLobby {
       try {
         const response = await request<{ room: PublicLobby; hostToken: string }>('/rooms', {
           method: 'POST',
-          body: JSON.stringify({ id: roomId, hostName, maxPlayers: COOP_MAX_PLAYERS, code, gameMode }),
+          body: JSON.stringify({ id: roomId, hostName, maxPlayers: multiplayerPlayerLimit(gameMode), code, gameMode }),
         });
         localToken = response.hostToken;
       } catch (error) {
@@ -176,7 +176,7 @@ export class HostedLobby {
       id: roomId,
       code,
       hostName,
-      maxPlayers: COOP_MAX_PLAYERS,
+      maxPlayers: multiplayerPlayerLimit(gameMode),
       playerCount: 1,
       state: 'waiting',
       gameMode,
@@ -231,7 +231,7 @@ export class HostedLobby {
             if (this.room.gameMode !== 'friends') this.offers.delete(join.requestId);
             this.statusListener?.(`${join.guestName} joined squad.`);
           } else if (!join.offer && !this.busy.has(join.requestId)) {
-            if (session.occupiedPeerSlots >= COOP_MAX_PLAYERS - 1) {
+            if (session.occupiedPeerSlots >= multiplayerPlayerLimit(this.room.gameMode) - 1) {
               this.busy.add(join.requestId);
               this.statusListener?.('This squad is full.');
               return;
@@ -266,7 +266,7 @@ export class HostedLobby {
 
   private offerFor(session: ManualWebRTCSession, requestId: string): Promise<string> {
     const existing=this.offerTasks.get(requestId);if(existing)return existing;
-    if(session.occupiedPeerSlots>=COOP_MAX_PLAYERS-1)return Promise.reject(new Error('This squad is full.'));
+    if(session.occupiedPeerSlots>=multiplayerPlayerLimit(this.room.gameMode)-1)return Promise.reject(new Error('This squad is full.'));
     const task=session.createOffer().then(offer=>{if(this.closed){session.disconnectPeer(decodeSignal(offer).peerId);throw new Error('Room closed');}this.offers.set(requestId,offer);return offer;}).catch(error=>{this.offerTasks.delete(requestId);throw error;});
     this.offerTasks.set(requestId,task);return task;
   }

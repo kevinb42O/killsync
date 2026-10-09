@@ -1,3 +1,4 @@
+import { LAVA_SEA_ENTRY,lavaRiverPoint } from './world/FriendsLavaRiver';
 import { describe, expect, it } from 'vitest';
 import { FriendsInteractionSound, friendsSurfaceSound, friendsWorldSound, spatialSound } from './FriendsWorldSound';
 import { CAVE_ROOMS, CAVE_TREASURES } from './world/FriendsCave';
@@ -153,5 +154,18 @@ describe('confirmed Friends interaction sounds', () => {
     const sound=new FriendsInteractionSound(); sound.sample(sim.createSnapshot().friends!,player,0,0,contact);
     sim['friends']!.interact(player,0);
     expect(sound.sample(sim.createSnapshot().friends!,player,100,0,contact).events.map(e=>e.cue)).toEqual(['treasure']);
+  });
+});
+
+describe('continuous lava and ocean-vapor ambience',()=>{
+  it('keeps the recorded lava loop audible throughout the river while the ocean hiss stays at its outlet',()=>{
+    for(const t of [.15,.35,.55,.75,.90]){const p=lavaRiverPoint(t);expect(friendsWorldSound(p,0,false).lava.volume).toBeGreaterThan(.18);}
+    const p={...LAVA_SEA_ENTRY,z:LAVA_SEA_ENTRY.z+100};
+    const close=friendsWorldSound(p,0,false),occluded=friendsWorldSound(p,0,false,()=>false);
+    expect(close.oceanSteam.volume).toBe(.34);expect(occluded.oceanSteam.volume).toBeLessThan(close.oceanSteam.volume);expect(occluded.oceanSteam.cutoff).toBeLessThan(close.oceanSteam.cutoff!);
+    expect(friendsWorldSound({...p,z:p.z+2500},0,false).oceanSteam.volume).toBe(0);
+    expect(friendsWorldSound(p,0,true).oceanSteam.volume).toBe(0);
+    expect(friendsWorldSound({...ISLAND_VOLCANO,z:ISLAND_VOLCANO.lavaLevel},0,false).oceanSteam.volume).toBe(0);
+    const side={...p,x:p.x-120};expect(friendsWorldSound(side,0,false).oceanSteam.pan).toBeCloseTo(-friendsWorldSound(side,Math.PI,false).oceanSteam.pan);
   });
 });

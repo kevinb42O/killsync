@@ -1,0 +1,20 @@
+{
+  "errors": [],
+  "checks": [
+    "slot 7 selects a visible rod and tiny controls; real mouse input casts into the lake",
+    "bite click reels automatically and equips the fish in both hands",
+    "right click gently drops a fish that flops on the shore",
+    "F picks the fish up and left click throws it back to swim away",
+    "swim-away cleanup completes and existing combat/rope shortcuts remain intact"
+  ],
+  "timing": {
+    "reelMs": 2800,
+    "waitMinMs": 7000,
+    "waitMaxMs": 28000
+  },
+  "catchLog": "YOUR CATCHES\n1\nKoi\n136 cm\nPersonal best\n136 cm\nKoi\n136 cm",
+  "toolbar": {
+    "height": 73.5,
+    "width": 532
+  }
+}

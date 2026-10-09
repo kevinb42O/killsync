@@ -35,14 +35,15 @@ describe('Friends held arm gestures',()=>{
   expect(neutralizeMenuInput(input(1,{friendsArms:15,firing:true,aiming:true}))).toMatchObject({friendsArms:0,firing:false,aiming:false});
  });
  it('accepts both players, snapshots late join poses, and blocks all equipment actions even in a malicious empty-hand frame',()=>{
-  const s=simulation(),before=s.createSnapshot();
+  const s=simulation(),before={grenades:s['players'].get('host')!.grenades,ammo:s['players'].get('host')!.weaponStates[0].magazineAmmo};
   s.setInput('host',input(1,{friendsArms:15,firing:true,aiming:true,fireActionId:1,altFireActionId:1,grenadeActionId:1,friendsFlashlight:true}));
   s.setInput('guest',input(1,{friendsArms:9,aimAngle:quantizeAngle(1),aimPitch:quantizePitch(.4)}));s.tick(50);
   const frame=s.createSnapshot();expect(frame.players[0].friendsHands?.mask).toBe(15);expect(frame.players[1].friendsHands?.mask).toBe(9);
   expect(frame.players[1].friendsHands?.pitch).toBeCloseTo(.4,2);
   expect(frame.players[0].friendsFlashlight).toBeUndefined();expect(frame.players[0].isAiming).toBe(false);
-  expect(frame.players[0].grenades).toBe(before.players[0].grenades);
-  expect(frame.players[0].weaponStates[0].magazineAmmo).toBe(before.players[0].weaponStates[0].magazineAmmo);
+  expect(s['players'].get('host')!.grenades).toBe(before.grenades);
+  expect(s['players'].get('host')!.weaponStates[0].magazineAmmo).toBe(before.ammo);
+  expect(frame.players[0].weaponStates).toHaveLength(0);
   expect(frame.projectiles).toHaveLength(0);expect(frame.friends?.frontier?.interaction?.actions.host).toBeUndefined();
   expect(JSON.parse(JSON.stringify(frame)).players[1].friendsHands.mask).toBe(9);
   const wire={format:'coop_snapshot_full' as const,snapshot:frame};expect(expandSnapshotWirePayload(compactSnapshotWirePayload(wire))).toEqual(wire);

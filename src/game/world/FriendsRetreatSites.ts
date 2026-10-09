@@ -10,10 +10,12 @@ export const RETREAT_SITES = [
   {id:'skyfalls-bench',name:'Skyfalls Bench',x:8884,y:21100,z:904,angle:-1.88,w:80,d:72,kind:'bench',color:'#a0d5e3',detail:'Two seats together above the hanging lake. F to sit; F or jump to stand.'},
   {id:'gatewater-bench',name:'Gatewater Bench',x:14116,y:11308,z:840,angle:1.23,w:80,d:64,kind:'bench',color:'#b1d9e0',detail:'Sit beside a friend under the World Gate, looking across its glacial water.'},
   {id:'saltwind-camp',name:'Saltwind Camp',x:27248,y:20704,z:208,angle:Math.PI/2,w:168,d:144,kind:'fire',color:'#f2b280',detail:'An always-warm coastal fire and five seats. A quiet place to watch the bay.'},
+  {id:'ember-lookout',name:'Ember Lookout',x:37560,y:40350,z:448,angle:2.62,w:224,d:176,kind:'bench',color:'#ffad68',detail:'A timber terrace beside the lava river. Sit together and watch molten rock meet the sea.'},
+  {id:'ember-camp',name:'Ember Campfire',x:37485,y:40220,z:448,angle:2.62,w:168,d:144,kind:'fire',color:'#ffad68',detail:'A warm fire beside Ember Lookout, above the steaming lava delta.'},
 ] as const;
 export type RetreatId = typeof RETREAT_SITES[number]['id'];
 export type RetreatState = {version:1;active:RetreatId[];lightsOn:boolean;switchSerial:number;switchBy?:string};
-export type RetreatSave = {version:1;active?:RetreatId[];lightsOn?:boolean};
+export type RetreatSave = {version:1;siteRevision?:number;active?:RetreatId[];lightsOn?:boolean};
 export function retreatPoint(site:{x:number;y:number;z:number;angle:number},u:number,v:number,z=0):RetreatPoint {
   const c=Math.cos(site.angle),s=Math.sin(site.angle);return {x:site.x+c*u-s*v,y:site.y+s*u+c*v,z:site.z+z};
 }
@@ -38,8 +40,14 @@ export function insideStillwater(p:RetreatPoint,active:readonly string[]=RETREAT
 }
 export const RETREAT_APPROACHES=RETREAT_SITES.map(s=>({siteId:s.id,points:s.kind==='house'?
   [{x:7740,y:23600},{x:7740,y:23080},{x:7800,y:22700},{x:7800,y:22380},{x:7750,y:22030},{x:7690,y:21860},retreatPoint(s,-210,STILLWATER_DOOR.v),retreatPoint(s,-100,STILLWATER_DOOR.v)]:
-  s.kind==='fire'?[retreatPoint(s,-s.w/2-80,64),retreatPoint(s,-s.w/2-40,64),retreatPoint(s,-s.w/2+4,0)]:[retreatPoint(s,-s.w/2-80,0),retreatPoint(s,-s.w/2+4,0)]}));
-export function retreatClearing(x:number,y:number){return RETREAT_SITES.some(s=>{const p=retreatLocal(s,{x,y});return Math.abs(p.u)<s.w/2+36&&Math.abs(p.v)<s.d/2+40;})||RETREAT_APPROACHES.some(r=>r.points.slice(1).some((b,i)=>{
+  s.id.startsWith('ember')?[retreatPoint(s,s.w/2+500,0),retreatPoint(s,s.w/2+240,0),retreatPoint(s,s.w/2-4,0)]:s.kind==='fire'?[retreatPoint(s,-s.w/2-80,64),retreatPoint(s,-s.w/2-40,64),retreatPoint(s,-s.w/2+4,0)]:[retreatPoint(s,-s.w/2-80,0),retreatPoint(s,-s.w/2+4,0)]}));
+/** Open plateau around both Ember platforms; crowns stay clear of the seating and view. */
+export const EMBER_RETREAT_TREE_RADIUS = 900;
+const EMBER_RETREAT_SITES = RETREAT_SITES.filter(s => s.id.startsWith('ember'));
+export function emberRetreatTreeClearance(x:number,y:number) {
+  return EMBER_RETREAT_SITES.some(s => (x-s.x)**2+(y-s.y)**2 <= EMBER_RETREAT_TREE_RADIUS**2);
+}
+export function retreatClearing(x:number,y:number){return emberRetreatTreeClearance(x,y)||RETREAT_SITES.some(s=>{const p=retreatLocal(s,{x,y});return Math.abs(p.u)<s.w/2+36&&Math.abs(p.v)<s.d/2+40;})||RETREAT_APPROACHES.some(r=>r.points.slice(1).some((b,i)=>{
   const a=r.points[i],dx=b.x-a.x,dy=b.y-a.y,f=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy)));
   return Math.hypot(x-a.x-dx*f,y-a.y-dy*f)<38;
 }));}

@@ -3,7 +3,7 @@ import { hydrologyWaterLevel } from './FriendsHydrology';
 import { scenicTransitSurface, scenicTransitRanges } from './FriendsRailInfrastructure';
 import { meshIslandVault } from './FriendsIslandVolume';
 import { islandArchRange } from './FriendsIsland';
-import { baseTerrainHeight, friendsFixedPlatformAt, FRONTIER_SIZE, VOXEL_SIZE } from './FriendsTerrain';
+import { baseTerrainHeight, friendsFixedPlatformAt, FRONTIER_SIZE, VOXEL_SIZE, TERRAIN_BOTTOM } from './FriendsTerrain';
 export type HorizonMeshData = { tx: number; ty: number; positions: Int16Array; normals: Int8Array; uv: Float32Array; colors: Uint8Array; indices: Uint32Array }; 
 
 /** Greedy surface-only voxel mesh. All samples use the exact simulation cells:
@@ -72,7 +72,7 @@ export function meshBlockHorizon(tx: number, ty: number, tile = 4096, sampleHeig
       }
     }
   }else{
-  const solids=(x:number,y:number):number[][]=>{const h=height(x,y),spans:number[][]=[];let lo=-512;for(const r of range(x,y)){if(r[0]>lo)spans.push([lo,r[0]]);lo=r[1];}if(h>lo)spans.push([lo,h]);return spans;};
+  const solids=(x:number,y:number):number[][]=>{const h=height(x,y),spans:number[][]=[];let lo=TERRAIN_BOTTOM;for(const r of range(x,y)){if(r[0]>lo)spans.push([lo,r[0]]);lo=r[1];}if(h>lo)spans.push([lo,h]);return spans;};
   const exposed=(x:number,y:number,dx:number,dy:number)=>{
     let spans=solids(x,y);
     for(const [lo,hi] of solids(x+dx,y+dy))spans=spans.flatMap(([a,b])=>hi<=a||lo>=b?[[a,b]]:[...(lo>a?[[a,lo]]:[]),...(hi<b?[[hi,b]]:[])]);

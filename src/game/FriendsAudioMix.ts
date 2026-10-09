@@ -6,6 +6,9 @@ type Profile = { attackDb: number; peakDb: number };
 const profile = (attackDb: number, peakDb = -4): Profile => ({ attackDb, peakDb });
 const STEP = profile(-20, -3), IMPACT = profile(-17, -3), SMALL = profile(-22, -6);
 const PROFILES: Record<FriendsCue, Profile | undefined> = {
+  fishingCast:profile(-24,-8), fishingSplash:profile(-22,-8), fishingBite:profile(-22,-8), fishingReel:profile(-25,-9),
+  dynamiteFuse: profile(-24,-6),
+  dynamiteExplosion: profile(-13, -2),
   grass: STEP, woodStep: STEP, stoneStep: STEP, snow: STEP, waterStep: STEP, mudStep: STEP,
   waterEntry: profile(-18, -3), swimStroke: profile(-20, -4), waterDive: profile(-18, -3), waterBreathIn: profile(-20, -4),
   stoneThrow: undefined, stoneImpact: IMPACT, stoneHurt: profile(-17, -3),

@@ -1,3 +1,4 @@
+import { RETREAT_SEATS,RETREAT_SITES } from '../world/FriendsRetreatSites';
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { FriendsMarshmallowVisuals } from './FriendsMarshmallowVisuals';
@@ -50,4 +51,10 @@ describe('standing marshmallow reach',()=>{
     const angle=CAMPFIRE_SEATS[0].angle;
     expect(f.tip().distanceTo(new THREE.Vector3(FRIENDS_CAMPFIRE.x+Math.cos(angle)*23,FRIENDS_CAMPFIRE.z+48,FRIENDS_CAMPFIRE.y+Math.sin(angle)*23))).toBeLessThan(.001);f.visuals.dispose();
   });
+});
+
+it('places seated Ember roasting sticks over Ember flames instead of the commons',()=>{
+  const f=fixture(true),camp=RETREAT_SITES.find(s=>s.id==='ember-camp')!,seat=RETREAT_SEATS.find(s=>s.siteId===camp.id)!;
+  Object.assign(f.player,seat,{friendsSeat:{vehicleId:camp.id,index:seat.index}});f.camera.position.set(seat.x,seat.z+50,seat.y);f.camera.lookAt(camp.x,camp.z+48*.27,camp.y);f.camera.updateMatrixWorld(true);
+  f.update(true);expect(f.tip().distanceTo(new THREE.Vector3(camp.x,camp.z+48*.27,camp.y))).toBeCloseTo(6,3);expect(f.grip().distanceTo(f.tip())).toBeLessThan(200);f.visuals.dispose();
 });

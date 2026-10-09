@@ -16,8 +16,21 @@ try{
   await page.goto(origin+'/tools/friends-character-review.html');
   await page.waitForFunction(()=>window.friendsCharacterReview?.crew.every(c=>c.rig.avatar.getObjectByName('friends-big-walk-character'))&&window.friendsCharacterReview.frames>5);
   await page.screenshot({path:directory+'/crew.png'});
-  report.crew=await page.evaluate(()=>{const r=window.friendsCharacterReview;return r.crew.map(c=>{const m=c.rig.avatar.getObjectByName('friends-big-walk-character');return {meshes:m.children[0].children.filter(p=>p.children.some(o=>o.isMesh)).length,oldBodyVisible:c.rig.bodyMesh.visible,scale:c.rig.root.scale.toArray()};});});
-  assert.ok(report.crew.every(c=>c.meshes===6&&!c.oldBodyVisible&&c.scale.every(n=>n===1)));
+  report.crew=await page.evaluate(()=>{const r=window.friendsCharacterReview;return r.crew.map(c=>{const m=c.rig.avatar.getObjectByName('friends-big-walk-character');return {meshes:m.children[0].children.filter(p=>p.children.some(o=>o.isMesh)).length,oldBodyVisible:Boolean(c.rig.bodyMesh),idleFirearm:Boolean(c.rig.firearm),scale:c.rig.root.scale.toArray()};});});
+  assert.ok(report.crew.every(c=>c.meshes===6&&!c.oldBodyVisible&&!c.idleFirearm&&c.scale.every(n=>n===1)));
+  report.rigComparison=await page.evaluate(async()=>{
+    const {createCoopOperatorRig,updateCoopOperatorRig,disposeCoopOperatorRig}=await import('/src/game/rendering/coopOperatorVisuals.ts');
+    const {mountFriendsCharacter,updateFriendsCharacter}=await import('/src/game/rendering/FriendsCharacterVisuals.ts');
+    const r=window.friendsCharacterReview,legacy=createCoopOperatorRig('#fbbf24','');
+    mountFriendsCharacter(legacy,'#fbbf24');
+    await new Promise(resolve=>setTimeout(resolve,100));
+    const current=r.crew[2].rig,player=r.crew[2].player;
+    updateCoopOperatorRig(legacy,player,1000,16.666);updateFriendsCharacter(legacy,player,1000);legacy.nameplate.visible=false;
+    const count=rig=>{let objects=0,meshes=0;rig.root.traverse(o=>{objects++;if(o.isMesh)meshes++;});return {objects,meshes};};
+    const comparison={legacy:count(legacy),friends:count(current)};
+    disposeCoopOperatorRig(legacy);return comparison;
+  });
+  assert.ok(report.rigComparison.friends.meshes<report.rigComparison.legacy.meshes);
   for(const mode of ['axe','pickaxe','shovel','flashlight','rope']){
     await page.getByRole('button',{name:mode[0].toUpperCase()+mode.slice(1),exact:true}).click();
     await page.waitForFunction(mode=>{const r=window.friendsCharacterReview;return mode==='rope'?r.hauling.gun.getObjectByName('rope-launcher-character-hand'):mode==='flashlight'?r.flashlight.hand.getObjectByName('premade-left-arm'):r.tools.root.getObjectByName('premade-right-arm');},mode);
@@ -70,15 +83,21 @@ try{
   });
   await page.waitForFunction(()=>{
     const rig=window.liveCharacterReview.bridge.remotePlayers.get('big-walk-review-friend');
-    return rig?.avatar.getObjectByName('friends-big-walk-character')&&!rig.bodyMesh.visible;
+    return rig?.avatar.getObjectByName('friends-big-walk-character')&&!rig.bodyMesh&&!rig.firearm;
   });
   report.production=await page.evaluate(()=>{
     const r=window.liveCharacterReview,rig=r.bridge.remotePlayers.get(r.guest.id);
-    return {model:rig.avatar.getObjectByName('friends-big-walk-character').name,oldBodyVisible:rig.bodyMesh.visible,glError:r.bridge.renderer.renderer.getContext().getError()};
+    return {model:rig.avatar.getObjectByName('friends-big-walk-character').name,oldBodyVisible:Boolean(rig.bodyMesh),idleFirearm:Boolean(rig.firearm),trailAllocated:Boolean(r.bridge.trailSystem),glError:r.bridge.renderer.renderer.getContext().getError()};
   });
-  assert.equal(report.production.glError,0);assert.equal(report.production.oldBodyVisible,false);
+  report.spectator=await page.evaluate(()=>{
+    const r=window.liveCharacterReview,snapshot=r.simulation.createSnapshot(),host=snapshot.players[0];
+    r.bridge.render(snapshot,host.id,16.666,r.guest.id);
+    return {glError:r.bridge.renderer.renderer.getContext().getError(),legacyBodyMeshes:r.bridge.renderer.thirdPersonPlayerGroup.children.filter(o=>o.isMesh).length};
+  });
+  assert.equal(report.spectator.glError,0);assert.equal(report.spectator.legacyBodyMeshes,0);
+  assert.equal(report.production.glError,0);assert.equal(report.production.oldBodyVisible,false);assert.equal(report.production.idleFirearm,false);assert.equal(report.production.trailAllocated,false);
   assert.ok(!report.requests.some(url=>url.includes('wrad-arms')));
   assert.deepEqual(report.errors,[]);
-  report.checks.push('three crew avatars use six articulated meshes each and hide the original chassis','all five held tools load matching character limbs without requesting WRAD arms','tools render without WebGL errors and remain in frame across 70–120° FOV and portrait/ultrawide sizes','a real island guest mounts the Big Walk model through the production multiplayer renderer');
+  report.checks.push('three crew avatars use six articulated meshes each and allocate no survival chassis or idle firearms','all five held tools load matching character limbs without requesting WRAD arms','tools render without WebGL errors and remain in frame across 70–120° FOV and portrait/ultrawide sizes','a real island guest mounts the Big Walk model through the production multiplayer renderer');
   console.log(JSON.stringify(report,null,2));
 }finally{await writeFile(directory+'/render-checks.json',JSON.stringify(report,null,2));await browser.close();}

@@ -3,7 +3,7 @@ import { scenicRailway } from './FriendsScenicRailway';
 import { RETREAT_SITES, RETREAT_APPROACHES } from './FriendsRetreatSites';
 
 export const HYDROLOGY_VERSION = 2;
-export const RIVER_BANK_APRON = 160;
+export const RIVER_BANK_APRON = 224;
 export type RiverPoint = {x:number;y:number;z:number;width:number;distance:number;tx:number;ty:number;roughness:number};
 export type River = {id:string;name:string;points:RiverPoint[];length:number;source:'skyfalls'|'gate'|'deepmere';roughness:number};
 type Knot = [number,number,number,number];
@@ -110,9 +110,9 @@ export function hydrologyTerrainHeight(x:number,y:number,natural:number,includeL
     // This only adds ground below the original truss; railway alignment,
     // decks and authored pier sockets keep their original generation field.
     if(river?.riverId==='skyfalls-river'&&Math.abs(river.level-442.5)<.05){
-      const inner=river.width*.58,outer=river.width*.68;
+      const inner=river.width*.58,outer=river.width*.8+64;
       if(river.side>=inner&&river.side<outer+96){
-        const top=Math.ceil((river.level+2)/32)*32;
+        const top=Math.ceil((river.level+32)/32)*32;
         const fill=top+(natural-top)*smooth((river.side-outer)/96);
         return Math.max(natural,fill);
       }
@@ -142,6 +142,14 @@ export function hydrologyTerrainHeight(x:number,y:number,natural:number,includeL
     // Cutting an outlet must never build a submerged dam across a lake bowl.
     const lakeJoin=ISLAND_LAKES.some(l=>Math.abs(river.level-l.level)<.05&&Math.abs(x-l.x)<l.rx*1.5&&Math.abs(y-l.y)<l.ry*1.5&&waterBasinRadius(x,y,l)<1.45);
     ground=lakeRadius<1.15||lakeJoin?Math.min(ground,channel):channel;
+    // The far terrain averages four cells into each 64-unit corner. Keep a
+    // broad dry collar beyond the boat lane so the water sheet can terminate
+    // inside solid banks in both the voxel and interpolated terrain meshes.
+    if(!lakeJoin&&lakeRadius>=1.15&&river.side>river.width*.65){
+      const top=Math.ceil((river.level+64)/32)*32;
+      const collar=top+(natural-top)*smooth((river.side-river.width*.8)/96);
+      ground=Math.max(ground,collar);
+    }
   }return ground;
 }
 export function riverWetAt(x:number,y:number){const s=riverSampleAt(x,y);return s&&s.side<s.width*.65?s:undefined;}

@@ -32,7 +32,8 @@
     "swimStroke": "https://pixabay.com/sound-effects/nature-splashing-water-443136/",
     "waterDive": "https://pixabay.com/sound-effects/cinematic-dive-underwater-467471/",
     "waterBreathIn": "https://pixabay.com/sound-effects/people-inalare-274160/",
-    "stoneHurt": "https://pixabay.com/sound-effects/people-oof-2-580732/"
+    "stoneHurt": "https://pixabay.com/sound-effects/people-oof-2-580732/",
+    "emberOceanSteam": "https://freesound.org/people/sethlind/sounds/265013/"
   },
   "assets": [
     {
@@ -1092,6 +1093,22 @@
       "licenseUrl": "https://pixabay.com/service/license-summary/",
       "downloaded": "2026-10-09",
       "sha256": "13ff710163adf952793767405a1991d900999892bfef2708f2f8a3fed127dec3"
+    },
+    {
+      "file": "ocean_steam_loop.ogg",
+      "pack": "emberOceanSteam",
+      "author": "sethlind",
+      "title": "NYC steam radiator hiss.wav",
+      "sourcePage": "https://freesound.org/people/sethlind/sounds/265013/",
+      "source": "https://cdn.freesound.org/previews/265/265013_4101863-hq.mp3",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "downloaded": "2026-10-10",
+      "originalSha256": "ea33fc1c51887d365318dc6a14aaf5a287dd66fb9e94cf01926435c94a4a296e",
+      "sha256": "d94206d66a9baf26bfba5b9793d07617d321385259883d863fffea4772fdb6fb",
+      "edit": "8\u201332 seconds; mono 32 kHz Vorbis q4; highpass=f=100,lowpass=f=7600; linear gain 7.468208122; native pitch and dynamics. Runtime uses an 800 ms seam crossfade.",
+      "durationSeconds": 24.0,
+      "bytes": 199348
     }
   ],
   "defaultLicense": "CC0-1.0",

@@ -1,3 +1,4 @@
+import { friendsLiveWaterSurface } from '../world/FriendsFloodWater';
 import type { FriendsVehicle } from './FriendsExpedition';
 import type { MultiplayerInputFrame } from './protocol';
 import type { FriendsTerrain } from '../world/FriendsTerrain';
@@ -38,11 +39,12 @@ export class FriendsRowboat{
   private observed=new Map<string,{fire:number;back:number}>();
   private observedMovement=new Map<string,number>();
   constructor(saved?:RowboatSave,terrain?:FriendsTerrain,id=ROWBOAT_ID,homePose:RowboatSave=home){this.id=id;this.home={...homePose};this.terrain=terrain;this.pose=saved&&Number.isFinite(saved.x)&&Number.isFinite(saved.y)&&Number.isFinite(saved.angle)&&Math.abs(saved.angle)<1e6&&this.fits(saved.x,saved.y,saved.angle,terrain)?{...saved}:{...this.home};}
+  private water(x:number,y:number){return this.terrain?friendsLiveWaterSurface(this.terrain,x,y):friendsWaterAt(x,y);}
   save():RowboatSave{return {...this.pose};}
   vehicle():FriendsVehicle{
-    const {x,y,angle}=this.pose,water=friendsWaterAt(x,y)?.level??154.5;
-    const a=friendsWaterAt(x+Math.cos(angle)*56,y+Math.sin(angle)*56)?.level??water;
-    const b=friendsWaterAt(x-Math.cos(angle)*56,y-Math.sin(angle)*56)?.level??water;
+    const {x,y,angle}=this.pose,water=this.water(x,y)?.level??154.5;
+    const a=this.water(x+Math.cos(angle)*56,y+Math.sin(angle)*56)?.level??water;
+    const b=this.water(x-Math.cos(angle)*56,y-Math.sin(angle)*56)?.level??water;
     return {id:this.id,kind:'rowboat',x,y,z:water+5,angle,pitch:Math.atan2(a-b,112),length:ROWBOAT_LENGTH,width:ROWBOAT_WIDTH,
       rowing:{left:{...this.left},right:{...this.right},speed:Math.hypot(this.vx,this.vy)}};
   }
@@ -50,7 +52,7 @@ export class FriendsRowboat{
   private fits(x:number,y:number,angle:number,terrain?:FriendsTerrain,pieces:readonly FriendsBuildPiece[]=[]){
     const c=Math.cos(angle),s=Math.sin(angle);
     for(const [u,v]of [[0,0],[-68,0],[68,0],[-38,-27],[-38,27],[38,-27],[38,27]]){
-      const px=x+u*c-v*s,py=y+u*s+v*c,water=friendsWaterAt(px,py);
+      const px=x+u*c-v*s,py=y+u*s+v*c,water=this.water(px,py);
       if(!water||water.depth<22)return false;
       if(terrain){
         const floor=terrain.floor(px,py,water.level,0),roof=terrain.ceiling(px,py,water.level-12);
@@ -89,7 +91,7 @@ export class FriendsRowboat{
   update(dt:number,elapsed:number,players:readonly Rower[],inputs:ReadonlyMap<string,MultiplayerInputFrame>,terrain?:FriendsTerrain,pieces:readonly FriendsBuildPiece[]=[]){
     this.terrain=terrain??this.terrain;this.pieces=pieces;
     for(const stroke of [this.left,this.right])stroke.playerId=undefined;
-    const rowers:Rower[]=[],previousActions=new Map<string,{fire:number;back:number}>(),previousMovement=new Map<string,number>();
+    const rowers:Rower[]=[],seated:Rower[]=[],previousActions=new Map<string,{fire:number;back:number}>(),previousMovement=new Map<string,number>();
     for(const p of players){
       const command=inputs.get(p.id),action=command?.fireActionId??0,back=command?.altFireActionId??0,movement=command?.movement??0,last=this.observed.get(p.id)??{fire:action,back},lastMovement=this.observedMovement.get(p.id)??movement;
       previousActions.set(p.id,last);
@@ -99,7 +101,10 @@ export class FriendsRowboat{
       if(p.friendsSeat?.vehicleId!==this.id)continue;
       if(p.lifeState!=='alive'||p.friendsDevFlight||(p.friendsSeat!.index!==0&&p.friendsSeat!.index!==1)){p.friendsSeat=undefined;p.crouching=false;continue;}
       if(command?.jumpPressed){this.interact(p,players);continue;}
-      rowers.push(p);
+      seated.push(p);
+      // Equipping the rod puts the oars down. A friend in the other seat can
+      // still row, while fishing input belongs solely to the fishing loop.
+      if(command?.friendsTool!==7)rowers.push(p);
     }
     for(const p of rowers){
       const sideStroke=p.friendsSeat!.index===0?this.left:this.right;
@@ -116,7 +121,7 @@ export class FriendsRowboat{
         if(strokes.every(stroke=>elapsed-stroke.atMs>=ROW_STROKE_MS))for(const stroke of strokes){stroke.atMs=elapsed;stroke.direction=direction;}
       }
     }
-    if(!rowers.length){this.vx=this.vy=this.turn=0;return;}
+    if(!rowers.length){this.vx=this.vy=this.turn=0;const v=this.vehicle();for(const p of seated)Object.assign(p,rowboatSeatPoint(v,p.friendsSeat!.index,seated.length===1));return;}
     const duration=Math.max(0,Math.min(dt,100)),count=Math.max(1,Math.ceil(duration/(1000/120))),seconds=duration/1000/count;
     for(let step=0;step<count;step++){
       const t=elapsed-duration+(step+1)*seconds*1000;
@@ -138,8 +143,8 @@ export class FriendsRowboat{
         this.vx*=Math.exp(-14*seconds);this.vy*=Math.exp(-14*seconds);this.turn*=Math.exp(-8*seconds);
       }
     }
-    const v=this.vehicle();for(const p of rowers){
-      Object.assign(p,rowboatSeatPoint(v,p.friendsSeat!.index,rowers.length===1));p.angle=v.angle+Math.PI;p.verticalVelocity=0;p.crouching=true;
+    const v=this.vehicle();for(const p of seated){
+      Object.assign(p,rowboatSeatPoint(v,p.friendsSeat!.index,seated.length===1));p.angle=v.angle+Math.PI;p.verticalVelocity=0;p.crouching=true;
     }
   }
 }

@@ -4,17 +4,37 @@ import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {mkdir,writeFile} from 'node:fs/promises';
 const require=createRequire(import.meta.url),{chromium}=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
-const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3014',directory='artifacts/fishing';await mkdir(directory,{recursive:true});
+const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3014',directory=process.env.FISHING_ARTIFACT_DIR||'artifacts/fishing';await mkdir(directory,{recursive:true});
 const browser=await chromium.launch({headless:true,args:['--use-angle=metal','--disable-background-timer-throttling','--disable-features=WebRtcHideLocalIpsWithMdns','--allow-loopback-in-peer-connection']}),report={errors:[],captures:[],framing:[],performance:{}};
 try{
-  const page=await browser.newPage({viewport:{width:1440,height:900}});page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
+  const page=await browser.newPage({viewport:{width:1440,height:900}});await page.routeWebSocket(/.*/,ws=>ws.close());page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!m.text().includes('[vite] failed to connect to websocket'))report.errors.push(m.text());});
   await page.goto(origin+'/tools/friends-fishing-review.html');await page.waitForFunction(()=>window.fishingReview?.fishing.rods.get('review')?.tip);await page.waitForTimeout(1500);
   for(const stage of ['rod','waiting','bite','reeling','held','dry','swimming']){
     await page.evaluate(s=>fishingReview.setStage(s),stage);await page.waitForTimeout(450);await page.screenshot({path:`${directory}/${stage}.png`});
     const result=await page.evaluate(()=>({gl:fishingReview.renderer.getContext().getError(),calls:fishingReview.renderer.info.render.calls}));assert.equal(result.gl,0);report.captures.push({stage,...result});
   }
-  report.assets=await page.evaluate(async()=>{const source=await fishingReview.loadFishingFish();let meshes=0,bones=0;source.root.traverse(o=>{if(o.isSkinnedMesh){meshes++;bones=o.skeleton.bones.length;}});return {fishMeshes:meshes,bones,clips:source.clips.map(c=>c.name)};});assert.equal(report.assets.fishMeshes,1);assert.equal(report.assets.bones,6);
+  for(const size of [.45,1.2,4.2]){await page.evaluate(size=>{fishingReview.setStage('held');fishingReview.setSize(size);},size);await page.waitForTimeout(500);await page.screenshot({path:`${directory}/held-${size}.png`});assert((await page.locator('.friends-fishing-log').innerText()).includes('cm'));}
+  report.assets=await page.evaluate(async()=>{const source=await fishingReview.loadFishingFish();let meshes=0,bones=0,finSides=0;source.root.traverse(o=>{if(o.isSkinnedMesh){meshes++;bones=o.skeleton.bones.length;finSides=o.material.side;}});return {fishMeshes:meshes,bones,finSides,clips:source.clips.map(c=>c.name)};});assert.equal(report.assets.fishMeshes,1);assert.equal(report.assets.bones,6);assert.equal(report.assets.finSides,2);
   await page.evaluate(()=>fishingReview.setStage('waiting'));await page.waitForFunction(()=>fishingReview.fishing.rods.get('review')?.tip);await page.evaluate(()=>fishingReview.pause());
+  report.audio=await page.evaluate(async()=>{
+    const {FRIENDS_CUE_ASSETS}=await import('/src/game/FriendsAudio.ts'),friendsAudio=fishingReview.audio,ctx=new AudioContext(),assets=[];
+    try{for(const cue of ['fishingCast','fishingSplash','fishingReel']){
+      const response=await fetch(FRIENDS_CUE_ASSETS[cue][0]);if(!response.ok)throw Error('Missing fishing recording '+cue);
+      const decoded=await ctx.decodeAudioData(await response.arrayBuffer());assets.push({cue,duration:decoded.duration,channels:decoded.numberOfChannels});
+    }}finally{await ctx.close();}
+    const r=fishingReview,events=[],original=friendsAudio.play;let stops=0;
+    friendsAudio.play=(cue,...args)=>{events.push({cue,args});return {stop:()=>stops++};};
+    const state=phase=>({equipped:['review'],fish:[],casts:phase?[{...r.player,id:987,playerId:'review',target:{x:r.player.x-240,y:r.player.y,z:156.5},from:{...r.player},phase,atMs:1000,biteAt:20000,size:1,lineLength:280}]:[]});
+    const update=(phase,now)=>r.fishing.update(state(phase),[r.player],'review',7,r.camera,now,16,true,r.project,()=>false);
+    try{update(undefined,1000);update('casting',1000);update('waiting',1650);update('bite',1800);update('reeling',1000);
+      for(let i=1;i<=90;i++)update('reeling',1000+i*16);
+      update(undefined,2500);
+    }finally{friendsAudio.play=original;}
+    return {assets,events,stops};
+  });
+  assert(report.audio.assets.every(a=>a.duration>0&&a.channels===1));
+  assert.equal(report.audio.events.filter(e=>e.cue==='fishingReel').length,1);assert.equal(report.audio.stops,1);
+  assert.deepEqual(report.audio.events.map(e=>e.cue),['fishingCast','fishingSplash','fishingBite','fishingReel']);
   report.framing=await page.evaluate(()=>{
     const r=fishingReview,v=new r.THREE.Vector3(),checks=[];
     for(const aspect of [16/9,2.4,9/16])for(const fov of [70,98,120]){
@@ -71,5 +91,5 @@ try{
       return {catch:true,drop:true,pickup:true,swimAway:true,errors};
     }finally{clearInterval(timer);host.close();guest.close();}
   });assert.deepEqual(report.network.errors,[]);assert.deepEqual(report.errors,[]);
-  console.log(JSON.stringify({assets:report.assets,toolbar:report.toolbar,mobile:report.mobile,performance:report.performance,network:report.network,errors:report.errors},null,2));
+  console.log(JSON.stringify({assets:report.assets,toolbar:report.toolbar,mobile:report.mobile,audio:report.audio,performance:report.performance,network:report.network,errors:report.errors},null,2));
 }finally{await writeFile(directory+'/validation.json',JSON.stringify(report,null,2));await browser.close();}

@@ -35,6 +35,7 @@ export class FriendsNightVision {
       resolution: { value: new THREE.Vector2(1, 1) },
       flashlightFlares: {value:Array.from({length:4},()=>new THREE.Vector4())},
       flashlightGlare: {value:0}, flashlightEffects: {value:false},
+      flashlightAfterimage: {value:new THREE.Vector4()},
     },
     vertexShader,
     fragmentShader: `
@@ -43,6 +44,7 @@ export class FriendsNightVision {
       uniform vec2 resolution;
       uniform vec4 flashlightFlares[4];
       uniform float flashlightGlare;
+      uniform vec4 flashlightAfterimage;
       uniform bool flashlightEffects;
       varying vec2 vUv;
       float nvgLuminance(vec3 c) { return dot(c,vec3(.2126,.7152,.0722)); }
@@ -85,16 +87,23 @@ export class FriendsNightVision {
           // Fuse lens glare into the existing copy pass: no bloom targets,
           // extra scene draw or shader variant when another player toggles.
           vec3 tint=mix(vec3(.88,.94,1.),vec3(.50,.88,.57),blend);
-          gl_FragColor.rgb=mix(gl_FragColor.rgb,tint,flashlightGlare*mix(.18,.24,blend));
+          // Sustained face hits wash out contrast, with extra saturation in
+          // goggles. Keep a trace of the scene so movement remains readable.
+          float dazzle=flashlightGlare*mix(.78,.88,blend);
+          gl_FragColor.rgb=mix(gl_FragColor.rgb,tint,dazzle);
           for(int i=0;i<4;i++) {
             if(flashlightFlares[i].z>0.) {
               vec2 p=vUv-flashlightFlares[i].xy;p.x*=resolution.x/resolution.y;
               float r2=dot(p,p);
-              float halo=exp(-r2/ .0012)*.10+exp(-r2/ .00009)*.25+exp(-r2/ .000008)*.65;
+              float halo=exp(-r2/ .016)*(.12+flashlightGlare*.28)
+                +exp(-r2/ .0012)*.22+exp(-r2/ .00009)*.36+exp(-r2/ .000008)*.65;
               float streak=exp(-abs(p.y)*1200.)*exp(-abs(p.x)*30.)*.09;
               gl_FragColor.rgb+=tint*(halo+streak)*flashlightFlares[i].z;
             }
           }
+          vec2 imprint=vUv-flashlightAfterimage.xy;imprint.x*=resolution.x/resolution.y;
+          float retinal=exp(-dot(imprint,imprint)/.009)*flashlightAfterimage.z;
+          gl_FragColor.rgb=mix(gl_FragColor.rgb,mix(vec3(.24,.13,.32),vec3(.12,.32,.17),blend),retinal);
           gl_FragColor.rgb=min(gl_FragColor.rgb,vec3(1.));
         }
         #include <colorspace_fragment>
@@ -164,7 +173,8 @@ export class FriendsNightVision {
       if(effect.flares[i])flares[i].copy(effect.flares[i]);else flares[i].set(0,0,0,0);
     }
     this.material.uniforms.flashlightGlare.value=THREE.MathUtils.clamp(effect.glare,0,1);
-    this.material.uniforms.flashlightEffects.value=effect.glare>0 || flares.some(f=>f.z>0);
+    this.material.uniforms.flashlightAfterimage.value.copy(effect.afterimage);
+    this.material.uniforms.flashlightEffects.value=effect.glare>0 || effect.afterimage.z>0 || flares.some(f=>f.z>0);
   }
 
   /** Run after final camera movement, before world and hand rendering. */

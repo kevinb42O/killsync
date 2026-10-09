@@ -1,0 +1,77 @@
+{
+  "errors": [],
+  "captures": [
+    {
+      "view": "overview",
+      "calls": 40,
+      "triangles": 214414,
+      "gl": 0
+    },
+    {
+      "view": "summit",
+      "calls": 33,
+      "triangles": 208550,
+      "gl": 0
+    },
+    {
+      "view": "delta",
+      "calls": 40,
+      "triangles": 214414,
+      "gl": 0
+    },
+    {
+      "view": "bench",
+      "calls": 19,
+      "triangles": 182776,
+      "gl": 0
+    }
+  ],
+  "river": {
+    "meshes": [
+      {
+        "name": "caldera-breach-lava-flow",
+        "instances": 1,
+        "triangles": 304
+      },
+      {
+        "name": "lava-river-cooled-basalt-banks",
+        "instances": 1,
+        "triangles": 608
+      },
+      {
+        "name": "lava-ocean-windblown-vapor",
+        "instances": 28,
+        "triangles": 56
+      },
+      {
+        "name": "lava-river-basalt-boulders",
+        "instances": 84,
+        "triangles": 6720
+      }
+    ],
+    "calls": 4
+  },
+  "summit": {
+    "calls": 1,
+    "triangles": 64,
+    "puffs": 32,
+    "medianRenderMs": 0,
+    "p95RenderMs": 0.10000000149011612,
+    "stableGeometry": true,
+    "stableInstances": true,
+    "offscreenCalls": 0
+  },
+  "audio": {
+    "duration": 23.2,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.2156325727701187,
+    "rms": 0.03887963655004278,
+    "stableSource": true,
+    "released": true,
+    "near": {
+      "volume": 0.33368583698272936,
+      "pan": -0.1547758711549615
+    }
+  }
+}

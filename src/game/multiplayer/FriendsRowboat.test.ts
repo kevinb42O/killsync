@@ -12,6 +12,17 @@ const actor=(id:string)=>({id,x:13680,y:22560,z:136.5,angle:0,lifeState:'alive',
 function crew(){const boat=new FriendsRowboat({x:12128,y:23600,angle:0}),a=actor('a'),b=actor('b');Object.assign(a,boat.vehicle());a.id='a';Object.assign(b,boat.vehicle());b.id='b';a.y+=20;b.y-=20;boat.update(50,0,[a,b],new Map([['a',command(0)],['b',command(0)]]));boat.interact(a,[a,b]);boat.interact(b,[a,b]);return {boat,a,b};}
 function row(boat:FriendsRowboat,a:ReturnType<typeof actor>,b:ReturnType<typeof actor>,left:number,right:number,back=false){for(let n=1;n<=120;n++){const stroke=Math.floor((n-1)/20)+1;boat.update(50,n*50,[a,b],new Map([['a',command(n,back?{altFireActionId:left?stroke:0}:{fireActionId:left?stroke:0})],['b',command(n,back?{altFireActionId:right?stroke:0}:{fireActionId:right?stroke:0})]]));}}
 describe('shared manual two-person rowboat',()=>{
+  it('gives fishing clicks exclusively to the rod while a friend rows and both retain their seats',()=>{
+    const {boat,a,b}=crew();
+    for(let n=1;n<=40;n++)boat.update(50,n*50,[a,b],new Map([['a',command(n,{friendsTool:7,fireActionId:n,altFireActionId:n,movement:4})],['b',command(n,{friendsTool:6,fireActionId:Math.floor((n-1)/20)+1})]]));
+    const v=boat.vehicle();expect(v.x).toBeGreaterThan(12180);
+    expect(v.rowing!.left.playerId).toBe('b');expect(v.rowing!.right.playerId).toBe('b');
+    expect(Math.hypot(a.x-rowboatSeatPoint(v,a.friendsSeat!.index).x,a.y-rowboatSeatPoint(v,a.friendsSeat!.index).y)).toBeLessThan(.001);
+    expect(Math.hypot(a.x-b.x,a.y-b.y)).toBeGreaterThan(30);
+    boat.update(50,2050,[a,b],new Map([['a',command(41,{friendsTool:7})],['b',command(41,{friendsTool:7})]]));
+    expect(boat.vehicle().rowing!.left.playerId).toBeUndefined();expect(boat.vehicle().rowing!.right.playerId).toBeUndefined();
+  });
+
   it('centres a solo rower and uses each stroke to drive both oars straight',()=>{
     const boat=new FriendsRowboat({x:12128,y:23600,angle:0}),a=actor('a');
     Object.assign(a,boat.vehicle());a.id='a';
@@ -107,6 +118,23 @@ describe('shared manual two-person rowboat',()=>{
     const home=new FriendsRowboat().save();expect(new FriendsRowboat({x:NaN,y:0,angle:0}).save()).toEqual(home);expect(new FriendsRowboat({x:5904,y:5712,angle:0}).save()).toEqual(home);
     const {boat,a,b}=crew();row(boat,a,b,1,1);const reload=new FriendsRowboat(boat.save());expect(reload.save()).toEqual(boat.save());expect(reload.vehicle().rowing!.left.playerId).toBeUndefined();expect(reload.vehicle().rowing!.speed).toBe(0);
   });
+  it('keeps a fishing passenger seated through a real host catch while the other player controls the oars',()=>{
+    const simulation=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'},{id:'guest',label:'Guest',color:'#aaa'}]);
+    const s=simulation as unknown as {players:Map<string,ReturnType<typeof actor>>},v=simulation.createSnapshot().friends!.vehicles.find(v=>v.id===ROWBOAT_ID)!;
+    for(const [id,side]of [['host',1],['guest',-1]] as const){const p=s.players.get(id)!;p.x=v.x;p.y=v.y+side*25;p.z=v.z;simulation.setInput(id,command(1,{interactActionId:1,reviving:true}));}
+    simulation.tick(50);let action=1,caught=false;
+    for(let i=2;i<760;i++){
+      if(simulation.createSnapshot().friends?.fishing?.casts[0]?.phase==='bite')action=2;
+      simulation.setInput('host',command(i,{friendsTool:7,fireActionId:action,aimPitch:Math.round((-.3+Math.PI*.44)/(Math.PI*.88)*65535)}));
+      // One physical stroke proves input ownership; then let the hull settle for the catch.
+      simulation.setInput('guest',command(i,{friendsTool:6,fireActionId:1}));simulation.tick(50);
+      if(simulation.createSnapshot().friends?.fishing?.fish.some(f=>f.ownerId==='host')){caught=true;break;}
+    }
+    const after=simulation.createSnapshot(),boat=after.friends!.vehicles.find(v=>v.id===ROWBOAT_ID)!;
+    expect(caught).toBe(true);expect(after.players.every(p=>p.friendsSeat?.vehicleId===ROWBOAT_ID)).toBe(true);
+    expect(boat.rowing!.left.playerId).toBe('guest');expect(boat.rowing!.right.playerId).toBe('guest');
+  });
+
   it('integrates seats, inputs and boat persistence into the real multiplayer simulation',()=>{
     const simulation=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'},{id:'guest',label:'Guest',color:'#aaa'}]);
     const s=simulation as unknown as {players:Map<string,ReturnType<typeof actor>>},v=simulation.createSnapshot().friends!.vehicles.find(v=>v.id===ROWBOAT_ID)!;

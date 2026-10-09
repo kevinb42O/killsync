@@ -1,0 +1,38 @@
+[
+  {
+    "file": "fishing_reel.ogg",
+    "source_sha256": "0be758c3b8701004617d3013100b4c93d62f5bddbc63b35e2be2f48623142066",
+    "asset_sha256": "2d5c5ca354b88cc6812bdb3a90e3c59e8d12e857513b2327da2fa1c0a1dfc639",
+    "source_start_seconds": 0.62,
+    "duration_seconds": 3.1,
+    "processing": "Mono 32 kHz Vorbis quality 4; peak 0.8; 5 ms onset and 20 ms tail fades. No synthesis, pitch change or layering.",
+    "author": "Joseph Sardin",
+    "sourcePage": "https://bigsoundbank.com/fishing-reel-medium-s1436.html",
+    "downloadUrl": "https://bigsoundbank.com/UPLOAD/bwf-en/1436.wav",
+    "license": "CC0-1.0"
+  },
+  {
+    "file": "fishing_cast.ogg",
+    "source_sha256": "effa87c6bd6e012a4580abeac26a237a9cb8942958996689badc9a69ddd66371",
+    "asset_sha256": "a5627ac9a851e10c193d3585c7d3eecacdef67bf7d6bfbb8ed12beb66092b554",
+    "source_start_seconds": 1.52,
+    "duration_seconds": 0.59,
+    "processing": "Mono 32 kHz Vorbis quality 4; peak 0.8; 5 ms onset and 20 ms tail fades. No synthesis, pitch change or layering.",
+    "author": "paulprit",
+    "sourcePage": "https://freesound.org/people/paulprit/sounds/529665/",
+    "downloadUrl": "https://cdn.freesound.org/previews/529/529665_8682843-hq.mp3",
+    "license": "CC0-1.0"
+  },
+  {
+    "file": "fishing_plop.ogg",
+    "source_sha256": "f7b68f5af6a2485ee5fb0e0d7fcd2cf0713c78891ffe776abf179d685758764b",
+    "asset_sha256": "6fcbb4daacf4023c3d98e4c2551de5b6c6a5e0d4630e7663706a74d1d2afd65c",
+    "source_start_seconds": 0.5,
+    "duration_seconds": 0.85,
+    "processing": "Mono 32 kHz Vorbis quality 4; peak 0.8; 5 ms onset and 20 ms tail fades. No synthesis, pitch change or layering.",
+    "author": "jc144940",
+    "sourcePage": "https://freesound.org/people/jc144940/sounds/178735/",
+    "downloadUrl": "https://cdn.freesound.org/previews/178/178735_2596329-hq.mp3",
+    "license": "CC0-1.0"
+  }
+]

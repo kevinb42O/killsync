@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { friendsWaterAt, friendsWaterDepth, friendsWaterGround } from './FriendsWaterSurface';
+import { friendsWaterAt, friendsWaterDepth, friendsWaterGround, friendsWaterRenderDepth } from './FriendsWaterSurface';
 import { FRIENDS_RIVERS } from './FriendsHydrology';
 import { ISLAND_LAKES } from './FriendsIsland';
 import { FriendsTerrain, skyfallWaterLevelAt } from './FriendsTerrain';
@@ -63,6 +63,35 @@ describe('water geometry and actual navigation continuity',()=>{
         }
       }
     }
+  });
+  it('buries every rendered river edge in both the collision banks and the distant terrain',()=>{
+    for(const river of FRIENDS_RIVERS)for(const p of river.points)for(const sign of [-1,1]){
+      const x=p.x-p.ty*p.width*.8*sign,y=p.y+p.tx*p.width*.8*sign;
+      // Lake joins are owned by their basin; the sea owns the estuary.
+      if(p.z<=-168.5||friendsWaterRenderDepth(x,y,river.id)<=0)continue;
+      const label=`${river.id} bank at ${p.distance}, side ${sign}`;
+      expect(friendsWaterGround(x,y),label).toBeGreaterThanOrEqual(p.z+2);
+      expect(organicHorizonHeightAt(x,y),label).toBeGreaterThanOrEqual(p.z+2);
+    }
+  });
+  it('contains both steep waterfall side edges through their lake transitions',()=>{
+    for(let y=18992;y<=20368;y+=16)for(const start of [6464,7360]){
+      const t=(y-18976)/1312,x=start+Math.sin(t*Math.PI)*96+Math.sin(t*8)*40;
+      const cascade=skyfallWaterLevelAt(x,y)!;
+      for(const sign of [-1,1]){
+        const edge=x+sign*cascade.width*.8;
+        if(friendsWaterRenderDepth(edge,y,cascade.id)<=0)continue;
+        expect(friendsWaterGround(edge,y)).toBeGreaterThanOrEqual(cascade.level);
+        expect(organicHorizonHeightAt(edge,y)).toBeGreaterThanOrEqual(cascade.level);
+      }
+    }
+  });
+  it('extends the render mask into dry station banks while keeping navigation dry',()=>{
+    const p=FRIENDS_RIVERS[0].points.find(p=>p.x>7900&&p.x<8000&&p.z===442.5)!;
+    const x=p.x-p.ty*p.width*.7,y=p.y+p.tx*p.width*.7;
+    expect(friendsWaterAt(x,y)).toBeUndefined();
+    expect(friendsWaterRenderDepth(x,y,'skyfalls-river')).toBeGreaterThan(0);
+    expect(friendsWaterRenderDepth(x,y,'gate-river')).toBeLessThan(0);
   });
   it('keeps deep freshwater bed geometry visible to divers instead of applying the ocean-floor cull',()=>{
     const deep=meshOrganicHorizon(12032,23552,256);

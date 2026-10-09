@@ -1,3 +1,5 @@
+import { FRIENDS_TERRAIN_BOTTOM } from './FriendsTerrainLimits';
+import { lavaChannelTerrain, lavaRiverTreeClearance } from './FriendsLavaRiver';
 import { skyfallCascadeAt, interpolateTerrainSurface } from './FriendsWaterBodies';
 import { retreatClearing } from './FriendsRetreatSites';
 import { scenicTransitAir, scenicRailColumns, scenicTransitProtected, scenicTransitSurface, scenicStructureRanges, scenicRailFloor, scenicRailCeiling } from './FriendsRailInfrastructure';
@@ -18,7 +20,7 @@ export const VOXEL_SIZE = 32;
 /** Small lips are walkable; a full voxel always needs a jump. */
 export const FRIENDS_STEP_HEIGHT = 8;
 export const TERRAIN_CHUNK = 512;
-export const TERRAIN_BOTTOM = -512;
+export const TERRAIN_BOTTOM = FRIENDS_TERRAIN_BOTTOM;
 export type TerrainMaterial = 0 | 1 | 2 | 3 | 4; // air, soil, stone, copper, iron
 export type TerrainEdit = [number, number, number, TerrainMaterial];
 export type TerrainGrade = [number, number, number, number]; // centre x/y, original ground height, core radius
@@ -90,14 +92,19 @@ export function baseTerrainHeight(x: number, y: number, includeRivers=true) {
   const inland=rollingGround(x,y)+mountains;
   // A submerged shelf rises continuously into the swash zone. Sand spits and
   // dunes undulate above it before blending into hills; no vertical map lip.
-  const shelf=ISLAND_SEA_LEVEL+coast*.12;
+  const offshore=Math.max(0,-coast);
+  // Preserve the swash/shelf, then descend into an undulating continental slope.
+  // Surface sampling and collision both consume this same seabed field.
+  const descent=islandSmooth((offshore-650)/3600);
+  const basin=descent>0?2900+420*terrainNoise(x/1700+19,y/1900-7):0;
+  const shelf=ISLAND_SEA_LEVEL+coast*.12-descent*basin;
   const duneEnvelope=islandSmooth(coast/480)*(1-islandSmooth((coast-900)/1200));
   const dune= (28+48*terrainNoise(x/260,y/420)
     +42*Math.pow(.5+.5*Math.sin(coast/150+x/700+y/900),2))*duneEnvelope;
   const beach=ISLAND_SEA_LEVEL+Math.max(0,coast)*.15+dune;
   const beachWidth=1500+600*terrainNoise(x/4200+8,y/4200);
   let h=coast<0?shelf:beach+(inland-beach)*islandSmooth((coast-650)/beachWidth);
-  h=Math.max(-416,h);
+  h=Math.max(coast<0?TERRAIN_BOTTOM+480:-416,h);
   // Two small cave approach collars preserve the authored mouths only.
   const mouthBlend=1-islandSmooth((Math.hypot(x-6384,y-5152)-300)/380);
   h=h*(1-mouthBlend)+previousTerrainHeight(x,y)*mouthBlend;
@@ -112,7 +119,7 @@ export function baseTerrainHeight(x: number, y: number, includeRivers=true) {
   const entrance=caveEntranceFloor(x,y);
   if(entrance===undefined)for(const [,roof] of caveColumn(x,y))h=Math.max(h,roof+64);
   else h=Math.min(h,entrance);
-  const mountain=castleTerrainHeight(x,y,Math.min(5856,Math.max(h,islandSeaStackHeight(x,y))));
+  const mountain=castleTerrainHeight(x,y,Math.min(5856,Math.max(h,islandSeaStackHeight(x,y,h))));
   let ground=castleStairsField?.terrainHeight(x,y,mountain)??mountain;
   const camp=FRIENDS_CAMPFIRE;
   if(Math.abs(x-camp.x)<camp.radius+160&&Math.abs(y-camp.y)<camp.radius+160)
@@ -136,10 +143,19 @@ export function baseTerrainHeight(x: number, y: number, includeRivers=true) {
       const blend=1-smooth((cascade.side-cascade.width*.625)/(96-cascade.width*.125));
       const channel=target*blend+ground*(1-blend);
       ground=cascade.level<=ISLAND_LAKES[0].level&&islandLakeRadius(x,y,ISLAND_LAKES[0])<1.45?Math.min(ground,channel):channel;
+      const upstream=skyfallWaterLevelAt(cascade.x,Math.max(18976,y0-64))?.level??cascade.level;
+      if(Math.max(cascade.level,upstream)>ISLAND_LAKES[0].level&&cascade.side>cascade.width*.62){
+        // A steep sheet traverses several terrain heights within a single
+        // smoothed horizon corner. Its side walls must contain the upstream
+        // height too, otherwise the falling water ends above an averaged bank.
+        const top=Math.ceil((Math.max(cascade.level,upstream)+32)/32)*32;
+        const collar=top+(ground-top)*smooth((cascade.side-cascade.width*.8-64)/64);
+        ground=Math.max(ground,collar);
+      }
     }
     ground=riverBridgeField?.terrainHeight(x,y,ground)??ground;
   }
-  return gridHeight(ground);
+  return gridHeight(lavaChannelTerrain(x,y,ground));
 }
 const skyfallLevels=new Map<string,number>();
 export function skyfallWaterLevelAt(x:number,y:number){
@@ -221,9 +237,9 @@ export function islandRuinsAt(x:number,y:number){
   return column;
 }
 export function terrainProtected(x: number, y: number) {
-  // Vegetation clearance around arrival and the aircraft. This is not an
+  // Vegetation clearance around lava, water, arrival and the aircraft. This is not an
   // excavation reserve: players may reshape this ground.
-  return skyfallCascadeAt(x,y)!==undefined || hydrologyWaterLevel(x,y)!==undefined || Boolean(riverBridgeField?.clearing(x,y)) || retreatClearing(x,y) || friendsCampfireContains(x,y) || Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
+  return lavaRiverTreeClearance(x,y) || skyfallCascadeAt(x,y)!==undefined || hydrologyWaterLevel(x,y)!==undefined || Boolean(riverBridgeField?.clearing(x,y)) || retreatClearing(x,y) || friendsCampfireContains(x,y) || Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
 }
 export function naturalCave(x: number, y: number, z: number, roofLimit=Infinity) {
   const arch=islandArchRange(x,y);if(arch&&z>=arch[0]&&z<arch[1])return true;
@@ -243,8 +259,19 @@ export class FriendsTerrain {
   private edits = new Map<string, TerrainMaterial>();
   private columns = new Map<string, Set<number>>();
   revision = 0;
+  /** Monotonic local invalidation, including same-revision authoritative repairs. */
+  waterEpoch = 0;
+  private waterChanges:{epoch:number;edit:TerrainEdit}[]=[];
+  private waterResetEpoch=0;
+  floodChanges(after:number):TerrainEdit[]|undefined {
+    if(after<this.waterResetEpoch||this.waterChanges.length&&after<this.waterChanges[0].epoch-1)return;
+    return this.waterChanges.filter(c=>c.epoch>after).map(c=>c.edit);
+  }
+  hasColumnEdits(vx:number,vy:number){return this.columns.has(`${vx},${vy}`);}
+  *floodEdits():Iterable<TerrainEdit> { for(const [k,m]of this.edits)yield [...k.split(",").map(Number),m] as TerrainEdit; }
   constructor(saved?: TerrainSnapshot) { if (saved) this.restore(saved); }
   restore(saved: TerrainSnapshot) {
+    this.waterEpoch++;this.waterResetEpoch=this.waterEpoch;this.waterChanges=[];
     this.edits.clear(); this.columns.clear();this.heights.clear();this.grades=[];this.gradeTiles.clear();
     // The landscape redesign intentionally retires former flat settlement
     // grades and excavations. New edits persist normally in generation 4.
@@ -274,7 +301,7 @@ export class FriendsTerrain {
     if(this.grades.some(p=>p.every((n,i)=>n===stored[i])) || this.grades.length>=8192)return;
     this.grades.push(stored);const r=stored[3]+320;
     for(let x=Math.floor((stored[0]-r)/512);x<=Math.floor((stored[0]+r)/512);x++)for(let y=Math.floor((stored[1]-r)/512);y<=Math.floor((stored[1]+r)/512);y++){const key=`${x},${y}`,list=this.gradeTiles.get(key)||[];list.push(stored);this.gradeTiles.set(key,list);}
-    this.heights.clear();if(revise)this.revision++;
+    this.heights.clear();if(revise){this.revision++;this.waterEpoch++;this.waterResetEpoch=this.waterEpoch;this.waterChanges=[];}
   }
   material(vx: number, vy: number, vz: number): TerrainMaterial {
     const x=(vx+.5)*32,y=(vy+.5)*32,z=(vz+.5)*32;
@@ -319,7 +346,7 @@ export class FriendsTerrain {
       if (!this.edits.has(k) && this.edits.size >= 6000) return false;
       this.write(vx,vy,vz,material);
     }
-    this.revision++; return true;
+    this.revision++; this.waterEpoch++;this.waterChanges.push({epoch:this.waterEpoch,edit:[vx,vy,vz,this.edits.get(k)??1]});if(this.waterChanges.length>8192)this.waterChanges.splice(0,4096); return true;
   }
   private write(vx: number, vy: number, vz: number, material: TerrainMaterial) {
     this.edits.set(key(vx, vy, vz), material);
@@ -336,7 +363,7 @@ export class FriendsTerrain {
     for(const [floor]of caveColumn(x,y))bottom=Math.min(bottom,Math.floor(floor/32)-1);
     for(const [lo]of scenicStructureRanges(x,y))bottom=Math.min(bottom,Math.floor((lo-32)/32));
     for(const p of scenicRailColumns(x,y))bottom=Math.min(bottom,Math.floor((p.z-96)/32));
-    return { bottom: Math.max(-16, bottom), top };
+    return { bottom: Math.max(TERRAIN_BOTTOM/VOXEL_SIZE, bottom), top };
   }
   floor(x: number, y: number, z: number, step = FRIENDS_STEP_HEIGHT): number | undefined {
     const stair=CASTLE_STAIRS.floor(x,y,z,step);
@@ -345,7 +372,7 @@ export class FriendsTerrain {
     const dock=friendsFishingDockSurface(x,y);
     if(dock!==undefined&&dock<=z+step&&dock>=z-32)best=Math.max(best,dock);
     const vx = Math.floor(x / VOXEL_SIZE), vy = Math.floor(y / VOXEL_SIZE);
-    for (let vz = Math.floor((z + step) / VOXEL_SIZE) - 1; vz >= -16; vz--) {
+    for (let vz = Math.floor((z + step) / VOXEL_SIZE) - 1; vz >= TERRAIN_BOTTOM/VOXEL_SIZE; vz--) {
       if (this.exposedMaterial(vx, vy, vz) && !this.exposedMaterial(vx, vy, vz + 1)) {best=Math.max(best,(vz+1)*VOXEL_SIZE);break;}
     }
     return Number.isFinite(best)?best:undefined;
@@ -419,7 +446,7 @@ export class FriendsTerrain {
   }
 }
 export function validTerrainEdit(e: unknown): e is TerrainEdit {
-  return Array.isArray(e) && e.length === 4 && e.every(Number.isSafeInteger) && e[0] >= 0 && e[0] < FRONTIER_SIZE / VOXEL_SIZE && e[1] >= 0 && e[1] < FRONTIER_SIZE / VOXEL_SIZE && e[2] >= -16 && e[2] < 256 && e[3] >= 0 && e[3] <= 4;
+  return Array.isArray(e) && e.length === 4 && e.every(Number.isSafeInteger) && e[0] >= 0 && e[0] < FRONTIER_SIZE / VOXEL_SIZE && e[1] >= 0 && e[1] < FRONTIER_SIZE / VOXEL_SIZE && e[2] >= TERRAIN_BOTTOM/VOXEL_SIZE && e[2] < 256 && e[3] >= 0 && e[3] <= 4;
 }
 
 export function validTerrainGrade(g: unknown): g is TerrainGrade {return Array.isArray(g) && g.length===4 && g.every(Number.isFinite) && g[0]>=0 && g[0]<FRONTIER_SIZE && g[1]>=0 && g[1]<FRONTIER_SIZE && g[2]>=TERRAIN_BOTTOM+96 && g[2]<=6000 && g[2]%32===0 && g[3]>=32 && g[3]<=512;}

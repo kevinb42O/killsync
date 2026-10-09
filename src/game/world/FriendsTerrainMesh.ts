@@ -6,7 +6,7 @@ export type TerrainMeshData = { positions: Int16Array; normals: Int8Array; uv: F
 /** Greedy volumetric meshing preserves every simulation voxel while merging
  * coplanar faces. Large vaulted rooms need only a fraction of the old triangles. */
 export function meshTerrainChunk(terrain: FriendsTerrain, cx: number, cy: number): TerrainMeshData {
-  let bottom=192,top=-16;
+  let bottom=Infinity,top=-Infinity;
   for(let x=-1;x<=16;x++)for(let y=-1;y<=16;y++){const r=terrain.columnRange(cx*16+x,cy*16+y);bottom=Math.min(bottom,r.bottom);top=Math.max(top,r.top);}
   const size=[16,16,Math.max(1,top-bottom+1)],depth=size[2]+2,cache=new Uint8Array(18*18*depth);cache.fill(255);
   const material=(x:number,y:number,z:number)=>{

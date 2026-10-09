@@ -36,7 +36,7 @@ export type JsonPatch = {
  * untouched, and unknown future keys still pass through safely.
  */
 const COMPACT_KEYS: Readonly<Record<string, string>> = {
-  friendsHands:'fhs', mask:'mk', friendsFlashlight:'fl', cone:'cn', yaw:'yw', confetti:'cf', bursts:'cb',
+  friendsWeaponEquipped:'fwe', friendsHands:'fhs', mask:'mk', friendsFlashlight:'fl', cone:'cn', yaw:'yw', confetti:'cf', bursts:'cb',
   frontier: 'ff', terrain: 'ft', edits: 'fe', harvested: 'fh', planted: 'fp', packs: 'fk', cargo: 'fg', feedback: 'fb', contracts: 'fn', chopped: 'fx', mined: 'fy', built: 'fz', upgrades: 'fu', shape: 'shp', finish: 'fin', author: 'aut', rotation: 'rot', revision: 'rev', pieces: 'pcs', guestsCanBuild: 'gcb',
   format: 'f', snapshot: 's', baseTransportTick: 'bt', globals: 'g', entities: 'es', value: 'v', object: 'o', array: 'ar', remove: 'rm', upsert: 'u', set: 'st', patch: 'pt',
   tick: 't', elapsedMs: 'em', kills: 'k', world: 'w', bridge: 'b', players: 'pl', enemies: 'en', projectiles: 'pr', gems: 'gm', items: 'it', ammoCaches: 'ac', combatEvents: 'ce', hazards: 'hz', pings: 'pg', structures: 'sr', artifactEffects: 'ae',

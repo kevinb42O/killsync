@@ -23,6 +23,15 @@ export class SnapshotAssembler {
   private readonly pending = new Map<number, { createdAt: number; totalBytes: number; parts: Map<number, Uint8Array> }>();
   private latestCompletedTick = -1;
 
+  // Gameplay acknowledges only a decoded state. A complete delta can arrive
+  // before its baseline, so assembling bytes alone must not evict that baseline.
+  constructor(private readonly deferAcceptance = false) {}
+
+  accept(tick: number) {
+    this.latestCompletedTick = Math.max(this.latestCompletedTick, tick);
+    for (const pendingTick of this.pending.keys()) if (pendingTick <= tick) this.pending.delete(pendingTick);
+  }
+
   push(packet: ArrayBuffer, now: number): string | undefined {
     for (const [tick, entry] of this.pending) if (now - entry.createdAt > 1000) this.pending.delete(tick);
     if (packet.byteLength <= HEADER_BYTES || packet.byteLength > CHUNK_BYTES + HEADER_BYTES) return;
@@ -45,10 +54,10 @@ export class SnapshotAssembler {
     if (entry.parts.size !== count) return;
     const bytes = new Uint8Array(totalBytes);
     for (const [partIndex, part] of entry.parts) bytes.set(part, partIndex * CHUNK_BYTES);
-    for (const pendingTick of this.pending.keys()) if (pendingTick <= tick) this.pending.delete(pendingTick);
+    this.pending.delete(tick);
     try {
       const message = textDecoder.decode(bytes);
-      this.latestCompletedTick = tick;
+      if (!this.deferAcceptance) this.accept(tick);
       return message;
     } catch { return; }
   }

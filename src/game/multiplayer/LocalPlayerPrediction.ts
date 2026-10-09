@@ -1,3 +1,4 @@
+import { friendsLiveWaterAt } from '../world/FriendsFloodWater';
 import { retreatPathFloor } from '../world/FriendsRetreatPaths';
 import { retreatFloor, retreatCeiling, collideRetreats } from '../world/FriendsRetreatSites';
 import { frontierTrees } from './FriendsFrontier';
@@ -172,7 +173,7 @@ export class LocalPlayerPrediction {
         return floor;
       },
       this.worldId,
-      this.friends ? { elevationAware: true, devFlightAllowed: false, devSuperjumpAllowed: false, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.friends!.building?.pieces || [], position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, retreatCeiling(position,this.friends?.retreats?.active??[])??Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
+      this.friends ? { elevationAware: true, devFlightAllowed: false, devSuperjumpAllowed: false, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), waterAt: (x,y,z)=>friendsLiveWaterAt(this.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.friends!.building?.pieces || [], position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, retreatCeiling(position,this.friends?.retreats?.active??[])??Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
     );
   }
 }

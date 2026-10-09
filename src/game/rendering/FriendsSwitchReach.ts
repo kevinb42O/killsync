@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { loadFriendsGrip } from './FriendsHeldEquipment';
 import { RETREAT_SWITCH, STILLWATER } from '../world/FriendsRetreatSites';
-import type { CoopOperatorRig } from './coopOperatorVisuals';
+import type { PlayerVisualRig } from './coopOperatorVisuals';
 
 type Actor={id:string;x:number;y:number;z:number;angle:number};
 const smooth=(t:number)=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
@@ -47,7 +47,7 @@ export class FriendsSwitchReach {
     }position.needsUpdate=true;
     return click;
   }
-  poseRemote(rig:CoopOperatorRig,actor:Actor){
+  poseRemote(rig:PlayerVisualRig,actor:Actor){
     if(!this.active||actor.id!==this.actorId)return;
     const arm=rig.root.getObjectByName('big-walk-right-arm');if(!arm?.parent||!arm.userData.palm)return;
     rig.root.updateWorldMatrix(true,true);const target=arm.parent.worldToLocal(switchPalmTarget.clone()).sub(arm.position),original=new THREE.Vector3().fromArray(arm.userData.palm);

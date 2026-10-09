@@ -20,7 +20,12 @@ const MAX_SIGNAL_BYTES = 48_000;
 const ICE_GATHER_TIMEOUT_MS = 7_000;
 const MAX_STATE_QUEUE_BYTES = MAX_SNAPSHOT_BYTES + 16_000;
 const STATE_SEND_HIGH_WATER_BYTES = 64_000;
+const FRIENDS_STATE_QUEUE_BYTES = 64_000;
+// Inputs are replaceable and sent at 20 Hz. A large queued history only adds
+// latency: keep a few frames, while reliable commands use their own channel.
+const FRIENDS_INPUT_QUEUE_BYTES = 4_000;
 const MAX_RELIABLE_QUEUE_BYTES = 256_000;
+const wireTextEncoder = new TextEncoder();
 
 export const DEFAULT_PUBLIC_STUN_SERVERS: RTCIceServer[] = [
   {
@@ -222,12 +227,12 @@ export class ManualWebRTCSession {
       const snapshot=frame.payload as CoopSnapshot;this.friendsHost.update(snapshot);
       const ids=[...this.peers.values()].filter(p=>p.friendsAdmitted&&p.worldChannel?.readyState==='open').map(p=>p.peerId);
       this.friendsHost.pump(ids,performance.now(),(id,packet)=>this.send(this.peers.get(id)?.worldChannel,packet),m=>this.onError?.(m));
-      for(const id of ids){const p=this.peers.get(id)!;if(p.stateChannel?.readyState!=='open')continue;
+      for(const id of ids){const p=this.peers.get(id)!;if(p.stateChannel?.readyState!=='open'||p.stateChannel.bufferedAmount>=FRIENDS_STATE_QUEUE_BYTES)continue;
         const interest=(payloadForPeer?payloadForPeer(id):snapshot) as CoopSnapshot;
         const motion=this.friendsHost.motion(id,interest) as {snapshot:CoopSnapshot}|undefined;if(!motion)continue;
         const payload=compactSnapshotWirePayload({...motion,snapshot:this.friendsReplicator.payloadFor(id,motion.snapshot,frame.tick)});
         const packets=encodeSnapshotPackets(JSON.stringify({...frame,payload}),frame.tick);
-        if(!packets.length||p.stateChannel.bufferedAmount+packets.reduce((a,b)=>a+b.byteLength,0)>64000){this.friendsReplicator.reset(id);continue;}
+        if(!packets.length||p.stateChannel.bufferedAmount+packets.reduce((a,b)=>a+b.byteLength,0)>FRIENDS_STATE_QUEUE_BYTES){this.friendsReplicator.reset(id);continue;}
         for(const packet of packets)if(!this.send(p.stateChannel,packet,false)){this.friendsReplicator.reset(id);break;}
       }
       return;
@@ -372,7 +377,7 @@ export class ManualWebRTCSession {
     if (kind === 'state' && raw instanceof ArrayBuffer) {
       let assembler = this.snapshotAssemblers.get(peerId);
       if (!assembler) {
-        assembler = new SnapshotAssembler();
+        assembler = new SnapshotAssembler(true);
         this.snapshotAssemblers.set(peerId, assembler);
       }
       raw = assembler.push(raw, Date.now());
@@ -390,7 +395,10 @@ export class ManualWebRTCSession {
         let state=message;
         if(this.friends){const motion=expandSnapshotWirePayload(message.payload) as any;const decoded=this.friendsDecoder.decode(motion?.snapshot,message.tick);if(!decoded)return;const snapshot=this.friendsGuest.decode({...motion,snapshot:decoded});if(!snapshot)return;state={...message,payload:snapshot};this.friendsStateReceivedAt=performance.now();}
         const accepted = this.onState?.(state);
-        if (accepted !== false) this.latestStateTick = message.tick;
+        if (accepted !== false) {
+          this.latestStateTick = message.tick;
+          this.snapshotAssemblers.get(peerId)?.accept(message.tick);
+        }
       } else if (kind === 'reliable' && message.type === 'event') {
         if(this.friends && this.role==='host' && message.event==='friends_sync'){const m=message.payload as any;if(m?.kind==='ack')this.friendsHost.acknowledge(peerId,m.epoch,m.revision);else if(m?.kind==='request'){this.friendsHost.request(peerId);this.friendsReplicator.reset(peerId);}return;}
         this.onEvent?.(peerId, message);
@@ -415,7 +423,12 @@ export class ManualWebRTCSession {
 
   private send(channel: RTCDataChannel | undefined, message: string | ArrayBuffer, checkBackpressure = true): boolean {
     if (channel?.readyState !== 'open') return false;
-    if (checkBackpressure && channel.bufferedAmount > (channel.label === 'reliable' ? MAX_RELIABLE_QUEUE_BYTES : STATE_SEND_HIGH_WATER_BYTES)) return false;
+    const limit = channel.label === 'reliable' ? MAX_RELIABLE_QUEUE_BYTES
+      : this.friends && channel.label === 'input' ? FRIENDS_INPUT_QUEUE_BYTES : STATE_SEND_HIGH_WATER_BYTES;
+    if (checkBackpressure) {
+      const bytes = typeof message === 'string' ? wireTextEncoder.encode(message).byteLength : message.byteLength;
+      if (channel.bufferedAmount + bytes > limit) return false;
+    }
     try {
       if (typeof message === 'string') channel.send(message);
       else channel.send(message);

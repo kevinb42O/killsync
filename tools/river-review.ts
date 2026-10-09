@@ -47,6 +47,7 @@ const launch=snapshot.friends!.vehicles.find(v=>v.id===ROWBOAT_ID)!;
 const views:Record<string,number[]>={
   boat:[launch.x+150,launch.z+110,launch.y+130,launch.x,launch.z+12,launch.y],
   underwater:[12128,-285,23600,12450,-400,23650],
+  underwater_sea:[40000,-620,23852,40350,-780,23980],
   underwater_up:[12128,85,23600,12330,235,23650],
   underwater_station:[8000,385,24348,8190,540,24348],
   island:[-2000,27000,52000,22500,0,22500],
@@ -82,11 +83,11 @@ function frame(){requestAnimationFrame(frame);const start=performance.now();elap
   }
   boats.update(snapshot.friends,snapshot.elapsedMs);
   rigs.forEach((rig,i)=>{const p=snapshot.players[i],stroke=p.friendsSeat?.index===0?snapshot.friends!.vehicles.find(v=>v.id===ROWBOAT_ID)!.rowing!.left:snapshot.friends!.vehicles.find(v=>v.id===ROWBOAT_ID)!.rowing!.right;rig.root.visible=Boolean(p.friendsSeat);if(rig.root.visible){updateCoopOperatorRig(rig,p,snapshot.elapsedMs,16.67);updateFriendsCharacter(rig,p,snapshot.elapsedMs,undefined,false,rowboatStrokePhase(stroke,snapshot.elapsedMs));rig.firearm.group.visible=false;}});
-  controls.update();frontier.update(snapshot.friends!.frontier,camera.position.x,camera.position.z,elapsed,0);rail.update(camera,true);underwater.update(camera,elapsed,true,frontier.soundscapeEnvironment.daylight);renderer.render(scene,camera);frames++;
+  controls.update();frontier.update(snapshot.friends!.frontier,camera.position.x,camera.position.z,elapsed,0);rail.update(camera,true);underwater.update(camera,elapsed,true,frontier.soundscapeEnvironment.daylight,frontier.terrain);renderer.render(scene,camera);frames++;
   times.push(performance.now()-start);if(times.length>120)times.shift();
   if(performance.now()-last>1000){document.getElementById('stats')!.textContent=`${renderer.info.render.calls} draws · ${renderer.info.render.triangles.toLocaleString()} triangles`;last=performance.now();}
 }
 frame();
-Object.assign(window,{riverReview:{scene,renderer,camera,frontier,rail,view,row,snapshot:()=>snapshot,frames:()=>frames,stats:()=>({draws:renderer.info.render.calls,triangles:renderer.info.render.triangles,terrain:frontier.terrainStats,frameMs:times.reduce((a,b)=>a+b,0)/times.length,rivers:FRIENDS_RIVERS.map(r=>({id:r.id,metres:r.length/12})),bridgeGround:baseTerrainHeight(20000,26900)}),hour:(hour:number)=>frontier.setEnvironment({hour,speed:0})}});
+Object.assign(window,{riverReview:{scene,renderer,camera,frontier,rail,underwater,view,row,snapshot:()=>snapshot,frames:()=>frames,stats:()=>({draws:renderer.info.render.calls,triangles:renderer.info.render.triangles,terrain:frontier.terrainStats,frameMs:times.reduce((a,b)=>a+b,0)/times.length,rivers:FRIENDS_RIVERS.map(r=>({id:r.id,metres:r.length/12})),bridgeGround:baseTerrainHeight(20000,26900)}),hour:(hour:number)=>frontier.setEnvironment({hour,speed:0})}});
 addEventListener('keydown',e=>{if(e.code==='Digit1'||e.code==='Digit2')row(e.code==='Digit1'?'left':'right',e.shiftKey);if(e.key.toLowerCase()==='h')document.querySelector('aside')!.hidden=!document.querySelector('aside')!.hidden;});
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});

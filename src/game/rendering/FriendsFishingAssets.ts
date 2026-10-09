@@ -4,6 +4,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { loadFriendsAsset } from './FriendsAssets';
 import { groundedFishClip } from './FriendsFishGroundAnimation';
+import { heldFishClip } from './FriendsFishingPresentation';
 
 let fishTemplate:Promise<{root:THREE.Group;clips:THREE.AnimationClip[]}>|undefined;
 let rodTemplate:Promise<THREE.Group>|undefined;
@@ -20,7 +21,8 @@ export function loadFishingFish(){
         g.setAttribute('color',new THREE.BufferAttribute(colors,3));return g;
       });
       const geometry=mergeGeometries(parts);parts.forEach(g=>g.dispose());
-      const material=new THREE.MeshLambertMaterial({vertexColors:true});
+      // Thin fins must remain visible from either side while a catch is held.
+      const material=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
       const mesh=new THREE.SkinnedMesh(geometry,material);mesh.name='fishing-koi';mesh.bind(first.skeleton,first.bindMatrix);mesh.position.copy(first.position);mesh.quaternion.copy(first.quaternion);mesh.scale.copy(first.scale);first.parent!.add(mesh);
       for(const m of meshes){m.removeFromParent();m.geometry.dispose();(m.material as THREE.Material).dispose();}
     }
@@ -28,7 +30,10 @@ export function loadFishingFish(){
     gltf.scene.updateMatrixWorld(true);
     const bounds=new THREE.Box3().setFromObject(gltf.scene),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
     const root=new THREE.Group();root.add(gltf.scene);gltf.scene.position.sub(center);root.scale.setScalar(34/Math.max(size.x,size.y,size.z));
-    return {root,clips:gltf.animations.map(clip=>clip.name.endsWith('|Out_Of_Water')?groundedFishClip(clip):clip)};
+    const clips=gltf.animations.map(clip=>clip.name.endsWith('|Out_Of_Water')?groundedFishClip(clip):clip);
+    const swim=clips.find(clip=>clip.name.endsWith('|Swimming_Normal'));
+    if(swim)clips.push(heldFishClip(swim,root));
+    return {root,clips};
   });
   return fishTemplate;
 }

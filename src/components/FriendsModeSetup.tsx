@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Bookmark, Check, Copy, DoorOpen, Globe, Leaf, Link2, LoaderCircle, MapPin, Moon, Pause, Play, RefreshCw, Sprout, Users } from 'lucide-react';
 import type { CoopPlayerSeed } from '../game/multiplayer/CoopSimulation';
 import type { PublicLobby } from '../game/multiplayer/LobbySignaling';
-import { COOP_MAX_PLAYERS } from '../game/multiplayer/protocol';
+import { FRIENDS_MAX_PLAYERS } from '../game/multiplayer/protocol';
 import { readFriendsWorld } from '../game/multiplayer/FriendsWorldStorage';
 import type { CoopLanguage } from '../game/multiplayer/i18n';
 import { FriendsMenuBackdrop } from './FriendsMenuBackdrop';
@@ -66,13 +66,13 @@ export function FriendsModeSetup(p: FriendsModeSetupProps) {
   };
   const names = p.mode === 'host' || p.mode === 'direct_host' ? [p.localPlayer, ...p.guestPlayers] : p.rosterPlayers;
   const roster = <div className="friends-menu__people">
-    <div className="friends-menu__section-title"><h3>{t('roster')}</h3><span>{t('of', { current: names.length, max: COOP_MAX_PLAYERS })}</span></div>
+    <div className="friends-menu__section-title"><h3>{t('roster')}</h3><span>{t('of', { current: names.length, max: FRIENDS_MAX_PLAYERS })}</span></div>
     <ul>{names.map((player, index) => <li key={player.id}>
       <span className="friends-menu__avatar" aria-hidden="true">{[...player.label][0]?.toLocaleUpperCase() || '?'}</span>
       <span className="friends-menu__person"><strong>{player.label}</strong><small>{player.id === p.localPlayer.id ? t('you') : t('connected')}</small></span>
       {index === 0 && <span className="friends-menu__host-tag">{t('hostLabel')}</span>}
     </li>)}</ul>
-    {(p.mode === 'host' || p.mode === 'direct_host') && names.length < COOP_MAX_PLAYERS && <div className="friends-menu__empty-slot"><Users size={18}/>{t('emptySlot', { count: COOP_MAX_PLAYERS - names.length })}</div>}
+    {(p.mode === 'host' || p.mode === 'direct_host') && names.length < FRIENDS_MAX_PLAYERS && <div className="friends-menu__empty-slot"><Users size={18}/>{t('emptySlot', { count: FRIENDS_MAX_PLAYERS - names.length })}</div>}
   </div>;
   const nameField = <div className="friends-menu__name">
     <label htmlFor="friends-name">{t('name')}</label>
@@ -140,7 +140,7 @@ export function FriendsModeSetup(p: FriendsModeSetupProps) {
             {title(t('manualHostTitle'))}<p className="friends-menu__intro">{t('helpIntro')}</p>
             <label htmlFor="friends-offer">{t('offer')}</label><textarea id="friends-offer" readOnly value={p.offerCode}/><button className="friends-menu__secondary" onClick={() => p.onCopyText(p.offerCode)}>{t('copyCode')}</button>
             <label htmlFor="friends-answer">{t('answer')}</label><textarea id="friends-answer" value={p.answerCode} onChange={event => p.onAnswer(event.target.value)}/><button className="friends-menu__secondary" disabled={p.loading || !p.answerCode.trim()} onClick={p.onAcceptAnswer}>{t('acceptAnswer')}</button>
-            {roster}<button className="friends-menu__primary" onClick={p.onLaunch} disabled={p.loading}>{t('launch')}<ArrowUpRight size={18}/></button><button className="friends-menu__text-button" disabled={p.loading || names.length >= COOP_MAX_PLAYERS} onClick={p.onManualHost}>{t('nextInvite')}</button>
+            {roster}<button className="friends-menu__primary" onClick={p.onLaunch} disabled={p.loading}>{t('launch')}<ArrowUpRight size={18}/></button><button className="friends-menu__text-button" disabled={p.loading || names.length >= FRIENDS_MAX_PLAYERS} onClick={p.onManualHost}>{t('nextInvite')}</button>
           </>}
           {p.mode === 'direct_guest' && <>
             {title(t('manualGuestTitle'))}<p className="friends-menu__intro">{t('helpIntro')}</p>

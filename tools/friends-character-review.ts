@@ -2,9 +2,8 @@ import {friendsArmPose} from '../src/game/multiplayer/FriendsGestureControls';
 import { FriendsGestureViewmodels } from '../src/game/rendering/FriendsGestureViewmodels';
 import { FRIENDS_CUTE_PALETTES } from '../src/game/rendering/FriendsCharacterFinish';
 import * as THREE from 'three';
-import { mountFriendsCharacter, updateFriendsCharacter } from '../src/game/rendering/FriendsCharacterVisuals';
+import { createFriendsCharacterRig, placeFriendsCharacter, updateFriendsCharacter } from '../src/game/rendering/FriendsCharacterVisuals';
 import { loadFriendsCharacterModel } from '../src/game/rendering/FriendsCharacterModel';
-import { createCoopOperatorRig, updateCoopOperatorRig } from '../src/game/rendering/coopOperatorVisuals';
 import { FriendsToolViewmodels } from '../src/game/rendering/FriendsToolViewmodels';
 import { FriendsFlashlight } from '../src/game/rendering/FriendsFlashlight';
 import { FriendsHaulingVisuals } from '../src/game/rendering/FriendsHaulingVisuals';
@@ -18,8 +17,8 @@ const viewmodel=new THREE.Scene(),handCamera=new THREE.PerspectiveCamera(98,inne
 const gestures=new FriendsGestureViewmodels(viewmodel);
 let gestureMask=0;
 const simulation=new FriendsSimulation([{id:'review',label:'Review',color:'#fbbf24'}],1);const snapshot=simulation.createSnapshot(),local=snapshot.players[0];
-const crew=FRIENDS_CUTE_PALETTES.map(({identity:color},i)=>{const rig=createCoopOperatorRig(color,'');rig.nameplate.visible=false;mountFriendsCharacter(rig,color);scene.add(rig.root);return {rig,player:{...local,id:`crew-${i}`,color,x:(i-2)*49,y:0,z:0,angle:Math.PI/2,motion:{...local.motion!,velocityX:i===1?120:0,velocityY:0},friendsSeat:i===4?{vehicleId:'campfire',index:0}:undefined,crouching:i===4}};});
-const demoRig=createCoopOperatorRig('#f472b6','');mountFriendsCharacter(demoRig,'#f472b6');scene.add(demoRig.root);
+const crew=FRIENDS_CUTE_PALETTES.map(({identity:color},i)=>{const rig=createFriendsCharacterRig(color,'');rig.nameplate.visible=false;scene.add(rig.root);return {rig,player:{...local,id:`crew-${i}`,color,x:(i-2)*49,y:0,z:0,angle:Math.PI/2,motion:{...local.motion!,velocityX:i===1?120:0,velocityY:0},friendsSeat:i===4?{vehicleId:'campfire',index:0}:undefined,crouching:i===4}};});
+const demoRig=createFriendsCharacterRig('#f472b6','');scene.add(demoRig.root);
 const demoPlayer={...local,id:'demo',color:'#f472b6',x:0,y:0,z:0,angle:Math.PI/2,motion:{...local.motion!,velocityX:150,velocityY:0},friendsSeat:undefined,crouching:false};
 const demoMasks=[0,4,8,12,1,2,3,5,10,15,7,11,13,14,6,9];
 let mode='crew',turn=false,frames=0,time=0,demoStartedAt=0,demoLockedStage:number|undefined,demoView:'orbit'|'front'|'side'='orbit';
@@ -35,14 +34,14 @@ function render(elapsed:number){
   time=elapsed;const firstPerson=mode!=='crew'&&mode!=='signals'&&mode!=='demo';
   camera.fov=firstPerson?85:36;camera.updateProjectionMatrix();camera.position.set(0,firstPerson?1.7:65,firstPerson?0:215);camera.lookAt(0,firstPerson?1.7:25,firstPerson?-1:0);
   for(const {rig,player}of crew){
-    (player as any).friendsHands=mode==='signals'?{mask:gestureMask,yaw:player.angle,pitch:0}:undefined;player.angle=turn?-Math.PI/2:Math.PI/2;updateCoopOperatorRig(rig,player,elapsed,16.666);updateFriendsCharacter(rig,player,elapsed);rig.root.visible=!firstPerson&&mode!=='demo';rig.firearm.group.visible=false;rig.nameplate.visible=false;}
+    (player as any).friendsHands=mode==='signals'?{mask:gestureMask,yaw:player.angle,pitch:0}:undefined;player.angle=turn?-Math.PI/2:Math.PI/2;placeFriendsCharacter(rig,player);updateFriendsCharacter(rig,player,elapsed);rig.root.visible=!firstPerson&&mode!=='demo';rig.nameplate.visible=false;}
   demoRig.root.visible=mode==='demo';
   if(mode==='demo'){
     const t=elapsed-demoStartedAt,stage=demoLockedStage??Math.floor(t/2300)%demoMasks.length,mask=demoMasks[stage],stride=t/1200;
     demoPlayer.x=Math.sin(stride)*16;demoPlayer.y=Math.cos(stride)*16;demoPlayer.angle=Math.atan2(-Math.sin(stride),Math.cos(stride));
     demoPlayer.sprinting=stage%4>=2;
     (demoPlayer as any).friendsHands={mask,yaw:demoPlayer.angle,pitch:Math.sin(t/3400)*.25};
-    updateCoopOperatorRig(demoRig,demoPlayer,elapsed,16.666);updateFriendsCharacter(demoRig,demoPlayer,elapsed);demoRig.firearm.group.visible=false;demoRig.nameplate.visible=false;
+    placeFriendsCharacter(demoRig,demoPlayer);updateFriendsCharacter(demoRig,demoPlayer,elapsed);demoRig.nameplate.visible=false;
     const angle=demoPlayer.angle+(demoView==='front'?0:demoView==='side'?Math.PI/2:Math.sin(t/4200)*1.2);
     camera.position.set(demoPlayer.x+Math.cos(angle)*135,62,demoPlayer.y+Math.sin(angle)*135);camera.lookAt(demoPlayer.x,28,demoPlayer.y);
     const names={rest:'Rest',up:'Raised ↑',point:'Forward →',sideways:'Sideways ↔'};

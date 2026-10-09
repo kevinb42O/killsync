@@ -453,7 +453,19 @@ export class FriendsBuilding {
       const b = worldBox(live, local);
       return Math.hypot(Math.max(0, Math.abs(actor.x - b.x) - b.w / 2), Math.max(0, Math.abs(actor.y - b.y) - b.d / 2), Math.max(0, b.z - (actor.z + 26), actor.z + 26 - b.z - b.h)) <= FRIENDS_BUILD_REACH;
     })) return 'Move closer to that piece.';
-    const removed = new Set([pieceId]);
+    return this.removePieces(actor, new Set([pieceId]), economy);
+  }
+  blast(actor: FriendsBuildActor, center: {x:number;y:number;z:number}, radius: number, hostId: string, economy?: FriendsBuildEconomy): number {
+    if (actor.id !== hostId && !this.guestsCanBuild) return 0;
+    const removed = new Set(this.getPieces().filter(p => friendsShapeBoxes(p.shape).some(local => {
+      const b = worldBox(p, local);
+      return Math.hypot(Math.max(0, Math.abs(center.x-b.x)-b.w/2), Math.max(0, Math.abs(center.y-b.y)-b.d/2), Math.max(0,b.z-center.z,center.z-b.z-b.h)) <= radius;
+    })).map(p => p.id));
+    if (!removed.size) return 0;
+    const before = this.pieces.length;
+    return this.removePieces(actor, removed, economy) ? 0 : before - this.pieces.length;
+  }
+  private removePieces(actor: FriendsBuildActor, removed: Set<number>, economy?: FriendsBuildEconomy): string | undefined {
     let added = true;
     while (added) {
       added = false;
@@ -462,7 +474,7 @@ export class FriendsBuilding {
       }
     }
     const edits = this.pieces.filter(p => removed.has(p.id)).map(before => ({ before }));
-    const error = edits.length === 1 ? economy?.(piece, undefined) : economy ? economy.batch?.(edits) ?? (economy.batch ? undefined : 'Group economy is unavailable.') : undefined;
+    const error = edits.length === 1 ? economy?.(edits[0].before, undefined) : economy ? economy.batch?.(edits) ?? (economy.batch ? undefined : 'Group economy is unavailable.') : undefined;
     if (error) return error;
     this.pieces = this.pieces.filter(p => !removed.has(p.id)); this.revision++;
     this.record(actor.id, edits);

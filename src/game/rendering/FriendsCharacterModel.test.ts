@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { cloneFriendsCharacterModel, createFriendsCharacterGrip, createFriendsCharacterModel, FRIENDS_CHARACTER_COLOURS, friendsCharacterColour, type FriendsCharacterData } from './FriendsCharacterModel';
-import { mountFriendsCharacter, updateFriendsCharacter, friendsCharacterHandPoint } from './FriendsCharacterVisuals';
+import { createFriendsCharacterRig, disposeFriendsCharacterRig, placeFriendsCharacter, mountFriendsCharacter, updateFriendsCharacter, friendsCharacterHandPoint } from './FriendsCharacterVisuals';
 import { createCoopOperatorRig, disposeCoopOperatorRig } from './coopOperatorVisuals';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
+import { createCoopWeaponRuntime } from '../combat/coopFirearms';
 import { lengthenFirstPersonArms } from './FriendsFirstPersonArms';
 
 vi.mock('./FriendsCharacterModel',async importOriginal=>{
@@ -98,4 +99,35 @@ describe('imported Big Walk characters',()=>{
     const rig=createCoopOperatorRig('#ff0000','Player');mountFriendsCharacter(rig,'#ff0000');disposeCoopOperatorRig(rig);await Promise.resolve();await Promise.resolve();
     expect(rig.avatar.getObjectByName('friends-big-walk-character')).toBeUndefined();
   });
+  it('uses a Friends-only rig with no survival chassis or idle firearm', async()=>{
+    const rig=createFriendsCharacterRig('#fbbf24','Friend');
+    await Promise.resolve(); await Promise.resolve();
+    for(const state of [{}, {friendsHands:{mask:0,yaw:0,pitch:0}}, {friendsSeat:{vehicleId:'campfire',index:0}}, {motion:{swimming:true}}]){
+      const p=player(state as Partial<CoopPlayerSnapshot>);
+      placeFriendsCharacter(rig,p); updateFriendsCharacter(rig,p,1000);
+      expect(rig.firearm).toBeUndefined();
+      expect(rig.root.children).toHaveLength(2);
+      expect(rig.avatar.children).toHaveLength(1);
+      expect(rig.avatar.children[0].name).toBe('friends-big-walk-character');
+    }
+    disposeFriendsCharacterRig(rig);
+  });
+  it('does not mount a Friends model after its rig is disposed',async()=>{
+    const rig=createFriendsCharacterRig('#fbbf24','Friend');disposeFriendsCharacterRig(rig);
+    await Promise.resolve();await Promise.resolve();
+    expect(rig.avatar.children).toHaveLength(0);
+  });
+
+  it('mounts an explicitly equipped weapon at the moving hand and hides it on tool change',async()=>{
+    const rig=createFriendsCharacterRig('#fbbf24','Friend');await Promise.resolve();await Promise.resolve();
+    const p=player({friendsWeaponEquipped:true,weaponStates:[createCoopWeaponRuntime('plasma_gun')]});
+    placeFriendsCharacter(rig,p);updateFriendsCharacter(rig,p,1000);
+    const hand=new THREE.Vector3();expect(friendsCharacterHandPoint(rig,hand)).toBe(true);
+    expect(rig.firearm!.group.visible).toBe(true);
+    expect(rig.firearm!.group.position.distanceTo(hand)).toBeLessThan(.001);
+    updateFriendsCharacter(rig,{...p,friendsWeaponEquipped:false,weaponStates:[]},1100);
+    expect(rig.firearm!.group.visible).toBe(false);
+    disposeFriendsCharacterRig(rig);
+  });
+
 });

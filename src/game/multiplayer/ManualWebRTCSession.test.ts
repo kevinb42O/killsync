@@ -1,3 +1,6 @@
+import { FriendsSimulation } from './FriendsSimulation';
+import { SnapshotDecoder, SnapshotReplicator } from './snapshotReplication';
+import { encodeSnapshotPackets } from './snapshotTransport';
 import { describe, expect, it, vi } from 'vitest';
 import { clampInputFrame, MULTIPLAYER_PROTOCOL_VERSION } from './protocol';
 import { decodeSignal, encodeSignal, ManualWebRTCSession } from './ManualWebRTCSession';
@@ -101,5 +104,76 @@ describe('gameplay transport', () => {
     expect(session['send'](channel, '{}')).toBe(true);
     send.mockImplementation(() => { throw new Error('closed'); });
     expect(session['send'](channel, '{}')).toBe(false);
+  });
+});
+
+
+describe('Friends congestion and unordered delivery', () => {
+  it('recovers from a delta arriving between keyframe fragments through the actual transport', () => {
+    const simulation = new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]);
+    const decoder = new SnapshotDecoder(), replicator = new SnapshotReplicator();
+    const accepted: number[] = [];
+    const session = new ManualWebRTCSession({role:'guest', onState: frame => {
+      const snapshot = decoder.decode(frame.payload, frame.tick);
+      if (!snapshot) return false;
+      accepted.push(frame.tick); return true;
+    }});
+    const base = simulation.createSnapshot(); base.players[0].label = 'Host'.repeat(7000);
+    const packet = (snapshot: typeof base, tick: number) => encodeSnapshotPackets(JSON.stringify({type:'state',version:MULTIPLAYER_PROTOCOL_VERSION,tick,sentAt:0,payload:replicator.payloadFor('guest',snapshot,tick)}),tick);
+    const keyframe = packet(base,10);
+    const next = {...base,tick:base.tick+1,elapsedMs:base.elapsedMs+50};
+    const delta = packet(next,11);
+    expect(keyframe.length).toBeGreaterThan(1);expect(delta).toHaveLength(1);
+    const receive = (p: ArrayBuffer) => session['receiveMessage']('host','state',p);
+    receive(keyframe[0]);delta.forEach(receive);expect(accepted).toEqual([]);
+    keyframe.slice(1).forEach(receive);expect(accepted).toEqual([10]);
+    packet({...next,tick:next.tick+1,elapsedMs:next.elapsedMs+50},12).forEach(receive);
+    expect(accepted).toEqual([10,12]);
+    delta.forEach(receive);expect(accepted).toEqual([10,12]);
+  });
+
+  it('recovers the same reordered motion on Friends channels after durable island sync', () => {
+    const accepted: number[] = [], packets: ArrayBuffer[] = [];
+    const host = new ManualWebRTCSession({role:'host',friends:true});
+    const guest = new ManualWebRTCSession({role:'guest',friends:true,onState:frame=>{accepted.push(frame.tick);}});
+    host['peers'].set('guest',{
+      peerId:'guest',friendsAdmitted:true,
+      stateChannel:{readyState:'open',label:'state',bufferedAmount:0,send:(p:ArrayBuffer)=>packets.push(p)},
+      worldChannel:{readyState:'open',label:'friends-world',bufferedAmount:0,send:(p:ArrayBuffer)=>guest['receiveMessage']('host','friends-world',p)},
+    } as never);
+    guest['peers'].set('host',{peerId:'host',reliableChannel:{readyState:'open',label:'reliable',bufferedAmount:0,send:(p:string)=>host['receiveMessage']('guest','reliable',p)}} as never);
+    const simulation = new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]);
+    const send = (tick:number) => {
+      const snapshot=simulation.createSnapshot();snapshot.players[0].label='Host'.repeat(7000);
+      host.broadcastState({type:'state',version:MULTIPLAYER_PROTOCOL_VERSION,tick,sentAt:0,payload:snapshot});
+      return packets.splice(0);
+    };
+    const keyframe=send(10);expect(keyframe.length).toBeGreaterThan(1);
+    simulation.tick(50);const delta=send(11);expect(delta).toHaveLength(1);
+    guest['receiveMessage']('host','state',keyframe[0]);
+    delta.forEach(p=>guest['receiveMessage']('host','state',p));expect(accepted).toEqual([]);
+    keyframe.slice(1).forEach(p=>guest['receiveMessage']('host','state',p));expect(accepted).toEqual([10]);
+    simulation.tick(50);send(12).forEach(p=>guest['receiveMessage']('host','state',p));expect(accepted).toEqual([10,12]);
+  });
+
+  it('bounds Friends input queues including the incoming UTF-8 packet and resumes after drainage', () => {
+    const session = new ManualWebRTCSession({role:'guest',friends:true});
+    const send = vi.fn();
+    const channel = {readyState:'open',label:'input',bufferedAmount:3990,send} as unknown as RTCDataChannel;
+    expect(session['send'](channel,'é'.repeat(6))).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    Object.assign(channel,{bufferedAmount:0});expect(session['send'](channel,'latest input')).toBe(true);
+    // Existing survival input budget remains available.
+    expect(new ManualWebRTCSession({role:'guest'})['send']({...channel,bufferedAmount:5000} as RTCDataChannel,'input')).toBe(true);
+  });
+
+  it('skips per-peer snapshot preparation when the Friends state queue is already full', () => {
+    const session = new ManualWebRTCSession({role:'host',friends:true});
+    session['peers'].set('guest',{peerId:'guest',friendsAdmitted:true,worldChannel:{readyState:'open'},stateChannel:{readyState:'open',bufferedAmount:64000}} as never);
+    vi.spyOn(session['friendsHost'],'pump').mockImplementation(()=>{});
+    const motion = vi.spyOn(session['friendsHost'],'motion');
+    const interest = vi.fn();
+    session.broadcastState({type:'state',version:MULTIPLAYER_PROTOCOL_VERSION,tick:1,sentAt:0,payload:new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]).createSnapshot()},interest);
+    expect(interest).not.toHaveBeenCalled();expect(motion).not.toHaveBeenCalled();
   });
 });

@@ -19,7 +19,7 @@ export function skyfallCascadeAt(x:number,y:number):SkyfallSample|undefined{
   const t=(y-18976)/1312;
   for(const [index,start]of [6464,7360].entries()){
     const cx=start+Math.sin(t*Math.PI)*96+Math.sin(t*8)*40,width=(index?128:192)*(1+.18*Math.sin(t*14));
-    const side=Math.abs(x-cx);if(side<width/2+96)return {id:`skyfall-cascade-${index}`,index,x:cx,y,side,width};
+    const side=Math.abs(x-cx);if(side<width/2+160)return {id:`skyfall-cascade-${index}`,index,x:cx,y,side,width};
   }
 }
 /** Triangle interpolation for a 64-unit surface, shared by water sources and

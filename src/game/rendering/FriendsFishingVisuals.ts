@@ -8,8 +8,9 @@ import { createFishingFish, loadFishingFish, loadFishingRod } from './FriendsFis
 import { FriendsFishingLine } from './FriendsFishingLine';
 import { friendsWaterAt } from '../world/FriendsWaterSurface';
 import { groundFishMotion } from './FriendsFishGroundAnimation';
+import { heldFishFraming } from './FriendsFishingPresentation';
 
-type Rod={root:THREE.Group;tip?:THREE.Object3D;mesh?:THREE.Mesh;arm?:THREE.Mesh;armRequested?:boolean;line:FriendsFishingLine;float:THREE.Group;ring:THREE.Mesh;phase:string;serial:number;local:boolean};
+type Rod={root:THREE.Group;tip?:THREE.Object3D;mesh?:THREE.Mesh;arm?:THREE.Mesh;reelHand?:THREE.Mesh;armRequested?:boolean;line:FriendsFishingLine;float:THREE.Group;ring:THREE.Mesh;phase:string;serial:number;local:boolean;lineOffset:number;previousFloat:THREE.Vector3;nextSplash:number;reelVoice?:AudioBufferSourceNode};
 type Fish={root:THREE.Group;model?:ReturnType<typeof createFishingFish>;action?:THREE.AnimationAction;clip?:string;id:number;phase:string;animationAt:number};
 function softShadowTexture(){const pixels=new Uint8Array(32*32*4);for(let y=0;y<32;y++)for(let x=0;x<32;x++){const r=Math.hypot((x-15.5)/15.5,(y-15.5)/15.5),v=Math.round(Math.max(0,1-r*r)**2*255),i=(y*32+x)*4;pixels[i]=pixels[i+1]=pixels[i+2]=v;pixels[i+3]=255;}const texture=new THREE.DataTexture(pixels,32,32);texture.magFilter=texture.minFilter=THREE.LinearFilter;texture.needsUpdate=true;return texture;}
 /** All world catches share one skinned mesh/material. Only visible fish advance
@@ -67,7 +68,7 @@ export class FriendsFishingVisuals {
     if(r){this.rodGrip(id,r,local);return r;}
     const root=new THREE.Group(),line=new FriendsFishingLine(),float=new THREE.Group(),ring=new THREE.Mesh(this.ringGeometry,this.ringMaterial);root.name=`fishing-rod-${id}`;
     const ball=new THREE.Mesh(this.floatGeometry,this.cream),cap=new THREE.Mesh(this.floatGeometry,this.red),stem=new THREE.Mesh(this.stemGeometry,this.red);cap.scale.y=.55;cap.position.y=1.6;stem.position.y=4;float.add(ball,cap,stem);ring.rotation.x=-Math.PI/2;
-    r={root,line,float,ring,phase:'',serial:0,local};this.rods.set(id,r);(local?this.rigParent:this.group).add(root);this.group.add(line,float,ring);
+    r={root,line,float,ring,phase:'',serial:0,local,lineOffset:0,previousFloat:new THREE.Vector3(),nextSplash:0};this.rods.set(id,r);(local?this.rigParent:this.group).add(root);this.group.add(line,float,ring);
     const entry=r;
     void loadFishingRod().then(source=>{if(this.disposed||this.rods.get(id)!==entry)return;const model=source.clone(true);root.add(model);entry.tip=model.getObjectByName('fishing-rod-tip');entry.mesh=model.getObjectByName('flexible-fishing-rod') as THREE.Mesh;}).catch(error=>console.warn('Fishing rod could not load',error));
     this.rodGrip(id,r,local);
@@ -75,7 +76,9 @@ export class FriendsFishingVisuals {
   }
   private rodGrip(id:string,entry:Rod,local:boolean){
     if(entry.arm)entry.arm.visible=local;
+    if(entry.reelHand)entry.reelHand.visible=false;
     if(local&&!entry.armRequested){entry.armRequested=true;void loadFriendsGrip('right').then(arm=>{if(this.disposed||this.rods.get(id)!==entry)return;entry.arm=arm.clone();entry.arm.visible=entry.local;entry.root.add(entry.arm);}).catch(()=>{});}
+    if(local&&!entry.root.userData.reelHandRequested){entry.root.userData.reelHandRequested=true;void loadFriendsGrip('left').then(arm=>{if(this.disposed||this.rods.get(id)!==entry)return;entry.reelHand=arm.clone();entry.root.add(entry.reelHand);}).catch(()=>{});}
   }
   private fish(id:number){
     let f=this.fishes.get(id);if(f)return f;
@@ -85,13 +88,13 @@ export class FriendsFishingVisuals {
   }
   private animate(f:Fish,state:CaughtFish|undefined,dt:number,now:number){
     if(!f.model)return;
-    const name=state?.phase==='dry'?'Out_Of_Water':state?.phase==='held'?'Swimming_Normal':'Swimming_Fast';
+    const name=state?.phase==='dry'?'Out_Of_Water':state?.phase==='held'?'Held':'Swimming_Fast';
     if(name!==f.clip){
       const clip=f.model.clips.find(c=>c.name.endsWith('|'+name));if(clip){
         // Stop airborne root motion immediately when the fish lands.
-        if(state?.phase==='dry')f.action?.stop();else f.action?.fadeOut(.12);
+        if(state?.phase==='dry'||state?.phase==='held')f.model.mixer.stopAllAction();else f.action?.fadeOut(.12);
         f.action=f.model.mixer.clipAction(clip);f.action.reset().setEffectiveWeight(state?.phase==='dry'?.45:1).fadeIn(.2).play();
-        f.action.setEffectiveTimeScale(state?.phase==='held'?.32:1);
+        f.action.setEffectiveTimeScale(state?.phase==='held'?.65:1);
       }f.clip=name;
     }
     if(state?.phase==='dry')f.action?.setEffectiveTimeScale(groundFishMotion(now,state.id).speed);
@@ -105,24 +108,33 @@ export class FriendsFishingVisuals {
       const player=players.find(p=>p.id===id);if(!player)continue;const local=id===localId&&firstPerson;if(local&&tool!==7)continue;
       if(!local&&Math.hypot(player.x-this.cameraPoint.x,player.y-this.cameraPoint.z)>1800)continue;
       active.add(id);const r=this.rod(id,local),cast=state?.casts.find(c=>c.playerId===id),t=cast?(now-cast.atMs)/1000:0;
-      if(local){frameHeldEquipment(r.root,this.camera);r.root.rotation.set(-.48+(cast?.phase==='casting'?.65*Math.sin(Math.min(1,t/.65)*Math.PI):0)-(cast?.phase==='bite'?.045*Math.sin(now*.028):0),0,-.12);this.lighting.setVisible(true);}
+      if(local){frameHeldEquipment(r.root,this.camera);r.root.rotation.set(-.48+(cast?.phase==='casting'?.65*Math.sin(Math.min(1,t/.65)*Math.PI):0)-(cast?.phase==='bite'?.12*Math.sin(now*.023):0)-(cast?.phase==='reeling'?.10+.035*Math.sin(now*.017):0),0,-.12);this.lighting.setVisible(true);}
       else{if(!handPoint(id,this.start))this.start.set(player.x,player.z+25,player.y);r.root.position.copy(this.start);r.root.scale.setScalar(32);r.root.rotation.set(-.45,Math.PI/2-player.angle,-.12);}
       r.root.visible=true;r.line.visible=r.float.visible=r.ring.visible=Boolean(cast);
-      const flex=cast?.phase==='bite'?.65+Math.sin(now*.018)*.15:cast?.phase==='reeling'?.5:cast?.phase==='casting'?.35*Math.sin(Math.min(1,t/.65)*Math.PI):.04;
+      const tension=cast?.lineLength?THREE.MathUtils.clamp((Math.hypot(player.x-cast.x,player.y-cast.y,player.z+26-cast.z)/cast.lineLength-.94)/.06,0,1):0;
+      const flex=cast?.phase==='bite'?.75+Math.sin(now*.018)*.15:cast?.phase==='reeling'?.5+.12*Math.sin(now*.018):cast?.phase==='casting'?.35*Math.sin(Math.min(1,t/.65)*Math.PI):.04+tension*.26;
       if(r.mesh?.morphTargetInfluences)r.mesh.morphTargetInfluences[0]=flex;if(r.tip)r.tip.position.z=-.2*flex;
-      if(!cast)continue;
+      if(r.reelHand&&local&&cast?.phase==='reeling'){
+        r.reelHand.visible=true;r.reelHand.position.set(-.16+Math.sin(now*.024)*.045,.20+Math.cos(now*.024)*.045,.10);r.reelHand.rotation.set(.35,1.0,-.35+Math.sin(now*.024)*.12);
+      }
+      if(!cast){this.stopReel(r);r.phase='';continue;}
+      if(!local||cast.phase!=='reeling')this.stopReel(r);
       const bite=cast.phase==='bite',waiting=cast.phase==='waiting';
       this.end.set(cast.x,cast.z,cast.y);
       if(waiting){this.end.y+=Math.sin(now*.004+cast.id)*.9;const before=cast.biteAt-now;if(before<1300)this.end.y-=Math.max(0,Math.sin(now*.019))*2.4;}
-      if(bite)this.end.y-=5+Math.sin(now*.013)*.7;
-      r.float.position.copy(this.end);r.float.rotation.z=bite?.3:Math.sin(now*.002)*.07;r.float.visible=cast.phase!=='reeling'||Boolean(cast.empty);
-      r.ring.position.set(cast.target.x,cast.target.z-.6,cast.target.y);const ripple=((now-cast.atMs)%1100)/1100;r.ring.scale.setScalar(4+ripple*(bite?17:10));r.ring.visible=waiting||bite;
+      if(bite){this.end.y-=8+Math.sin(now*.023)*2;this.end.x+=Math.sin(now*.025)*1.6;this.end.z+=Math.cos(now*.021)*1.6;}
+      const moving=r.serial===cast.id?Math.min(1,r.previousFloat.distanceTo(this.end)/Math.max(1,dt)*16):0;
+      r.float.position.copy(this.end);r.float.rotation.set(moving*.28,bite?now*.001:0,(bite?.38:Math.sin(now*.002)*.07)+moving*.22);r.float.visible=cast.phase!=='reeling'||Boolean(cast.empty);r.previousFloat.copy(this.end);
+      r.ring.position.set(cast.x,cast.target.z-1.8,cast.y);const ripple=((now-cast.atMs)%1100)/1100;r.ring.scale.setScalar(4+ripple*(bite?23:10+moving*12));r.ring.visible=waiting||bite;
       if(r.tip){r.root.updateWorldMatrix(true,true);if(local){const p=project(r.tip);this.start.set(p.x,p.y,p.z);}else r.tip.getWorldPosition(this.start);}
       else this.start.copy(r.root.position);
-      r.line.update(this.start,this.end,cast.phase==='casting'?24:cast.phase==='reeling'?2:bite?3:12,dt,this.cameraPoint);
+      if(r.serial!==cast.id){this.dropPosition.set(cast.target.x,cast.target.z,cast.target.y);r.lineOffset=this.start.distanceTo(this.dropPosition)-Math.hypot(player.x-cast.target.x,player.y-cast.target.y,player.z+26-cast.target.z);}
+      const slack=Math.max(1,(cast.lineLength??this.start.distanceTo(this.end)+12)+r.lineOffset-this.start.distanceTo(this.end));
+      r.line.update(this.start,this.end,cast.phase==='casting'?24:cast.phase==='reeling'?2:bite?Math.min(3,slack):slack,dt,this.cameraPoint,waiting||bite?cast.target.z-2:undefined);
+      if(bite&&now>=r.nextSplash){this.splash(cast.x,cast.target.z-2,cast.y,now);r.nextSplash=now+650;}
       if(r.serial!==cast.id||r.phase!==cast.phase){
-        if(waiting||bite)this.splash(cast.target.x,cast.target.z,cast.target.y,now);
-        if(local){if(cast.phase==='casting')friendsAudio.play('swing',.12,100);else if(waiting)friendsAudio.play('waterStep',.17,100);else if(bite){friendsAudio.play('waterStep',.24,100,1.25);friendsAudio.play('chime',.07,100,1.8);}else friendsAudio.play('reelRatchet',.13,100,1.2,1.2);}
+        if(waiting)this.splash(cast.x,cast.target.z-2,cast.y,now);
+        if(local){if(cast.phase==='casting')friendsAudio.play('fishingCast',.16,100);else if(waiting)friendsAudio.play('fishingSplash',.18,100);else if(bite)friendsAudio.play('fishingBite',.10,100,1,.45,{fadeOutSeconds:.08});else if(cast.phase==='reeling'){this.stopReel(r);r.reelVoice=friendsAudio.play('fishingReel',.18,100,1,Math.max(.05,(cast.empty?.4:2.8)-t),{fadeOutSeconds:.08});}}
         r.serial=cast.id;r.phase=cast.phase;
       }
       if(cast.phase==='reeling'&&!cast.empty){
@@ -135,8 +147,10 @@ export class FriendsFishingVisuals {
       activeFish.add(s.id);const f=this.fish(s.id);f.root.visible=true;
       if(local&&s.phase==='held'){
         if(f.root.parent!==this.held)this.held.add(f.root);this.held.visible=true;this.lighting.setVisible(true);
-        const tangent=Math.tan(THREE.MathUtils.degToRad((this.camera?.fov??98)/2)),scale=tangent/Math.tan(THREE.MathUtils.degToRad(49)),narrow=Math.min(1,(this.camera?.aspect??16/9)/1.25);
-        this.held.position.set(0,-.46*scale*narrow,-1.08);this.held.scale.set(scale*narrow,scale*narrow,1);f.root.position.set(0,.11+Math.sin(now*.003)*.006,-.02);f.root.scale.setScalar(.022*s.size);f.root.rotation.set(.04,Math.PI/2,.025*Math.sin(now*.004));
+        const {depth,scale,narrow,fishScale,spread,lift}=heldFishFraming(s.size,this.camera?.fov,this.camera?.aspect),arrival=THREE.MathUtils.smoothstep(now-s.atMs,0,450);
+        this.held.position.set(0,(-.34*depth-.12*(1-arrival))*scale*narrow,-depth);this.held.scale.set(scale*narrow,scale*narrow,1);
+        f.root.position.set(0,lift+Math.sin(now*.003)*.006,-.02);f.root.scale.setScalar(fishScale);f.root.rotation.set(.04,Math.PI/2,.012*Math.sin(now*.004));
+        for(const grip of this.grips.children){const side=grip.position.x<0?-1:1;grip.position.set(side*spread*.80,lift-.29,.03);grip.rotation.set(.10,side*.45,side*.16);}
       }else{
         if(f.root.parent!==this.group)this.group.add(f.root);
         if(owner){if(!handPoint(owner.id,this.end,true))this.end.set(owner.x,owner.z+25,owner.y);}
@@ -146,18 +160,18 @@ export class FriendsFishingVisuals {
         f.root.scale.setScalar(s.size*fade);f.root.rotation.set(0,Math.PI/2-s.angle,s.phase==='dry'?Math.PI/2+groundFishMotion(now,s.id).roll:s.phase==='air'?Math.sin(now*.012)*.35:0);
         if(s.phase==='dry'&&shadowCount<40){this.dropPosition.set(s.x,s.z-FISH_GROUND_RADIUS*s.size+.2,s.y);this.dropScale.set(28*s.size,1,22*s.size);this.dropMatrix.compose(this.dropPosition,this.dropRotation,this.dropScale);this.shadows.setMatrixAt(shadowCount++,this.dropMatrix);}
       }
-      if(f.phase!==s.phase&&local&&s.phase==='held')friendsAudio.play('waterStep',.15,100);
-      if(f.phase!==s.phase&&s.phase==='swimming'&&f.root.position.distanceTo(this.cameraPoint)<500)friendsAudio.play('waterStep',.2,100,1.15);
+      if(f.phase!==s.phase&&s.phase==='swimming'&&f.root.position.distanceTo(this.cameraPoint)<500)friendsAudio.play('fishingSplash',.20,100,1,.75,{fadeOutSeconds:.12});
       if(f.phase!==s.phase&&s.phase==='swimming')this.splash(s.x,(friendsWaterAt(s.x,s.y)?.level??s.z)+1,s.y,now);
       this.animate(f,s,dt,now);f.phase=s.phase;
     }
-    for(const [id,r]of this.rods)if(!active.has(id)){r.root.removeFromParent();r.float.removeFromParent();r.ring.removeFromParent();r.line.removeFromParent();r.line.dispose();this.rods.delete(id);}
+    for(const [id,r]of this.rods)if(!active.has(id)){this.stopReel(r);r.root.removeFromParent();r.float.removeFromParent();r.ring.removeFromParent();r.line.removeFromParent();r.line.dispose();this.rods.delete(id);}
     for(const [id,f]of this.fishes)if(!activeFish.has(id)){f.root.removeFromParent();f.root.visible=false;this.fishes.delete(id);this.pool.push(f);}
     this.updateSplashes(now);
     this.shadows.count=shadowCount;this.shadows.visible=shadowCount>0;if(shadowCount)this.shadows.instanceMatrix.needsUpdate=true;
   }
+  private stopReel(r:Rod){if(r.reelVoice){try{r.reelVoice.stop();}catch{/* Already ended. */}r.reelVoice=undefined;}}
   dispose(){
-    this.disposed=true;for(const r of this.rods.values()){r.root.removeFromParent();r.line.dispose();}this.rods.clear();
+    this.disposed=true;for(const r of this.rods.values()){this.stopReel(r);r.root.removeFromParent();r.line.dispose();}this.rods.clear();
     for(const f of [...this.fishes.values(),...this.pool]){f.model?.mixer.stopAllAction();if(f.model)f.model.root.traverse(o=>{if(o instanceof THREE.SkinnedMesh)o.skeleton.dispose();});f.root.removeFromParent();}this.fishes.clear();this.pool=[];
     this.floatGeometry.dispose();this.stemGeometry.dispose();this.ringGeometry.dispose();this.red.dispose();this.cream.dispose();this.ringMaterial.dispose();this.lighting.dispose();this.held.removeFromParent();this.group.removeFromParent();
     this.shadows.geometry.dispose();(this.shadows.material as THREE.Material).dispose();this.shadowTexture.dispose();this.shadows.dispose();this.droplets.dispose();

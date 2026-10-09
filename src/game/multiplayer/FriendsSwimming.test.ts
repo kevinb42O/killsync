@@ -62,6 +62,23 @@ describe('frontier swimming and diving',()=>{
     for(let i=161;i<=280;i++){sim.setInput('host',input(i,{jetHeld:true}));sim.tick(50);}
     snapshot=sim.createSnapshot().players[0];expect(snapshot.z).toBeCloseTo(136.5,3);expect(snapshot.motion?.swimSubmerged).toBe(false);expect(snapshot.jetActive).toBe(false);
   });
+  it('keeps host and guest diving below the old recovery plane and lets them return from the abyss',()=>{
+    const sim=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'},{id:'guest',label:'Guest',color:'#aaa'}]),terrain=new FriendsTerrain(),bed=terrain.floor(44000,23852,-169,0)!;
+    const players=(sim as unknown as {players:Map<string,PlayerMotionState>}).players;
+    for(const p of players.values())Object.assign(p,{x:44000,y:23852,z:bed+30,verticalVelocity:0,friendsDevFlight:false});
+    for(let i=1;i<=20;i++){for(const id of ['host','guest'])sim.setInput(id,input(i,{sliding:true}));sim.tick(50);}
+    for(const p of sim.createSnapshot().players){expect(p.x).toBeCloseTo(44000,4);expect(p.z).toBe(bed);expect(p.motion?.swimSubmerged).toBe(true);expect(p.lifeState).toBe('alive');}
+    for(let i=21;i<=680;i++){for(const id of ['host','guest'])sim.setInput(id,input(i,{jetHeld:true}));sim.tick(50);for(const p of players.values())expect(p.x).toBeCloseTo(44000,4);}
+    for(const p of sim.createSnapshot().players){expect(p.z).toBeCloseTo(-186.5,3);expect(p.motion?.swimSubmerged).toBe(false);expect(p.jetActive).toBe(false);}
+    // A real escape below the world's floor must still recover, even with stale swimming flags.
+    const host=players.get('host')!;Object.assign(host,{z:-4300,swimming:true,swimSubmerged:true});sim.tick(50);
+    expect(host.x).not.toBe(44000);expect(host.swimming).toBe(false);expect(host.swimSubmerged).toBe(false);
+  });
+  it('does not clamp a deep swimmer to the old -480 fallback when no floor resolver is provided',()=>{
+    const p=actor({x:44000,y:23852,z:-2000,swimming:true,swimSubmerged:true});
+    advancePlayerMovement(p,input(1),50,undefined,undefined,undefined,'friends_frontier',{elevationAware:true,volumetric:true,ceiling:6000,stepHeight:8});
+    expect(p.z).toBeCloseTo(-2000,5);expect(p.swimming).toBe(true);
+  });
   it('produces the same dive movement for host ticks and split prediction ticks',()=>{
     const point=FRIENDS_RIVERS[1].points[300],host=actor({...point,z:point.z-18}),prediction={...host};
     for(let i=1;i<=30;i++){

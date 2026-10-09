@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FriendsFishing, FISHING_BITE_MS, FISHING_CAST_MS, FISHING_REEL_MS, FISHING_WAIT_MIN_MS, FISHING_WAIT_MAX_MS, LOOSE_FISH_LIMIT, type FishingActor, type FishingEnvironment } from './FriendsFishing';
+import { FriendsFishing, FISHING_BITE_MS, FISHING_CAST_MS, FISHING_REEL_MS, FISHING_WAIT_MIN_MS, FISHING_WAIT_MAX_MS, LOOSE_FISH_LIMIT, fishLengthCm, fishingCatchSize, type FishingActor, type FishingEnvironment } from './FriendsFishing';
 import { SnapshotDecoder, compactSnapshotWirePayload } from './snapshotReplication';
 import { FriendsSimulation } from './FriendsSimulation';
 import { friendsToolInput } from './FriendsToolControls';
@@ -12,16 +12,54 @@ const input=(extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({t
 const player=():FishingActor=>({id:'host',x:0,y:0,z:0,angle:0,lifeState:'alive'});
 const environment:FishingEnvironment={water:(x)=>x>=80?{level:0,depth:40,bodyId:'test'}:undefined,floor:(x)=>x>=80?-40:0,blocked:()=>false};
 const fixtureBiteDelay=FISHING_CAST_MS+(FISHING_WAIT_MIN_MS+FISHING_WAIT_MAX_MS)/2+50;
-function fixture(sizeRandom=.5){
+function fixture(sizeRandom=.5,env:FishingEnvironment=environment){
   let samples=0;
   const fishing=new FriendsFishing(()=>++samples%2?.5:sizeRandom),p=player();let now=0,command=input();
-  const step=(ms=50)=>{for(let t=0;t<ms;t+=50){now+=50;fishing.update(50,now,[p],new Map([[p.id,command]]),environment);}};
+  const step=(ms=50)=>{for(let t=0;t<ms;t+=50){now+=50;fishing.update(50,now,[p],new Map([[p.id,command]]),env);}};
   const click=()=>{command={...command,fireActionId:(command.fireActionId??0)+1,firing:true};step();};
   const catchFish=()=>{click();step(fixtureBiteDelay);expect(fishing.snapshot().casts[0]?.phase).toBe('bite');click();step(FISHING_REEL_MS);expect(fishing.held(p.id)).toBeDefined();};
   return {fishing,p,step,click,catchFish,get now(){return now;},set command(i:MultiplayerInputFrame){command=i;},get command(){return command;}};
 }
 
 describe('casual Friends fishing',()=>{
+  it('measures nose-to-tail length and makes giants rare without removing them',()=>{
+    expect(fishLengthCm(.45)).toBe(38);expect(fishLengthCm(4.2)).toBe(357);
+    const sizes=Array.from({length:10000},(_,i)=>fishingCatchSize(i/10000));
+    expect(sizes.every(s=>s>=.45&&s<=4.2)).toBe(true);
+    expect(sizes.filter(s=>s>=2)).toHaveLength(150);
+    expect(sizes.filter(s=>s<1).length).toBeGreaterThan(5000);
+    expect(fishingCatchSize(1)).toBeCloseTo(4.2);
+  });
+  it('pulls a taut bobber when walking away while preserving its paid-out length and bite timing',()=>{
+    const f=fixture(.5,{...environment,water:()=>({level:0,depth:40,bodyId:'test'}),floor:()=>-40});f.click();f.step(700);const before=f.fishing.snapshot().casts[0];
+    f.p.x=-90;f.step(1600);const after=f.fishing.snapshot().casts[0];
+    expect(after.x).toBeLessThan(before.x-30);expect(after.lineLength).toBe(before.lineLength);expect(after.biteAt).toBe(before.biteAt);
+    const x=after.x;f.p.x+=40;f.step(500);expect(f.fishing.snapshot().casts[0].x).toBeCloseTo(x);
+  });
+  it('retrieves safely when a dragged bobber reaches the dry bank',()=>{
+    const f=fixture();f.click();f.step(700);f.p.x=-170;f.step(3500);
+    expect(f.fishing.snapshot().casts).toHaveLength(0);expect(f.fishing.snapshot().fish).toHaveLength(0);
+  });
+  it('preserves the original catcher when another player picks up the fish',()=>{
+    const f=fixture();f.catchFish();f.command={...f.command,altFireActionId:1};f.step(1200);
+    const guest={...f.p,id:'guest'};expect(f.fishing.pickup(guest,7,f.now,environment)).toBe(true);
+    expect(f.fishing.held('guest')?.caughtBy).toBe('host');
+  });
+  it('blocks pickup across walls and keeps initial releases on the clear side',()=>{
+    const f=fixture();f.catchFish();f.command={...f.command,altFireActionId:1};f.step(1200);
+    expect(f.fishing.pickup(f.p,7,f.now,{blocked:()=>true})).toBe(false);
+    expect(f.fishing.pickup(f.p,7,f.now,environment)).toBe(true);
+    const wall={...environment,blocked:(a:{x:number},b:{x:number})=>a.x<10&&b.x>=10};
+    f.fishing.update(50,f.now+50,[f.p],new Map([['host',{...f.command,altFireActionId:2}]]),wall);
+    expect(f.fishing.snapshot().fish[0].x).toBeLessThan(10);
+  });
+  it('allows fishing in retreat and skiff seats but keeps operating seats blocked',()=>{
+    for(const vehicleId of ['skyfalls-bench','reedwater-skiff','deepmere-skiff']){
+      const f=fixture();f.p.friendsSeat={vehicleId,index:0};f.catchFish();expect(f.fishing.held('host')).toBeDefined();
+    }
+    const f=fixture();f.p.friendsSeat={vehicleId:'rail-train',index:0};f.click();expect(f.fishing.snapshot().casts).toHaveLength(0);
+  });
+
   it('casts, signals a bite, automatically reels and holds exactly one fish despite repeated held input',()=>{
     const f=fixture();f.click();expect(f.fishing.snapshot().casts[0].phase).toBe('casting');
     f.step(FISHING_CAST_MS);expect(f.fishing.snapshot().casts[0].phase).toBe('waiting');

@@ -32,7 +32,7 @@ import {
   globalLobbyDiscovery,
   listPublicLobbies,
 } from '../game/multiplayer/LobbySignaling';
-import { COOP_GUEST_COLORS, COOP_MAX_PLAYERS, MultiplayerPeerInfo, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
+import { COOP_GUEST_COLORS, FRIENDS_GUEST_COLORS, multiplayerPlayerLimit, MultiplayerPeerInfo, MULTIPLAYER_PROTOCOL_VERSION } from '../game/multiplayer/protocol';
 import { CoopPlayerSeed } from '../game/multiplayer/CoopSimulation';
 import { generateRoomCode, normalizeRoomCode } from '../game/multiplayer/UnifiedSignaling';
 import { coopOperatorClassKey, coopOperatorRoleKey, coopText, coopWeaponNameKey, localizeCoopSignalingMessage, readCoopLanguage, writeCoopLanguage, type CoopLanguage, type CoopTextKey } from '../game/multiplayer/i18n';
@@ -359,14 +359,14 @@ export function ManualMultiplayerSetup({
             }catch(error){session.sendEventTo(peerId,{type:'event',version:MULTIPLAYER_PROTOCOL_VERSION,event:'error',payload:(error as Error).message});return;}
           }
           if (!player || peerPlayerIdsRef.current[peerId] || player.id === localPlayerRef.current.id || guestPlayersRef.current.some(guest => guest.id === player.id)) return;
-          if (guestPlayersRef.current.length >= COOP_MAX_PLAYERS - 1) {
+          if (guestPlayersRef.current.length >= multiplayerPlayerLimit(gameMode) - 1) {
             session.disconnectPeer(peerId);
             return;
           }
           peerPlayerIdsRef.current[peerId] = player.id;
           const next = guestPlayersRef.current.some(item => item.id === player.id)
             ? guestPlayersRef.current
-            : [...guestPlayersRef.current, { ...player, color: guestColor(guestPlayersRef.current.length) }];
+            : [...guestPlayersRef.current, { ...player, color: guestColor(guestPlayersRef.current.length, gameMode) }];
           guestPlayersRef.current = next;
           setGuestPlayers(next);
           session.sendEvent({ type: 'event', version: MULTIPLAYER_PROTOCOL_VERSION, event: 'setup_mode', payload: gameMode });
@@ -375,7 +375,7 @@ export function ManualMultiplayerSetup({
           setStatus(tr('status.joined', { name: player.label }));
         }
         if (event.event === 'roster' && role === 'guest') {
-          const players = parsePlayers(event.payload, 1);
+          const players = parsePlayers(event.payload, 1, gameMode);
           if (players) {setRosterPlayers(gameMode === 'friends' ? players.map(friendsMenuPlayer) : players);if(gameMode==='friends'){readySentRef.current=true;window.clearTimeout(connectionTimeoutRef.current);setStatus(tr('status.waitingHost'));}}
         }
         if (event.event === 'skin_update' && role === 'host') {
@@ -517,7 +517,7 @@ export function ManualMultiplayerSetup({
       id: targetCode,
       code: targetCode,
       hostName: targetCode,
-      maxPlayers: COOP_MAX_PLAYERS,
+      maxPlayers: multiplayerPlayerLimit(gameMode),
       playerCount: 1,
       state: 'waiting',
     });
@@ -582,7 +582,7 @@ export function ManualMultiplayerSetup({
         ? sessionRef.current
         : await createSession('host', operation);
       if (operation !== operationRef.current) return;
-      if (session.occupiedPeerSlots >= COOP_MAX_PLAYERS - 1) {
+      if (session.occupiedPeerSlots >= multiplayerPlayerLimit(gameMode) - 1) {
         setError(tr('error.squadFull'));
         setStatus('');
         return;
@@ -1150,7 +1150,7 @@ export function ManualMultiplayerSetup({
                 <div className="mb-3 flex items-center justify-between">
                   <div className="text-xs font-black uppercase tracking-[0.16em] text-white flex items-center gap-2">
                     <Users size={14} className="text-cyan-300" />
-                    {tr('setup.squadOperatives', { current: guestPlayers.length + 1, max: COOP_MAX_PLAYERS })}
+                    {tr('setup.squadOperatives', { current: guestPlayers.length + 1, max: multiplayerPlayerLimit(gameMode) })}
                   </div>
                 </div>
 
@@ -1186,7 +1186,7 @@ export function ManualMultiplayerSetup({
                   })()}
 
                   {/* Guest Slots */}
-                  {Array.from({ length: COOP_MAX_PLAYERS - 1 }, (_, slotIdx) => slotIdx).map(slotIdx => {
+                  {Array.from({ length: multiplayerPlayerLimit(gameMode) - 1 }, (_, slotIdx) => slotIdx).map(slotIdx => {
                     const guest = guestPlayers[slotIdx];
                     const guestSkin = guest ? COOP_SKINS.find(s => s.id === guest.skinId) || COOP_SKINS[0] : null;
 
@@ -1285,7 +1285,7 @@ export function ManualMultiplayerSetup({
               {rosterPlayers.length > 0 && (
                 <div>
                   <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/60">
-                    {tr('setup.squadOperatives', { current: rosterPlayers.length, max: COOP_MAX_PLAYERS })}
+                    {tr('setup.squadOperatives', { current: rosterPlayers.length, max: multiplayerPlayerLimit(gameMode) })}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {rosterPlayers.map((p, idx) => {
@@ -1441,8 +1441,8 @@ function parsePlayer(value: unknown): CoopPlayerSeed | null {
     : null;
 }
 
-function parsePlayers(value: unknown, minimumPlayers: number = 2): CoopPlayerSeed[] | null {
-  if (!Array.isArray(value) || value.length < minimumPlayers || value.length > COOP_MAX_PLAYERS) return null;
+function parsePlayers(value: unknown, minimumPlayers: number = 2, gameMode: CoopGameMode = 'survival'): CoopPlayerSeed[] | null {
+  if (!Array.isArray(value) || value.length < minimumPlayers || value.length > multiplayerPlayerLimit(gameMode)) return null;
   const players = value.map(parsePlayer);
   return players.every((player): player is CoopPlayerSeed => player !== null) ? players : null;
 }
@@ -1456,13 +1456,14 @@ function parseStartPayload(value: unknown, minimumPlayers: number) {
   }
   if (!value || typeof value !== 'object') return null;
   const payload = value as { players?: unknown; worldId?: unknown; gameMode?: unknown };
-  const players = parsePlayers(payload.players, minimumPlayers);
   const gameMode = normalizeCoopGameMode(payload.gameMode);
+  const players = parsePlayers(payload.players, minimumPlayers, gameMode);
   return players ? { players, gameMode, worldId: gameMode === 'friends' ? 'friends_frontier' as WorldId : normalizeWorldId(payload.worldId) } : null;
 }
 
-function guestColor(index: number) {
-  return COOP_GUEST_COLORS[index % COOP_GUEST_COLORS.length];
+function guestColor(index: number, gameMode: CoopGameMode) {
+  const colors = gameMode === 'friends' ? FRIENDS_GUEST_COLORS : COOP_GUEST_COLORS;
+  return colors[index % colors.length];
 }
 
 function normalizeNickname(value: string) {

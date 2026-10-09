@@ -7,6 +7,12 @@ Per-file licenses, publisher labels, source URLs and hashes are preserved in
 `sources.json`. Assets are bundled locally; gameplay does not contact the
 publishers or depend on their servers.
 
+## Fishing
+
+Real CC0 reel, rod cast and small water-impact recordings added October 10, 2026.
+See [fishing recording credits and exact sources](fishing-sources.md) and
+`fishing-sources.json` for hashes and edits.
+
 ## Music
 
 - `exploration.ogg`: **Cornerian Flight Academy, VGM Yume - Minecraft Title Theme Lofi** — the main exploration soundtrack.
@@ -257,3 +263,19 @@ sparrow chirp used for the campfire reaction. Audio assets stay local during pla
 - `stone_oof.mp3` is **Oof 2** by **u_b9zlfeiqje**, bundled under the
   [Pixabay Content License](https://pixabay.com/service/license-summary/).
   [Source page](https://pixabay.com/sound-effects/people-oof-2-580732/).
+
+## Ember ocean vapor — added 2026-10-10
+
+- `ocean_steam_loop.ogg`: **NYC steam radiator hiss.wav** by **sethlind**,
+  [Freesound source](https://freesound.org/people/sethlind/sounds/265013/),
+  [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+  Recorded steam hiss; public high-quality MP3 preview, excerpt 8–32 seconds.
+  Mono 32 kHz Vorbis q4, 100 Hz high-pass / 7.6 kHz low-pass, fixed linear
+  gain to -28 dBFS RMS with a -9 dBFS peak bound. Native pitch and dynamics.
+  Playback adds an 800 ms seam crossfade. The loop is loaded only near the
+  lava's ocean outlet and uses spatial pan, distance falloff and occlusion.
+  Source/output SHA-256 hashes and processing are in `ember-steam-sources.json`
+  and `sources.json`; reproduce with `tools/import-ember-steam.py`.
+
+The lava river retains the bundled **Nature Lava Loop 3** recording above,
+with sound sources following its full route from the crater to the sea.

@@ -26,6 +26,63 @@ function fixture(mobile=false){
 }
 
 describe('shared Friends flashlight rendering',()=>{
+  it('projects glare from the rendered lens and checks occlusion again as the hand moves',()=>{
+    const f=fixture(),p=actor('guest'),source=new THREE.Vector3(25,35,-400),blocked=vi.fn((_source:THREE.Vector3,_eye:THREE.Vector3)=>false);
+    f.warm();const emission=(_id:string,out:THREE.Vector3)=>{out.copy(source);return true;};
+    f.lamps.update([p],'self',f.camera,0,16,blocked,'',true,emission);
+    const projected=source.clone().project(f.camera),flare=f.lamps.presentation.flares.find(v=>v.z>0)!;
+    expect(flare.x).toBeCloseTo(projected.x*.5+.5);expect(flare.y).toBeCloseTo(projected.y*.5+.5);
+    expect(blocked.mock.calls[0][0].distanceTo(source)).toBe(0);
+    source.x+=10;blocked.mockReturnValue(true);
+    f.lamps.update([p],'self',f.camera,16,16,blocked,'',true,emission);
+    expect(blocked).toHaveBeenCalledTimes(2);expect(f.lamps.presentation.flares.every(v=>v.z===0)).toBe(true);
+    f.lamps.update([p],'self',f.camera,32,16,blocked,'',true,()=>false);f.render();
+    expect(f.lights.every(l=>l.intensity===0)).toBe(true);f.lamps.dispose();
+  });
+  it('blinds at conversational distance when the sender aims at standing eyes',()=>{
+    const f=fixture();f.camera.position.y=50;f.camera.updateMatrixWorld(true);f.warm();
+    const p=actor('guest',{y:-55});
+    for(let i=0;i<45;i++)f.lamps.update([p],'self',f.camera,i*16,16,()=>false);
+    expect(f.lamps.presentation.glare).toBeGreaterThan(.8);
+    f.lamps.dispose();
+  });
+  it('scales with distance and alignment, including pitched aim at different eye heights',()=>{
+    const sample=(distance:number,miss=0,height=50)=>{
+      const f=fixture();f.camera.position.y=height;f.camera.lookAt(0,50,-distance);f.camera.updateMatrixWorld(true);f.warm();
+      const p=actor('guest',{y:-distance,friendsFlashlight:{pitch:Math.atan2(height-50,distance),yaw:Math.PI/2+miss,cone:1.35}});
+      for(let i=0;i<60;i++)f.lamps.update([p],'self',f.camera,i*16,16,()=>false);
+      const glare=f.lamps.presentation.glare;f.lamps.dispose();return glare;
+    };
+    expect(sample(80)).toBeGreaterThan(sample(500));
+    expect(sample(500)).toBeGreaterThan(sample(1200));
+    expect(sample(2200)).toBe(0);
+    expect(sample(500,.18)).toBeGreaterThan(.4);
+    expect(sample(500,.5)).toBe(0);
+    expect(sample(80,0,90)).toBeGreaterThan(.8);
+  });
+  it('builds a brief retinal imprint under sustained exposure and clears it on recovery or spectator views',()=>{
+    const f=fixture();f.camera.position.y=50;f.camera.updateMatrixWorld(true);f.warm();
+    const p=actor('guest',{y:-80});
+    f.lamps.update([p],'self',f.camera,0,16,()=>false);
+    const initial=f.lamps.presentation.glare;
+    expect(f.lamps.presentation.afterimage.z).toBe(0);
+    for(let i=1;i<=60;i++)f.lamps.update([p],'self',f.camera,i*16,16,()=>false);
+    expect(f.lamps.presentation.glare).toBeGreaterThan(initial);
+    expect(f.lamps.presentation.afterimage.z).toBeGreaterThan(.3);
+    const position=f.lamps.presentation.afterimage.clone();
+    f.camera.lookAt(0,50,100);f.camera.updateMatrixWorld(true);
+    for(let i=1;i<=15;i++)f.lamps.update([p],'self',f.camera,960+i*16,16,()=>false);
+    expect(f.lamps.presentation.flares.every(v=>v.z===0)).toBe(true);
+    expect(f.lamps.presentation.afterimage.z).toBeGreaterThan(.05);
+    expect(f.lamps.presentation.afterimage.x).toBe(position.x);expect(f.lamps.presentation.afterimage.y).toBe(position.y);
+    for(let i=16;i<=100;i++)f.lamps.update([],'self',f.camera,960+i*16,16,()=>false);
+    expect(f.lamps.presentation.glare).toBe(0);expect(f.lamps.presentation.afterimage.z).toBe(0);
+    f.camera.lookAt(0,50,-100);f.camera.updateMatrixWorld(true);
+    for(let i=0;i<60;i++)f.lamps.update([p],'self',f.camera,2600+i*16,16,()=>false);
+    f.lamps.update([p],'self',f.camera,3600,16,()=>false,'',false);
+    expect(f.lamps.presentation.glare).toBe(0);expect(f.lamps.presentation.afterimage.z).toBe(0);
+    f.lamps.dispose();
+  });
   it('keeps four fixed shadowed slots, excludes self/dead/distant lamps, and restores them after toggling',()=>{
     const f=fixture();expect(f.lights).toHaveLength(4);expect(f.lights.every(l=>l.visible&&l.intensity===0&&!l.castShadow)).toBe(true);
     expect(f.lights.every(l=>l.shadow.mapSize.x===512&&!l.shadow.autoUpdate&&l.map===null)).toBe(true);

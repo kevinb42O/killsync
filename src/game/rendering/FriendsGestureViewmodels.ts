@@ -1,3 +1,4 @@
+import { createDynamiteModel, disposeDynamiteModel } from './FriendsDynamiteModel';
 import * as THREE from 'three';
 import { lengthenFirstPersonArms } from './FriendsFirstPersonArms';
 import { loadFriendsCharacterModel, cloneFriendsCharacterModel, type FriendsCharacterModel } from './FriendsCharacterModel';
@@ -11,6 +12,7 @@ export class FriendsGestureViewmodels {
   private blend=[0,0,0,0];
   private disposed=false;
   private camera?:THREE.PerspectiveCamera;
+  private dynamite?:THREE.Group;
   private confettiPile?:THREE.InstancedMesh;
   private lighting:ReturnType<typeof acquireEquipmentLighting>;
   constructor(scene:THREE.Scene){
@@ -25,7 +27,14 @@ export class FriendsGestureViewmodels {
       model.parts[2].position.set(5.2,0,0);model.parts[3].position.set(-5.2,0,0);
       model.basePositions=model.parts.map(p=>p.position.clone());
       this.createConfettiPile(model);
+      this.createHeldDynamite(model);
     }).catch(error=>console.warn('Empty hands could not load',error));
+  }
+  private createHeldDynamite(model:FriendsCharacterModel){
+    const hand=model.parts[3],palm=hand.userData.palm as number[]|undefined;
+    if(!palm)return;
+    const dynamite=createDynamiteModel();dynamite.name='friends-held-dynamite';dynamite.scale.setScalar(.14);
+    dynamite.position.fromArray(palm);dynamite.position.z-=1.4;dynamite.rotation.x=Math.PI/2;dynamite.visible=false;hand.add(dynamite);this.dynamite=dynamite;
   }
   private createConfettiPile(model:FriendsCharacterModel){
     const hand=model.parts[3],palm=hand.userData.palm as number[]|undefined;
@@ -46,7 +55,7 @@ export class FriendsGestureViewmodels {
     // Local Y runs along the arm and would put the pile behind the hand.
     pile.name='friends-held-confetti';pile.position.fromArray(palm);pile.position.z-=1.8;pile.visible=false;hand.add(pile);this.confettiPile=pile;
   }
-  update(mask:number,pitch:number,dt:number,visible:boolean,confetti=false,throwAt?:number,now=0){
+  update(mask:number,pitch:number,dt:number,visible:boolean,confetti=false,throwAt?:number,now=0,dynamite=false){
     this.root.visible=visible;this.lighting.setVisible(visible);
     if(!visible){this.blend.fill(0);return;}
     const tangent=Math.tan(THREE.MathUtils.degToRad((this.camera?.fov??98)/2)),scale=tangent/Math.tan(THREE.MathUtils.degToRad(49)),narrow=Math.min(1,(this.camera?.aspect??16/9)/1.25);
@@ -55,12 +64,14 @@ export class FriendsGestureViewmodels {
     this.root.position.set(0,-.32*scale*narrow,.20);this.root.scale.set(scale*narrow,scale*narrow,1);
     const model=this.model;if(!model)return;
     const throwAge=throwAt===undefined?Infinity:now-throwAt;
-    const throwing=confetti&&throwAge>=0&&throwAge<560;
-    model.parts[2].visible=!confetti;model.parts[3].visible=true;
+    const holding=confetti||dynamite;
+    const throwing=holding&&throwAge>=0&&throwAge<560;
+    model.parts[2].visible=!holding;model.parts[3].visible=true;
     if(this.confettiPile){this.confettiPile.visible=confetti&&(!throwing||throwAge<170);this.confettiPile.rotation.z=confetti?Math.sin(now*.008)*.045:0;}
+    if(this.dynamite)this.dynamite.visible=dynamite&&(!throwing||throwAge<100);
     for(let i=2;i<=3;i++){model.parts[i].position.copy(model.basePositions[i]);model.parts[i].rotation.copy(model.baseRotations[i]);}
     // Camera owns local pitch already; pointing remains forward in its frame.
-    applyFriendsArmPose(model,confetti?(throwing?FRIENDS_ARM.rightRaise:FRIENDS_ARM.rightPoint):mask,0,dt,this.blend,true);
+    applyFriendsArmPose(model,holding?(throwing?FRIENDS_ARM.rightRaise:FRIENDS_ARM.rightPoint):mask,0,dt,this.blend,true);
     // Frame relaxed arms down/forward and lean raised arms into the view.
     // Sideways arms keep the shared lateral pose.
     // Re-solve translation around the same fixed shoulder after each rotation.
@@ -70,7 +81,7 @@ export class FriendsGestureViewmodels {
       const attachment=pivot.clone().applyQuaternion(part.quaternion).add(part.position);
       part.rotation.x+=1.00*up-1.10*rest;
       // Bring the confetti palm inward without moving its shoulder attachment.
-      if(confetti&&side===1)part.rotation.y-=.35*point;
+      if(holding&&side===1)part.rotation.y-=.35*point;
       part.rotation.z=model.baseRotations[side+2].z+(part.rotation.z-model.baseRotations[side+2].z)*(1-.45*up);
       part.position.copy(attachment).sub(pivot.applyQuaternion(part.quaternion));
     }
@@ -79,6 +90,7 @@ export class FriendsGestureViewmodels {
     this.disposed=true;this.root.traverse(o=>{if(o instanceof THREE.SkinnedMesh){o.skeleton.dispose();if(o.geometry.userData.firstPersonArm)o.geometry.dispose();}});
     this.confettiPile?.dispose();this.confettiPile?.geometry.dispose();
     if(this.confettiPile){const material=this.confettiPile.material;if(Array.isArray(material))material.forEach(item=>item.dispose());else material.dispose();}
+    if(this.dynamite)disposeDynamiteModel(this.dynamite);
     this.lighting.dispose();this.root.removeFromParent();this.root.clear();
   }
 }

@@ -1,0 +1,20 @@
+{
+  "errors": [],
+  "wet": {
+    "context": "running",
+    "effectsCutoff": 850,
+    "ambienceCutoff": 661.2750854492188,
+    "voicesBefore": 0,
+    "voicesAfter": 0,
+    "duration": 2.0399773242630386,
+    "loop": true,
+    "loopStart": 1.0399773242630386,
+    "loopEnd": 2.0399773242630386
+  },
+  "dry": {
+    "effectsCutoff": 21996.125,
+    "ambienceCutoff": 21982.447265625,
+    "underwaterVoice": false,
+    "breathPlayed": true
+  }
+}

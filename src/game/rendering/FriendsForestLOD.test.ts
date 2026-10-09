@@ -1,3 +1,5 @@
+import { RETREAT_SITES } from '../world/FriendsRetreatSites';
+import { LAVA_RIVER_POINTS } from '../world/FriendsLavaRiver';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { FriendsFrontier, type FrontierTree } from '../multiplayer/FriendsFrontier';
@@ -174,4 +176,19 @@ describe('persistent 3D forest', () => {
     forest.update(snapshot, ground, new Set(), camera); expect(forest.stats.trees).toBe(1);
     forest.dispose();
   });
+});
+
+it('excludes unsafe worker trees and stale planted trees from every forest batch',async()=>{
+  const {forest,camera,snapshot,ground}=await fixture();
+  const p=LAVA_RIVER_POINTS[95];
+  forest['natural'].push({...tree,id:'unsafe-worker',x:p.x,y:p.y,z:p.z});
+  snapshot.planted.push({...tree,id:'planted:123',x:p.x+400,y:p.y,z:p.z});
+  const lookout=RETREAT_SITES.find(s=>s.id==='ember-lookout')!;
+  forest['natural'].push({...tree,id:'hidden-lookout',x:lookout.x-800,y:lookout.y});
+  snapshot.planted.push({...tree,id:'planted:124',x:lookout.x-700,y:lookout.y});
+  snapshot.revision++;
+  forest.update(snapshot,ground,new Set(),camera);
+  expect(forest['entries'].map(e=>e.tree.id)).toEqual([tree.id]);
+  expect(forest.stats.trees).toBe(1);
+  forest.dispose();
 });

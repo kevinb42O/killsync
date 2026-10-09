@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
-import type { CoopOperatorRig } from './coopOperatorVisuals';
+import type { PlayerVisualRig } from './coopOperatorVisuals';
 import type { ToolAction } from '../multiplayer/FriendsToolActions';
 import { friendsCharacterHandPoint } from './FriendsCharacterVisuals';
 
@@ -9,10 +9,10 @@ const models = new Map<FriendsAssetId, Promise<THREE.Group>>();
 export class FriendsRemoteToolVisuals {
   private handPoint=new THREE.Vector3();
   private actors = new Map<string, {group:THREE.Group;tool:number;owner:THREE.Object3D}>();
-  update(id:string,rig:CoopOperatorRig,action:ToolAction|undefined,now:number) {
+  update(id:string,rig:PlayerVisualRig,action:ToolAction|undefined,now:number, equipped=true) {
     let entry=this.actors.get(id);
     if(entry&&entry.owner!==rig.root){entry.group.removeFromParent();this.actors.delete(id);entry=undefined;}
-    if(!action||now>action.end+100||!rig.firearm.group.visible){if(entry)entry.group.visible=false;return;}
+    if(!action||now>action.end+100||!equipped || !rig.root.visible){if(entry)entry.group.visible=false;return;}
     if(!entry){entry={group:new THREE.Group(),tool:0,owner:rig.root};rig.root.add(entry.group);this.actors.set(id,entry);}
     if(entry.tool!==action.tool){
       entry.tool=action.tool;entry.group.clear();
@@ -21,7 +21,7 @@ export class FriendsRemoteToolVisuals {
       const current=entry,tool=action.tool;
       void model.then(source=>{if(this.actors.get(id)===current&&current.tool===tool){const copy=source.clone(true);copy.position.y=-15;copy.rotation.y=-Math.PI/2;current.group.add(copy);}}).catch(()=>{});
     }
-    entry.group.visible=true;rig.firearm.group.visible=false;
+    entry.group.visible=true;
     const windup=Math.max(0,Math.min(1,(now-action.start)/(action.contact-action.start))),recovery=Math.max(0,Math.min(1,(now-action.contact)/(action.end-action.contact)));
     const swing=now<action.contact?-.55*Math.sin(windup*Math.PI/2):1.1*(1-recovery)**2;
     if(friendsCharacterHandPoint(rig,this.handPoint))entry.group.position.copy(this.handPoint);

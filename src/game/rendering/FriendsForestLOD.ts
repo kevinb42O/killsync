@@ -1,3 +1,5 @@
+import { emberRetreatTreeClearance } from '../world/FriendsRetreatSites';
+import { lavaRiverTreeClearance } from '../world/FriendsLavaRiver';
 import * as THREE from 'three';
 import { FRIENDS_TREE_SIZES, FRIENDS_FOREST_DETAIL_END } from '../world/FriendsVegetationAppearance';
 import { type FrontierTree, type FrontierSnapshot, frontierTrees } from '../multiplayer/FriendsFrontier';
@@ -148,7 +150,7 @@ export class FriendsForestLOD {
   canopy(tree: FrontierTree) { return this.species[KINDS.indexOf(tree.kind)]?.canopy; }
   private rebuild(trees: FrontierTree[], ground: (tree: FrontierTree) => boolean) {
     this.speciesCounts = this.species.map(() => 0);
-    this.entries = trees.map(tree => {
+    this.entries = trees.filter(tree => !lavaRiverTreeClearance(tree.x, tree.y) && !emberRetreatTreeClearance(tree.x, tree.y)).map(tree => {
       const species = KINDS.indexOf(tree.kind), model = this.species[species];
       this.speciesCounts[species]++;
       const root = new THREE.Matrix4().compose(new THREE.Vector3(tree.x, tree.z, tree.y), new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, terrainHash(tree.x, tree.y) * Math.PI * 2), new THREE.Vector3().setScalar(tree.scale));

@@ -34,3 +34,19 @@ describe('snapshot packet transport', () => {
     expect(assembler['pending'].size).toBe(0);
   });
 });
+
+describe('decoded snapshot acceptance', () => {
+  it('retains a fragmented baseline when a newer delta completes before it', () => {
+    const assembler = new SnapshotAssembler(true);
+    const baseline = encodeSnapshotPackets('b'.repeat(25_000), 10);
+    assembler.push(baseline[0], 0);
+    expect(assembler.push(encodeSnapshotPackets('delta', 11)[0], 10)).toBe('delta');
+    expect(assembler.push(baseline[1], 20)).toBeUndefined();
+    expect(assembler.push(baseline[2], 30)).toBe('b'.repeat(25_000));
+    assembler.accept(10);
+    expect(assembler.push(baseline[0], 40)).toBeUndefined();
+    expect(assembler.push(encodeSnapshotPackets('next delta', 12)[0], 50)).toBe('next delta');
+    assembler.accept(12);
+    expect(assembler.push(encodeSnapshotPackets('delta', 11)[0], 60)).toBeUndefined();
+  });
+});

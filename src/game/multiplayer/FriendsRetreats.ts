@@ -26,7 +26,7 @@ export function retreatSeatPrompt(player:Actor,players:readonly Actor[],state:Re
 }
 export class FriendsRetreats {
   readonly state:RetreatState;
-  constructor(save?:RetreatSave){const selected=save?.version===1&&Array.isArray(save.active)?save.active:undefined;this.state={version:1,active:RETREAT_SITES.filter(s=>!selected||selected.includes(s.id)).map(s=>s.id),lightsOn:save?.lightsOn!==false,switchSerial:0};}
+  constructor(save?:RetreatSave){const selected=save?.version===1&&Array.isArray(save.active)?save.active:undefined;this.state={version:1,active:RETREAT_SITES.filter(s=>!selected||selected.includes(s.id)||((save?.siteRevision??1)<2&&s.id.startsWith('ember'))).map(s=>s.id),lightsOn:save?.lightsOn!==false,switchSerial:0};}
   /** Run once after loading buildings. Existing construction and edits win. */
   configure(pieces:readonly FriendsBuildPiece[],terrain?:FriendsTerrain){
     this.state.active=this.state.active.filter(id=>{
@@ -88,5 +88,5 @@ export class FriendsRetreats {
     }
   }
   snapshot():RetreatState{return {...this.state,active:[...this.state.active]};}
-  save():RetreatSave{return {version:1,active:[...this.state.active],lightsOn:this.state.lightsOn};}
+  save():RetreatSave{return {version:1,siteRevision:2,active:[...this.state.active],lightsOn:this.state.lightsOn};}
 }

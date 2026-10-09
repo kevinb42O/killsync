@@ -4,7 +4,16 @@ import { CoopFirearmVisualRig } from './coopFirearmVisuals';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import { getCoopSkin, type CoopSkinDefinition, type CoopSkinId } from '../multiplayer/CoopSkins';
 
-export interface CoopOperatorRig {
+export interface PlayerVisualRig {
+  root: THREE.Group;
+  avatar: THREE.Group;
+  nameplate: THREE.Sprite;
+  nameplateScale: THREE.Vector3;
+  skin: CoopSkinDefinition;
+  firearm?: CoopFirearmVisualRig;
+}
+
+export interface CoopOperatorRig extends PlayerVisualRig {
   root: THREE.Group;
   /** Backward-compatible alias for root */
   mesh: THREE.Group;
@@ -687,7 +696,7 @@ export function disposeCoopOperatorRig(rig: CoopOperatorRig): void {
   rig.ownedMaterials.forEach(material => material.dispose());
 }
 
-function createNameplate(label: string, color: string, style: 'operator' | 'friends'): THREE.Sprite {
+export function createNameplate(label: string, color: string, style: 'operator' | 'friends'): THREE.Sprite {
   if (typeof document === 'undefined') {
     return new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true }));
   }
@@ -766,7 +775,7 @@ function roundedRect(
   context.closePath();
 }
 
-function disposeNameplate(sprite: THREE.Sprite): void {
+export function disposeNameplate(sprite: THREE.Sprite): void {
   const material = sprite.material as THREE.SpriteMaterial;
   material.map?.dispose();
   material.dispose();

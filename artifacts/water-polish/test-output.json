@@ -1,0 +1,262 @@
+{
+  "errors": [],
+  "captures": [
+    {
+      "view": "lake",
+      "before": true,
+      "gl": 0,
+      "calls": 3,
+      "triangles": 38168
+    },
+    {
+      "view": "lake",
+      "before": false,
+      "gl": 0,
+      "calls": 3,
+      "triangles": 38168
+    },
+    {
+      "view": "overhead",
+      "before": true,
+      "gl": 0,
+      "calls": 3,
+      "triangles": 38168
+    },
+    {
+      "view": "overhead",
+      "before": false,
+      "gl": 0,
+      "calls": 3,
+      "triangles": 38168
+    },
+    {
+      "view": "sea",
+      "before": true,
+      "gl": 0,
+      "calls": 3,
+      "triangles": 60568
+    },
+    {
+      "view": "sea",
+      "before": false,
+      "gl": 0,
+      "calls": 3,
+      "triangles": 60568
+    }
+  ],
+  "performance": {
+    "lake": {
+      "before": {
+        "cpuP50": 0,
+        "cpuP95": 0.10000000149011612,
+        "gpuP50": 6.590499,
+        "gpuP95": 6.662708,
+        "gpuSamples": 64
+      },
+      "after": {
+        "cpuP50": 0,
+        "cpuP95": 0.10000000149011612,
+        "gpuP50": 7.21275,
+        "gpuP95": 7.861458,
+        "gpuSamples": 64
+      }
+    },
+    "sea": {
+      "before": {
+        "cpuP50": 0,
+        "cpuP95": 0.09999999962747097,
+        "gpuP50": 7.291625,
+        "gpuP95": 7.846166,
+        "gpuSamples": 64
+      },
+      "after": {
+        "cpuP50": 0,
+        "cpuP95": 0.09999999962747097,
+        "gpuP50": 7.292374,
+        "gpuP95": 9.376875,
+        "gpuSamples": 64
+      }
+    }
+  },
+  "world": [
+    {
+      "view": "deepmere",
+      "hour": 12,
+      "gl": 0,
+      "draws": 707,
+      "triangles": 2223774,
+      "terrain": {
+        "surfaceTiles": 82,
+        "surfaceBytes": 19604000,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 6.383333333302289,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "view": "mouth",
+      "hour": 12,
+      "gl": 0,
+      "draws": 160,
+      "triangles": 334102,
+      "terrain": {
+        "surfaceTiles": 91,
+        "surfaceBytes": 23661872,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 5.292499999996895,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "view": "water_bridge",
+      "hour": 12,
+      "gl": 0,
+      "draws": 232,
+      "triangles": 1889106,
+      "terrain": {
+        "surfaceTiles": 94,
+        "surfaceBytes": 23636808,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 5.623333333308498,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "view": "underwater_up",
+      "hour": 12,
+      "gl": 0,
+      "draws": 286,
+      "triangles": 1419562,
+      "terrain": {
+        "surfaceTiles": 92,
+        "surfaceBytes": 24061960,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 4.644999999987582,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "view": "deepmere",
+      "hour": 23,
+      "gl": 0,
+      "draws": 697,
+      "triangles": 2212234,
+      "terrain": {
+        "surfaceTiles": 96,
+        "surfaceBytes": 23388872,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 6.047500000040357,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    }
+  ],
+  "oceanOverlap": {
+    "maxChannelDifference": 1,
+    "meanChannelDifference": 0.03558661265432099
+  }
+}

@@ -1,4 +1,4 @@
-import { COOP_MAX_PLAYERS } from './protocol';
+import { multiplayerPlayerLimit } from './protocol';
 import type { CoopGameMode } from './CoopGameMode';
 
 /**
@@ -439,7 +439,7 @@ export class AutoHostedLobby {
   readonly id: string;
   readonly code: string;
   readonly hostName: string;
-  private maxPlayers = COOP_MAX_PLAYERS;
+  private readonly maxPlayers: number;
   private playerCount = 1;
   private state: 'waiting' | 'in_game' = 'waiting';
   private heartbeatTimer: number | NodeJS.Timeout = 0;
@@ -457,6 +457,7 @@ export class AutoHostedLobby {
     this.code = code ? normalizeRoomCode(code) : generateRoomCode();
     this.id = id || `room-${this.code.toLowerCase()}`;
     this.hostName = hostName;
+    this.maxPlayers = multiplayerPlayerLimit(gameMode);
   }
 
   setStatusListener(listener?: (status: string) => void) {

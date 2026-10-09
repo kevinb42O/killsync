@@ -31,8 +31,10 @@ check terrain and building obstructions. Fish land on actual ground or floors,
 including bridges, and use the model's Out_Of_Water flop animation. Fish thrown
 into water swim briefly at the surface, dive away and disappear. Players can
 drop and pick up fish on land. Changing tools or entering menus/building,
-swimming, flying, piloting or seated activities stows the rod and drops a held
-fish. Current rowboat seats are rowing seats and therefore stow fishing.
+swimming, flying, piloting or operating seated activities stows the rod and drops a held
+fish. Retreat benches and skiff seats allow fishing. A skiff passenger holding a rod
+does not row; the other player can control both oars. Operating seats still
+stow the rod.
 
 ## Models and performance
 
@@ -51,7 +53,8 @@ sizes, triangle counts and the license are in
   Held catches are protected. Unattended distant fish expire after 90 seconds.
 - The host owns timing, movement and ownership. Snapshots send casts/fish, not
   rope nodes or skeletons. Fishing state is transient and excluded from saves.
-  Multiplayer protocol version 53 includes slot 7 and fishing input blocking.
+  Multiplayer protocol version 61 includes catch attribution and paid-out line
+  length, alongside slot 7 and fishing input blocking.
 
 Local browser samples in `artifacts/fishing/validation.json` measured fishing
 visual-update CPU p95 at 0.2 ms for one cast and 0.5 ms for five casts or 32 nearby
@@ -81,3 +84,34 @@ held/drop/swimming presentations before capturing screenshots.
   rod selection, bite/reel/hold, drop/flop, pickup/throw/release and existing
   combat/rope shortcuts. Screenshots and results are in `artifacts/fishing/`.
 - `tools/friends-fishing-review.html`: visual review harness for each phase.
+
+## October 10 polish
+
+The catch card shows rounded nose-to-tail lengths in centimeters, using the
+normalized 34-unit silhouette as an 85 cm fish at size 1. The session log only
+counts fish originally caught by the player, so borrowed pickups do not create
+extra catches. Ordinary fish favor smaller sizes; 1.5% of draws reach the giant
+2–4.2 size band. This remains one koi species, including stylized giant catches.
+
+Held fish use a nearly straight animation and two-sided fin rendering. Hands
+support the belly without hiding the tail, and very large fish move farther
+from the camera to keep the silhouette inside desktop framing. Retrieval adds
+a turning reel hand, rod flex and a brief catch arrival movement.
+
+Walking away takes up slack and then pulls the bobber at a bounded speed;
+walking toward it leaves the bobber afloat. The line settles onto the water.
+Dragging into a bank or obstruction safely retrieves without a catch. Pickup
+checks line of sight, and initial releases no longer jump through a wall.
+
+Three real CC0 recordings provide the cast, continuous reel and small water
+impact. See [recording provenance](../public/audio/friends/fishing-sources.md).
+There are no catch chimes or instructional popups. Bite ripples remain silent
+after one quiet initial water cue. The line is visual physics, not a fish-fighting
+or line-break minigame. Current screenshots and browser reports are in
+`artifacts/fishing-polish/`.
+
+Polish validation: 93 focused tests passed across fishing, presentation, line,
+rowboats, swimming, controls, snapshots and audio. TypeScript and the production
+build passed. Browser checks decoded all three recordings, verified one reel
+voice and cancellation, checked fin rendering and framing, exercised the real
+arena controls, and replicated the full catch/release loop over WebRTC.

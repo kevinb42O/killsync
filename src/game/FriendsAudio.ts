@@ -8,6 +8,8 @@ const QUIET_SOUNDSCAPE: FriendsSoundscapeMix = { wind: 0, birds: 0, crickets: 0,
 
 export type SurfaceCue = 'grass' | 'woodStep' | 'stoneStep' | 'snow' | 'waterStep' | 'mudStep';
 export type FriendsCue = SurfaceCue | 'wood' | 'stone' | 'soil' | 'ore' | 'dig' | 'landing' | 'leaves' | 'treeBreak' | 'birdCall'
+  | 'fishingCast' | 'fishingSplash' | 'fishingBite' | 'fishingReel'
+  | 'dynamiteExplosion' | 'dynamiteFuse'
   | 'stoneThrow' | 'stoneImpact' | 'stoneHurt'
   | 'waterEntry' | 'swimStroke' | 'waterDive' | 'waterBreathIn'
   | 'birdRobin' | 'birdBlueTit' | 'birdSparrow' | 'birdWings' | 'birdStartled'
@@ -21,6 +23,8 @@ export type FriendsAudioSettings = { music: number; effects: number; ambience: n
 const ROOT = `${import.meta.env.BASE_URL}audio/friends/`;
 const variants = (stem: string, count = 3) => Array.from({ length: count }, (_, i) => `${ROOT}${stem}_${String(i).padStart(3, '0')}.ogg`);
 export const FRIENDS_CUE_ASSETS: Readonly<Record<Cue, readonly string[]>> = {
+  fishingCast:[ROOT+'fishing_cast.ogg'], fishingSplash:[ROOT+'fishing_plop.ogg'], fishingBite:[ROOT+'fishing_plop.ogg'], fishingReel:[ROOT+'fishing_reel.ogg'],
+  dynamiteExplosion: [ROOT + 'dynamite_explosion.mp3'], dynamiteFuse: [ROOT + 'dynamite_fuse.ogg'],
   grass: variants('footstep_grass'), woodStep: variants('footstep_wood'), stoneStep: variants('footstep_concrete'), snow: variants('footstep_snow'),
   waterStep: variants('step_water', 4), mudStep: variants('step_mud', 4),
   waterEntry: [ROOT + 'water_splash_effect.mp3', ROOT + 'splashing_water.mp3'],
@@ -58,7 +62,7 @@ const MUSIC_FADE_SECONDS = 8;
 const TRAIN_LOOPS = { engine: ROOT + 'train_drive.ogg', rail: ROOT + 'train_rail.ogg' };
 const WORLD_LOOPS: Record<WorldLoop, string> = {
   caveAir: ROOT + 'cave_air.ogg', waterfall: ROOT + 'waterfall.ogg', lava: ROOT + 'lava.ogg',
-  volcano: ROOT + 'volcano.ogg', reel: ROOT + 'reel_motor.ogg',
+  volcano: ROOT + 'volcano.ogg', reel: ROOT + 'reel_motor.ogg', oceanSteam: ROOT + 'ocean_steam_loop.ogg',
 };
 const STORAGE = 'sunline.audio.v1';
 const SAMPLE_CUES = new Map(Object.entries(CUES).flatMap(([cue, urls]) => urls.map(url => [url, cue as Cue] as const)));
@@ -88,6 +92,8 @@ export class FriendsAudio {
   private releaseTimer?: ReturnType<typeof setTimeout>;
   private context?: AudioContext;
   private effectsGain?: GainNode;
+  private effectsWaterFilter?: BiquadFilterNode;
+  private ambienceWaterFilter?: BiquadFilterNode;
   private musicGain?: GainNode;
   private ambienceGain?: GainNode;
   private outputGuard?: DynamicsCompressorNode;
@@ -186,7 +192,7 @@ export class FriendsAudio {
         document.removeEventListener('visibilitychange', this.onVisibility);
         this.stopMusic();
         this.clearSoundscape();
-        this.underwaterDiveRequested = false; this.stopUnderwaterDive(false); this.cancelResurfaceBreath();
+        this.underwaterDiveRequested = false; this.applyVolumes(); this.stopUnderwaterDive(false); this.cancelResurfaceBreath();
         for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } voice.disconnect(); }
         this.voices.clear(); this.effectVoices.clear();
         this.lastCue.clear();
@@ -202,9 +208,11 @@ export class FriendsAudio {
     window.removeEventListener('pointerdown', this.activate, true);
     window.removeEventListener('keydown', this.activate, true);
     document.removeEventListener('visibilitychange', this.onVisibility);
-    this.stopMusic(); this.clearSoundscape(); this.underwaterDiveRequested = false; this.stopUnderwaterDive(false); this.cancelResurfaceBreath();
+    this.stopMusic(); this.clearSoundscape(); this.underwaterDiveRequested = false; this.applyVolumes(); this.stopUnderwaterDive(false); this.cancelResurfaceBreath();
     for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } voice.disconnect(); }
     this.voices.clear(); this.effectVoices.clear(); this.buffers.clear(); this.bufferTrims.clear(); this.musicOffsets.clear();
+    this.effectsWaterFilter?.disconnect();this.ambienceWaterFilter?.disconnect();
+    this.effectsWaterFilter=this.ambienceWaterFilter=undefined;
     this.outputGuard?.disconnect(); this.outputGuard = undefined;
     void this.context?.close().catch(() => {}); this.context = undefined;
   }
@@ -224,9 +232,13 @@ export class FriendsAudio {
           this.outputGuard.release.value = .15; this.outputGuard.connect(this.context.destination);
         }
         const output = this.outputGuard ?? this.context.destination;
-        this.effectsGain = this.context.createGain(); this.effectsGain.connect(output);
+        this.effectsGain = this.context.createGain();
+        this.effectsWaterFilter=this.context.createBiquadFilter?.();
+        if(this.effectsWaterFilter){this.effectsWaterFilter.type='lowpass';this.effectsWaterFilter.Q.value=.7;this.effectsWaterFilter.frequency.value=22000;this.effectsGain.connect(this.effectsWaterFilter);this.effectsWaterFilter.connect(output);}else this.effectsGain.connect(output);
         this.musicGain = this.context.createGain(); this.musicGain.connect(output);
-        this.ambienceGain = this.context.createGain(); this.ambienceGain.connect(output);
+        this.ambienceGain = this.context.createGain();
+        this.ambienceWaterFilter=this.context.createBiquadFilter?.();
+        if(this.ambienceWaterFilter){this.ambienceWaterFilter.type='lowpass';this.ambienceWaterFilter.Q.value=.7;this.ambienceWaterFilter.frequency.value=22000;this.ambienceGain.connect(this.ambienceWaterFilter);this.ambienceWaterFilter.connect(output);}else this.ambienceGain.connect(output);
         this.effectsGain.gain.value = this.settings.muted ? 0 : this.settings.effects;
         this.musicGain.gain.value = this.settings.muted ? 0 : this.settings.music * .35;
         this.ambienceGain.gain.value = this.settings.muted ? 0 : this.settings.ambience;
@@ -267,8 +279,9 @@ export class FriendsAudio {
     this.loads.set(url, promise);
     return promise;
   }
-  play(cue: Cue, volume = .3, cooldownMs = 80, rate = 1, duration?: number, options?: { ambience?: boolean; pan?: number; delay?: number; offset?: number; fadeOutSeconds?: number }) {
+  play(cue: Cue, volume = .3, cooldownMs = 80, rate = 1, duration?: number, options?: { ambience?: boolean; pan?: number; delay?: number; offset?: number; fadeOutSeconds?: number; loop?:boolean }) {
     const context = this.context;
+    if(this.underwaterDiveRequested&&(cue==='swimStroke'||cue==='waterStep'))return;
     if (!this.active || !context || context.state !== 'running' || document.hidden || this.settings.muted || !(options?.ambience ? this.settings.ambience : this.settings.effects) || this.voices.size >= 20) return;
     const now = context.currentTime, start = now + Math.max(0, Math.min(2, options?.delay ?? 0));
     if ((now - (this.lastCue.get(cue) ?? -Infinity)) * 1000 < cooldownMs) return;
@@ -286,7 +299,8 @@ export class FriendsAudio {
     const source = context.createBufferSource(), gain = context.createGain();
     source.buffer = buffer; source.playbackRate.value = Math.max(.65, Math.min(1.4, rate));
     const offset = Math.max(0, Math.min(options?.offset ?? 0, buffer.duration - .001));
-    const length = Math.min(duration ?? buffer.duration, buffer.duration - offset);
+    const length = options?.loop ? duration ?? buffer.duration : Math.min(duration ?? buffer.duration, buffer.duration - offset);
+    source.loop=Boolean(options?.loop);
     const level = clamp(volume) * (this.bufferTrims.get(urls[index]) ?? 1);
     gain.gain.value = level;
     if (duration !== undefined) {
@@ -310,6 +324,7 @@ export class FriendsAudio {
   setUnderwaterDive(enabled: boolean) {
     this.cancelResurfaceBreath();
     this.underwaterDiveRequested = enabled;
+    this.applyVolumes();
     this.syncUnderwaterDive();
   }
   /** Let the water-entry splash clear, then breathe in if the player stays surfaced. */
@@ -614,9 +629,11 @@ export class FriendsAudio {
   private applyVolumes() {
     if (!this.context) return;
     const now = this.context.currentTime;
-    this.effectsGain?.gain.setTargetAtTime(this.settings.muted ? 0 : this.settings.effects, now, .05);
+    this.effectsGain?.gain.setTargetAtTime(this.settings.muted ? 0 : this.settings.effects*(this.underwaterDiveRequested?.8:1), now, .05);
+    this.effectsWaterFilter?.frequency.setTargetAtTime(this.underwaterDiveRequested?850:22000,now,.09);
+    this.ambienceWaterFilter?.frequency.setTargetAtTime(this.underwaterDiveRequested?650:22000,now,.12);
     this.musicGain?.gain.setTargetAtTime(this.settings.muted ? 0 : this.settings.music * .35, now, .25);
-    this.ambienceGain?.gain.setTargetAtTime(this.settings.muted ? 0 : this.settings.ambience, now, .25);
+    this.ambienceGain?.gain.setTargetAtTime(this.settings.muted ? 0 : this.settings.ambience*(this.underwaterDiveRequested?.25:1), now, .25);
   }
   private syncMusic() {
     if (!this.active || !this.activated || document.hidden || this.settings.muted || !this.settings.music) { this.stopMusic(); return; }

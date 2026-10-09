@@ -1,3 +1,4 @@
+import { RETREAT_SITES,RETREAT_SEATS } from '../world/FriendsRetreatSites';
 import { describe,it,expect } from 'vitest';
 import { FriendsCampfireSimulation, CAMPFIRE_MAX_FUEL, campfireHeat, MARSHMALLOW_TOOL, marshmallowReachTip } from './FriendsCampfireSimulation';
 import { CAMPFIRE_SEATS } from './FriendsCampfireSeats';
@@ -143,5 +144,36 @@ describe('timber fuel and marshmallow roasting',()=>{
     expect(weapon.magazineAmmo).toBe(ammo);expect(snapshot.projectiles).toEqual([]);
     expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(snapshot),1)!.friends!.campfire).toEqual(snapshot.friends!.campfire);
     sim.setInput(p.id,{...input(false),sequence:181,jumpPressed:true});sim.tick(50);expect(p.friendsSeat).toBeUndefined();expect(sim.createSnapshot().friends!.campfire!.roasts.host).toBeDefined();
+  });
+});
+
+describe('Ember campfire roasting',()=>{
+  const camp=RETREAT_SITES.find(s=>s.id==='ember-camp')!;
+  function emberInput(p:{x:number;y:number;z:number}){
+    const dx=camp.x-p.x,dy=camp.y-p.y;
+    return {...input(true,Math.atan2(dy,dx)),aimPitch:quantizePitch(Math.atan2(camp.z+42*.27-p.z-45,Math.hypot(dx,dy)))};
+  }
+  it.each(RETREAT_SEATS.filter(s=>s.siteId==='ember-camp'))('roasts from Ember seat $index without aiming at the distant commons',seat=>{
+    const fire=new FriendsCampfireSimulation(),p={...player(),...seat,friendsSeat:{vehicleId:camp.id,index:seat.index}};
+    for(let i=0;i<240;i++)fire.update(50,[p],new Map([[p.id,emberInput(p)]]));
+    expect(fire.snapshot().roasts.host).toMatchObject({roasting:true,charred:false});expect(fire.snapshot().roasts.host.toast).toBeGreaterThan(.4);
+    const away={...emberInput(p),aimAngle:quantizeAngle(Math.atan2(camp.y-p.y,camp.x-p.x)+Math.PI)};
+    fire.update(50,[p],new Map([[p.id,away]]));expect(fire.snapshot().roasts.host.roasting).toBe(false);
+    expect(fire.eat(p)).toBe(true);
+  });
+  it('cooks a standing marshmallow only where the visible finite tip reaches the small flame',()=>{
+    const fire=new FriendsCampfireSimulation(),pitch=Math.asin((48*.27-50)/124),p={...player(),friendsSeat:undefined,x:camp.x-124*Math.cos(pitch),y:camp.y,z:camp.z};
+    const frame={...input(true,0),aimPitch:quantizePitch(pitch)};
+    for(let i=0;i<100;i++)fire.update(50,[p],new Map([[p.id,frame]]));expect(fire.snapshot().roasts.host.roasting).toBe(true);
+    fire.update(50,[{...p,x:p.x-150}],new Map([[p.id,frame]]));expect(fire.snapshot().roasts.host.roasting).toBe(false);
+  });
+  it('spends timber locally, replicates the new fuel and restores it independently of the commons',()=>{
+    const sim=new FriendsSimulation([{id:'host',label:'host',color:'#fff'}]),p=sim['players'].get('host')!;
+    Object.assign(p,{x:camp.x+60,y:camp.y,z:camp.z});const pack=sim['friendsFrontier']!.pack(p),before=pack.wood;
+    expect(sim.friendsAction(p.id,{requestId:90,action:'campfire_fuel'}).ok).toBe(true);expect(pack.wood).toBe(before-1);
+    expect(sim['friends']!.campfire.fuelSeconds).toBe(0);expect(sim['friends']!.campfire.snapshot().siteFuelSeconds?.[camp.id]).toBe(30);
+    const snapshot=sim.createSnapshot();expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(snapshot),1)!.friends!.campfire!.siteFuelSeconds?.[camp.id]).toBe(30);
+    const restored=new FriendsCampfireSimulation(0,sim['friends']!.campfire.siteFuelSave());expect(restored.snapshot().siteFuelSeconds?.[camp.id]).toBe(30);
+    restored.setActiveSites([]);expect(restored.fuelError(p)).toBeDefined();restored.update(50,[p],new Map([[p.id,emberInput(p)]]));expect(restored.snapshot().roasts.host.roasting).toBe(false);
   });
 });

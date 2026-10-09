@@ -1,0 +1,271 @@
+{
+  "errors": [],
+  "fixture": {
+    "checks": [
+      {
+        "angle": -1.2,
+        "yawOffset": -0.6,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": -1.2,
+        "yawOffset": -0.6,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": -1.2,
+        "yawOffset": -0.6,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": -1.2,
+        "yawOffset": 0,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1.0000000000000002,
+        "flareGap": 0
+      },
+      {
+        "angle": -1.2,
+        "yawOffset": 0,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": -1.2,
+        "yawOffset": 0,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1.0000000000000002,
+        "flareGap": 0
+      },
+      {
+        "angle": -1.2,
+        "yawOffset": 0.6,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": -1.2,
+        "yawOffset": 0.6,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1.0000000000000002,
+        "flareGap": 0
+      },
+      {
+        "angle": -1.2,
+        "yawOffset": 0.6,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": -0.6,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": -0.6,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1.0000000000000002,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": -0.6,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": 0,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 0.9999999999999999,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": 0,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": 0,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 0.9999999999999999,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": 0.6,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 0.9999999999999996,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": 0.6,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 0,
+        "yawOffset": 0.6,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 0.9999999999999996,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": -0.6,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": -0.6,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": -0.6,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": 0,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1.0000000000000002,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": 0,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": 0,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1.0000000000000002,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": 0.6,
+        "pitch": -0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": 0.6,
+        "pitch": 0,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      },
+      {
+        "angle": 1.5,
+        "yawOffset": 0.6,
+        "pitch": 0.7,
+        "handGap": 0,
+        "beamGap": 0,
+        "aimDot": 1,
+        "flareGap": 0
+      }
+    ],
+    "glare": 0.9702513574860079,
+    "off": {
+      "emission": false,
+      "glare": 0,
+      "afterimage": 0
+    },
+    "before": {
+      "programs": 12,
+      "textures": 11
+    },
+    "after": {
+      "programs": 12,
+      "textures": 11
+    },
+    "glError": 0
+  },
+  "production": {
+    "propVisible": true,
+    "beamGap": 0,
+    "flareGap": 0,
+    "glError": 0
+  }
+}

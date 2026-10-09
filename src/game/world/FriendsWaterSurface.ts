@@ -1,6 +1,6 @@
 import { ISLAND_LAKES, ISLAND_SEA_LEVEL, islandArchRange, islandLakeRadius, islandCoastDistance } from './FriendsIsland';
 import { baseTerrainHeight, skyfallWaterLevelAt } from './FriendsTerrain';
-import { riverWetAt } from './FriendsHydrology';
+import { riverWetAt, riverSampleAt } from './FriendsHydrology';
 
 export type FriendsWaterSample = { level:number; depth:number; bodyId:string };
 /** Match the actual 32-unit collision cells, including open cave mouths. */
@@ -31,4 +31,26 @@ export function friendsWaterLevel(x:number,y:number){return friendsWaterAt(x,y)?
 /** Signed ownership mask, deliberately identical for adjacent water meshes. */
 export function friendsWaterDepth(x:number,y:number,bodyId:string){
   const s=friendsWaterAt(x,y);return s?.bodyId===bodyId?s.depth:-32;
+}
+
+/** Keep the visual sheet buried in its banks. The navigation field stops at
+ * solid collision cells, but the distant terrain interpolates those cells.
+ * Cutting the mesh at that same texel exposes an air edge below the smooth
+ * bank. Dry bank texels therefore retain water geometry behind the terrain;
+ * ordinary depth testing supplies the actual visible shoreline. */
+export function friendsWaterRenderDepth(x:number,y:number,bodyId:string){
+  const wet=friendsWaterAt(x,y);
+  if(wet)return wet.bodyId===bodyId?wet.depth:-32;
+  const river=riverSampleAt(x,y),cascade=skyfallWaterLevelAt(x,y);
+  let owner:string|undefined,level:number|undefined;
+  if(river&&river.side<river.width*.8+32){owner=river.riverId;level=river.level;}
+  else if(cascade&&cascade.side<cascade.width*.8+32){owner=cascade.id;level=cascade.level;}
+  // Give dry bank texels the same lake ownership as their adjacent wet
+  // texels. Extending two translucent sheets over a join would darken it.
+  for(const lake of ISLAND_LAKES){
+    if(Math.abs(x-lake.x)>lake.rx*1.5||Math.abs(y-lake.y)>lake.ry*1.5||islandLakeRadius(x,y,lake)>1.45)continue;
+    if(river&&Math.abs(river.level-lake.level)>1||cascade&&cascade.level>lake.level+1)continue;
+    owner=lake.id;level=lake.level;break;
+  }
+  return owner===bodyId&&level!==undefined?Math.max(1,level-friendsWaterGround(x,y)):-32;
 }

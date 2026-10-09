@@ -1,6 +1,6 @@
+import { lavaRiverPoint } from '../world/FriendsLavaRiver';
 import * as THREE from 'three';
 import { ISLAND_VOLCANO } from '../world/FriendsIsland';
-import { baseTerrainHeight } from '../world/FriendsTerrain';
 
 /** Molten rock illuminates nearby terrain independently of the sun. */
 export class FriendsVolcanoGlow extends THREE.Group {
@@ -10,10 +10,8 @@ export class FriendsVolcanoGlow extends THREE.Group {
     const v = ISLAND_VOLCANO;
     this.addSource(v.x, v.lavaLevel + 420, v.y, 14000000, 5400, 0);
     for (const [index, t] of [.25, .72].entries()) {
-      const radius = 700 + t * 2800;
-      const angle = 1.05 + .045 * Math.sin(t * 8) + .025 * Math.sin(t * 17);
-      const x = v.x + Math.cos(angle) * radius, z = v.y + Math.sin(angle) * radius;
-      this.addSource(x, baseTerrainHeight(x, z) + 140, z, 1400000, 1800, index + 1);
+      const p=lavaRiverPoint(t);
+      this.addSource(p.x,p.z+140,p.y,1400000,1800,index+1);
     }
   }
   private addSource(x: number, y: number, z: number, intensity: number, distance: number, phase: number) {

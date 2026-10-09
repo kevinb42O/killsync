@@ -2154,6 +2154,16 @@ export class Renderer3D {
 
   private setupThirdPersonCharacter() {
     this.thirdPersonPlayerGroup = new THREE.Group();
+    if (this.worldId === 'friends_frontier') {
+      // Friends supplies its own local/spectator body through the bridge.
+      this.tpMuzzlePoint = new THREE.Object3D();
+      this.tpMuzzlePoint.position.set(0, 29, 22);
+      this.thirdPersonPlayerGroup.add(this.tpMuzzlePoint);
+      this.thirdPersonPlayerGroup.visible = false;
+      this.scene.add(this.thirdPersonPlayerGroup);
+      return;
+    }
+
 
     // Armored Torso
     const torsoGeo = new THREE.BoxGeometry(18, 24, 12);
@@ -2715,6 +2725,15 @@ export class Renderer3D {
     this.viewmodelCamera.position.copy(this.camera.position);
     this.viewmodelCamera.quaternion.copy(this.camera.quaternion);
 
+    // Friends equipment has its own viewmodels. Keep camera preparation, but
+    // skip animation of the hidden survival handgun and cybernetic arm.
+    if (this.worldId === 'friends_frontier' && this.frontierToolActive) {
+      this.lastMouseDeltaX = this.lastMouseDeltaY = 0;
+      this.camera.updateMatrixWorld(true);
+      this.viewmodelCamera.updateMatrixWorld(true);
+      return;
+    }
+
     const targetSwayX = THREE.MathUtils.clamp(-this.lastMouseDeltaX * 0.0017, -0.22, 0.22);
     const targetSwayY = THREE.MathUtils.clamp(this.lastMouseDeltaY * 0.0017, -0.16, 0.16);
     const targetSwayTilt = THREE.MathUtils.clamp(-this.lastMouseDeltaX * 0.003, -0.12, 0.12);
@@ -2828,6 +2847,7 @@ export class Renderer3D {
     this.vmGlowLight.color.copy(primaryColor);
     this.vmGlowLight.intensity = suit?.premium ? 2.35 + (suit.emissiveIntensity || 0) * 1.25 : 2.2;
 
+    if (this.worldId !== 'friends_frontier' || !this.frontierToolActive) {
     // 2. Update First-Person Viewmodel Materials with Operator Palette
     (this.weaponChassis.material as THREE.MeshStandardMaterial).color.copy(secondaryColor);
     (this.weaponChassis.material as THREE.MeshStandardMaterial).emissive.copy(darkColor);
@@ -2918,6 +2938,8 @@ export class Renderer3D {
     this.weaponQuantumCore.rotation.x += deltaTime * 0.004;
     this.weaponQuantumCore.rotation.y += deltaTime * 0.005;
 
+    }
+    if (this.worldId !== 'friends_frontier') {
     // 3. Update Third-Person Character Materials
     (this.tpBodyMesh.material as THREE.MeshStandardMaterial).color.copy(secondaryColor);
     (this.tpBodyMesh.material as THREE.MeshStandardMaterial).emissive.copy(darkColor);
@@ -2937,6 +2959,8 @@ export class Renderer3D {
     (this.tpRightLeg.material as THREE.MeshStandardMaterial).color.copy(bootsColor);
     (this.tpBlasterMesh.material as THREE.MeshStandardMaterial).emissive.copy(primaryColor);
     (this.tpGroundRingMesh.material as THREE.MeshBasicMaterial).color.copy(primaryColor);
+
+    }
 
     // ==========================================
     // CAMERA & VIEWPORT UPDATE
@@ -2984,6 +3008,7 @@ export class Renderer3D {
       this.thirdPersonPlayerGroup.scale.set(1, this.presentationSliding ? 0.62 : 1, this.presentationSliding ? 1.16 : 1);
 
       // Halo ring rotation & pulse
+      if (this.worldId !== 'friends_frontier') {
       this.tpGroundRingMesh.rotation.z += deltaTime * 0.002;
       if (this.muzzleFlashTimer > 0) {
         this.muzzleFlashTimer -= deltaTime;
@@ -3011,6 +3036,7 @@ export class Renderer3D {
         this.tpRightLeg.rotation.x = 0;
         this.tpLeftArm.rotation.x = 0;
         this.tpRightArm.rotation.x = 0;
+      }
       }
     }
 

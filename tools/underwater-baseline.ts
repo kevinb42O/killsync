@@ -1,0 +1,55 @@
+import type { FriendsTerrain } from '../src/game/world/FriendsTerrain';
+import { friendsLiveWaterAt } from '../src/game/world/FriendsFloodWater';
+import * as THREE from 'three';
+import { friendsWaterLevel } from '../src/game/world/FriendsWaterSurface';
+
+/** One screen triangle and existing scene fog. No reflection cameras, scene
+ * copies, particle systems or full-resolution intermediate targets. */
+export class FriendsUnderwaterBaselineReview{
+  private fog=new THREE.FogExp2(0x225c64,.004);
+  private deepColor=new THREE.Color(0x123c51);
+  private background=new THREE.Color(0x225c64);
+  private originalFog:THREE.Scene['fog']=null;
+  private originalBackground:THREE.Scene['background']=null;
+  private hiddenAtmosphere:{object:THREE.Object3D;visible:boolean}[]=[];private active=false;
+  readonly overlay:THREE.Mesh<THREE.BufferGeometry,THREE.ShaderMaterial>;
+  constructor(private scene:THREE.Scene){
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute([-1,-1,0,3,-1,0,-1,3,0],3));
+    const material=new THREE.ShaderMaterial({transparent:true,depthTest:false,depthWrite:false,uniforms:{light:{value:1},depth:{value:0},time:{value:0},immersion:{value:1}},
+      vertexShader:'varying vec2 screenUv;void main(){screenUv=position.xy*.5+.5;gl_Position=vec4(position.xy,0.,1.);}',
+      fragmentShader:`varying vec2 screenUv;uniform float depth,time,light,immersion;void main(){
+        float rim=pow(length((screenUv-.5)*vec2(1.2,1.)),2.);
+        float shimmer=sin(screenUv.x*28.+sin(screenUv.y*19.+time*.7))*sin(screenUv.y*31.-time*.8);
+        float dark=smoothstep(0.,480.,depth);
+        gl_FragColor=vec4(mix(vec3(.12,.43,.45),vec3(.045,.19,.25),dark)*light+shimmer*.006*light,(.065+rim*.14+dark*.065)*immersion);
+      }`});
+    this.overlay=new THREE.Mesh(geometry,material);this.overlay.name='underwater-lens';this.overlay.frustumCulled=false;this.overlay.renderOrder=10000;this.overlay.visible=false;scene.add(this.overlay);
+  }
+  /** Restore before daylight updates, then apply after the final camera pose. */
+  beginFrame(){
+    if(!this.active)return;
+    this.scene.fog=this.originalFog;this.scene.background=this.originalBackground;
+    for(const saved of this.hiddenAtmosphere)saved.object.visible=saved.visible;this.hiddenAtmosphere.length=0;
+    this.active=false;this.overlay.visible=false;
+  }
+  update(camera:THREE.Camera,elapsed:number,enabled=true,daylight=1,terrain?:FriendsTerrain){
+    const level=enabled?(terrain?friendsLiveWaterAt(terrain,camera.position.x,camera.position.z,camera.position.y)?.level:friendsWaterLevel(camera.position.x,camera.position.z)):undefined;
+    const depth=level===undefined?0:level-camera.position.y;
+    if(depth<.5)return;
+    this.originalFog=this.scene.fog;this.originalBackground=this.scene.background;
+    const immersion=THREE.MathUtils.smoothstep(depth,0,24);
+    // Clouds render after translucent water. Hide their above-water pass
+    // underwater so it cannot paint white clouds over total internal reflection.
+    if(depth>24)for(const name of ['frontier-day-night-sky','frontier-volumetric-cumulus']){
+      const object=this.scene.getObjectByName(name);if(object){this.hiddenAtmosphere.push({object,visible:object.visible});object.visible=false;}
+    }
+    const dark=THREE.MathUtils.smoothstep(depth,0,600);this.fog.color.set(0x347f85).lerp(this.deepColor,dark);this.fog.color.multiplyScalar(.22+.78*daylight);
+    if(this.originalFog)this.fog.color.lerp(this.originalFog.color,1-immersion);
+    const originalDensity=this.originalFog instanceof THREE.FogExp2?this.originalFog.density:0;
+    this.fog.density=THREE.MathUtils.lerp(originalDensity,.0015+dark*.0028,immersion);
+    this.background.copy(this.fog.color);if(this.originalBackground instanceof THREE.Color)this.background.lerp(this.originalBackground,1-immersion);
+    this.scene.fog=this.fog;this.scene.background=this.background;
+    this.overlay.material.uniforms.immersion.value=immersion;this.overlay.material.uniforms.light.value=.22+.78*daylight;this.overlay.material.uniforms.depth.value=depth;this.overlay.material.uniforms.time.value=elapsed/1000;this.overlay.visible=true;this.active=true;
+  }
+  dispose(){this.beginFrame();this.overlay.removeFromParent();this.overlay.geometry.dispose();this.overlay.material.dispose();}
+}

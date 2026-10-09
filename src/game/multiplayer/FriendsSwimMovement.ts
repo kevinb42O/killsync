@@ -1,3 +1,4 @@
+import { FRIENDS_TERRAIN_BOTTOM } from '../world/FriendsTerrainLimits';
 import type { MultiplayerInputFrame } from './protocol';
 import type { PlayerMotionState, PlayerCollisionResolver, PlayerFloorResolver, PlayerMovementEnvironment } from './playerMovement';
 import { friendsWaterLevel } from '../world/FriendsWaterSurface';
@@ -7,7 +8,7 @@ import { riverWetAt } from '../world/FriendsHydrology';
  * surface buoyancy, camera-directed swimming and real floor/ceiling contacts. */
 export function advanceFriendsSwimming(p:PlayerMotionState,input:MultiplayerInputFrame|undefined,seconds:number,
   collision:PlayerCollisionResolver|undefined,floor:PlayerFloorResolver|undefined,environment:PlayerMovementEnvironment){
-  const water=friendsWaterLevel(p.x,p.y),ground=floor?.(p,19);
+  const water=environment.waterAt?environment.waterAt(p.x,p.y,p.z+10)?.level:friendsWaterLevel(p.x,p.y),ground=floor?.(p,19);
   if(water===undefined||p.z>=water-10||(ground!==undefined&&ground>=water-24)){
     p.swimming=false;p.swimSubmerged=false;return false;
   }
@@ -38,13 +39,13 @@ export function advanceFriendsSwimming(p:PlayerMotionState,input:MultiplayerInpu
   const vy=(Math.sin(yaw)*forward*cp+Math.cos(yaw)*strafe)/n*speed+(current?.ty??0)*drift;
   const next={x:p.x+vx*seconds,y:p.y+vy*seconds};collision?.(next,19);
   p.velocityX=(next.x-p.x)/seconds;p.velocityY=(next.y-p.y)/seconds;p.x=next.x;p.y=next.y;p.angle=yaw;
-  const destination=friendsWaterLevel(p.x,p.y)??water;
+  const destination=(environment.waterAt?environment.waterAt(p.x,p.y,p.z+10)?.level:friendsWaterLevel(p.x,p.y))??water;
   let target=down?-95:up?110:p.swimSubmerged?forward*Math.sin(pitch)/n*speed:Math.max(-90,Math.min(90,(destination-18-p.z)*10));
   if(up&&down)target=0;
   p.verticalVelocity+=(target-p.verticalVelocity)*(1-Math.exp(-10*seconds));
   const nextZ=p.z+p.verticalVelocity*seconds;
   const bed=floor?.({...p,z:nextZ},19),ceiling=environment.overhead?.(p);
-  p.z=Math.max(bed??-480,Math.min(nextZ,ceiling===undefined?Infinity:ceiling-50,destination-18));
+  p.z=Math.max(bed??FRIENDS_TERRAIN_BOTTOM,Math.min(nextZ,ceiling===undefined?Infinity:ceiling-50,destination-18));
   if(p.z!==nextZ)p.verticalVelocity=0;
   if(p.z>=destination-19&&!down){p.swimSubmerged=false;}
   p.sprinting=Boolean(input?.sprinting);

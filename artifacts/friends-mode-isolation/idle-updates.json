@@ -1,0 +1,44 @@
+{
+  "simulatedSeconds": 10,
+  "tickCalls": {
+    "updateRun": 0,
+    "updateWorldHazards": 0,
+    "updateFieldMission": 0,
+    "updatePrivateExfil": 0,
+    "updateRealityBreach": 0,
+    "scheduleEncounters": 0,
+    "updateOrdnance": 0,
+    "updateArtifactEffects": 0,
+    "updateArtifactStatuses": 0,
+    "updatePassiveModules": 0,
+    "updateStructures": 0,
+    "updateRevives": 0,
+    "advanceWeaponActions": 0
+  },
+  "weaponSlotsPerPlayer": [
+    0,
+    0
+  ],
+  "compactFullBytes": 9067,
+  "compactWeaponFieldsBytes": 101,
+  "compactDeltaBytes": 312,
+  "enemyCount": 0,
+  "run": {
+    "phase": "insertion",
+    "elapsedMs": 0,
+    "contractIndex": 0,
+    "bossesDefeated": 0,
+    "noticeKey": "objective.dropIn"
+  },
+  "bridge": {
+    "sourceWorldId": "friends_frontier",
+    "state": "terminal",
+    "builtSegments": 0,
+    "requiredSegments": 0,
+    "buildX": 5890,
+    "buildY": 5630,
+    "startX": 6000,
+    "endX": 7040,
+    "width": 170
+  }
+}

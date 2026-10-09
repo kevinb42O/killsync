@@ -1,8 +1,10 @@
 import * as THREE from 'three';
-import { createElement } from 'react';
+import { createElement, Fragment } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../src/components/frontier.css';
+import { FriendsFishingCatchLog } from '../src/components/FriendsFishingCatchLog';
 import { FriendsToolbelt } from '../src/components/FriendsFieldPack';
+import { friendsAudio } from '../src/game/FriendsAudio';
 import { FriendsFishingVisuals } from '../src/game/rendering/FriendsFishingVisuals';
 import { loadFishingFish } from '../src/game/rendering/FriendsFishingAssets';
 import { FriendsFrontierVisuals } from '../src/game/rendering/FriendsFrontierVisuals';
@@ -27,14 +29,16 @@ const projector={camera,viewmodelCamera:handCamera,tempMuzzlePos:new THREE.Vecto
 function setStage(value:string){
   stage=value;camera.fov=85;camera.position.set(p.x,p.z+32,p.y);camera.lookAt(target.x,target.z,target.y);camera.updateProjectionMatrix();
   state={equipped:['review'],casts:[],fish:[]};
-  if(['waiting','bite','reeling'].includes(value))state.casts=[{id:1,playerId:'review',...target,target:{...target},from:{...target},phase:value as 'waiting'|'bite'|'reeling',atMs:time,biteAt:time+10000,size:1.2}];
+  if(['waiting','bite','reeling'].includes(value))state.casts=[{id:1,playerId:'review',...target,target:{...target},from:{...target},phase:value as 'waiting'|'bite'|'reeling',atMs:time,biteAt:time+10000,size:1.2,lineLength:Math.hypot(p.x-target.x,p.z+26-target.z)+24}];
   if(['held','dry','swimming'].includes(value)){
-    state.equipped=[];state.fish=[{id:1,size:1.2,phase:value as 'held'|'dry'|'swimming',ownerId:value==='held'?'review':undefined,x:value==='dry'?p.x-35:target.x,y:p.y,z:value==='dry'?terrain.surfaceHeight(p.x-35,p.y)+9.6:target.z+3.6,angle:Math.PI,atMs:time,vx:0,vy:0,vz:0}];
+    state.equipped=[];state.fish=[{id:1,size:1.2,phase:value as 'held'|'dry'|'swimming',ownerId:value==='held'?'review':undefined,caughtBy:'review',x:value==='dry'?p.x-35:target.x,y:p.y,z:value==='dry'?terrain.surfaceHeight(p.x-35,p.y)+9.6:target.z+3.6,angle:Math.PI,atMs:time,vx:0,vy:0,vz:0}];
     if(value==='dry'){camera.position.set(p.x+20,p.z+50,p.y+45);camera.lookAt(p.x-35,terrain.surfaceHeight(p.x-35,p.y)+3,p.y);camera.fov=60;camera.updateProjectionMatrix();}
     if(value==='swimming'){camera.position.set(target.x+65,target.z+60,target.y+60);camera.lookAt(target.x,target.z-6,target.y);camera.fov=60;camera.updateProjectionMatrix();}
   }
-  root.render(createElement(FriendsToolbelt,{frontier:snapshot.friends!.frontier!,player,tool:7,onTool:()=>{},onPack:()=>{},elapsed:0}));
+  renderOverlay();
 }
+function renderOverlay(){root.render(createElement(Fragment,null,createElement(FriendsToolbelt,{frontier:snapshot.friends!.frontier!,player,tool:7,onTool:()=>{},onPack:()=>{},elapsed:0}),createElement(FriendsFishingCatchLog,{fish:state.fish,localId:'review',visible:true})));}
+function setSize(size:number){for(const f of state.fish)f.size=size;for(const c of state.casts)c.size=size;renderOverlay();}
 for(const b of document.querySelectorAll<HTMLButtonElement>('[data-stage]'))b.onclick=()=>setStage(b.dataset.stage!);
 let previous=0,paused=false;
 function frame(now:number){requestAnimationFrame(frame);if(paused)return;const dt=Math.min(50,now-previous);previous=now;time=now;
@@ -45,4 +49,4 @@ function frame(now:number){requestAnimationFrame(frame);if(paused)return;const d
 }
 setStage('rod');requestAnimationFrame(frame);
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=handCamera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();handCamera.updateProjectionMatrix();});
-(window as any).fishingReview={THREE,scene,viewmodel,renderer,camera,handCamera,world,fishing,project:(point:THREE.Object3D)=>Renderer3D.prototype.projectViewmodelPointToWorld.call(projector,point),pause:()=>paused=true,state:()=>state,setStage,player,loadFishingFish};
+(window as any).fishingReview={audio:friendsAudio,THREE,scene,viewmodel,renderer,camera,handCamera,world,fishing,project:(point:THREE.Object3D)=>Renderer3D.prototype.projectViewmodelPointToWorld.call(projector,point),pause:()=>paused=true,state:()=>state,setStage,setSize,player,loadFishingFish};

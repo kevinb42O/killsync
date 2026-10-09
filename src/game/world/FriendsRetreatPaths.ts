@@ -50,6 +50,8 @@ export function retreatPaths():RetreatPath[]{
         points.push({x,y,z:top+8,ground});
       }
     }
+    // Include the deck elevation before grading so raised terraces have a continuous ramp.
+    points.at(-1)!.z=site.z;
     // A grade-limited upper envelope clears voxel terrace faces without digging.
     for(let i=1;i<points.length;i++)points[i].z=Math.max(points[i].z,points[i-1].z-.65*Math.hypot(points[i].x-points[i-1].x,points[i].y-points[i-1].y));
     for(let i=points.length-2;i>=0;i--)points[i].z=Math.max(points[i].z,points[i+1].z-.65*Math.hypot(points[i].x-points[i+1].x,points[i].y-points[i+1].y));

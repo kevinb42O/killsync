@@ -1,0 +1,125 @@
+{
+  "errors": [],
+  "views": [
+    {
+      "name": "underwater",
+      "camera": [
+        12128,
+        -284.9999999999999,
+        23599.999999999993
+      ],
+      "scenery": {
+        "visible": true,
+        "placedTiles": 121,
+        "sampledTiles": 121,
+        "rocks": 363,
+        "plants": 484
+      },
+      "gl": 0,
+      "draws": 225,
+      "triangles": 1520573,
+      "terrain": {
+        "floodDrawCalls": 0,
+        "floodGeometryBytes": 0,
+        "floodMaskBytes": 0,
+        "surfaceTiles": 80,
+        "surfaceBytes": 21796008,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 14.950000000093132,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "name": "underwater_sea",
+      "camera": [
+        39999.999999999985,
+        -619.9999999999997,
+        23851.99999999999
+      ],
+      "scenery": {
+        "visible": true,
+        "placedTiles": 237,
+        "sampledTiles": 242,
+        "rocks": 363,
+        "plants": 484
+      },
+      "gl": 0,
+      "draws": 34,
+      "triangles": 170061,
+      "terrain": {
+        "floodDrawCalls": 0,
+        "floodGeometryBytes": 0,
+        "floodMaskBytes": 0,
+        "surfaceTiles": 80,
+        "surfaceBytes": 19025344,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 7.770000000096236,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    }
+  ],
+  "performance": {
+    "gpuWithout": 1.97125,
+    "gpuWith": 1.992083,
+    "calls": [
+      5,
+      8
+    ],
+    "before": {
+      "geometries": 8,
+      "textures": 6
+    },
+    "after": {
+      "geometries": 8,
+      "textures": 6
+    },
+    "land": {
+      "visible": false,
+      "samples": 605,
+      "draws": 2
+    },
+    "landQueries": 0
+  }
+}

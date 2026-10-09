@@ -25,6 +25,7 @@ describe('downloaded Friends audio', () => {
       createBuffer: vi.fn((channels: number, size: number, rate: number) => buffer(new Array(size).fill(0), channels, rate)),
       decodeAudioData: vi.fn(async () => decoded), createOscillator: vi.fn(),
       createGain: vi.fn(() => { const gain = { gain: { value: 1, setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn(), setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() }, connect: vi.fn(), disconnect: vi.fn() }; gains.push(gain); return gain; }),
+      createBiquadFilter: vi.fn(()=>({type:'lowpass',frequency:{value:22000,setTargetAtTime:vi.fn()},Q:{value:1},connect:vi.fn(),disconnect:vi.fn()})),
       createBufferSource: vi.fn(() => { const source = { buffer: null, loop: false, playbackRate: { value: 1, setTargetAtTime: vi.fn() }, connect: vi.fn(), disconnect: vi.fn(), start: vi.fn(), stop: vi.fn(), onended: undefined }; sources.push(source); return source; }),
     };
     function AudioContextMock() { return context; }
@@ -80,8 +81,8 @@ describe('downloaded Friends audio', () => {
     audio.setReelSound({volume:.2,pan:0,rate:1.1}); await load();
     expect(sources.length).toBe(before+3);
     const state=audio as any, reel=state.worldLoops.get('reel'), falls=state.worldLoops.get('waterfall');
-    expect(reel.gain.connect).toHaveBeenCalledWith(gains[0]);
-    expect(falls.gain.connect).toHaveBeenCalledWith(gains[2]);
+    expect(reel.filter.connect).toHaveBeenCalledWith(gains[0]);
+    expect(falls.filter.connect).toHaveBeenCalledWith(gains[2]);
     for(let i=0;i<50;i++) { audio.setWorldSound({...QUIET_WORLD_SOUND,waterfall:{volume:.3,pan:.5}}); audio.setReelSound({volume:.2,pan:0,rate:1.1}); }
     expect(state.worldLoops.get('reel').source).toBe(reel.source);
     expect(state.worldLoops.get('waterfall').source).toBe(falls.source);
@@ -89,6 +90,15 @@ describe('downloaded Friends audio', () => {
     expect(state.worldLoops.get('reel').source).toBe(reel.source);
     audio.setReelSound({volume:0,pan:0}); expect(reel.source.stop).toHaveBeenCalledWith(context.currentTime+.18);
     audio.clearSoundscape(); expect(state.worldLoops.size+state.retiringWorldSources.size).toBe(0);
+  });
+  it('loads the ocean hiss only on approach, reuses one loop, and releases it on mute and exit',async()=>{
+    releases.push(audio.acquire());audio.activate();await load();
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('ocean_steam_loop'))).toBe(false);
+    const mix={...QUIET_WORLD_SOUND,oceanSteam:{volume:.3,pan:.2,cutoff:7600}};
+    audio.setWorldSound(mix);await load();const state=audio as any,loop=state.worldLoops.get('oceanSteam');expect(loop.source.loop).toBe(true);
+    for(let i=0;i<50;i++)audio.setWorldSound({...mix,oceanSteam:{volume:.2,pan:-.3,cutoff:2000}});
+    expect(state.worldLoops.get('oceanSteam').source).toBe(loop.source);expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url).includes('ocean_steam_loop'))).toHaveLength(1);
+    audio.setSettings({ambience:0});expect(loop.source.stop).toHaveBeenCalled();audio.clearSoundscape();expect(state.worldLoops.size+state.retiringWorldSources.size).toBe(0);
   });
   it('schedules treasure layers and cancels them on mute, hidden tab and exit', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
@@ -182,6 +192,25 @@ describe('downloaded Friends audio', () => {
     expect(dive.start).toHaveBeenCalledWith(context.currentTime, 0);
     audio.setUnderwaterDive(false);
     expect(dive.stop).toHaveBeenCalledWith(context.currentTime + .2);
+  });
+  it('muffles both world buses, suppresses surface splashes and restores the dry mix',async()=>{
+    releases.push(audio.acquire());audio.activate();await load();const state=audio as any;
+    audio.setUnderwaterDive(true);const voice=state.underwaterDiveVoice.source,n=sources.length;
+    expect(state.effectsGain.connect).toHaveBeenCalledWith(state.effectsWaterFilter);
+    expect(state.ambienceGain.connect).toHaveBeenCalledWith(state.ambienceWaterFilter);
+    expect(state.effectsWaterFilter.frequency.setTargetAtTime).toHaveBeenLastCalledWith(850,context.currentTime,.09);
+    expect(state.ambienceWaterFilter.frequency.setTargetAtTime).toHaveBeenLastCalledWith(650,context.currentTime,.12);
+    audio.play('swimStroke',.25,0);audio.play('waterStep',.25,0);expect(sources).toHaveLength(n);
+    audio.setSettings({effects:.6,ambience:.5});expect(state.effectsGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.48,context.currentTime,.05);expect(state.ambienceGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.125,context.currentTime,.25);
+    expect(state.underwaterDiveVoice.source).toBe(voice);
+    audio.setUnderwaterDive(false);expect(state.effectsWaterFilter.frequency.setTargetAtTime).toHaveBeenLastCalledWith(22000,context.currentTime,.09);
+    expect(state.ambienceGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.5,context.currentTime,.25);
+    audio.play('swimStroke',.25,0);expect(sources).toHaveLength(n+1);
+  });
+  it('clears underwater mixing when leaving a world and reacquiring audio',async()=>{
+    const release=audio.acquire();audio.activate();await load();audio.setUnderwaterDive(true);release();vi.advanceTimersByTime(0);
+    expect((audio as any).effectsWaterFilter.frequency.setTargetAtTime).toHaveBeenLastCalledWith(22000,context.currentTime,.09);
+    releases.push(audio.acquire());audio.activate();expect((audio as any).underwaterDiveRequested).toBe(false);
   });
   it('does not endlessly reload a failed dive asset and can retry on the next dive', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
@@ -469,6 +498,19 @@ describe('downloaded Friends audio', () => {
 });
 
 describe('asset provenance and the music seam', () => {
+  it('bundles distinct real fishing recordings with verified provenance and no catch chime', () => {
+    const root=resolve('public/audio/friends'), manifest=JSON.parse(readFileSync(resolve(root,'fishing-sources.json'),'utf8'));
+    expect(manifest).toHaveLength(3);
+    for(const asset of manifest){
+      expect(asset.license).toBe('CC0-1.0');expect(asset.sourcePage).toMatch(/^https:\/\/(freesound.org|bigsoundbank.com)\//);
+      expect(createHash('sha256').update(readFileSync(resolve(root,asset.file))).digest('hex')).toBe(asset.asset_sha256);
+    }
+    expect(FRIENDS_CUE_ASSETS.fishingCast[0]).toContain('fishing_cast.ogg');
+    expect(FRIENDS_CUE_ASSETS.fishingReel[0]).toContain('fishing_reel.ogg');
+    expect(FRIENDS_CUE_ASSETS.fishingSplash[0]).toContain('fishing_plop.ogg');
+    expect(FRIENDS_CUE_ASSETS).not.toHaveProperty('fishingCatch');
+  });
+
   it('preserves the downloaded bytes recorded in the source manifest', () => {
     const root = resolve('public/audio/friends');
     const manifest = JSON.parse(readFileSync(resolve(root, 'sources.json'), 'utf8'));
