@@ -61,7 +61,7 @@ describe('Friends world sound placement', () => {
     const found=new Map<string,{x:number;y:number;z:number}>();
     for(let x=2048;x<46000&&found.size<2;x+=512) for(let y=2048;y<46000;y+=512){
       const z=baseTerrainHeight(x,y), biome=islandSurfaceBiome(x,y,z);
-      if(biome==='mud'||biome==='snow') found.set(biome,{x,y,z});
+      if((biome==='mud'||biome==='snow')&&friendsSurfaceSound({x,y,z})!=='waterStep') found.set(biome,{x,y,z});
     }
     expect(found.has('mud')).toBe(true); expect(found.has('snow')).toBe(true);
     expect(friendsSurfaceSound(found.get('mud')!)).toBe('mudStep');

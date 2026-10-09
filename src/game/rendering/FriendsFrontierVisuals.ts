@@ -13,7 +13,7 @@ import { FRIENDS_NIGHT_VISION_RANGE } from './FriendsVision';
 import { FriendsTreasureVisuals } from './FriendsTreasureVisuals';
 import { FriendsCaveVisuals } from './FriendsCaveVisuals';
 import * as THREE from 'three';
-import { FriendsTerrain, FRONTIER_SIZE, FRONTIER_SITES, frontierSiteElevation, terrainHash } from '../world/FriendsTerrain';
+import { FriendsTerrain, FRONTIER_SIZE, FRONTIER_SITES, frontierSiteMarkerPose, terrainHash } from '../world/FriendsTerrain';
 import { meshTerrainChunk, type TerrainMeshData } from '../world/FriendsTerrainMesh';
 import { frontierTrees, type FrontierSnapshot, type FrontierTool, type FrontierTree } from '../multiplayer/FriendsFrontier';
 import { addFriendsAssetInstances } from './FriendsAssets';
@@ -158,7 +158,7 @@ export class FriendsFrontierVisuals {
     this.island.setAtmosphere(this.atmosphere);
     // Survey flags make regional destinations readable from the air and ground.
     for (const site of FRONTIER_SITES) {
-      const h = frontierSiteElevation(site), marker = new THREE.Group(); marker.position.set(site.x, h, site.y); this.group.add(marker);
+      const pose=frontierSiteMarkerPose(site), marker = new THREE.Group(); marker.position.set(pose.x, pose.z, pose.y); this.group.add(marker);
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 160, 8), new THREE.MeshStandardMaterial({ color: '#d7c29d', roughness: .8 })); pole.position.y = 80; marker.add(pole);
       const flag = new THREE.Mesh(new THREE.PlaneGeometry(70, 34), new THREE.MeshStandardMaterial({ color: site.color, side: THREE.DoubleSide, roughness: .9 })); flag.position.set(35, 139, 0); marker.add(flag);
       const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128; const ctx = canvas.getContext('2d')!;

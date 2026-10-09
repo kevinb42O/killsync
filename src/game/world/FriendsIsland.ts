@@ -1,7 +1,9 @@
 import { createHighfallCastle, HIGHFALL_CASTLE } from './FriendsCastle';
+import { ISLAND_SEA_LEVEL, ISLAND_LAKES } from './FriendsWaterBodies';
+import { hydrologyTerrainHeight, deepmereRadius, riverSampleAt } from './FriendsHydrology';
+export { ISLAND_SEA_LEVEL, ISLAND_LAKES } from './FriendsWaterBodies';
 /** Authored seed-like landforms. World coordinates and elevations are shared by
  * the voxel field, horizon, atlas and landmark presentation. */
-export const ISLAND_SEA_LEVEL = -168.5;
 export const ISLAND_ARCH = { x: 15520, y: 10560, radius: 1664, depth: 5200, floor: 608, height: 2848 };
 export const ISLAND_PEAKS = [
   { x: 15488, y: 9600, rx: 2752, ry: 2464, height: 4700 },
@@ -69,12 +71,9 @@ export function islandVolcanoHeight(x:number,y:number){
   const breach=1700*Math.exp(-((direction/.19)**2)-(((r-1250)/780)**2));
   return (cone+rim)*(1-crater)+1980*crater-breach;
 }
-export const ISLAND_LAKES=[
-  {id:'skyfalls',x:6912,y:20448,rx:1568,ry:1120,level:666.5},
-  {id:'gate',x:15520,y:10800,rx:1152,ry:2368,level:602.5},
-] as const;
 /** Distorted bowls determine both solid lakebeds and the water's shoreline. */
 export function islandLakeRadius(x:number,y:number,lake:typeof ISLAND_LAKES[number]){
+  if(lake.id==='deepmere')return deepmereRadius(x,y);
   const dx=(x-lake.x)/lake.rx,dy=(y-lake.y)/lake.ry,a=Math.atan2(dy,dx);
   return Math.hypot(dx,dy)/(1+.13*Math.sin(a*3+.4)+.065*Math.sin(a*7-1.2))
     +.035*Math.sin(x/170)*Math.sin(y/210);
@@ -82,14 +81,16 @@ export function islandLakeRadius(x:number,y:number,lake:typeof ISLAND_LAKES[numb
 export function islandArchFloor(x:number,y:number){
   const lake=ISLAND_LAKES[1],r=islandLakeRadius(x,y,lake);
   const bank=736+64*Math.sin(y/770)+48*Math.sin(x/510+y/930);
-  return Math.round((bank-(bank-lake.level+192)*(1-islandSmooth((r-.48)/.68)))/32)*32;
+  const natural=bank-(bank-lake.level+192)*(1-islandSmooth((r-.48)/.68));
+  return Math.round(hydrologyTerrainHeight(x,y,natural,false)/32)*32;
 }
 /** Climate channels sampled by the terrain shader and vegetation. Sand and
  * wet soil follow coasts and basins; volcanic rock and ice have real regions. */
 export function islandClimate(x:number,y:number):[number,number,number,number]{
   const coast=islandCoastDistance(x,y);
-  const wet=Math.exp(-(((x-20500)/5800)**2+((y-30700)/4800)**2))
+  let wet=Math.exp(-(((x-20500)/5800)**2+((y-30700)/4800)**2))
     *(.65+.35*Math.sin(x/1200)*Math.sin(y/1500));
+  const river=riverSampleAt(x,y);if(river)wet=Math.max(wet,.6*(1-islandSmooth((river.side-river.width/2)/160)));
   const volcanic=1-islandSmooth((islandVolcanoRadius(x,y)-3000)/3600);
   const glacier=Math.exp(-(((x-24100)/3600)**2+((y-16800)/4000)**2));
   return [coast,wet,volcanic,glacier];

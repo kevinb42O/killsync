@@ -1,0 +1,44 @@
+{
+  "errors": [],
+  "views": [
+    {
+      "name": "gorge",
+      "draws": 120,
+      "triangles": 545924,
+      "terrain": {
+        "surfaceTiles": 83,
+        "surfaceBytes": 19579976,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 5.718333328763644,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1687.428342503078
+        }
+      ],
+      "bridgeGround": -64
+    }
+  ],
+  "date": "2026-10-09T04:15:10.532Z",
+  "addedGeometry": {
+    "meshBatches": 28,
+    "triangles": 19680,
+    "depthMaskBytes": 958464
+  }
+}

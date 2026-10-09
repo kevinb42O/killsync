@@ -1,4 +1,6 @@
 import { RETREAT_SITES } from '../game/world/FriendsRetreatSites';
+import { FRIENDS_RIVERS } from '../game/world/FriendsHydrology';
+import { ISLAND_LAKES } from '../game/world/FriendsWaterBodies';
 import { scenicRailway, scenicStationPoses } from '../game/world/FriendsScenicRailway';
 import { islandSurfaceBiome, ISLAND_SEA_LEVEL } from '../game/world/FriendsIsland';
 import { CAVE_ENTRANCE } from '../game/world/FriendsCave';
@@ -62,6 +64,8 @@ export function FriendsMap({ snapshot, localPlayer, onClose }: { snapshot: CoopS
         <rect width={FRONTIER_SIZE} height={FRONTIER_SIZE} fill="#366b80" />
         <g filter="url(#frontier-terrain-soften)">{terrainTiles.map((t, i) => <rect key={i} x={t.x} y={t.y} width="1210" height="1210" fill={t.color} />)}</g>
         {contours.map(c => <path key={c.level} d={c.path} fill="none" stroke={c.level === ISLAND_SEA_LEVEL ? '#c8d8b1' : '#d0dfc2'} strokeWidth={wide ? 30 : 8} opacity={c.level === ISLAND_SEA_LEVEL ? .65 : .24} />)}
+        {ISLAND_LAKES.map(l=><ellipse key={l.id} cx={l.x} cy={l.y} rx={l.rx} ry={l.ry} fill="#66b7c5" opacity=".85"/>)}
+        {FRIENDS_RIVERS.map(r=><polyline key={r.id} aria-label={r.name} points={r.points.filter((_,i)=>i%3===0).map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke="#80d5db" strokeWidth={wide?150:64} strokeLinejoin="round" strokeLinecap="round"/>)}
         <rect width={FRONTIER_SIZE} height={FRONTIER_SIZE} fill="url(#frontier-grid)" />
         {haulView && <>{[FRIENDS_SPAWN_PLATFORM,...FRIENDS_HAULING_PLATFORMS].map(p=><rect key={p.x} x={p.x-p.size/2} y={p.y-p.size/2} width={p.size} height={p.size} fill="#405651" stroke="#b0c8ae" strokeWidth="1"/>)}<rect x={goal.x-goal.width/2} y={goal.y-goal.depth/2} width={goal.width} height={goal.depth} fill={goal.color+'22'} stroke={goal.color} strokeWidth="2"/></>}
         {loads.filter(c=>!cargoDelivered(f.hauling!,c)&&(!haulView||c.id===core?.id)).map(c=><line key={c.id} aria-label="Core to delivery route" x1={c.x} y1={c.y} x2={haulingGoal(c).x} y2={haulingGoal(c).y} stroke={haulingGoal(c).color} strokeWidth={scale*10} strokeDasharray={`${scale*35} ${scale*25}`} />)}

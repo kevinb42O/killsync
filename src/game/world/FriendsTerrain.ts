@@ -5,6 +5,9 @@ import { caveColumn, caveEntranceFloor, explorationCave } from './FriendsCave';
 import { FRIENDS_AIRPAD, FRIENDS_CAMPFIRE } from './FriendsRegion';
 import { castleTerrainHeight, HIGHFALL_CASTLE } from './FriendsCastle';
 import { createCastleStairs, type CastleStairs } from './FriendsCastleStairs';
+import { hydrologyTerrainHeight, hydrologyWaterLevel, HYDROLOGY_SITES, RIVER_CROSSING } from './FriendsHydrology';
+import { createRiverBridge, type RiverBridge } from './FriendsRiverBridge';
+let riverBridgeField:RiverBridge|undefined;
 let castleStairsField:CastleStairs|undefined;
 /** Deterministic, editable volumetric ground. Simulation, prediction and mesh
  * generation consume this same field; no invisible plane remains below a dig. */
@@ -27,6 +30,7 @@ export const FRONTIER_SITES = [
   { id: 'ridge', name: 'HIGHFALL RIDGE', x: 15600, y: 8700, detail: 'A towering alpine range above the World Gate and rich iron deposits.', color: '#c2d4df' },
   { id: 'coast', name: 'THE LONG SHORE', x: 27600, y: 19000, detail: 'A distant coast of salt water, ridges and scattered salvage.', color: '#82c9cc' },
   ...ISLAND_LANDMARK_SITES,
+  ...HYDROLOGY_SITES,
 ] as const;
 const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
 export function terrainHash(x: number, y: number, z = 0) {
@@ -78,7 +82,7 @@ export function previousTerrainHeight(x: number, y: number) {
 }
 /** Generation 4: an eroded archipelago silhouette, continental shelf, low
  * beaches and dunes. Cave protection follows the authored rooms themselves. */
-export function baseTerrainHeight(x: number, y: number) {
+export function baseTerrainHeight(x: number, y: number, includeRivers=true) {
   const coast=islandCoastDistance(x,y);
   const mountains=Math.max(islandMountainHeight(x,y,terrainNoise),islandVolcanoHeight(x,y));
   const inland=rollingGround(x,y)+mountains;
@@ -111,6 +115,11 @@ export function baseTerrainHeight(x: number, y: number) {
   const camp=FRIENDS_CAMPFIRE;
   if(Math.abs(x-camp.x)<camp.radius+160&&Math.abs(y-camp.y)<camp.radius+160)
     ground=grade(ground,x,y,camp.x,camp.y,camp.z,camp.radius,160);
+  // Do not remove the World Gate roof: its river carves the cavity floor.
+  if(includeRivers){
+    if(!islandArchRange(x,y))ground=hydrologyTerrainHeight(x,y,ground);
+    ground=riverBridgeField?.terrainHeight(x,y,ground)??ground;
+  }
   return gridHeight(ground);
 }
 // Vehicles and arrivals follow their individual terrain cells, without grading.
@@ -156,12 +165,21 @@ export function friendsSpawnProtected(x: number, y: number, z: number) {
   return friendsSpawnPlatformContains(x, y) && z >= p.top - p.thickness && z < p.top + p.clearance;
 }
 export function frontierSiteElevation(site: {id:string;x:number;y:number}) {
+  if(site.id==='deepmere')return ISLAND_LAKES[2].level;
+  if(site.id==='river-mouth')return ISLAND_SEA_LEVEL;
+  if(site.id===RIVER_CROSSING.id)return RIVER_CROSSING.z;
   if(site.id==='arch')return islandArchRange(site.x,site.y)?.[0]??baseTerrainHeight(site.x,site.y);
   if(site.id==='citadel')return HIGHFALL_CASTLE.floor+64;
   return baseTerrainHeight(site.x,site.y)+(site.id==='portal'?288:0);
 }
+export function frontierSiteMarkerPose(site:{id:string;x:number;y:number;markerX?:number;markerY?:number}){
+  const x=site.markerX??site.x,y=site.markerY??site.y;
+  return {x,y,z:site.id===RIVER_CROSSING.id?RIVER_CROSSING.z:site.markerX===undefined?frontierSiteElevation(site):baseTerrainHeight(x,y)};
+}
 export const CASTLE_STAIRS = createCastleStairs(baseTerrainHeight);
 castleStairsField=CASTLE_STAIRS;
+export const RIVER_BRIDGE=createRiverBridge(baseTerrainHeight);
+riverBridgeField=RIVER_BRIDGE;
 export const ISLAND_RUINS = createIslandRuins(baseTerrainHeight);
 const ruinTiles = new Map<string, IslandStoneBox[]>();
 for(const b of ISLAND_RUINS)for(let x=Math.floor((b.x-b.w/2)/512);x<=Math.floor((b.x+b.w/2)/512);x++)for(let y=Math.floor((b.y-b.d/2)/512);y<=Math.floor((b.y+b.d/2)/512);y++){
@@ -177,7 +195,7 @@ export function islandRuinsAt(x:number,y:number){
 export function terrainProtected(x: number, y: number) {
   // Vegetation clearance around arrival and the aircraft. This is not an
   // excavation reserve: players may reshape this ground.
-  return retreatClearing(x,y) || friendsCampfireContains(x,y) || Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
+  return hydrologyWaterLevel(x,y)!==undefined || Boolean(riverBridgeField?.clearing(x,y)) || retreatClearing(x,y) || friendsCampfireContains(x,y) || Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
 }
 export function naturalCave(x: number, y: number, z: number, roofLimit=Infinity) {
   const arch=islandArchRange(x,y);if(arch&&z>=arch[0]&&z<arch[1])return true;
@@ -260,7 +278,7 @@ export class FriendsTerrain {
     return 2;
   }
   set(vx: number, vy: number, vz: number, material: TerrainMaterial) {
-    if (!validTerrainEdit([vx, vy, vz, material]) || friendsFixedPlatformProtected((vx+.5)*32,(vy+.5)*32,(vz+.5)*32) || scenicTransitProtected((vx+.5)*32,(vy+.5)*32,(vz+.5)*32)) return false;
+    if (!validTerrainEdit([vx, vy, vz, material]) || friendsFixedPlatformProtected((vx+.5)*32,(vy+.5)*32,(vz+.5)*32) || scenicTransitProtected((vx+.5)*32,(vy+.5)*32,(vz+.5)*32) || RIVER_BRIDGE.protected((vx+.5)*32,(vy+.5)*32,(vz+.5)*32)) return false;
     const k = key(vx,vy,vz);
     if (material === this.naturalMaterial(vx,vy,vz)) {
       this.edits.delete(k); const column = this.columns.get(`${vx},${vy}`); column?.delete(vz); if (!column?.size) this.columns.delete(`${vx},${vy}`);
@@ -290,7 +308,7 @@ export class FriendsTerrain {
   floor(x: number, y: number, z: number, step = FRIENDS_STEP_HEIGHT): number | undefined {
     const stair=CASTLE_STAIRS.floor(x,y,z,step);
     const rail=scenicRailFloor(x,y,z,step);
-    let best=Math.max(stair??-Infinity,rail??-Infinity);
+    let best=Math.max(stair??-Infinity,rail??-Infinity,RIVER_BRIDGE.floor(x,y,z,step)??-Infinity);
     const vx = Math.floor(x / VOXEL_SIZE), vy = Math.floor(y / VOXEL_SIZE);
     for (let vz = Math.floor((z + step) / VOXEL_SIZE) - 1; vz >= -16; vz--) {
       if (this.exposedMaterial(vx, vy, vz) && !this.exposedMaterial(vx, vy, vz + 1)) {best=Math.max(best,(vz+1)*VOXEL_SIZE);break;}
@@ -298,13 +316,15 @@ export class FriendsTerrain {
     return Number.isFinite(best)?best:undefined;
   }
   supports(x: number, y: number, z: number) {
+    const bridge=RIVER_BRIDGE.floor(x,y,z,0);if(bridge!==undefined&&Math.abs(bridge-z)<.001)return true;
     const stair=CASTLE_STAIRS.floor(x,y,z,0);if(stair!==undefined&&Math.abs(stair-z)<.001)return true;
     const top=Math.round(z/VOXEL_SIZE);if(Math.abs(top*VOXEL_SIZE-z)>=1)return false;
     const vx=Math.floor(x/VOXEL_SIZE),vy=Math.floor(y/VOXEL_SIZE);
     return Boolean(this.exposedMaterial(vx,vy,top-1)) && !this.exposedMaterial(vx,vy,top);
   }
   ceiling(x: number, y: number, z: number): number | undefined {
-    const deck=scenicRailCeiling(x,y,z);
+    const candidates=[scenicRailCeiling(x,y,z),RIVER_BRIDGE.ceiling(x,y,z)].filter((n):n is number=>n!==undefined);
+    const deck=candidates.length?Math.min(...candidates):undefined;
     const vx = Math.floor(x / VOXEL_SIZE), vy = Math.floor(y / VOXEL_SIZE);
     const max = Math.ceil(Math.max(this.height(vx,vy),...islandRuinsAt(x,y).map(b=>b.z+b.h)) / VOXEL_SIZE) + 2;
     for (let vz = Math.floor((z + .1) / VOXEL_SIZE); vz <= max; vz++) if (vz * VOXEL_SIZE > z + .1 && this.exposedMaterial(vx, vy, vz)) return Math.min(deck??Infinity,vz*VOXEL_SIZE);
@@ -338,7 +358,7 @@ export class FriendsTerrain {
         collided = true;
       }
     }
-    return CASTLE_STAIRS.collide(p,z,radius)||collided;
+    return RIVER_BRIDGE.collide(p,z,radius)||CASTLE_STAIRS.collide(p,z,radius)||collided;
   }
   wallContact(position: { x: number; y: number }, z: number, radius: number) {
     const probe = { ...position };
@@ -347,18 +367,19 @@ export class FriendsTerrain {
     return length > .001 ? { normalX: dx / length, normalY: dy / length } : undefined;
   }
   raycast(ray: TerrainRay, maxDistance = 260): TerrainHit | undefined {
+    const bridge=RIVER_BRIDGE.raycast(ray,maxDistance);
     const dirs = [ray.dx, ray.dy, ray.dz], origin = [ray.x, ray.y, ray.z], cell = origin.map(v => Math.floor(v / VOXEL_SIZE));
     const steps = dirs.map(v => v < 0 ? -1 : 1), delta = dirs.map(v => v === 0 ? Infinity : VOXEL_SIZE / Math.abs(v));
     const next = dirs.map((v, i) => v === 0 ? Infinity : (((cell[i] + (v > 0 ? 1 : 0)) * VOXEL_SIZE) - origin[i]) / v);
     let distance = 0, normal = [0, 0, 1];
     while (distance <= maxDistance) {
       const m = this.exposedMaterial(cell[0], cell[1], cell[2]);
-      if (m) return { x: ray.x + ray.dx * distance, y: ray.y + ray.dy * distance, z: ray.z + ray.dz * distance, vx: cell[0], vy: cell[1], vz: cell[2], nx: normal[0], ny: normal[1], nz: normal[2], distance, material: m };
+      if (m) return bridge&&bridge.distance<distance?bridge:{ x: ray.x + ray.dx * distance, y: ray.y + ray.dy * distance, z: ray.z + ray.dz * distance, vx: cell[0], vy: cell[1], vz: cell[2], nx: normal[0], ny: normal[1], nz: normal[2], distance, material: m };
       const axis = next[0] < next[1] ? next[0] < next[2] ? 0 : 2 : next[1] < next[2] ? 1 : 2;
       distance = next[axis]; if (!Number.isFinite(distance)) break;
       cell[axis] += steps[axis]; next[axis] += delta[axis]; normal = [0, 0, 0]; normal[axis] = -steps[axis];
     }
-    return undefined;
+    return bridge;
   }
 }
 export function validTerrainEdit(e: unknown): e is TerrainEdit {

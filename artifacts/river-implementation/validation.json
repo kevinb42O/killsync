@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-09",
+  "aggregateTestsPassed": 1472,
+  "testFiles": 180,
+  "fullSuite": {
+    "command": "npm test -- --maxWorkers=1",
+    "passed": 1470,
+    "timedOut": 2,
+    "timeoutFiles": [
+      "FriendsGesturePose.test.ts",
+      "FriendsFrontier.test.ts"
+    ]
+  },
+  "finalRerun": {
+    "command": "npm test -- src/game/rendering/FriendsGesturePose.test.ts src/game/multiplayer/FriendsFrontier.test.ts src/game/rendering/FriendsTerrainCoverage.test.ts src/game/world/FriendsHydrology.test.ts --maxWorkers=1",
+    "passed": 32,
+    "failed": 0,
+    "files": 4
+  },
+  "typecheck": {
+    "command": "npm run lint",
+    "passed": true
+  },
+  "productionBuild": {
+    "command": "npm run build",
+    "passed": true,
+    "advisory": "Existing large bundle warning"
+  },
+  "browser": {
+    "passed": true,
+    "viewpoints": 10,
+    "duskAndNight": true,
+    "errors": [],
+    "report": "render-checks.json"
+  },
+  "boatScope": "Landscape and navigation envelope only; one boat is the next implementation step."
+}

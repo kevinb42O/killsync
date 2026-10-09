@@ -1,10 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { FriendsIslandOcean } from './FriendsIslandVisuals';
+import { FriendsIslandOcean, islandOceanDepth, islandWater } from './FriendsIslandVisuals';
+import { FriendsRiverVisuals } from './FriendsRiverVisuals';
 import { ISLAND_LAKES, ISLAND_SEA_LEVEL, ISLAND_VOLCANO } from '../world/FriendsIsland';
 import { FriendsVolcanoSmoke } from './FriendsVolcanoSmoke';
 
 describe('island fluid stability and bounded effects',()=>{
+  it('excludes seawater beneath inland lakebeds and bounds the added river geometry and textures',()=>{
+    expect(islandOceanDepth(12128,23600)).toBeLessThan(0);
+    expect(islandOceanDepth(31450.27,23852.08)).toBeGreaterThan(0);
+    const rivers=new FriendsRiverVisuals(islandWater,new THREE.MeshStandardMaterial());
+    let triangles=0,textureBytes=0,bridgeDraws=0;
+    for(const object of rivers.children){
+      const mesh=object as THREE.Mesh<THREE.BufferGeometry,THREE.Material>;
+      triangles+=(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3;
+      if(mesh.material instanceof THREE.ShaderMaterial){
+        textureBytes+=(mesh.material.uniforms.bathymetry.value as THREE.DataTexture).image.data.byteLength;
+        expect(mesh.material.vertexShader).toContain('streamFlow=riverFlow');
+        expect(mesh.material.fragmentShader).toContain('float ribbons=');
+      }else bridgeDraws++;
+    }
+    expect(triangles).toBeLessThan(22000);expect(textureBytes).toBeLessThan(2*1024*1024);
+    expect(rivers.waterMaterials.length).toBeLessThanOrEqual(32);expect(bridgeDraws).toBe(2);
+    rivers.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();o.material.dispose();if(o.material instanceof THREE.ShaderMaterial)o.material.uniforms.bathymetry.value.dispose();}});
+  });
   it('keeps every fluid away from a terrain step, even at the highest wave crest',()=>{
     const gap=(level:number)=>Math.min(level-Math.floor(level/32)*32,Math.ceil(level/32)*32-level);
     expect(gap(ISLAND_SEA_LEVEL)).toBeGreaterThan(5);

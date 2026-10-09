@@ -1,6 +1,8 @@
 import { CAVE_ROOMS, CAVE_TREASURES } from './world/FriendsCave';
-import { ISLAND_LAKES, ISLAND_SEA_LEVEL, ISLAND_VOLCANO, islandLakeRadius, islandSurfaceBiome, islandCoastDistance } from './world/FriendsIsland';
+import { ISLAND_VOLCANO, islandSurfaceBiome, islandCoastDistance } from './world/FriendsIsland';
 import { baseTerrainHeight } from './world/FriendsTerrain';
+import { friendsWaterLevel } from './world/FriendsWaterSurface';
+import { riverSampleAt } from './world/FriendsHydrology';
 import type { FriendsSnapshot } from './multiplayer/FriendsExpedition';
 import type { PhysicalCargo } from './multiplayer/FriendsHauling';
 import { cargoBounds } from './multiplayer/FriendsCargoPose';
@@ -65,6 +67,12 @@ export function friendsWorldSound(listener: SoundPoint, yaw: number, underground
     const visible = clear({ ...listener, z:listener.z+40 }, { ...falls, z:falls.z+40 });
     mix.waterfall = { ...fall, volume:fall.volume*(visible?1:.28), cutoff:visible?9000:1200 };
   }
+  const river=riverSampleAt(listener.x,listener.y);
+  if(river&&river.side<river.width/2+500){
+    const source={x:river.x,y:river.y,z:river.level+12};
+    const flowing=spatialSound(source,listener,yaw,1200,.11+river.roughness*.10);
+    if(flowing.volume>mix.waterfall.volume&&clear({...listener,z:listener.z+30},source))mix.waterfall={...flowing,rate:.8+river.roughness*.25,cutoff:7000};
+  }
   const lava = nearest(LAVA_POINTS, listener);
   const hot = spatialSound(lava, listener, yaw, 1300, .24);
   if (hot.volume > .001 && clear({ ...listener, z:listener.z+40 }, { ...lava, z:lava.z+40 })) {
@@ -79,7 +87,7 @@ export function friendsSurfaceSound(point: SoundPoint, supported?: 'wood' | 'har
   if (supported === 'wood') return 'woodStep';
   if (supported === 'hard' || underground) return 'stoneStep';
   if (supported === 'soil') return 'grass';
-  const water = Math.max(islandCoastDistance(point.x, point.y) < 80 ? ISLAND_SEA_LEVEL : -Infinity, ...ISLAND_LAKES.filter(l => islandLakeRadius(point.x,point.y,l) <= 1).map(l => l.level));
+  const water = friendsWaterLevel(point.x,point.y)??-Infinity;
   if (point.z < water+3 && point.z > water-160) return 'waterStep';
   const biome = islandSurfaceBiome(point.x,point.y,point.z);
   if (material && material !== 1 && (biome !== 'snow' || point.z < baseTerrainHeight(point.x,point.y)-32)) return 'stoneStep';

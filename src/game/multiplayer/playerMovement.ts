@@ -1,6 +1,8 @@
 import { getWorldWallContact, resolveWorldCollisions } from '../world/WorldLayout';
 import { getWorldDefinition, isWorldSurfaceWalkable, sampleWorldSurface, type WorldId } from '../world/WorldDefinitions';
 import type { MultiplayerInputFrame } from './protocol';
+import { friendsWaterLevel } from '../world/FriendsWaterSurface';
+import { riverWetAt } from '../world/FriendsHydrology';
 
 export const COOP_STEP_MS = 1000 / 30;
 export const COOP_PLAYER_RADIUS = 19;
@@ -174,6 +176,37 @@ function advanceMovementStep(
   const seconds = Math.max(0, Math.min(50, deltaMs)) / 1000;
   const startX = player.x, startY = player.y;
   const floorAtStart = cachedFloor ? cachedFloor.height : getAdditionalFloor?.(player, COOP_PLAYER_RADIUS);
+  if(worldId==='friends_frontier'&&transport?.volumetric){
+    const water=friendsWaterLevel(player.x,player.y);
+    if(water!==undefined&&player.z<water-12&&(floorAtStart===undefined||floorAtStart<water-24)){
+      const jump=Boolean(input?.jumpPressed&&input.sequence!==player.lastJumpInputSequence);
+      player.sliding=player.crouching=player.jetActive=false;player.slideHeld=false;
+      player.platformVelocityX=player.platformVelocityY=player.platformVelocityZ=0;
+      player.airborneMs=player.groundedMs=0;
+      player.jetFuel=Math.min(COOP_JET_FUEL_MAX,(player.jetFuel??COOP_JET_FUEL_MAX)+COOP_JET_RECHARGE_PER_SECOND*seconds);
+      if(jump){
+        player.lastJumpInputSequence=input!.sequence;player.lastJumpSequence=input!.sequence;
+        player.jumpBufferMs=0;player.z=water-12;player.verticalVelocity=COOP_JUMP_VELOCITY;
+        player.airActionConsumedSinceGrounded=false;
+      }else{
+        const yaw=input?input.aimAngle/65535*Math.PI*2:player.angle;player.angle=yaw;
+        const forward=(input?.movement&&input.movement&1?1:0)-(input?.movement&&input.movement&2?1:0);
+        const strafe=(input?.movement&&input.movement&8?1:0)-(input?.movement&&input.movement&4?1:0);
+        const n=Math.max(1,Math.hypot(forward,strafe)),speed=input?.sprinting?150:110;
+        const current=riverWetAt(player.x,player.y),drift=current?8+current.roughness*12:0;
+        const vx=(Math.cos(yaw)*forward-Math.sin(yaw)*strafe)/n*speed+(current?.tx??0)*drift;
+        const vy=(Math.sin(yaw)*forward+Math.cos(yaw)*strafe)/n*speed+(current?.ty??0)*drift;
+        const p={x:player.x+vx*seconds,y:player.y+vy*seconds};
+        resolveAdditionalCollisions?.(p,COOP_PLAYER_RADIUS);
+        player.x=p.x;player.y=p.y;player.velocityX=vx;player.velocityY=vy;
+        const destination=friendsWaterLevel(p.x,p.y)??water;
+        player.z+=(destination-18-player.z)*(1-Math.exp(-12*seconds));
+        player.verticalVelocity=0;player.sprinting=Boolean(input?.sprinting);
+        player.coyoteMs=player.jumpBufferMs=0;player.airActionConsumedSinceGrounded=false;
+        return;
+      }
+    }
+  }
   const boardingFloor = floorAtStart !== undefined && floorAtStart > player.z && floorAtStart - player.z <= 18
     && player.verticalVelocity <= 0 ? transport?.boardingFloor?.(player) : undefined;
   if (boardingFloor !== undefined && floorAtStart === boardingFloor && player.verticalVelocity <= 0

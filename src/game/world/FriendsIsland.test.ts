@@ -4,6 +4,7 @@ import { baseTerrainHeight, FriendsTerrain, ISLAND_RUINS, TERRAIN_GENERATION, pr
 import { CAVE_ROOMS, CAVE_ENTRANCE } from './FriendsCave';
 import { meshBlockHorizon } from './FriendsHorizonMesh';
 import { meshTerrainChunk } from './FriendsTerrainMesh';
+import { riverSampleAt } from './FriendsHydrology';
 
 describe('the alpine ocean island',()=>{
   it('has ocean around every edge, with a dry interior and peaks above the cloud deck',()=>{
@@ -64,7 +65,9 @@ describe('the alpine ocean island',()=>{
     let samples=0;
     for(let x=1024;x<47000;x+=192)for(let y=10048;y<47000;y+=192){
       const d=islandCoastDistance(x,y);
-      if(Math.abs(d)>120)continue;
+      // The authored estuary has a deeper boat channel through the beach.
+      // Its continuity is covered by FriendsHydrology.test.ts.
+      if(Math.abs(d)>120||riverSampleAt(x,y))continue;
       samples++;
       expect(Math.abs(baseTerrainHeight(x+32,y)-baseTerrainHeight(x-32,y))).toBeLessThanOrEqual(64);
       expect(Math.abs(baseTerrainHeight(x,y+32)-baseTerrainHeight(x,y-32))).toBeLessThanOrEqual(64);

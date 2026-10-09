@@ -17,12 +17,21 @@ import { configureTerrainCoverage } from './FriendsTerrainCoverage';
 import { meshIslandRuins } from '../world/FriendsIslandRuinMesh';
 import { FriendsCastleTorches } from './FriendsCastleTorches';
 import { FriendsCastleStairVisuals } from './FriendsCastleStairVisuals';
+import { FriendsRiverVisuals } from './FriendsRiverVisuals';
+import { hydrologyWaterLevel, riverSampleAt } from '../world/FriendsHydrology';
+
+export function islandOceanDepth(x:number,y:number){
+  // Deep inland water can lie below sea level. It must not acquire a second
+  // ocean surface beneath the translucent freshwater mesh.
+  const fresh=hydrologyWaterLevel(x,y);
+  return fresh!==undefined&&fresh>ISLAND_SEA_LEVEL+1?-32:ISLAND_SEA_LEVEL-baseTerrainHeight(x,y);
+}
 
 /** Bathymetric water shared by the ocean and carved mountain basins. The
  * negative depth mask cuts water to its terrain shoreline, not a drawn oval. */
-function islandWater(cx:number,cy:number,width:number,length:number,level:number,
-  depthAt:(x:number,y:number)=>number, ocean=false){
-  const size=ocean?384:160,depths=new Float32Array(size*size);
+export function islandWater(cx:number,cy:number,width:number,length:number,level:number,
+  depthAt:(x:number,y:number)=>number, ocean=false,resolution?:number){
+  const size=resolution??(ocean?384:160),depths=new Float32Array(size*size);
   const sampleWidth=ocean?FRONTIER_SIZE:width,sampleLength=ocean?FRONTIER_SIZE:length;
   const origin=new THREE.Vector2(ocean?0:cx-width/2,ocean?0:cy-length/2);
   for(let y=0;y<size;y++)for(let x=0;x<size;x++)depths[y*size+x]=depthAt(origin.x+(x+.5)/size*sampleWidth,origin.y+(y+.5)/size*sampleLength);
@@ -92,7 +101,7 @@ export class FriendsIslandOcean extends THREE.Group {
   private far:THREE.Mesh;private patch:THREE.Mesh;
   constructor(){
     super();this.name='the-surrounding-ocean';
-    this.far=islandWater(24000,24000,170000,170000,ISLAND_SEA_LEVEL,(x,y)=>ISLAND_SEA_LEVEL-baseTerrainHeight(x,y),true);
+    this.far=islandWater(24000,24000,170000,170000,ISLAND_SEA_LEVEL,islandOceanDepth,true);
     const material=(this.far.material as THREE.ShaderMaterial).clone();
     material.uniforms.bathymetry.value=this.far.userData.bathymetry;
     material.uniforms.patchCentre=(this.far.material as THREE.ShaderMaterial).uniforms.patchCentre;
@@ -180,12 +189,14 @@ export class FriendsIslandVisuals extends THREE.Group {
     for(const lake of ISLAND_LAKES){
       const water=islandWater(lake.x,lake.y,lake.rx*3.2,lake.ry*3.2,lake.level,(x,y)=>{
         if(islandLakeRadius(x,y,lake)>1.45)return -32;
+        const river=riverSampleAt(x,y);if(river&&river.side<river.width*.57&&Math.abs(river.level-lake.level)>1)return -32;
         const floor=lake.id==='gate'?islandArchRange(x,y)?.[0]:baseTerrainHeight(x,y);
         return floor===undefined?-32:lake.level-floor;
       });
-      water.name=lake.id==='gate'?'world-gate-glacial-lake':'skyfalls-carved-basin';
+      water.name=lake.id==='gate'?'world-gate-glacial-lake':lake.id==='deepmere'?'deepmere-deep-lake':'skyfalls-carved-basin';
       this.add(water);this.animated.push(water.material as THREE.ShaderMaterial);
     }
+    const rivers=new FriendsRiverVisuals(islandWater,ruinMaterials[0]);this.add(rivers);this.animated.push(...rivers.waterMaterials);
     const v=ISLAND_VOLCANO;
     const lava=islandWater(v.x,v.y,3000,3000,v.lavaLevel,(x,y)=>islandVolcanoRadius(x,y)<1100?v.lavaLevel-baseTerrainHeight(x,y):-32);
     const lavaMaterial=new THREE.ShaderMaterial({uniforms:(lava.material as THREE.ShaderMaterial).uniforms,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2,
