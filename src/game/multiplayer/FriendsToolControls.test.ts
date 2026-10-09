@@ -9,7 +9,7 @@ describe('Friends wheel tools', () => {
     }
   });
   it('keeps one shovel slot and maps secondary input to filling only for that tool', () => {
-    expect(FRIENDS_TOOL_ORDER).toEqual([1, 2, 3, 0, 5]);
+    expect(FRIENDS_TOOL_ORDER).toEqual([6, 1, 2, 3, 0, 5]);
     expect(friendsToolInput(3, false, true)).toEqual({ fill: true, held: true });
     expect(friendsToolInput(3, true, true)).toEqual({ fill: true, held: true });
     expect(friendsToolInput(3, true, false)).toEqual({ fill: false, held: true });

@@ -1,3 +1,5 @@
+import { retreatPathFloor } from '../world/FriendsRetreatPaths';
+import { retreatFloor, retreatCeiling, collideRetreats } from '../world/FriendsRetreatSites';
 import { frontierTrees } from './FriendsFrontier';
 import { collidePhysicalCargo } from './FriendsHauling';
 import { FriendsTerrain, FRIENDS_STEP_HEIGHT } from '../world/FriendsTerrain';
@@ -122,6 +124,7 @@ export class LocalPlayerPrediction {
       deltaMs,
       (position, radius) => {
         let collided = this.friends ? resolveFriendsVehicleCollisions(this.friends.vehicles, position, motion.z, radius) : false;
+        if (this.friends?.retreats) collided = collideRetreats(position,motion.z,radius,this.friends.retreats.active) || collided;
         if (this.friends?.hauling) collided = collidePhysicalCargo(this.friends.hauling.cargo, position, motion.z, radius) || collided;
         if (this.friends?.frontier) {
           collided = this.terrain.collide(position, motion.z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.friends?.building?.pieces??[],position,motion.z,x,y,top)) || collided;
@@ -151,6 +154,9 @@ export class LocalPlayerPrediction {
       },
       (position, radius) => {
         let floor = this.friends ? friendsWorldFloor(this.friends.vehicles, position.x, position.y, motion.z) : undefined;
+        const retreatPoint={x:position.x,y:position.y,z:motion.z};
+        const retreatTop=this.friends?.retreats&&Math.max(retreatFloor(retreatPoint,this.friends.retreats.active)??-Infinity,retreatPathFloor(retreatPoint,this.friends.retreats.active)??-Infinity);
+        if(retreatTop!==undefined)floor=Math.max(floor??-Infinity,retreatTop);
         const ground = this.friends?.frontier && this.terrain.floor(position.x, position.y, motion.z);
         if (ground !== undefined) floor = Math.max(floor ?? -Infinity, ground);
         const creative = this.friends?.building && friendsWalkFloor(this.friends.building.pieces, position.x, position.y, motion.z, radius, this.friends?.frontier?this.terrain:undefined);
@@ -163,7 +169,7 @@ export class LocalPlayerPrediction {
         return floor;
       },
       this.worldId,
-      this.friends ? { elevationAware: true, devFlightAllowed: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.friends!.building?.pieces || [], position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
+      this.friends ? { elevationAware: true, devFlightAllowed: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.friends!.building?.pieces || [], position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, retreatCeiling(position,this.friends?.retreats?.active??[])??Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
     );
   }
 }

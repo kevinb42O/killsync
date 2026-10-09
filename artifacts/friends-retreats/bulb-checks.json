@@ -1,0 +1,42 @@
+{
+  "errors": [],
+  "failedTextures": [],
+  "bulb-on": {
+    "warm": 1,
+    "lamp": 3400,
+    "materials": [
+      {
+        "name": "lightbulb_01_glass",
+        "emissive": "ffb65a",
+        "intensity": 5,
+        "opacity": 0.84
+      },
+      {
+        "name": "lightbulb_01_base",
+        "emissive": "ffb65a",
+        "intensity": 5,
+        "opacity": 1
+      }
+    ],
+    "glError": 0
+  },
+  "bulb-off": {
+    "warm": 3.3382377953649917e-15,
+    "lamp": 1.1350008504240971e-11,
+    "materials": [
+      {
+        "name": "lightbulb_01_glass",
+        "emissive": "ffb65a",
+        "intensity": 1.6691188976824958e-14,
+        "opacity": 0.240000000000002
+      },
+      {
+        "name": "lightbulb_01_base",
+        "emissive": "ffb65a",
+        "intensity": 1.6691188976824958e-14,
+        "opacity": 1
+      }
+    ],
+    "glError": 0
+  }
+}

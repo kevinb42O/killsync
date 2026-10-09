@@ -1,0 +1,7 @@
+{
+  "errors": [],
+  "checks": [],
+  "failure": "TimeoutError: locator.click: Timeout 90000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Head into the island', exact: true })\u001b[22m\n",
+  "text": "Friends mode\nLanguage\nEnglish\nРусский\nResume scenery\nSunline\n·\nFriends mode\nA little adventure, together.\n\nExplore the island, make something, and see where the day takes you.\n\nYour name\nYour first island\nYour progress will be saved on this device.\nOpen my island\nJoin a friend\nPlay on my own\n\nOpen islands appear in the room list. Your world is saved on this device.\n\nOpening your island…\n\nsignal timed out\nSunline island\nRoom to wander. Time to make something.",
+  "eating": {}
+}

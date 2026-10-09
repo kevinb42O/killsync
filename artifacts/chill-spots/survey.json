@@ -1,0 +1,114 @@
+{
+  "date": "2026-10-09",
+  "status": "Preliminary design candidates, not final placement approval",
+  "unitsPerMetre": 12,
+  "sites": [
+    {
+      "id": "house",
+      "name": "Stillwater House",
+      "x": 7680,
+      "y": 21696,
+      "width": 96,
+      "depth": 72,
+      "lake": 0,
+      "archFloor": false,
+      "ground": 1312,
+      "preliminaryDeck": 1320,
+      "seatedEye": 1334,
+      "footprintReliefMetres": 0,
+      "highestFootprintGround": 1312,
+      "nearestRailCentrelineMetres": 27.44159350802025,
+      "nearestAuthoredRuinMetres": 854.3868496699191,
+      "lakeView": {
+        "target": "skyfalls",
+        "blockedVoxelSamples": 0
+      }
+    },
+    {
+      "id": "falls",
+      "name": "Skyfalls Bench",
+      "x": 8884,
+      "y": 21100,
+      "width": 48,
+      "depth": 36,
+      "lake": 0,
+      "archFloor": false,
+      "ground": 864,
+      "preliminaryDeck": 904,
+      "seatedEye": 918,
+      "footprintReliefMetres": 2.6666666666666665,
+      "highestFootprintGround": 896,
+      "nearestRailCentrelineMetres": 53.545314894657075,
+      "nearestAuthoredRuinMetres": 743.3463377038847,
+      "lakeView": {
+        "target": "skyfalls",
+        "blockedVoxelSamples": 0
+      }
+    },
+    {
+      "id": "gate",
+      "name": "Gatewater Bench",
+      "x": 14116,
+      "y": 11308,
+      "width": 48,
+      "depth": 36,
+      "lake": 1,
+      "archFloor": true,
+      "ground": 832,
+      "preliminaryDeck": 840,
+      "seatedEye": 854,
+      "footprintReliefMetres": 0,
+      "highestFootprintGround": 832,
+      "nearestRailCentrelineMetres": 140.33333333333334,
+      "nearestAuthoredRuinMetres": 199.66666666666666,
+      "lakeView": {
+        "target": "gate",
+        "blockedVoxelSamples": 0
+      }
+    },
+    {
+      "id": "tidal",
+      "name": "Saltwind Camp",
+      "x": 27248,
+      "y": 20704,
+      "width": 128,
+      "depth": 128,
+      "archFloor": false,
+      "ground": 192,
+      "preliminaryDeck": 200,
+      "seatedEye": 214,
+      "footprintReliefMetres": 2.6666666666666665,
+      "highestFootprintGround": 192,
+      "nearestRailCentrelineMetres": 62.666666666666664,
+      "nearestAuthoredRuinMetres": 46.89468105351727
+    },
+    {
+      "id": "summit",
+      "name": "Last Light Bench",
+      "x": 6816,
+      "y": 18080,
+      "width": 48,
+      "depth": 36,
+      "archFloor": false,
+      "ground": 4576,
+      "preliminaryDeck": 4672,
+      "seatedEye": 4686,
+      "footprintReliefMetres": 5.333333333333333,
+      "highestFootprintGround": 4576,
+      "nearestRailCentrelineMetres": 167.2365735503054,
+      "nearestAuthoredRuinMetres": 877.3333333333334,
+      "solarTerrainHorizonDegrees": {
+        "dawn": -4.812910296128276,
+        "dusk": -7.1786036583648904
+      }
+    }
+  ],
+  "limitations": [
+    "Footprints are axis-aligned sketches; final orientation, porch and stand-up clearances need a new survey.",
+    "Fresh island only: saved terrain, player builds, vegetation, paths, cargo routes and station envelopes are not inspected.",
+    "Lake rays sample the fresh volumetric field at 8-unit intervals; they test the lake centre, not the entire panorama or waterfall mesh.",
+    "Gatewater ground uses the arch cavity floor rather than the top of the mountain; exact voxel support still needs in-engine review.",
+    "Rail distance is to compiled polyline segments, not a vehicle or station clearance envelope.",
+    "Solar horizon uses natural surface height at exact dawn/dusk bearings, excluding foliage, infrastructure and the solar disc."
+  ]
+}

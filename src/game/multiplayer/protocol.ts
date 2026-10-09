@@ -1,3 +1,4 @@
+import { sanitizeFriendsArms } from './FriendsGestureControls';
 /**
  * Transport-neutral messages for manual WebRTC co-op.
  *
@@ -6,10 +7,10 @@
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v50 merges Earthwork into Shovel secondary input and removes tool id 4. Incrementing this makes
+/** v51 adds empty hands and compact, independently controlled arm gestures. Incrementing this makes
  * a stale tab fail the handshake cleanly instead of silently misreading the
  * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 50;
+export const MULTIPLAYER_PROTOCOL_VERSION = 51;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
@@ -31,7 +32,9 @@ export interface MultiplayerInputFrame {
   aimAngle: number;
   /** Quantized camera pitch. Zero is the lowest valid look angle. */
   aimPitch: number;
-  friendsTool?: 0 | 1 | 2 | 3 | 5;
+  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6;
+  /** Four held arm buttons; validated by the host, never persisted. */
+  friendsArms?: number;
   /** Held state travels with normal input; no toggle edges can be lost. */
   friendsFlashlight?: boolean;
   /** Spotlight half-angle quantized over 0..PI/2, in one byte. */
@@ -209,7 +212,8 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   movement: boundedInteger(frame.movement, 15),
   aimAngle: boundedInteger(frame.aimAngle, 65535),
   aimPitch: boundedInteger(frame.aimPitch, 65535),
-  friendsTool: (boundedInteger(frame.friendsTool, 5) === 4 ? 0 : boundedInteger(frame.friendsTool, 5)) as 0 | 1 | 2 | 3 | 5,
+  friendsTool: (boundedInteger(frame.friendsTool, 6) === 4 ? 0 : boundedInteger(frame.friendsTool, 6)) as 0 | 1 | 2 | 3 | 5 | 6,
+  friendsArms: sanitizeFriendsArms(frame.friendsArms),
   friendsFlashlight: frame.friendsFlashlight === true ? true : undefined,
   friendsFlashlightCone: frame.friendsFlashlight === true ? boundedInteger(frame.friendsFlashlightCone, 255) : undefined,
   friendsWorkPlane: frame.friendsWorkPlane && [0,1,2].includes(frame.friendsWorkPlane.axis) && Number.isFinite(frame.friendsWorkPlane.value) && frame.friendsWorkPlane.value>=-512 && frame.friendsWorkPlane.value<=48000 ? {axis:frame.friendsWorkPlane.axis,value:Math.round(frame.friendsWorkPlane.value/32)*32} : undefined,

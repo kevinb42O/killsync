@@ -119,7 +119,7 @@ export class FriendsMarshmallowVisuals {
     group.add(rod,food,fire);this.group.add(group);
     const entry:Stick={group,rod,food,surface,fire,pose:0,eatPose:0};this.actors.set(id,entry);return entry;
   }
-  update(players:readonly CoopPlayerSnapshot[],state:CampfireSnapshot|undefined,localId:string,camera:THREE.Camera,seconds:number,dt:number,firstPerson=true){
+  update(players:readonly CoopPlayerSnapshot[],state:CampfireSnapshot|undefined,localId:string,camera:THREE.Camera,seconds:number,dt:number,firstPerson=true,handPoint?:(id:string,out:THREE.Vector3)=>boolean){
     if(this.disposed)return;
     this.time.value=seconds;camera.getWorldPosition(this.cameraPosition);camera.getWorldQuaternion(this.cameraQuaternion);
     for(const entry of this.actors.values())entry.group.visible=false;
@@ -142,7 +142,7 @@ export class FriendsMarshmallowVisuals {
         this.start.set(.48*24*tangent*aspect,-.64*24*tangent,-24).applyQuaternion(this.cameraQuaternion).add(this.cameraPosition);
         this.forward.set(0,0,-1).applyQuaternion(this.cameraQuaternion);this.right.set(1,0,0).applyQuaternion(this.cameraQuaternion);
       }else{
-        this.start.set(player.x-Math.sin(player.angle)*8,player.z+18,player.y+Math.cos(player.angle)*8);
+        if(!handPoint?.(player.id,this.start))this.start.set(player.x-Math.sin(player.angle)*8,player.z+18,player.y+Math.cos(player.angle)*8);
         this.forward.set(Math.cos(player.angle),0,Math.sin(player.angle));this.right.set(-Math.sin(player.angle),0,Math.cos(player.angle));
       }
       this.rest.copy(this.start).addScaledVector(this.forward,64).addScaledVector(this.right,-9);this.rest.y+=40;

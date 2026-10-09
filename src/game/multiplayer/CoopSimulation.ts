@@ -1,3 +1,6 @@
+import { sanitizeFriendsArms, type FriendsHandsState } from './FriendsGestureControls';
+import { retreatPathFloor } from '../world/FriendsRetreatPaths';
+import { RETREAT_BOXES, isQuietSeat, retreatFloor, retreatCeiling, collideRetreats } from '../world/FriendsRetreatSites';
 import { friendsToolInput } from './FriendsToolControls';
 import { orientedBuildBox } from './FriendsAssemblyPose';
 import { dequantizeFriendsFlashlightCone, type FriendsFlashlightState } from './FriendsFlashlightState';
@@ -174,6 +177,7 @@ export interface CoopPlayerSeed { id: string; label: string; color: string; skin
 
 export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   /** Local goggles never enter this state; only the visible handheld beam. */
+  friendsHands?: FriendsHandsState;
   friendsFlashlight?: FriendsFlashlightState;
   x: number;
   y: number;
@@ -537,7 +541,7 @@ export class CoopSimulation {
   private friendsEmptySinceMs: number | undefined;
 
   constructor(players: CoopPlayerSeed[], seed: number = 0xdecafbad, runId = `coop-${Date.now().toString(36)}-${(seed >>> 0).toString(36)}`, worldId: WorldId = 'neon_bastion', private readonly mode: CoopGameMode = 'survival', progress?: FriendsProgress, building?: FriendsBuildingSnapshot, projects?: FriendsProjectSnapshot, frontier?: FrontierSnapshot, transport?: FriendsTransportSave) {
-    if (mode === 'friends') { worldId = 'friends_frontier'; this.friendsFrontier = new FriendsFrontier(frontier); this.friends = new FriendsExpedition(progress, transport, this.friendsFrontier.terrain); this.friendsBuilding = new FriendsBuilding(building, (this.friendsBuilding?.snapshot().revision || 0) + 1, this.friendsFrontier?.terrain); this.friendsBuilding.vehicleProvider=()=>this.friends?.vehicles()||[]; this.friendsBuilding.craneAngleProvider=()=>this.friends?.hauling.getCraneAngles()??new Map(); this.friendsFrontier.demolishBuild=(actor,piece)=>this.demolishFriendsBuild(actor,piece); this.friendsFrontier.preserveTerrainWork(this.friendsBuilding.getPieces(),frontier?.terrain); this.friends.resetAircraft(this.friendsFrontier.terrain); this.friends.setRailway(this.friendsBuilding.getPieces(), this.friendsBuilding.getRevision()); if (!frontier) this.friendsFrontier.adaptLegacyBuildings(this.friendsBuilding.getPieces()); this.friendsProjects = new FriendsProjects(projects); this.friendsHostId = players[0]?.id || ''; }
+    if (mode === 'friends') { worldId = 'friends_frontier'; this.friendsFrontier = new FriendsFrontier(frontier); this.friends = new FriendsExpedition(progress, transport, this.friendsFrontier.terrain); this.friendsBuilding = new FriendsBuilding(building, (this.friendsBuilding?.snapshot().revision || 0) + 1, this.friendsFrontier?.terrain); this.friendsBuilding.vehicleProvider=()=>this.friends?.vehicles()||[]; this.friendsBuilding.craneAngleProvider=()=>this.friends?.hauling.getCraneAngles()??new Map(); this.friendsFrontier.demolishBuild=(actor,piece)=>this.demolishFriendsBuild(actor,piece); this.friendsFrontier.preserveTerrainWork(this.friendsBuilding.getPieces(),frontier?.terrain); this.friends.resetAircraft(this.friendsFrontier.terrain); this.friends.setRailway(this.friendsBuilding.getPieces(), this.friendsBuilding.getRevision()); this.friends.retreats.configure(this.friendsBuilding.getPieces(),this.friendsFrontier.terrain); this.friendsFrontier.retreatActive=this.friends.retreats.state.active; this.friendsBuilding.placementGuard=(shape,pose)=>friendsShapeBoxes(shape).some(b=>this.friends!.retreats.constructionConflict(worldBox(pose,b)))?'Keep the quiet place and its approach clear.':undefined; if (!frontier) this.friendsFrontier.adaptLegacyBuildings(this.friendsBuilding.getPieces()); this.friendsProjects = new FriendsProjects(projects); this.friendsHostId = players[0]?.id || ''; }
     else if (worldId === 'friends_frontier') worldId = 'neon_bastion';
     this.randomState = seed >>> 0;
     this.runId = runId;
@@ -905,7 +909,12 @@ export class CoopSimulation {
       const input = rawInput && player.carryingHostage
         ? { ...rawInput, firing: false, aiming: false, sprinting: false, sliding: false, jetHeld: false, dashPressed: false, reloadPressed: false, altFireActionId: player.lastAltFireActionId }
         : rawInput;
-      if(this.friends && !stale && input?.friendsFlashlight === true && player.lifeState === 'alive'
+      const handsAllowed = Boolean(this.friends && !stale && input?.friendsTool === 6 && player.lifeState === 'alive'
+        && !isCampfireSeat(player.friendsSeat) && !this.friends.vehicles().some(v => v.pilotId === player.id));
+      if (handsAllowed) player.friendsHands = {mask:sanitizeFriendsArms(input!.friendsArms),
+        yaw:input!.aimAngle/65535*Math.PI*2, pitch:dequantizePitch(input!.aimPitch)};
+      else delete player.friendsHands;
+      if(this.friends && !stale && input?.friendsFlashlight === true && input.friendsTool !== 6 && player.lifeState === 'alive'
         && !this.friends.vehicles().some(v => v.kind==='aircraft' && v.pilotId === player.id))
         player.friendsFlashlight = { pitch: dequantizePitch(input.aimPitch), cone: dequantizeFriendsFlashlightCone(input.friendsFlashlightCone),
           yaw: Math.round(input.aimAngle / 65535 * Math.PI * 2 * 1000) / 1000 };
@@ -980,13 +989,13 @@ export class CoopSimulation {
         if (requestedSlot !== player.selectedSlot && !player.isSwitching) this.switchWeapon(player, requestedSlot);
         player.selectedWeaponId = this.weapon(player).weaponId;
         player.selectedWeaponLevel = this.weapon(player).level;
-        player.isAiming = !(this.friends && input.friendsTool === 3) && !isCampfireSeat(player.friendsSeat) && !isCoopSpell(player.selectedWeaponId) && Boolean(input.aiming) && player.selectedSlot !== 3 && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
-        if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; if (this.friends && (carried || this.friends.hauling.playerCarry.hasCarrier(player.id))) this.friends.hauling.detach(player.id); else if (this.friends && isCampfireSeat(player.friendsSeat)) this.friends.campfire.replace(player); else if (this.friends && input.friendsTool === 5) this.friends.hauling.detach(player.id); else this.startReload(player); }
+        player.isAiming = !(this.friends && (input.friendsTool === 3 || input.friendsTool === 6)) && !isQuietSeat(player.friendsSeat) && !isCoopSpell(player.selectedWeaponId) && Boolean(input.aiming) && player.selectedSlot !== 3 && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
+        if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; if (this.friends && (carried || this.friends.hauling.playerCarry.hasCarrier(player.id))) this.friends.hauling.detach(player.id); else if (this.friends && isCampfireSeat(player.friendsSeat)) this.friends.campfire.replace(player); else if (this.friends && input.friendsTool === 5) this.friends.hauling.detach(player.id); else if (!isQuietSeat(player.friendsSeat) && !(this.friends && input.friendsTool===6)) this.startReload(player); }
         this.advanceWeaponActions(player);
         const fireActionId = input.fireActionId || 0;
         const triggerPressed = fireActionId > player.lastFireActionId || (input.fireActionId === undefined && input.firing && !player.previousFiring);
         if (fireActionId > player.lastFireActionId) player.lastFireActionId = fireActionId;
-        if (!stale && !piloting && !isCampfireSeat(player.friendsSeat) && this.friends && input.friendsTool === 5 && triggerPressed) {
+        if (!stale && !piloting && !isQuietSeat(player.friendsSeat) && this.friends && input.friendsTool === 5 && triggerPressed) {
           const a = player.angle, pitch = player.aimPitch;
           this.friends.hauling.shoot(player, { x: Math.cos(a) * Math.cos(pitch), y: Math.sin(a) * Math.cos(pitch), z: Math.sin(pitch) }, this.haulingEnvironment(), this.elapsedMs, [...this.players.values()]);
         }
@@ -994,10 +1003,10 @@ export class CoopSimulation {
         const altFireActionId = input.altFireActionId || 0;
         if (altFireActionId > player.lastAltFireActionId) {
           player.lastAltFireActionId = altFireActionId;
-          if (!isCampfireSeat(player.friendsSeat) && !(this.friends && input.friendsTool) && (player.selectedSlot === 3 || player.operatorId === 'royal_inferno')) this.tryArtifactSpender(player);
+          if (!isQuietSeat(player.friendsSeat) && !(this.friends && input.friendsTool) && (player.selectedSlot === 3 || player.operatorId === 'royal_inferno')) this.tryArtifactSpender(player);
         }
         const grenadeActionId = input.grenadeActionId || 0;
-        if (grenadeActionId > player.lastGrenadeActionId) { player.lastGrenadeActionId = grenadeActionId; if (!isCampfireSeat(player.friendsSeat) && !(this.friends && input.friendsTool)) this.throwGrenade(player); }
+        if (grenadeActionId > player.lastGrenadeActionId) { player.lastGrenadeActionId = grenadeActionId; if (!isQuietSeat(player.friendsSeat) && !(this.friends && input.friendsTool)) this.throwGrenade(player); }
         const interactActionId = input.interactActionId || 0;
         if (interactActionId > player.lastInteractActionId) {
           player.lastInteractActionId = interactActionId;
@@ -1006,9 +1015,9 @@ export class CoopSimulation {
         if (this.friendsFrontier) {
           const pitch = player.aimPitch, a = player.angle;
           const shovelInput = friendsToolInput(input.friendsTool || 0, input.firing, Boolean(input.aiming));
-          this.friendsFrontier.advanceTool(player, input.friendsTool || 0, { x: player.x, y: player.y, z: player.z + 26, dx: Math.cos(a) * Math.cos(pitch), dy: Math.sin(a) * Math.cos(pitch), dz: Math.sin(pitch) }, this.elapsedMs, this.friendsBuilding!.getPieces(), !stale && !piloting && !isCampfireSeat(player.friendsSeat) && shovelInput.held, player.id === this.friendsHostId || this.friendsBuilding!.getGuestAccess(), [...this.players.values(), ...physicalCargoBuildBodies(this.friends?.hauling.getCargo())],this.friendsBuilding!.getRevision(),input.friendsWorkPlane,shovelInput.fill);
+          this.friendsFrontier.advanceTool(player, input.friendsTool || 0, { x: player.x, y: player.y, z: player.z + 26, dx: Math.cos(a) * Math.cos(pitch), dy: Math.sin(a) * Math.cos(pitch), dz: Math.sin(pitch) }, this.elapsedMs, this.friendsBuilding!.getPieces(), !stale && !piloting && !isQuietSeat(player.friendsSeat) && shovelInput.held, player.id === this.friendsHostId || this.friendsBuilding!.getGuestAccess(), [...this.players.values(), ...physicalCargoBuildBodies(this.friends?.hauling.getCargo())],this.friendsBuilding!.getRevision(),input.friendsWorkPlane,shovelInput.fill);
         }
-        if (!piloting && !isCampfireSeat(player.friendsSeat) && !(this.friendsFrontier && input.friendsTool) && input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
+        if (!piloting && !isQuietSeat(player.friendsSeat) && !(this.friendsFrontier && input.friendsTool) && input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
       }
       if (!input && !player.friendsSeat && !this.friends?.hauling.playerCarry.isCarried(player.id)) advancePlayerMovement(player, undefined, dt, this.friends ? (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius) : undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId, this.friends ? { elevationAware: true, devFlightAllowed: true, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined);
@@ -1380,7 +1389,7 @@ export class CoopSimulation {
     if (!this.friends || playerId !== this.friendsHostId) return false;
     this.friendsCommandResults.clear();
     const nextTerrainRevision = (this.friendsFrontier?.terrain.revision || 0) + 1;
-    this.friendsFrontier = new FriendsFrontier(frontier); this.friends = new FriendsExpedition(progress, transport, this.friendsFrontier.terrain); this.friendsBuilding = new FriendsBuilding(building, (this.friendsBuilding?.snapshot().revision || 0) + 1, this.friendsFrontier?.terrain); this.friendsFrontier.terrain.revision = Math.max(nextTerrainRevision, this.friendsFrontier.terrain.revision); this.friendsBuilding.vehicleProvider=()=>this.friends?.vehicles()||[]; this.friendsBuilding.craneAngleProvider=()=>this.friends?.hauling.getCraneAngles()??new Map(); this.friendsFrontier.demolishBuild=(actor,piece)=>this.demolishFriendsBuild(actor,piece); this.friendsFrontier.preserveTerrainWork(this.friendsBuilding.getPieces(),frontier?.terrain); this.friends.resetAircraft(this.friendsFrontier.terrain); this.friends.setRailway(this.friendsBuilding.getPieces(), this.friendsBuilding.getRevision()); if (!frontier) this.friendsFrontier.adaptLegacyBuildings(this.friendsBuilding.getPieces()); this.friendsProjects = new FriendsProjects(projects); this.friendsBuildCheckedRevision = -1;
+    this.friendsFrontier = new FriendsFrontier(frontier); this.friends = new FriendsExpedition(progress, transport, this.friendsFrontier.terrain); this.friendsBuilding = new FriendsBuilding(building, (this.friendsBuilding?.snapshot().revision || 0) + 1, this.friendsFrontier?.terrain); this.friendsFrontier.terrain.revision = Math.max(nextTerrainRevision, this.friendsFrontier.terrain.revision); this.friendsBuilding.vehicleProvider=()=>this.friends?.vehicles()||[]; this.friendsBuilding.craneAngleProvider=()=>this.friends?.hauling.getCraneAngles()??new Map(); this.friendsFrontier.demolishBuild=(actor,piece)=>this.demolishFriendsBuild(actor,piece); this.friendsFrontier.preserveTerrainWork(this.friendsBuilding.getPieces(),frontier?.terrain); this.friends.resetAircraft(this.friendsFrontier.terrain); this.friends.setRailway(this.friendsBuilding.getPieces(), this.friendsBuilding.getRevision()); this.friends.retreats.configure(this.friendsBuilding.getPieces(),this.friendsFrontier.terrain); this.friendsFrontier.retreatActive=this.friends.retreats.state.active; this.friendsBuilding.placementGuard=(shape,pose)=>friendsShapeBoxes(shape).some(b=>this.friends!.retreats.constructionConflict(worldBox(pose,b)))?'Keep the quiet place and its approach clear.':undefined; if (!frontier) this.friendsFrontier.adaptLegacyBuildings(this.friendsBuilding.getPieces()); this.friendsProjects = new FriendsProjects(projects); this.friendsBuildCheckedRevision = -1;
     this.enemies = []; this.hazards = []; this.projectiles = []; this.grenades = []; this.spellZones = [];
     for (const player of this.players.values()) this.recoverFriend(player);
     return true;
@@ -1488,7 +1497,7 @@ export class CoopSimulation {
     const terrain = this.friendsFrontier?.terrain.ceiling(position.x, position.y, position.z);
     const a = friendsVehicleCeiling(this.friends!.vehicles(), position.x, position.y, position.z);
     const b = this.friendsBuilding && friendsBuildCeiling(this.friendsBuilding.getPieces(), position.x, position.y, position.z);
-    return Math.min(a ?? Infinity, b ?? Infinity, terrain ?? Infinity);
+    return Math.min(a ?? Infinity, b ?? Infinity, terrain ?? Infinity, retreatCeiling(position,this.friends!.retreats.state.active) ?? Infinity);
   }
 
   buildStructure(playerId: string, requestedType: unknown, requestedX: number, requestedY: number, requestedAngle: number, requestId?: number): CoopBuildError | undefined {
@@ -2661,6 +2670,7 @@ export class CoopSimulation {
 
   private resolvePlayerStructureCollisions(position: { x: number; y: number }, z: number, radius: number) {
     let collided = this.friends ? resolveFriendsVehicleCollisions(this.friends.vehicles(), position, z, radius) : false;
+    if (this.friends) collided = collideRetreats(position,z,radius,this.friends.retreats.state.active) || collided;
     if (this.friends) collided = collidePhysicalCargo(this.friends.hauling.getCargo(), position, z, radius) || collided;
     if (this.friendsFrontier) { collided = this.friendsFrontier.terrain.collide(position, z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.friendsBuilding?.getPieces()??[],position,z,x,y,top)) || collided; collided = this.friendsFrontier.collideTrees(position, z, radius) || collided; }
     if (this.friendsBuilding) collided = resolveFriendsBuildCollisions(this.friendsBuilding.getPieces(), position, z, radius) || collided;
@@ -2682,6 +2692,7 @@ export class CoopSimulation {
       solid:(x,y,z)=>Boolean(terrain.exposedMaterial(x,y,z)),
       colliders:region=>{
         const colliders:CargoStaticCollider[]=castleCargoColliders(region);
+        for(const b of RETREAT_BOXES)if(this.friends!.retreats.state.active.includes(b.siteId as any)&&b.x+b.w+b.d>=region.minX&&b.x-b.w-b.d<=region.maxX&&b.y+b.w+b.d>=region.minY&&b.y-b.w-b.d<=region.maxY&&b.z+b.h>=region.minZ&&b.z<=region.maxZ)colliders.push({...b,kind:'box'});
         for(const p of pieces){
           const def=FRIENDS_BUILD_CATALOG[p.shape];
           if(p.x+def.w+def.d<region.minX||p.x-def.w-def.d>region.maxX||p.y+def.w+def.d<region.minY||p.y-def.w-def.d>region.maxY||p.z+def.h<region.minZ||p.z>region.maxZ)continue;
@@ -2698,13 +2709,13 @@ export class CoopSimulation {
       dynamicColliders:region=>pieces.filter(p=>p.assembly&&p.x+96>=region.minX&&p.x-96<=region.maxX&&p.y+96>=region.minY&&p.y-96<=region.maxY&&p.z+32>=region.minZ&&p.z<=region.maxZ).flatMap(p=>friendsShapeBoxes(p.shape).map(b=>orientedBuildBox(p,b))),
       operatorFloor:(x,y,z)=>this.getPlayerStructureFloor({x,y,z},PLAYER_RADIUS),
       floor: (x,y,z,step) => {
-        const floors = [terrain.floor(x,y,z,step), friendsBuildFloor(pieces,x,y,z,step), friendsWorldFloor(vehicles,x,y,z)];
+        const floors = [terrain.floor(x,y,z,step), friendsBuildFloor(pieces,x,y,z,step), friendsWorldFloor(vehicles,x,y,z),retreatFloor({x,y,z},this.friends!.retreats.state.active),retreatPathFloor({x,y,z},this.friends!.retreats.state.active,step)];
         const available = floors.filter((f): f is number => f !== undefined && f <= z + step);
         return available.length ? Math.max(...available) : undefined;
       },
       collide: (point,z,radius,height,step) => {
         const ceiling = friendsVehicleCeiling(vehicles,point.x,point.y,z);
-        return terrain.collide(point,z,radius,height,step) || resolveFriendsBuildCollisions(pieces,point,z,radius,height,step)
+        return collideRetreats(point,z,radius,this.friends!.retreats.state.active,height) || terrain.collide(point,z,radius,height,step) || resolveFriendsBuildCollisions(pieces,point,z,radius,height,step)
           || this.friendsFrontier!.collideTrees(point,z,radius) || resolveFriendsVehicleCollisions(vehicles,point,z,radius)
           || (ceiling !== undefined && z + height > ceiling);
       },
@@ -2715,7 +2726,7 @@ export class CoopSimulation {
         if (terrain.raycast(ray,distance-.5) || raycastFriendsBuild(pieces,ray,distance-.5)) return true;
         for (let d=0; d<distance; d+=16) {
           const point = {x:from.x+ray.dx*d,y:from.y+ray.dy*d}, z=from.z+ray.dz*d;
-          if (this.friendsFrontier!.collideTrees(point,z,1) || resolveFriendsVehicleCollisions(vehicles,point,z,1)) return true;
+          if (collideRetreats(point,z,1,this.friends!.retreats.state.active,.1) || this.friendsFrontier!.collideTrees(point,z,1) || resolveFriendsVehicleCollisions(vehicles,point,z,1)) return true;
         }
         return false;
       },
@@ -2751,6 +2762,9 @@ export class CoopSimulation {
 
   private getPlayerStructureFloor(position: { x: number; y: number; z?: number }, radius: number) {
     let floor = this.friends ? friendsWorldFloor(this.friends.vehicles(), position.x, position.y, position.z ?? 0) : undefined;
+    const retreatPoint={x:position.x,y:position.y,z:position.z??0};
+    const retreatTop=this.friends&&Math.max(retreatFloor(retreatPoint,this.friends.retreats.state.active)??-Infinity,retreatPathFloor(retreatPoint,this.friends.retreats.state.active)??-Infinity);
+    if(retreatTop!==undefined)floor=Math.max(floor??-Infinity,retreatTop);
     const terrainFloor = this.friendsFrontier?.terrain.floor(position.x, position.y, position.z ?? 0);
     if (terrainFloor !== undefined) floor = Math.max(floor ?? -Infinity, terrainFloor);
     const creativeFloor = this.friendsBuilding && friendsWalkFloor(this.friendsBuilding.getPieces(), position.x, position.y, position.z ?? 0, radius, this.friendsFrontier?.terrain);

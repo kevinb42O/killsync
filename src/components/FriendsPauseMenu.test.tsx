@@ -15,7 +15,7 @@ describe('Friends Escape menu', () => {
     const html = renderToStaticMarkup(<FriendsPauseMenu {...props} initialTab="controls" controlScheme="QWERTY"/>);
     for (const profile of ['AZERTY', 'QWERTY', 'GAMEPAD', 'MOBILE']) expect(html).toContain(profile);
     expect(html).toContain('W A S D'); expect(html).toContain('Look sensitivity');
-    expect(html).toContain('1–5 / wheel');expect(html).toContain('Shovel · dig / fill');expect(html).toContain('LMB / RMB');
+    expect(html).toContain('1–6 / wheel');expect(html).toContain('Shovel · dig / fill');expect(html).toContain('LMB / RMB');
   });
   it('offers only rendering controls that apply to the running renderer', () => {
     const html = renderToStaticMarkup(<FriendsPauseMenu {...props} initialTab="performance"/>);

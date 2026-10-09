@@ -1,0 +1,397 @@
+{
+  "errors": [],
+  "poses": [
+    {
+      "mode": "signals",
+      "mask": 0,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 1,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 2,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 3,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 4,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 5,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 6,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 7,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 8,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 9,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 10,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 11,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 12,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 13,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 14,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "signals",
+      "mask": 15,
+      "gl": 0,
+      "calls": 0,
+      "triangles": 0
+    },
+    {
+      "mode": "hands",
+      "mask": 0,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 1,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 2,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 3,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 4,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 5,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 6,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 7,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 8,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 9,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 10,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 11,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 12,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 13,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 14,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    },
+    {
+      "mode": "hands",
+      "mask": 15,
+      "gl": 0,
+      "calls": 4,
+      "triangles": 120
+    }
+  ],
+  "shoulderConnections": [
+    {
+      "fov": 70,
+      "aspect": 1.7777777777777777,
+      "name": "left-upper-arm-connection",
+      "gap": 3.152427400121712e-16,
+      "minY": -116.79264396708248,
+      "maxY": -0.5007069553133062
+    },
+    {
+      "fov": 70,
+      "aspect": 1.7777777777777777,
+      "name": "right-upper-arm-connection",
+      "gap": 3.152427400121712e-16,
+      "minY": -116.79264396708248,
+      "maxY": -0.5007069553133062
+    },
+    {
+      "fov": 98,
+      "aspect": 1.7777777777777777,
+      "name": "left-upper-arm-connection",
+      "gap": 4.996003610813204e-16,
+      "minY": -116.7926439670825,
+      "maxY": -0.5007069553133063
+    },
+    {
+      "fov": 98,
+      "aspect": 1.7777777777777777,
+      "name": "right-upper-arm-connection",
+      "gap": 4.996003610813204e-16,
+      "minY": -116.7926439670825,
+      "maxY": -0.5007069553133063
+    },
+    {
+      "fov": 120,
+      "aspect": 1.7777777777777777,
+      "name": "left-upper-arm-connection",
+      "gap": 8.3820000221454525e-16,
+      "minY": -116.7926439670825,
+      "maxY": -0.5007069553133064
+    },
+    {
+      "fov": 120,
+      "aspect": 1.7777777777777777,
+      "name": "right-upper-arm-connection",
+      "gap": 8.3820000221454525e-16,
+      "minY": -116.7926439670825,
+      "maxY": -0.5007069553133064
+    },
+    {
+      "fov": 70,
+      "aspect": 2.4,
+      "name": "left-upper-arm-connection",
+      "gap": 3.152427400121712e-16,
+      "minY": -116.79264396708248,
+      "maxY": -0.5007069553133062
+    },
+    {
+      "fov": 70,
+      "aspect": 2.4,
+      "name": "right-upper-arm-connection",
+      "gap": 3.152427400121712e-16,
+      "minY": -116.79264396708248,
+      "maxY": -0.5007069553133062
+    },
+    {
+      "fov": 98,
+      "aspect": 2.4,
+      "name": "left-upper-arm-connection",
+      "gap": 4.996003610813204e-16,
+      "minY": -116.7926439670825,
+      "maxY": -0.5007069553133063
+    },
+    {
+      "fov": 98,
+      "aspect": 2.4,
+      "name": "right-upper-arm-connection",
+      "gap": 4.996003610813204e-16,
+      "minY": -116.7926439670825,
+      "maxY": -0.5007069553133063
+    },
+    {
+      "fov": 120,
+      "aspect": 2.4,
+      "name": "left-upper-arm-connection",
+      "gap": 8.3820000221454525e-16,
+      "minY": -116.7926439670825,
+      "maxY": -0.5007069553133064
+    },
+    {
+      "fov": 120,
+      "aspect": 2.4,
+      "name": "right-upper-arm-connection",
+      "gap": 8.3820000221454525e-16,
+      "minY": -116.7926439670825,
+      "maxY": -0.5007069553133064
+    },
+    {
+      "fov": 70,
+      "aspect": 0.5625,
+      "name": "left-upper-arm-connection",
+      "gap": 3.1401849173675503e-16,
+      "minY": -73.61289354702377,
+      "maxY": -0.5048877549124084
+    },
+    {
+      "fov": 70,
+      "aspect": 0.5625,
+      "name": "right-upper-arm-connection",
+      "gap": 3.1401849173675503e-16,
+      "minY": -73.61289354702377,
+      "maxY": -0.5048877549124084
+    },
+    {
+      "fov": 98,
+      "aspect": 0.5625,
+      "name": "left-upper-arm-connection",
+      "gap": 3.152427400121712e-16,
+      "minY": -73.61289354702377,
+      "maxY": -0.5048877549124084
+    },
+    {
+      "fov": 98,
+      "aspect": 0.5625,
+      "name": "right-upper-arm-connection",
+      "gap": 3.152427400121712e-16,
+      "minY": -73.61289354702377,
+      "maxY": -0.5048877549124084
+    },
+    {
+      "fov": 120,
+      "aspect": 0.5625,
+      "name": "left-upper-arm-connection",
+      "gap": 4.965068306494546e-16,
+      "minY": -73.6128935470238,
+      "maxY": -0.5048877549124086
+    },
+    {
+      "fov": 120,
+      "aspect": 0.5625,
+      "name": "right-upper-arm-connection",
+      "gap": 4.965068306494546e-16,
+      "minY": -73.6128935470238,
+      "maxY": -0.5048877549124086
+    }
+  ],
+  "thirdPerson": {
+    "combinations": 16,
+    "shoulderHierarchy": true
+  },
+  "network": {
+    "combinations": 16,
+    "bothDirections": true,
+    "toolChange": true,
+    "staleCleared": true,
+    "errors": []
+  },
+  "game": {
+    "combinations": 16,
+    "emptyStarts": true,
+    "azertyNumberRow": true,
+    "toolSwitchDoesNotFire": true,
+    "flashlightStowsAndRestores": true,
+    "blurClears": true,
+    "qwerty": true,
+    "controllerGestures": true,
+    "controllerReleaseGate": true
+  }
+}

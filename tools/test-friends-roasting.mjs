@@ -58,7 +58,7 @@ try{
   assert(await page.evaluate(()=>!bridge.frontierVisuals.tools.root.visible&&!bridge.localFirearm.group.visible&&!bridge.renderer.fpsWeaponGroup.visible&&!bridge.renderer.viewmodelScene.getObjectByName('rope-launcher').visible));
   assert(await page.evaluate(()=>bridge.marshmallows.group.getObjectByName(`marshmallow-stick-${campPlayer.id}`)?.visible));
  }
- for(const key of ['1','2','3','4','5']){
+ for(const key of ['1','2','3','4','5','6']){
   await page.keyboard.press(key);await page.waitForTimeout(100);
   assert.equal(await page.evaluate(()=>bridge.friendsTool),seatedTool,'Tool hotkeys while seated must preserve the original equipped tool');
  }
@@ -111,12 +111,12 @@ try{
  };
  await eat('button');report.checks.push('The Eat button plays one short downloaded chewing sound, keeps the stick empty for five seconds and then supplies a fresh marshmallow');
  report.stage='fuel';const wood=await page.evaluate(()=>sim.friendsFrontier.pack(campPlayer).wood);
- await page.keyboard.press('e');await page.waitForFunction(before=>sim.friendsFrontier.pack(campPlayer).wood===before-1,wood);
+ await page.keyboard.press('k');await page.waitForFunction(before=>sim.friendsFrontier.pack(campPlayer).wood===before-1,wood);
  assert(await page.evaluate(()=>sim.friends.campfire.fuelSeconds>28));
- for(let i=0;i<5;i++)await page.keyboard.press('e');
+ for(let i=0;i<5;i++)await page.keyboard.press('k');
  await page.waitForFunction(()=>sim.friends.campfire.fuelSeconds>170);
  await page.waitForTimeout(1100);await page.screenshot({path:`${directory}/wood-fed-fire.png`});
- report.checks.push('E spends pack timber and grows the shared fire');
+ report.checks.push('K spends pack timber and grows the shared fire');
  report.stage='roast';const ammo=await page.evaluate(()=>campPlayer.weaponStates[0].magazineAmmo);
  await page.mouse.down();await page.waitForFunction(()=>sim.friends.campfire.snapshot().roasts[campPlayer.id]?.roasting);
  await page.evaluate(()=>{const input=sim.inputByPlayer.get(campPlayer.id);for(let i=0;i<130;i++){sim.setInput(campPlayer.id,input);sim.tick(50);}});
@@ -136,7 +136,7 @@ try{
  await eat('button');report.checks.push('The Eat button also consumes a burning marshmallow and clears its flames');
  await page.keyboard.press('r');await page.waitForFunction(()=>sim.friends.campfire.snapshot().roasts[campPlayer.id].toast===0);
  await page.keyboard.press('f');await page.waitForFunction(()=>!campPlayer.friendsSeat);await page.waitForTimeout(200);
- assert(await page.evaluate(()=>!bridge.marshmallows.group.getObjectByName(`marshmallow-stick-${campPlayer.id}`)&&bridge.frontierVisuals.tools.root.visible));
+ assert(await page.evaluate(()=>!bridge.marshmallows.group.getObjectByName(`marshmallow-stick-${campPlayer.id}`)&&(bridge.friendsTool===6?bridge.gestureViewmodels.root.visible:bridge.frontierVisuals.tools.root.visible)));
  assert(await page.locator('.hauling-compass').count()>0);
  report.checks.push('R supplies a fresh marshmallow; standing restores the original tool and removes the stick');
  assert.deepEqual(report.errors,[]);console.log(JSON.stringify(report,null,2));

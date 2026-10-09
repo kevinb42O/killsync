@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isRetreatSeat } from '../world/FriendsRetreatSites';
 import { CoopFirearmVisualRig } from './coopFirearmVisuals';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import { getCoopSkin, type CoopSkinDefinition, type CoopSkinId } from '../multiplayer/CoopSkins';
@@ -38,6 +39,8 @@ export interface CoopOperatorRig {
   lastBlinkAtMs: number;
   lastDoubleJumpSequence: number;
   doubleJumpFlareRemainingMs: number;
+  seatedLegs:THREE.Group;
+  nameplateScale:THREE.Vector3;
 }
 
 const sharedGeom = <T extends THREE.BufferGeometry>(geom: T): T => {
@@ -102,6 +105,9 @@ const GEOMETRY = {
   powerCell: sharedGeom(new THREE.CylinderGeometry(1.6, 1.6, 6, 8)),
   
   // Knee armor guards
+  seatedThigh: sharedGeom(new THREE.BoxGeometry(7, 6, 13)),
+  seatedShin: sharedGeom(new THREE.BoxGeometry(6, 13, 6)),
+  seatedBoot: sharedGeom(new THREE.BoxGeometry(7, 5, 12)),
   kneePlate: sharedGeom(new THREE.BoxGeometry(5.8, 6.5, 3.2)),
   
   // Jump thruster pack & large fire red/orange exhausts
@@ -131,7 +137,7 @@ sharedWhiteCoreMaterial.userData.coopOperatorShared = true;
  * - Ballistic chest rig with reactive biometric life core
  * - Dual-exhaust jump-jet pack with dynamic ion plasma flare
  */
-export function createCoopOperatorRig(color: string, label: string, skinId?: CoopSkinId): CoopOperatorRig {
+export function createCoopOperatorRig(color: string, label: string, skinId?: CoopSkinId, nameplateStyle: 'operator' | 'friends' = 'operator'): CoopOperatorRig {
   const root = new THREE.Group();
   root.name = `coop-operator:${label}`;
 
@@ -385,6 +391,13 @@ export function createCoopOperatorRig(color: string, label: string, skinId?: Coo
   }
 
   // 8. KNEE ARMOR GUARDS
+  const seatedLegs=new THREE.Group();seatedLegs.name='relaxed-seated-legs';root.add(seatedLegs);
+  for(const side of [-1,1]){
+    const thigh=new THREE.Mesh(GEOMETRY.seatedThigh,undersuitMaterial);thigh.position.set(side*6,-1,8);seatedLegs.add(thigh);
+    const shin=new THREE.Mesh(GEOMETRY.seatedShin,carbonMaterial);shin.position.set(side*6,-13,12);seatedLegs.add(shin);
+    const boot=new THREE.Mesh(GEOMETRY.seatedBoot,carbonMaterial);boot.position.set(side*6,-23,16);seatedLegs.add(boot);
+  }
+  seatedLegs.visible=false;
   for (const side of [-1, 1]) {
     const knee = new THREE.Mesh(GEOMETRY.kneePlate, armorMaterial);
     knee.position.set(side * 4.8, -18.5, 12.0);
@@ -435,7 +448,7 @@ export function createCoopOperatorRig(color: string, label: string, skinId?: Coo
   const firearm = new CoopFirearmVisualRig(false);
   root.add(firearm.group);
 
-  const nameplate = createNameplate(label, color);
+  const nameplate = createNameplate(label, color, nameplateStyle);
   nameplate.position.set(0, 62, 0);
   root.add(nameplate);
 
@@ -484,6 +497,7 @@ export function createCoopOperatorRig(color: string, label: string, skinId?: Coo
     premiumAuraMaterial,
     premiumParticleMaterial,
     lastBlinkAtMs: 0,
+    seatedLegs,nameplateScale:nameplate.scale.clone(),
     lastDoubleJumpSequence: -1,
     doubleJumpFlareRemainingMs: 0,
   };
@@ -525,6 +539,9 @@ export function updateCoopOperatorRig(
 
   // Compact crouching / sliding: scales the entire pill avatar cleanly
   const lowProfile = !downed && (player.sliding || player.crouching);
+  const resting=!downed&&isRetreatSeat(player.friendsSeat);
+  rig.seatedLegs.visible=resting;
+  rig.nameplate.scale.copy(rig.nameplateScale).multiplyScalar(resting?.45:1);
   rig.root.scale.set(1, lowProfile ? 0.62 : 1, lowProfile ? 1.16 : 1);
   rig.root.rotation.y = Math.PI / 2 - player.angle + (falling ? fallProgress * Math.PI * 2.6 : 0);
 
@@ -662,18 +679,52 @@ export function updateCoopOperatorRig(
  * Deliberately preserves global shared geometries.
  */
 export function disposeCoopOperatorRig(rig: CoopOperatorRig): void {
+  rig.root.userData.disposed = true;
+  rig.root.traverse(node=>{if(node instanceof THREE.SkinnedMesh)node.skeleton.dispose();});
   rig.root.removeFromParent();
   rig.firearm.dispose();
   disposeNameplate(rig.nameplate);
   rig.ownedMaterials.forEach(material => material.dispose());
 }
 
-function createNameplate(label: string, color: string): THREE.Sprite {
+function createNameplate(label: string, color: string, style: 'operator' | 'friends'): THREE.Sprite {
   if (typeof document === 'undefined') {
     return new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true }));
   }
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d')!;
+  if (style === 'friends') {
+    // A small caption rather than a badge; render at 2× for clean fine text.
+    const text = Array.from(label.trim()).slice(0, 24).join('');
+    const font = '500 26px system-ui, sans-serif';
+    context.font = font;
+    const width = Math.ceil(context.measureText(text).width) + 34;
+    canvas.width = width * 2;
+    canvas.height = 96;
+    context.scale(2, 2);
+    context.font = font;
+    context.textBaseline = 'middle';
+    context.shadowColor = 'rgba(12, 22, 24, .8)';
+    context.shadowBlur = 6;
+    context.shadowOffsetY = 1;
+    context.fillStyle = '#eeeae1';
+    context.fillText(text, 22, 24);
+    context.shadowBlur = 0;
+    context.shadowOffsetY = 0;
+    context.fillStyle = color;
+    context.globalAlpha = .7;
+    context.beginPath();
+    context.arc(13, 24, 2, 0, Math.PI * 2);
+    context.fill();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: texture, transparent: true, opacity: .88,
+      depthTest: true, depthWrite: false, toneMapped: false,
+    }));
+    sprite.scale.set(width / 48 * 9, 9, 1);
+    return sprite;
+  }
   const text = label.toUpperCase().slice(0, 16);
   context.font = '900 34px system-ui, sans-serif';
   const width = Math.max(150, Math.ceil(context.measureText(text).width + 42));

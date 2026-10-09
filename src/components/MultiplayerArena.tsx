@@ -1,3 +1,4 @@
+import { EMPTY_HANDS, FriendsGestureControls, friendsGestureKey, friendsNumberSlot } from '../game/multiplayer/FriendsGestureControls';
 import { durableBuildPieces } from '../game/multiplayer/FriendsAssemblyPose';
 import { campfireSeatPrompt, isCampfireSeat } from '../game/multiplayer/FriendsCampfireSeats';
 import { campfireNearby } from '../game/multiplayer/FriendsCampfireSimulation';
@@ -148,7 +149,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   if (simulationRef.current && !snapshotRef.current) snapshotRef.current = simulationRef.current.createSnapshot();
   const presentationRef = useRef({ previous: snapshotRef.current as CoopSnapshot | null, current: snapshotRef.current as CoopSnapshot | null, receivedAt: performance.now(), durationMs: INPUT_INTERVAL_MS });
   const snapshotInterpolatorRef = useRef(new CoopSnapshotInterpolator());
-  const inputRef = useRef<MultiplayerInputFrame>({ ...createInput(), friendsTool: launch.gameMode === 'friends' ? 1 : 0 });
+  const inputRef = useRef<MultiplayerInputFrame>({ ...createInput(), friendsTool: launch.gameMode === 'friends' ? EMPTY_HANDS : 0 });
   const mobileInputHandlerRef = useRef<((action: MobileCoopAction) => void) | null>(null);
   const networkTickRef = useRef(0);
   const adminOpenRef = useRef(false);
@@ -284,7 +285,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const [buildMode, setBuildModeState] = useState(false);
   const [buildPaletteExpanded, setBuildPaletteExpanded] = useState(false);
   const [buildType, setBuildTypeState] = useState<CoopStructureType>('barricade');
-  const [frontierTool, setFrontierTool] = useState<FrontierTool>(1);
+  const [frontierTool, setFrontierTool] = useState<FrontierTool>(EMPTY_HANDS);
   const [frontierToolbeltVisible,revealFrontierToolbelt] = useFriendsToolbelt();
   const [buildBarVisible, revealBuildBar] = useFriendsToolbelt();
   const buildSelectionWheelRef = useRef(new FriendsToolWheel());
@@ -297,10 +298,17 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     const plane=inputRef.current.friendsWorkPlane?undefined:rendererRef.current?.getFriendsMiningPlane(snapshotRef.current);
     inputRef.current={...inputRef.current,friendsWorkPlane:plane};setMiningWorkLocked(Boolean(plane));
   };
+  const mobileGestureHandlerRef=useRef<(bit:number,held:boolean)=>void>(()=>{});
+  const gestureReleaseRef=useRef(0);
+  const gestureControlsRef = useRef(new FriendsGestureControls());
+  const lastHeldToolRef = useRef<FrontierTool>(1);
   const selectFrontierTool = (tool: FrontierTool) => {
     if (isCampfireSeat(snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.friendsSeat)) return;
+    if (tool !== inputRef.current.friendsTool) {gestureReleaseRef.current=gestureControlsRef.current.mask||inputRef.current.friendsArms||0;clearControlsRef.current();}
+    gestureControlsRef.current.clear();
+    if (tool !== EMPTY_HANDS) lastHeldToolRef.current = tool;
     if (tool !== inputRef.current.friendsTool) friendsAudio.play('pack', .12, 80);
-    inputRef.current = { ...inputRef.current, friendsTool: tool, firing: false, aiming: false, friendsWorkPlane:undefined };
+    inputRef.current = { ...inputRef.current, friendsTool: tool, friendsArms: 0, firing: false, aiming: false, friendsWorkPlane:undefined };
     setMiningWorkLocked(false); setFrontierTool(tool); revealFrontierToolbelt();
   };
   const [friendsToolbar, setFriendsToolbar] = useState(readBuildToolbar);
@@ -908,6 +916,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     const syncPointerLock = () => {
       const locked = renderer.isPointerLocked;
       setMouseLocked(locked);
+      if (!locked) clearControlsRef.current();
       if (wasPointerLocked && !locked && document.hasFocus() && !pauseOpenRef.current && !deploymentBlockedRef.current
         && !trainControlsOpenRef.current && craneControlsOpenRef.current===null && !friendsDevOpenRef.current && !haulingBriefingOpenRef.current && !buildLibraryOpenRef.current
         && !stationOpenRef.current && !foundryOpenRef.current && !backpackOpenRef.current && !tacticalMapOpenRef.current && !chatOpenRef.current && !adminOpenRef.current) openPauseMenu();
@@ -1467,6 +1476,15 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
     let altFireActionId = inputRef.current.altFireActionId || 0;
     let grenadeActionId = inputRef.current.grenadeActionId || 0;
     let interactActionId = inputRef.current.interactActionId || 0;
+    const gesturesAllowed = () => {
+      const local=snapshotRef.current?.players.find(p=>p.id===launch.localPlayerId);
+      return launch.gameMode==='friends' && inputRef.current.friendsTool===EMPTY_HANDS && local?.lifeState==='alive'
+        && !isSpectator && !interactionBlockedRef.current && !buildModeRef.current && !isCampfireSeat(local.friendsSeat)
+        && !snapshotRef.current?.friends?.vehicles.some(v=>v.pilotId===local.id);
+    };
+    mobileGestureHandlerRef.current=(bit,held)=>{gestureControlsRef.current.set(bit,held);publishGestures();};
+    const publishGestures = () => { inputRef.current={...inputRef.current,friendsArms:gesturesAllowed()?gestureControlsRef.current.mask:0,
+      sequence:++sequence,clientTime:Date.now(),firing:false,aiming:false}; };
     const updateInput = () => {
       const movementBindings = getMovementBindings(controlsRef.current);
       const slideBinding = getCoopSlideBinding(controlsRef.current);
@@ -1480,7 +1498,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         sequence: ++sequence,
         clientTime: Date.now(),
         movement,
-        firing,
+        firing: gesturesAllowed() || gestureReleaseRef.current ? false : firing,
+        friendsArms: gesturesAllowed() ? gestureControlsRef.current.mask : 0,
         sprinting: keys.has('shift'),
         // W is AZERTY-only. QWERTY uses C so W stays available for forward.
         sliding: keys.has(slideBinding),
@@ -1501,7 +1520,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         | (mobile.moveX < -.22 ? 4 : 0)
         | (mobile.moveX > .22 ? 8 : 0);
       const specialSelected = inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno');
-      firing = mobile.fire && !buildModeRef.current;
+
+      firing = mobile.fire && !buildModeRef.current && !gesturesAllowed();
       inputRef.current = {
         ...inputRef.current,
         sequence: ++sequence,
@@ -1510,7 +1530,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         aimAngle: quantizeAngle(renderer.getAimAngle()),
         aimPitch: quantizePitch(renderer.getAimPitch()),
         firing,
-        aiming: mobile.aim && !specialSelected && !buildModeRef.current,
+        friendsArms: gesturesAllowed()?gestureControlsRef.current.mask:0,
+        aiming: !gesturesAllowed() && mobile.aim && !specialSelected && !buildModeRef.current,
         sprinting: mobile.sprint || mobile.stickSprint,
         sliding: mobile.slide && !buildModeRef.current,
         reviving: mobile.interact,
@@ -1812,7 +1833,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         const wasPressed = mobile[action.control];
         mobile[action.control] = action.pressed;
         if(action.control==='fire'&&!action.pressed){buildHeld=false;constructionRef.current.release();}
-        if (action.control === 'fire' && action.pressed && !wasPressed) {
+        if(gesturesAllowed()&&(action.control==='fire'||action.control==='aim'))gestureControlsRef.current.set(action.control==='fire'?4:8,action.pressed);
+        if (action.control === 'fire' && action.pressed && !wasPressed && !gesturesAllowed()) {
           if (buildModeRef.current) {buildHeld=true;placeStructure();}
           else {
             fireActionId++;
@@ -1822,7 +1844,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
             inputRef.current = { ...inputRef.current, fireActionId };
           }
         }
-        if (action.control === 'aim' && action.pressed && !wasPressed && inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno')) {
+        if (action.control === 'aim' && action.pressed && !wasPressed && !gesturesAllowed() && inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno')) {
           inputRef.current = { ...inputRef.current, altFireActionId: ++altFireActionId, aiming: false, sequence: ++sequence, clientTime: Date.now() };
         }
         if (action.control === 'jump' && action.pressed && !wasPressed) inputRef.current = { ...inputRef.current, jumpPressed: true, jetHeld: true, sequence: ++sequence, clientTime: Date.now() };
@@ -1832,14 +1854,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       }
       switch (action.control) {
         case 'grenade':
-          if (buildModeRef.current) break;
+          if (buildModeRef.current || launch.gameMode==='friends'&&inputRef.current.friendsTool!==0) break;
           inputRef.current = { ...inputRef.current, grenadeActionId: ++grenadeActionId, sequence: ++sequence, clientTime: Date.now() };
           break;
         case 'reload':
           inputRef.current = { ...inputRef.current, reloadPressed: true, sequence: ++sequence, clientTime: Date.now() };
           break;
-        case 'previousWeapon': changeSelectedWeapon(-1); break;
-        case 'nextWeapon': changeSelectedWeapon(1); break;
+        case 'previousWeapon': if(launch.gameMode==='friends')selectFrontierTool(cycleFriendsTool(inputRef.current.friendsTool||0,-1));else changeSelectedWeapon(-1); break;
+        case 'nextWeapon': if(launch.gameMode==='friends')selectFrontierTool(cycleFriendsTool(inputRef.current.friendsTool||0,1));else changeSelectedWeapon(1); break;
         case 'toggleBuild':
           firing = false;
           setBuildMode(!buildModeRef.current);
@@ -1946,7 +1968,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         return;
       }
       if (launch.gameMode === 'friends' && event.code === 'KeyV' && !typingTarget && !isSpectator && !backpackOpenRef.current) {
-        event.preventDefault(); if (!event.repeat) renderer.toggleFriendsFlashlight(); return;
+        event.preventDefault(); if (!event.repeat) {const empty=inputRef.current.friendsTool===EMPTY_HANDS;if(empty)selectFrontierTool(lastHeldToolRef.current);renderer.toggleFriendsFlashlight(empty);} return;
       }
       if (launch.gameMode === 'friends' && event.code === 'KeyN' && !typingTarget && !isSpectator && !backpackOpenRef.current
         && !stationOpenRef.current && !foundryOpenRef.current && !event.ctrlKey && !event.metaKey && !event.altKey
@@ -2044,6 +2066,11 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         return;
       }
       const key = event.key.toLowerCase();
+      const gestureBit=friendsGestureKey(key,controlsRef.current);
+      if (launch.gameMode==='friends' && gestureBit && !buildModeRef.current) {
+        if (gesturesAllowed()) {event.preventDefault();gestureControlsRef.current.set(gestureBit,true);publishGestures();return;}
+        if (key==='e') {event.preventDefault();return;}
+      }
       if (launch.gameMode === 'friends' && (event.key === 'F2' || key === 'c' && controlsRef.current !== 'QWERTY') && !typingTarget && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         if (!event.repeat) {
@@ -2056,8 +2083,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         if(event.code==='KeyT'&&isCampfireSeat(local?.friendsSeat)){
           event.preventDefault();if(!event.repeat)frontierRequestRef.current({action:'campfire_eat'});return;
         }
-        if(local&&((event.code==='KeyE'&&campfireNearby(local))||(event.code==='KeyR'&&isCampfireSeat(local.friendsSeat)))){
-          event.preventDefault();if(!event.repeat)frontierRequestRef.current({action:event.code==='KeyE'?'campfire_fuel':'campfire_fresh'});return;
+        if(local&&((event.code==='KeyK'&&campfireNearby(local))||(event.code==='KeyR'&&isCampfireSeat(local.friendsSeat)))){
+          event.preventDefault();if(!event.repeat)frontierRequestRef.current({action:event.code==='KeyK'?'campfire_fuel':'campfire_fresh'});return;
         }
       }
       if (launch.gameMode === 'friends' && !buildModeRef.current && event.code === 'KeyH') {
@@ -2093,12 +2120,12 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         else if (!event.repeat) dismantleAimedStructure();
         return;
       }
-      if (key === 'e' && buildModeRef.current) {
+      if (key === (launch.gameMode==='friends'?'y':'e') && buildModeRef.current) {
         event.preventDefault();
         if (!event.repeat) operateAimedStructure('activate');
         return;
       }
-      if (key === 'e' && !buildModeRef.current) {
+      if (key === (launch.gameMode==='friends'?'j':'e') && !buildModeRef.current && (launch.gameMode!=='friends'||inputRef.current.friendsTool===0)) {
         event.preventDefault();
         if (!event.repeat) { soundManager.activate(); inputRef.current = { ...inputRef.current, grenadeActionId: ++grenadeActionId, sequence: ++sequence, clientTime: Date.now() }; }
         return;
@@ -2135,22 +2162,27 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         if (!event.repeat) inputRef.current = { ...inputRef.current, sequence: ++sequence, clientTime: Date.now(), reloadPressed: true };
         return;
       }
-      if (/^[1-9]$/.test(key)) {
+      const numberSlot=friendsNumberSlot(event.code);
+      const numberKey=launch.gameMode==='friends' && numberSlot!==undefined ? String(numberSlot+1) : key;
+      if (/^[1-9]$/.test(numberKey)) {
         event.preventDefault();
-        if (buildModeRef.current && launch.gameMode === 'friends') { if (Number(key) <= 8) selectFriendsShape(friendsToolbarRef.current[Number(key) - 1]); else expandFriendsPalette(true); return; }
-        if (buildModeRef.current && Number(key) <= COOP_BUILD_TYPES.length) {
-          selectBuildType(COOP_BUILD_TYPES[Number(key) - 1]);
+        if (buildModeRef.current && launch.gameMode === 'friends') { if (Number(numberKey) <= 8) selectFriendsShape(friendsToolbarRef.current[Number(numberKey) - 1]); else expandFriendsPalette(true); return; }
+        if (buildModeRef.current && Number(numberKey) <= COOP_BUILD_TYPES.length) {
+          selectBuildType(COOP_BUILD_TYPES[Number(numberKey) - 1]);
           return;
         }
-        if (launch.gameMode === 'friends' && Number(key) <= FRIENDS_TOOL_ORDER.length) { if(!event.repeat)selectFrontierTool(FRIENDS_TOOL_ORDER[Number(key) - 1]); return; }
-        inputRef.current = { ...inputRef.current, selectedSlot: Number(key) - 1 };
-        setHud(current => ({ ...current, selectedSlot: Number(key) - 1 }));
+        if (launch.gameMode === 'friends' && Number(numberKey) <= FRIENDS_TOOL_ORDER.length) { if(!event.repeat)selectFrontierTool(FRIENDS_TOOL_ORDER[Number(numberKey) - 1]); return; }
+        inputRef.current = { ...inputRef.current, selectedSlot: Number(numberKey) - 1 };
+        setHud(current => ({ ...current, selectedSlot: Number(numberKey) - 1 }));
         return;
       }
       keys.add(key);
       updateInput();
     };
     const onKeyUp = (event: KeyboardEvent) => {
+      const bit=friendsGestureKey(event.key,controlsRef.current);
+      if(bit){gestureReleaseRef.current&=~bit;gestureControlsRef.current.set(bit,false);if(gesturesAllowed())publishGestures();}
+
       if(event.key.toLowerCase()==='x'){dismantleHeld=false;dismantleDone=false;}
       if(pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current||haulingBriefingOpenRef.current){keys.clear();return;}
       if (deploymentBlockedRef.current) return;
@@ -2200,6 +2232,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         }
         return;
       }
+      if(gestureReleaseRef.current && (event.button===0||event.button===2))return;
       // This must run inside the real user gesture. The firing event reaches
       // the renderer on a later animation frame, which is too late for strict
       // autoplay policies to resume a suspended AudioContext.
@@ -2219,6 +2252,9 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         if (event.button === 2) { event.preventDefault(); setBuildMode(false); return; }
         if (event.button === 0) { event.preventDefault(); renderer.requestPointerLock(); buildHeld=true;placeStructure(); }
         return;
+      }
+      if (gesturesAllowed() && (event.button===0||event.button===2)) {
+        event.preventDefault();renderer.requestPointerLock();gestureControlsRef.current.set(event.button===0?4:8,true);publishGestures();return;
       }
       if (event.button === 2) {
         event.preventDefault();
@@ -2242,6 +2278,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       }
     };
     const onMouseUp = (event: MouseEvent) => {
+      if(event.button===0||event.button===2){gestureReleaseRef.current&=~(event.button===0?4:8);gestureControlsRef.current.set(event.button===0?4:8,false);if(gesturesAllowed()){publishGestures();return;}}
+
       if(event.button===0){buildHeld=false;constructionRef.current.release();}
       if (deploymentBlockedRef.current) return;
       if (pauseOpenRef.current || craneControlsOpenRef.current!==null || trainControlsOpenRef.current || friendsDevOpenRef.current || haulingBriefingOpenRef.current || stationOpenRef.current || foundryOpenRef.current || backpackOpenRef.current || tacticalMapOpenRef.current || chatOpenRef.current) {
@@ -2298,6 +2336,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       changeSelectedWeapon(direction);
     };
     const clearControls = () => {
+      gestureControlsRef.current.clear();
       keys.clear(); firing = false; buildHeld=false;dismantleHeld=false;constructionRef.current.release();updateInput();
       mobile.moveX = 0; mobile.moveY = 0; mobile.fire = false; mobile.aim = false; mobile.jump = false; mobile.slide = false; mobile.sprint = false; mobile.stickSprint = false; mobile.interact = false;
       inputRef.current = neutralizeMenuInput(inputRef.current);
@@ -2345,7 +2384,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const firePressed = pressed(GAMEPAD_BUTTON.fire);
       const aimHeld = isGamepadTriggerDown(gamepad, GAMEPAD_BUTTON.aim, 4);
       const casterSelected = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.operatorId === 'royal_inferno';
-      const specialPressed = inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && aimHeld && !previousGamepadAimHeld && (inputRef.current.selectedSlot === 3 || casterSelected);
+      const gamepadMask=(aimHeld?1:0)|(isGamepadTriggerDown(gamepad,GAMEPAD_BUTTON.fire,5)?2:0)|(down(GAMEPAD_BUTTON.previousWeapon)?4:0)|(down(GAMEPAD_BUTTON.nextWeapon)?8:0);
+      gestureReleaseRef.current &= gamepadMask;
+      const emptyGestures=gesturesAllowed();
+      const specialPressed = !emptyGestures && !gestureReleaseRef.current && inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && aimHeld && !previousGamepadAimHeld && (inputRef.current.selectedSlot === 3 || casterSelected);
       const jumpPressed = pressed(GAMEPAD_BUTTON.jump);
       const reloadPressed = pressed(GAMEPAD_BUTTON.reload);
       const camper=snapshotRef.current?.players.find(p=>p.id===launch.localPlayerId);
@@ -2375,12 +2417,17 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         if (pressed(GAMEPAD_BUTTON.slide)) setBuildMode(false);
         if (firePressed) placeStructure();
       } else {
-        if (pressed(GAMEPAD_BUTTON.dpadDown)) { grenadeActionId++; sequence++; }
-        if (pressed(GAMEPAD_BUTTON.previousWeapon) || pressed(GAMEPAD_BUTTON.dpadLeft)) changeSelectedWeapon(-1);
-        if (!isCampfireSeat(camper?.friendsSeat) && (pressed(GAMEPAD_BUTTON.nextWeapon) || pressed(GAMEPAD_BUTTON.dpadRight))) changeSelectedWeapon(1);
+        if (pressed(GAMEPAD_BUTTON.dpadDown) && (!launch.gameMode || launch.gameMode!=='friends' || inputRef.current.friendsTool===0)) { grenadeActionId++; sequence++; }
+        if(launch.gameMode==='friends'){
+          if(pressed(GAMEPAD_BUTTON.dpadLeft))selectFrontierTool(cycleFriendsTool(inputRef.current.friendsTool||0,-1));
+          if(!isCampfireSeat(camper?.friendsSeat)&&pressed(GAMEPAD_BUTTON.dpadRight))selectFrontierTool(cycleFriendsTool(inputRef.current.friendsTool||0,1));
+        }else{
+          if (pressed(GAMEPAD_BUTTON.previousWeapon) || pressed(GAMEPAD_BUTTON.dpadLeft)) changeSelectedWeapon(-1);
+          if (pressed(GAMEPAD_BUTTON.nextWeapon) || pressed(GAMEPAD_BUTTON.dpadRight)) changeSelectedWeapon(1);
+        }
       }
 
-      if (firePressed && !buildModeRef.current) {
+      if (firePressed && !emptyGestures && !gestureReleaseRef.current && !buildModeRef.current) {
         fireActionId++;
         const local = snapshotRef.current?.players.find(player => player.id === launch.localPlayerId);
         const weapon = local?.weaponStates[inputRef.current.selectedSlot];
@@ -2395,7 +2442,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (specialPressed && !buildModeRef.current) altFireActionId++;
       if (interactPressed && !(buildModeRef.current && launch.gameMode === 'friends')) triggerContextualInteract();
       if (reloadPressed || jumpPressed || interactPressed || firePressed || specialPressed) sequence++;
-      firing = buildModeRef.current ? false : fireHeld;
+      firing = buildModeRef.current || emptyGestures || gestureReleaseRef.current ? false : fireHeld;
       inputRef.current = {
         ...inputRef.current,
         sequence,
@@ -2403,7 +2450,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         movement: gamepadMovementMask(gamepad),
         aimAngle: quantizeAngle(renderer.getAimAngle()),
         aimPitch: quantizePitch(renderer.getAimPitch()),
-        firing: buildModeRef.current ? false : fireHeld,
+        firing: buildModeRef.current || emptyGestures || gestureReleaseRef.current ? false : fireHeld,
+        friendsArms: emptyGestures ? gamepadMask : 0,
         fireActionId,
         altFireActionId,
         grenadeActionId,
@@ -2414,7 +2462,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         interactActionId,
         jumpPressed: inputRef.current.jumpPressed || jumpPressed,
         jetHeld: down(GAMEPAD_BUTTON.jump),
-        aiming: buildModeRef.current || (inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || casterSelected)) ? false : aimHeld,
+        aiming: emptyGestures || buildModeRef.current || (inputRef.current.friendsTool !== 3 && inputRef.current.friendsTool !== 5 && (inputRef.current.selectedSlot === 3 || casterSelected)) ? false : aimHeld,
       };
       previousGamepadButtons = buttons;
       previousGamepadAimHeld = aimHeld;
@@ -2591,6 +2639,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       const renderStartedAt = performance.now();
       renderer.setFriendsWorkPlane(inputRef.current.friendsWorkPlane);
       renderer.setFriendsEffects(friendsEffectsRef.current);
+      if(!gesturesAllowed()){gestureControlsRef.current.clear();inputRef.current.friendsArms=0;}
+      renderer.setFriendsArms(inputRef.current.friendsArms||0);
       const shovelInput = friendsToolInput(inputRef.current.friendsTool || 0, inputRef.current.firing, Boolean(inputRef.current.aiming));
       renderer.setFriendsTool(buildModeRef.current ? 0 : inputRef.current.friendsTool || 0, shovelInput.held,launch.role==='host'||frameSnapshot?.friends?.building?.guestsCanBuild!==false,shovelInput.fill);
       renderer.render(frameSnapshot, launch.localPlayerId, elapsed, presentationTargetId, latestLifeState === 'alive', buildModeRef.current && launch.gameMode === 'friends');
@@ -2711,7 +2761,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       if (wasBlocked) renderer.requestPointerLock();
       return;
     }
-    if (launch.gameMode === 'friends' && inputRef.current.friendsTool === 3) clearControlsRef.current();
+    clearControlsRef.current();
     const focusModal = window.requestAnimationFrame(() => {
       const target = document.querySelector<HTMLElement>('.coop-admin-console input, .coop-arena [role="dialog"] button:not(:disabled), .coop-arena [role="dialog"] [tabindex="0"]');
       target?.focus({ preventScroll: true });
@@ -3061,7 +3111,14 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
           {tr('arena.resumeControl')}
         </button>
       )}
+      {showMobileTouchControls && frontierTool===EMPTY_HANDS && !interactionBlocked && !buildMode && !campfireSeated && !isSpectator && <div className="friends-gesture-touch" aria-label="Arm gestures" onMouseDown={e=>e.stopPropagation()}>
+        {[['Left up',1],['Left point',4],['Right up',2],['Right point',8]].map(([label,bit])=><button key={String(label)} type="button"
+          onPointerDown={e=>{e.stopPropagation();e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);mobileGestureHandlerRef.current(Number(bit),true);}}
+          onPointerUp={e=>{e.stopPropagation();mobileGestureHandlerRef.current(Number(bit),false);}}
+          onPointerCancel={()=>mobileGestureHandlerRef.current(Number(bit),false)} onLostPointerCapture={()=>mobileGestureHandlerRef.current(Number(bit),false)}>{label}</button>)}
+      </div>}
       {!campfireSeated && showMobileTouchControls && !isSpectator && !interactionBlocked && <CoopMobileControls
+        emptyHands={launch.gameMode==='friends'&&frontierTool===EMPTY_HANDS&&!buildMode}
         spellcaster={classOperator.id === 'royal_inferno'}
         creativeBuilding={launch.gameMode === 'friends'}
         onCreativeLibrary={() => expandFriendsPalette(true)}
@@ -3266,7 +3323,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
         <div className="coop-weapons__meter coop-weapons__meter--jet"><span>BURST PACK</span><i><em style={{ width: `${Math.max(0, Math.min(100, localSnapshot?.jetFuel ?? 100))}%` }} /></i><b>{Math.round(localSnapshot?.jetFuel ?? 100)}</b></div>
         {(hud.selectedSlot === 3 || classOperator.id === 'royal_inferno') && <div className="coop-weapons__artifact" data-ready={specialReady} style={{ '--special-color': classOperator.color } as CSSProperties}><kbd>{isGamepadControlScheme(controlScheme) ? 'LT' : 'RMB'}</kbd><b>{classOperator.spenderName}</b><span>{classOperator.spenderDescription}</span>{specialReady && <small className="coop-weapons__artifact-ready">{tr('hud.specialCharged')}</small>}{localSnapshot?.artifactProc && <small>{localSnapshot.artifactProc.replaceAll('_', ' ')}</small>}</div>}
         <div className="coop-weapons__name" style={{ color: activeWeapon.color }}><span>{tr(coopWeaponShortNameKey(activeWeaponState?.weaponId || 'plasma_gun'))}</span><small>{tr('hud.weaponLevel', { level: activeWeaponState?.level || 1 })}</small></div>
-        <button type="button" className="coop-grenade-counter" aria-label={tr('hud.throwGrenade')} disabled={buildMode || (localSnapshot?.grenades ?? 2) <= 0} onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={() => mobileInputHandlerRef.current?.({ type: 'tap', control: 'grenade' })}><kbd>{isGamepadControlScheme(controlScheme) ? '↓' : 'E'}</kbd><span>{tr('hud.grenades')}</span><b>{localSnapshot?.grenades ?? 2}<small> / 2</small></b>{Boolean(localSnapshot?.grenadeRechargeRemainingMs) && <em>{Math.ceil((localSnapshot?.grenadeRechargeRemainingMs || 0) / 1000)}s</em>}</button>
+        <button type="button" className="coop-grenade-counter" aria-label={tr('hud.throwGrenade')} disabled={buildMode || (localSnapshot?.grenades ?? 2) <= 0} onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={() => mobileInputHandlerRef.current?.({ type: 'tap', control: 'grenade' })}><kbd>{isGamepadControlScheme(controlScheme) ? '↓' : launch.gameMode==='friends'?'J':'E'}</kbd><span>{tr('hud.grenades')}</span><b>{localSnapshot?.grenades ?? 2}<small> / 2</small></b>{Boolean(localSnapshot?.grenadeRechargeRemainingMs) && <em>{Math.ceil((localSnapshot?.grenadeRechargeRemainingMs || 0) / 1000)}s</em>}</button>
         {classOperator.id === 'royal_inferno' ? <div className="coop-spellbook">
           <div className="coop-spellbook__mana"><span>{tr('hud.mana')}</span><b>{Math.floor(localSnapshot?.mana ?? 100)}<small> / 100</small></b><i><em style={{ width: `${localSnapshot?.mana ?? 100}%` }} /></i></div>
           <div className="coop-spellbook__slots">{hud.weapons.map((weapon, index) => {

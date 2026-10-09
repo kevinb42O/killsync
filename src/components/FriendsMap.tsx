@@ -1,3 +1,4 @@
+import { RETREAT_SITES } from '../game/world/FriendsRetreatSites';
 import { scenicRailway, scenicStationPoses } from '../game/world/FriendsScenicRailway';
 import { islandSurfaceBiome, ISLAND_SEA_LEVEL } from '../game/world/FriendsIsland';
 import { CAVE_ENTRANCE } from '../game/world/FriendsCave';
@@ -10,7 +11,7 @@ import type { CoopPlayerSnapshot, CoopSnapshot } from '../game/multiplayer/CoopS
 import { FRIENDS_DELIVERY_BAY, FRIENDS_HAULING_JOBS, haulingGoal, haulingJob, cargoDelivered } from '../game/world/FriendsHaulingGoal';
 import { FRIENDS_SPAWN_PLATFORM, FRIENDS_HAULING_PLATFORMS } from '../game/world/FriendsTerrain';
 
-const destinations = [{id:'arrival',name:'ARRIVAL POINT',...FRIENDS_HUB,color:'#ffd494',detail:'Open ground for your first workshop. Build your own settlement and railway.'},{id:'helicopter',name:'HELICOPTER SPAWN',...FRIENDS_AIRPAD,color:'#8de6ce',detail:'Your helicopter returns here on the ground whenever you spawn.'},{id:'cave',name:CAVE_ENTRANCE.name,x:CAVE_ENTRANCE.x,y:CAVE_ENTRANCE.y,color:'#ffc57a',detail:'A stepped sinkhole northeast of arrival. Follow the torches through vaulted chambers, the stone crossing and the deep well.'},...FRONTIER_SITES];
+const destinations = [{id:'arrival',name:'ARRIVAL POINT',...FRIENDS_HUB,color:'#ffd494',detail:'Open ground for your first workshop. Build your own settlement and railway.'},{id:'helicopter',name:'HELICOPTER SPAWN',...FRIENDS_AIRPAD,color:'#8de6ce',detail:'Your helicopter returns here on the ground whenever you spawn.'},{id:'cave',name:CAVE_ENTRANCE.name,x:CAVE_ENTRANCE.x,y:CAVE_ENTRANCE.y,color:'#ffc57a',detail:'A stepped sinkhole northeast of arrival. Follow the torches through vaulted chambers, the stone crossing and the deep well.'},...FRONTIER_SITES,...RETREAT_SITES];
 const scenicRoute=scenicRailway(),scenicPath=scenicRoute.points.filter((_,i)=>i%16===0).map(p=>`${p.x},${p.y}`).join(' ');
 const castleApproach=CASTLE_STAIRS.approach.filter((_,i)=>i%8===0),castleFoot=CASTLE_STAIRS.approach.at(-1)!;
 const castlePath=[castleFoot,...[...castleApproach].reverse(),FRIENDS_HAULING_JOBS[1].goal].map(p=>`${p.x},${p.y}`).join(' ');
@@ -41,7 +42,7 @@ export function FriendsMap({ snapshot, localPlayer, onClose }: { snapshot: CoopS
   const goal=core?haulingGoal(core):FRIENDS_DELIVERY_BAY;
   const markerId=(id:string)=>id==='lantern-core'?'salvage-core':id;
   const isHaulingPlace=(id:string)=>loads.some(c=>markerId(c.id)===id||haulingGoal(c).id===id);
-  const allPlaces=[...loads.map(c=>({...haulingGoal(c),detail:cargoDelivered(f.hauling!,c)?'Delivery complete! The core stays movable. A new game resets this hauling goal.':c.id==='lantern-core'?'Find the amber light column about 750m east-northeast of spawn. Haul the Lantern core home to the green square on the west side of the spawn deck. Park the whole block inside, let it settle and press F beside it to deliver.':`${haulingJob(c).mission.title}: ${haulingJob(c).mission.objective} ${haulingJob(c).mission.route[0]} Park the entire load in its coloured bay, let it settle and press F. Read the full dispatch from Mission details on your compass.`})),...destinations,...scenicStops];
+  const allPlaces=[...loads.map(c=>({...haulingGoal(c),detail:cargoDelivered(f.hauling!,c)?'Delivery complete! The core stays movable. A new game resets this hauling goal.':c.id==='lantern-core'?'Find the amber light column about 750m east-northeast of spawn. Haul the Lantern core home to the green square on the west side of the spawn deck. Park the whole block inside, let it settle and press F beside it to deliver.':`${haulingJob(c).mission.title}: ${haulingJob(c).mission.objective} ${haulingJob(c).mission.route[0]} Park the entire load in its coloured bay, let it settle and press F. Read the full dispatch from Mission details on your compass.`})),...destinations.filter(d=>!RETREAT_SITES.some(s=>s.id===d.id)||(f.retreats?.active??[]).includes(d.id as any)),...scenicStops];
   const places=[...allPlaces,...loads.map(c=>({id:markerId(c.id),name:`${haulingJob(c).name.toUpperCase()} · LOAD ${haulingJob(c).number}`,x:c.x,y:c.y,color:c.id==='lantern-core'?'#ffc36e':haulingGoal(c).color,detail:`The light column follows the live core. Each block has its own delivery bay. Equip 6: rope, attach and walk to pull; hold aim to reel. Your top-left compass switches to this block's destination. F secures or releases cargo on deck.`}))];
   const selected = places.find(p => p.id === selectedId) || places[0];
   const castleHaul=core?.id==='ridge-core';

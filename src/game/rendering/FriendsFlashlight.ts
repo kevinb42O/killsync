@@ -70,7 +70,7 @@ export class FriendsFlashlight {
     const lens = new THREE.MeshStandardMaterial({color:0xfff1c9,emissive:0xffdfa0,emissiveIntensity:1});
     // Seat the barrel on the left grip socket, following the same carry
     // rotation as the premade fingers. The shaft sits in their enclosed pocket.
-    const body=new THREE.Group();body.name='flashlight-body';
+    const body=new THREE.Group();body.name='flashlight-body';body.scale.setScalar(1.14);
     body.position.set(.025,-.065,0);body.rotation.set(0,-.10,.68,'ZYX');this.hand.add(body);
     const part=(radius:number,length:number,z:number,material:THREE.Material)=>{const mesh=new THREE.Mesh(new THREE.CylinderGeometry(radius*1.15,radius*1.15,length*1.35,16),material);mesh.rotation.x=Math.PI/2;mesh.position.z=z*1.35-.04;body.add(mesh);};
     part(.026,.26,0,metal);for(let i=0;i<5;i++)part(.029,.015,.035+i*.028,rubber);part(.07,.07,-.16,metal);part(.064,.007,-.199,lens);

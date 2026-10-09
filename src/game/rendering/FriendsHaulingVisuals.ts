@@ -9,6 +9,7 @@ import { FriendsRopeMesh, ropeFibreTextures } from './FriendsRopeMesh';
 import { cargoRotation, cargoHullPoints } from '../multiplayer/FriendsCargoPose';
 import { FRIENDS_DELIVERY_BAY, FRIENDS_HAULING_JOBS, haulingJob, cargoDelivered, type HaulingGoal } from '../world/FriendsHaulingGoal';
 import { FriendsCargoBeacon } from './FriendsCargoBeacon';
+import { loadFriendsGrip } from './FriendsHeldEquipment';
 
 type MuzzleProjector = (point:THREE.Object3D)=>{x:number;y:number;z:number};
 
@@ -48,6 +49,7 @@ export class FriendsHaulingVisuals {
   private start = new THREE.Vector3();
   private end = new THREE.Vector3();
   private rim = new THREE.Vector3();
+  private disposed=false;
   constructor(scene: THREE.Scene, viewmodel: THREE.Scene) {
     scene.add(this.group);
     this.cranes=new FriendsCraneVisuals(this.group,this.ropeMaterial());
@@ -77,14 +79,13 @@ export class FriendsHaulingVisuals {
     const coilMaterial=this.ropeMaterial();this.materials.push(coilMaterial);
     const coilGeometry=new THREE.TorusGeometry(.106,.009,6,32);this.geometries.push(coilGeometry);
     for(let i=-2;i<=2;i++){const coil=new THREE.Mesh(coilGeometry,coilMaterial);coil.rotation.y=Math.PI/2;coil.position.x=i*.015;this.reel.add(coil);}
-    // Glove wraps the grip, with a continuous wrist and sleeve into the screen edge.
-    const glove=this.material(0x755949),cuff=this.material(0x355d5b),sleeve=this.material(0x283f42);
-    glove.roughness=.95;glove.metalness=0;sleeve.roughness=.95;sleeve.metalness=0;
-    const palm=this.roundedBox(this.gun,.115,.125,.12,.045,-.155,.115,glove,.025);palm.rotation.z=-.12;
-    for(let i=0;i<4;i++)this.roundedBox(this.gun,.085,.022,.075,.027,-.103-i*.03,.04,glove,.009);
-    const thumb=this.roundedBox(this.gun,.034,.085,.065,-.024,-.115,.108,glove,.013);thumb.rotation.z=-.5;
-    const wrist=this.roundedBox(this.gun,.11,.11,.16,.062,-.223,.20,cuff,.018);wrist.rotation.x=-.45;
-    const arm=this.roundedBox(this.gun,.17,.15,.65,.135,-.39,.46,sleeve,.035);arm.rotation.set(-.5,.18,-.12);
+    // Scale the prop about its grip socket; the character hand retains its size.
+    const gripSocket=new THREE.Vector3(.045,-.155,.115);
+    for(const child of this.gun.children){child.position.sub(gripSocket).multiplyScalar(1.14).add(gripSocket);child.scale.multiplyScalar(1.14);}
+    void loadFriendsGrip('right').then(source=>{
+      if(this.disposed)return;
+      const arm=source.clone();arm.name='rope-launcher-character-hand';arm.position.set(.045,-.155,.115);this.gun.add(arm);
+    }).catch(()=>{});
     const key=new THREE.DirectionalLight(0xffead3,1.4);key.position.set(-.8,1,1);key.target.position.set(0,0,-.2);
     this.gun.add(new THREE.AmbientLight(0xffedd3,.6),key,key.target);this.gun.visible=false;
   }
@@ -183,5 +184,5 @@ export class FriendsHaulingVisuals {
       mesh.material.color.setHex('blocked' in rope&&rope.blocked?0xd9947b:0xffffff);
     }
   }
-  dispose(){this.cranes.dispose();for(const beacon of this.cargoBeacons.values())beacon.dispose();this.cargoBeacons.clear();this.goals.clear();this.group.removeFromParent();this.gun.removeFromParent();for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose();for(const mesh of this.ropes.values())mesh.dispose();this.fibres.map.dispose();this.fibres.normalMap.dispose();this.loads.clear();this.ropes.clear();}
+  dispose(){this.disposed=true;this.cranes.dispose();for(const beacon of this.cargoBeacons.values())beacon.dispose();this.cargoBeacons.clear();this.goals.clear();this.group.removeFromParent();this.gun.removeFromParent();for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose();for(const mesh of this.ropes.values())mesh.dispose();this.fibres.map.dispose();this.fibres.normalMap.dispose();this.loads.clear();this.ropes.clear();}
 }

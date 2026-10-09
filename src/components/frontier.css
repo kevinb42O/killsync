@@ -72,3 +72,7 @@
 .friends-campfire-eat button:hover{background:#334336cc}
 .friends-campfire-eat button:focus-visible{outline:2px solid #ffc36e;outline-offset:3px}
 .friends-campfire-eat button:disabled,.friends-campfire-touch button:disabled{opacity:.55;cursor:default}
+
+.friends-gesture-touch{position:absolute;z-index:65;right:20px;top:38%;display:grid;grid-template-columns:repeat(2,82px);gap:9px;touch-action:none}
+.friends-gesture-touch button{min-height:48px;border:1px solid #f3dfa766;border-radius:14px;background:#172c2ddd;color:#fff0cf;font:600 12px system-ui;touch-action:none;user-select:none}
+.friends-gesture-touch button:active{background:#698b7c}

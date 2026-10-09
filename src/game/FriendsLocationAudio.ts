@@ -22,9 +22,9 @@ export function inCastleMusicArea(point: Point, alreadyInside = false) {
   return false;
 }
 
-export function campfireSound(point: Point, yaw: number, fuelSeconds = 0, underground = false): CampfireSoundMix {
+export function campfireSound(point: Point, yaw: number, fuelSeconds = 0, underground = false,source:Point=FRIENDS_CAMPFIRE): CampfireSoundMix {
   if (underground) return QUIET_CAMPFIRE;
-  const fire = FRIENDS_CAMPFIRE, dx = fire.x - point.x, dy = fire.y - point.y;
+  const fire = source, dx = fire.x - point.x, dy = fire.y - point.y;
   const distance = Math.hypot(dx, dy, fire.z + 24 - point.z);
   const n = Math.max(0, Math.min(1, 1 - distance / 650));
   // The rendered fire always has a small base flame; extra timber boosts it.

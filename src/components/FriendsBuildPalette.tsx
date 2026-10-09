@@ -92,7 +92,7 @@ export function FriendsBuildPalette({ construction, shape, finish, toolbar, rota
     <span className="build-controls__angle" aria-label={`Rotation ${rotation} degrees`}>{rotation}°</span>
     <button type="button" onClick={() => onAction('rotate_right')} title="Rotate right · R" aria-label="Rotate right"><RotateCw size={15} /></button>
     <i />
-    <button type="button" onClick={() => onAction('paint')} title="Paint aimed piece · E" aria-label="Paint aimed piece"><Paintbrush size={15} /></button>
+    <button type="button" onClick={() => onAction('paint')} title="Paint aimed piece · Y" aria-label="Paint aimed piece"><Paintbrush size={15} /></button>
     <button type="button" onClick={() => onAction('copy')} title="Copy aimed piece · I" aria-label="Copy aimed piece"><Copy size={15} /></button>
     <button type="button" onClick={() => onAction('move')} title="Move aimed piece · C" aria-label="Move aimed piece" aria-pressed={moving}><Move size={15} /></button>
     <button type="button" onClick={() => onAction('remove')} title="Remove aimed piece · X" aria-label="Remove aimed piece"><X size={15} /></button>

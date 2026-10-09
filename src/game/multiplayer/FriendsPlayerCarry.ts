@@ -1,5 +1,5 @@
 import type { HaulingActor, HaulingEnvironment } from './FriendsHauling';
-import { isCampfireSeat } from './FriendsCampfireSeats';
+import { isQuietSeat } from '../world/FriendsRetreatSites';
 
 type Point = { x: number; y: number; z: number };
 type CarryActor = HaulingActor & {
@@ -50,7 +50,7 @@ export class FriendsPlayerCarry {
     for (const [id, carry] of this.carries) {
       const carrier = actors.get(id), passenger = actors.get(carry.rope.playerId);
       if (!carrier || !passenger || carrier.lifeState !== 'alive' || passenger.lifeState !== 'alive'
-        || isCampfireSeat(carrier.friendsSeat) || passenger.friendsSeat || env.vehicles.some(v => v.pilotId === passenger.id)) {
+        || isQuietSeat(carrier.friendsSeat) || passenger.friendsSeat || env.vehicles.some(v => v.pilotId === passenger.id)) {
         this.release(id); continue;
       }
       if (seconds === 0) continue;

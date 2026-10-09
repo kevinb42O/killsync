@@ -26,11 +26,11 @@ export function FriendsPauseMenu(p: FriendsPauseMenuProps) {
   const movement = CONTROL_SCHEME_DETAILS[p.controlScheme].bindings;
   const bindings = keyboard ? [
     ['Move', `${movement.up.toUpperCase()} ${movement.left.toUpperCase()} ${movement.down.toUpperCase()} ${movement.right.toUpperCase()} / ↑ ← ↓ →`],
-    ['Look', 'Mouse'], ['Jump / jetpack', 'Space / hold'], ['Sprint', 'Shift'], ['Crouch / slide', getCoopSlideBinding(p.controlScheme).toUpperCase()],
+    ['Look', 'Mouse'], ['Empty hands', '1'], ['Raise left / right arm', `${p.controlScheme==='AZERTY'?'A':'Q'} / E`], ['Point left / right arm', 'LMB / RMB'], ['Arms sideways', 'Raise + same mouse button'], ['Campfire wood', 'K'], ['Paint · build mode', 'Y'], ['Grenade · Combat', 'J'], ['Jump / jetpack', 'Space / hold'], ['Sprint', 'Shift'], ['Crouch / slide', getCoopSlideBinding(p.controlScheme).toUpperCase()],
     ['Use / interact', 'F'], ['Build / piece library', 'B / hold'], ['Tools', `1–${FRIENDS_TOOL_ORDER.length} / wheel`], ['Shovel · dig / fill', 'LMB / RMB'], ['Backpack', 'G'], ['Atlas', 'M'], ['Flashlight', 'V'], ['Night vision', 'N'], ['Train horn · aboard / nearby', 'H'],
   ] : isGamepadControlScheme(p.controlScheme) ? [
-    ['Move / look', 'Left / right stick'], ['Jump / jetpack', 'A / hold'], ['Sprint', 'L3'], ['Crouch / slide', 'B'], ['Use / interact', 'Y'], ['Reload', 'X'], ['Fire / aim', 'RT / LT'], ['Shovel · dig / fill', 'RT / LT'], ['Build', 'View'], ['Weapons', 'LB / RB'], ['Game menu', 'Start'],
-  ] : [['Move', 'Left stick'], ['Look', 'Swipe'], ['Jump / jetpack', 'Tap / hold'], ['Sprint / slide', 'Pull / double tap'], ['Use / interact', 'Use'], ['Fire / aim', 'Fire / aim'], ['Shovel · dig / fill', 'Fire / aim'], ['Build', 'Build / place']];
+    ['Move / look', 'Left / right stick'], ['Jump / jetpack', 'A / hold'], ['Sprint', 'L3'], ['Crouch / slide', 'B'], ['Use / interact', 'Y'], ['Reload', 'X'], ['Fire / aim', 'RT / LT'], ['Shovel · dig / fill', 'RT / LT'], ['Build', 'View'], ['Tools', 'D-pad ← / →'], ['Empty hands · raise left / right', 'LT / RT'], ['Empty hands · point left / right', 'LB / RB'], ['Game menu', 'Start'],
+  ] : [['Empty hands · arm gestures', 'Hold arm buttons'], ['Move', 'Left stick'], ['Look', 'Swipe'], ['Jump / jetpack', 'Tap / hold'], ['Sprint / slide', 'Pull / double tap'], ['Use / interact', 'Use'], ['Fire / aim', 'Fire / aim'], ['Shovel · dig / fill', 'Fire / aim'], ['Build', 'Build / place']];
   const chooseTab = (next: PauseTab) => { setTab(next); friendsAudio.play('click', .16); };
   return <div className="friends-pause-backdrop" onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
     <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="friends-pause-title" className="friends-pause" onKeyDown={event => {

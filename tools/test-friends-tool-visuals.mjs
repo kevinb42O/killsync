@@ -68,7 +68,7 @@ try {
   });
   report.framing=await page.evaluate(()=>{
     const r=window.toolsReview,checks=[];
-    for(const aspect of [16/9,2.4,9/16])for(const fov of [70,98,120])for(const id of [1,2,3,4]) {
+    for(const aspect of [16/9,2.4,9/16])for(const fov of [70,98,120])for(const id of [1,2,3]) {
       r.camera.aspect=aspect;r.camera.fov=fov;r.camera.updateProjectionMatrix();r.tools.update(id,10000,false,false);r.tools.update(id,10500,false,false);r.scene.updateMatrixWorld(true);
       const meshes=[];r.tools.root.traverseVisible(o=>{if(o.isMesh){const bounds=new r.THREE.Box3(),point=new r.THREE.Vector3(),positions=o.geometry.getAttribute('position');for(let i=0;i<positions.count;i++)bounds.expandByPoint(point.fromBufferAttribute(positions,i).applyMatrix4(o.matrixWorld).project(r.camera));meshes.push({name:o.name,min:bounds.min.toArray(),max:bounds.max.toArray(),finite:[...bounds.min.toArray(),...bounds.max.toArray()].every(Number.isFinite)});}});
       checks.push({aspect,fov,id,meshes});

@@ -11,6 +11,7 @@ export type MobileCoopAction =
   | { type: 'buildType'; buildType: CoopStructureType };
 
 type Props = {
+  emptyHands?: boolean;
   spellcaster?: boolean;
   creativeBuilding?: boolean;
   onCreativeLibrary?: () => void;
@@ -75,7 +76,7 @@ function HoldButton({ label, title, className = '', control, onAction, onDrag, c
 
 /** Mobile-only co-op HUD. It emits high-level actions; MultiplayerArena keeps
  * authority, prediction, and all input sequencing in one place. */
-export function CoopMobileControls({ spellcaster = false, creativeBuilding = false, onCreativeLibrary, buildMode, buildType, onAction }: Props) {
+export function CoopMobileControls({ emptyHands=false, spellcaster = false, creativeBuilding = false, onCreativeLibrary, buildMode, buildType, onAction }: Props) {
   const joystickRef = useRef<HTMLDivElement>(null);
   const joystickPointerRef = useRef<number | null>(null);
   const lastJoystickTapAtRef = useRef(0);
@@ -207,9 +208,9 @@ export function CoopMobileControls({ spellcaster = false, creativeBuilding = fal
     </div>
 
     <div className="coop-touch-combat">
-      <TapButton label="GRENADE" title="Throw grenade" onAction={() => onAction({ type: 'tap', control: 'grenade' })} className="coop-touch-button--grenade"><Bomb size={18} /></TapButton>
+      {!emptyHands && <><TapButton label="GRENADE" title="Throw grenade" onAction={() => onAction({ type: 'tap', control: 'grenade' })} className="coop-touch-button--grenade"><Bomb size={18} /></TapButton>
       <HoldButton label={spellcaster ? "SOULS" : "AIM"} title={spellcaster ? "Cast Hellseed; drag to look" : "Hold to aim; drag to look"} control="aim" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--aim"><Crosshair size={17} /></HoldButton>
-      <HoldButton label={spellcaster ? "CAST" : "FIRE"} title={spellcaster ? "Hold to cast; drag to look" : "Hold to fire; drag to look"} control="fire" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton>
+      <HoldButton label={spellcaster ? "CAST" : "FIRE"} title={spellcaster ? "Hold to cast; drag to look" : "Hold to fire; drag to look"} control="fire" onAction={onAction} onDrag={(deltaX, deltaY) => onAction({ type: 'look', deltaX, deltaY })} className="coop-touch-button--fire"><Crosshair size={28} /></HoldButton></>}
       <HoldButton label="USE" control="interact" onAction={onAction} className="coop-touch-button--use"><ShieldPlus size={19} /></HoldButton>
       <TapButton label="PREV" title="Previous weapon" onAction={() => onAction({ type: 'tap', control: 'previousWeapon' })} className="coop-touch-button--previous"><ChevronLeft size={19} /></TapButton>
       <TapButton label="NEXT" title="Next weapon" onAction={() => onAction({ type: 'tap', control: 'nextWeapon' })} className="coop-touch-button--next"><ChevronRight size={19} /></TapButton>

@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "real Rope shortcut and mouse shot attach a teammate without carry text or overlays",
+    "switching tools and using real movement controls keeps the AFK passenger following",
+    "captured the same connected state from both first-person cameras with the ropegun equipped",
+    "real R input releases while another tool is equipped and removes the tether"
+  ],
+  "errors": [],
+  "rendering": {
+    "glError": 0,
+    "ropes": 1,
+    "visibleRope": true,
+    "gap": 56
+  }
+}

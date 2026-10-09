@@ -1,0 +1,470 @@
+{
+  "errors": [],
+  "requests": [
+    "http://localhost:3014/models/hellbinder/right-hand.glb",
+    "http://localhost:3014/models/friends/big-walk/character.json",
+    "http://localhost:3014/models/friends/big-walk/atlas.png",
+    "http://localhost:3014/models/friends/survival-kit/tool-axe.glb",
+    "http://localhost:3014/models/friends/survival-kit/Textures/colormap.png",
+    "http://localhost:3014/models/friends/survival-kit/tool-pickaxe.glb",
+    "http://localhost:3014/models/friends/survival-kit/Textures/colormap.png",
+    "http://localhost:3014/models/friends/survival-kit/tool-shovel.glb",
+    "http://localhost:3014/models/friends/survival-kit/Textures/colormap.png",
+    "http://localhost:3014/models/hellbinder/right-hand.glb",
+    "http://localhost:3014/models/friends/quaternius/PineTree_1.glb",
+    "http://localhost:3014/models/friends/quaternius/PineTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/quaternius/BirchTree_1.glb",
+    "http://localhost:3014/models/friends/quaternius/BirchTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/quaternius/MapleTree_1.glb",
+    "http://localhost:3014/models/friends/quaternius/MapleTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/quaternius/Textures/PineTree_Bark.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/PineTree_Bark_Normal.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/PineTree_Leaves.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/BirchTree_Bark.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/BirchTree_Bark_Normal.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/BirchTree_Leaves.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/MapleTree_Bark.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/MapleTree_Bark_Normal.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/MapleTree_Leaves.png",
+    "http://localhost:3014/models/friends/big-walk/character.json",
+    "http://localhost:3014/models/friends/quaternius/PineTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/quaternius/BirchTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/quaternius/MapleTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/roasting/twig.glb",
+    "http://localhost:3014/models/friends/quaternius/PineTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/quaternius/BirchTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/quaternius/MapleTree_1_BarkLOD.json",
+    "http://localhost:3014/models/friends/big-walk/atlas.png",
+    "http://localhost:3014/models/friends/space-kit/desk_chair.glb",
+    "http://localhost:3014/models/friends/space-kit/desk_computer.glb",
+    "http://localhost:3014/models/friends/space-kit/machine_generator.glb",
+    "http://localhost:3014/models/friends/space-kit/rocket_fuelA.glb",
+    "http://localhost:3014/models/friends/survival-kit/tool-axe.glb",
+    "http://localhost:3014/models/friends/quaternius/Bush.glb",
+    "http://localhost:3014/models/friends/survival-kit/grass-large.glb",
+    "http://localhost:3014/models/friends/nature-kit/rock_largeB.glb",
+    "http://localhost:3014/models/friends/survival-kit/Textures/colormap.png",
+    "http://localhost:3014/models/friends/quaternius/Textures/Bush_Leaves.png",
+    "http://localhost:3014/models/friends/survival-kit/Textures/colormap.png"
+  ],
+  "renders": {
+    "axe": {
+      "calls": 2,
+      "triangles": 132,
+      "glError": 0
+    },
+    "pickaxe": {
+      "calls": 2,
+      "triangles": 122,
+      "glError": 0
+    },
+    "shovel": {
+      "calls": 2,
+      "triangles": 172,
+      "glError": 0
+    },
+    "flashlight": {
+      "calls": 9,
+      "triangles": 560,
+      "glError": 0
+    },
+    "rope": {
+      "calls": 15,
+      "triangles": 3312,
+      "glError": 0
+    }
+  },
+  "checks": [
+    "three crew avatars use six articulated meshes each and hide the original chassis",
+    "all five held tools load matching character limbs without requesting WRAD arms",
+    "tools render without WebGL errors and remain in frame across 70–120° FOV and portrait/ultrawide sizes",
+    "a real island guest mounts the Big Walk model through the production multiplayer renderer"
+  ],
+  "crew": [
+    {
+      "meshes": 6,
+      "oldBodyVisible": false,
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "meshes": 6,
+      "oldBodyVisible": false,
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "meshes": 6,
+      "oldBodyVisible": false,
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "framing": [
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 70,
+      "tool": 1,
+      "min": [
+        0.41256772861258123,
+        -20.269337158863355
+      ],
+      "max": [
+        9.576615110894986,
+        -0.635353726461526
+      ]
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 70,
+      "tool": 2,
+      "min": [
+        0.41351180593737097,
+        -18.810122204195054
+      ],
+      "max": [
+        8.590462798238086,
+        -0.638801256326761
+      ]
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 70,
+      "tool": 3,
+      "min": [
+        0.41351180593737097,
+        -18.810122204195054
+      ],
+      "max": [
+        8.590462798238086,
+        -0.638801256326761
+      ]
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 98,
+      "tool": 1,
+      "min": [
+        0.41256772861258123,
+        -20.269337158863355
+      ],
+      "max": [
+        9.576615110894986,
+        -0.6353537264615259
+      ]
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 98,
+      "tool": 2,
+      "min": [
+        0.41351180593737097,
+        -18.810122204195054
+      ],
+      "max": [
+        8.590462798238086,
+        -0.6388012563267608
+      ]
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 98,
+      "tool": 3,
+      "min": [
+        0.41351180593737097,
+        -18.810122204195054
+      ],
+      "max": [
+        8.590462798238086,
+        -0.6388012563267608
+      ]
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 120,
+      "tool": 1,
+      "min": [
+        0.41256772861258123,
+        -20.269337158863355
+      ],
+      "max": [
+        9.576615110894988,
+        -0.635353726461526
+      ]
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 120,
+      "tool": 2,
+      "min": [
+        0.4135118059373711,
+        -18.810122204195054
+      ],
+      "max": [
+        8.590462798238088,
+        -0.6388012563267608
+      ]
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 120,
+      "tool": 3,
+      "min": [
+        0.4135118059373711,
+        -18.810122204195054
+      ],
+      "max": [
+        8.590462798238088,
+        -0.6388012563267608
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 70,
+      "tool": 1,
+      "min": [
+        0.4194905133425449,
+        -20.269337158863355
+      ],
+      "max": [
+        9.446371986904307,
+        -0.635353726461526
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 70,
+      "tool": 2,
+      "min": [
+        0.41970325759354693,
+        -18.810122204195054
+      ],
+      "max": [
+        8.55679013585155,
+        -0.638801256326761
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 70,
+      "tool": 3,
+      "min": [
+        0.41970325759354693,
+        -18.810122204195054
+      ],
+      "max": [
+        8.55679013585155,
+        -0.638801256326761
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 98,
+      "tool": 1,
+      "min": [
+        0.41949051334254495,
+        -20.269337158863355
+      ],
+      "max": [
+        9.446371986904307,
+        -0.6353537264615259
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 98,
+      "tool": 2,
+      "min": [
+        0.419703257593547,
+        -18.810122204195054
+      ],
+      "max": [
+        8.55679013585155,
+        -0.6388012563267608
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 98,
+      "tool": 3,
+      "min": [
+        0.419703257593547,
+        -18.810122204195054
+      ],
+      "max": [
+        8.55679013585155,
+        -0.6388012563267608
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 120,
+      "tool": 1,
+      "min": [
+        0.419490513342545,
+        -20.269337158863355
+      ],
+      "max": [
+        9.446371986904309,
+        -0.635353726461526
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 120,
+      "tool": 2,
+      "min": [
+        0.41970325759354704,
+        -18.810122204195054
+      ],
+      "max": [
+        8.556790135851552,
+        -0.6388012563267608
+      ]
+    },
+    {
+      "aspect": 2.4,
+      "fov": 120,
+      "tool": 3,
+      "min": [
+        0.41970325759354704,
+        -18.810122204195054
+      ],
+      "max": [
+        8.556790135851552,
+        -0.6388012563267608
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 70,
+      "tool": 1,
+      "min": [
+        0.38581827639893274,
+        -15.630988886522815
+      ],
+      "max": [
+        9.788725341394091,
+        -0.6370800024486911
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 70,
+      "tool": 2,
+      "min": [
+        0.38857901553198304,
+        -14.534103327933092
+      ],
+      "max": [
+        8.64530113412473,
+        -0.632812963511873
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 70,
+      "tool": 3,
+      "min": [
+        0.38857901553198304,
+        -14.534103327933092
+      ],
+      "max": [
+        8.64530113412473,
+        -0.632812963511873
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 98,
+      "tool": 1,
+      "min": [
+        0.38581827639893296,
+        -15.630988886522815
+      ],
+      "max": [
+        9.788725341394095,
+        -0.6370800024486911
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 98,
+      "tool": 2,
+      "min": [
+        0.3885790155319831,
+        -14.534103327933092
+      ],
+      "max": [
+        8.645301134124733,
+        -0.6328129635118732
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 98,
+      "tool": 3,
+      "min": [
+        0.3885790155319831,
+        -14.534103327933092
+      ],
+      "max": [
+        8.645301134124733,
+        -0.6328129635118732
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 120,
+      "tool": 1,
+      "min": [
+        0.3858182763989328,
+        -15.630988886522815
+      ],
+      "max": [
+        9.788725341394095,
+        -0.6370800024486911
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 120,
+      "tool": 2,
+      "min": [
+        0.38857901553198304,
+        -14.534103327933094
+      ],
+      "max": [
+        8.645301134124733,
+        -0.6328129635118732
+      ]
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 120,
+      "tool": 3,
+      "min": [
+        0.38857901553198304,
+        -14.534103327933094
+      ],
+      "max": [
+        8.645301134124733,
+        -0.6328129635118732
+      ]
+    }
+  ],
+  "production": {
+    "model": "friends-big-walk-character",
+    "oldBodyVisible": false,
+    "glError": 0
+  }
+}

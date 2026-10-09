@@ -1,5 +1,11 @@
 # First-person tool presentation
 
+Friends now uses the matching Big Walk character hands for every held tool,
+including the rope launcher and marshmallow stick. See
+[Friends character presentation](friends-characters.md) for the current assets,
+grip fitting and measurements. The WRAD arm notes and earlier capture counts
+below document the preceding implementation.
+
 The held axe, pickaxe and shovel continue to use the existing Survival Kit GLB
 models, including their original upgraded variants. Shovel now handles both
 left-click excavation and right-click soil placement with one held model. The models are colored with walnut handles, muted blue-gray

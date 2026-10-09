@@ -411,6 +411,8 @@ export type FriendsBuildEconomy = ((before?: FriendsBuildPiece, after?: Pick<Fri
   batch?: (edits: readonly FriendsBuildEdit[]) => string | undefined;
 };
 export class FriendsBuilding {
+  placementGuard?:(shape:FriendsBuildShape,pose:FriendsBuildPose)=>string|undefined;
+  private reserved(shape:FriendsBuildShape|undefined,pose:FriendsBuildPose|undefined){return shape&&pose?this.placementGuard?.(shape,resolveFriendsBuildPose(pose,this.vehicleProvider())):undefined;}
   vehicleProvider:()=>readonly FriendsVehicle[]=()=>[];
   craneAngleProvider:()=>ReadonlyMap<number,number>=()=>new Map();
   parkCrane(id:number,angle:number){const p=this.pieces.find(p=>p.id===id&&p.shape==='crane_joint');if(p&&Math.abs((p.craneAngle??0)-angle)>.0001){p.craneAngle=angle;p.revision=++this.revision;}}
@@ -488,7 +490,7 @@ export class FriendsBuilding {
           return result(false, 'A friend changed this piece. Their edit is protected.');
         if (edit.before) {
           const restoredPose = resolveFriendsBuildPose(edit.before,this.vehicleProvider());
-          const issue = friendsPlacementError(candidates, edit.before.shape, restoredPose, undefined, bodies, undefined, true, this.terrain,this.vehicleProvider());
+          const issue = friendsPlacementError(candidates, edit.before.shape, restoredPose, undefined, bodies, undefined, true, this.terrain,this.vehicleProvider())||this.reserved(edit.before.shape,restoredPose);
           if (issue) return result(false, issue);
           candidates.push(restoredPose);
         }
@@ -518,7 +520,7 @@ export class FriendsBuilding {
       const candidates = [...this.getPieces()], group: Edit[] = [];
       for (let i = 0; i < request.poses.length; i++) {
         const pose = resolveFriendsBuildPose({...request.poses[i],vehicleFrame:undefined},this.vehicleProvider());
-        const issue = friendsPlacementError(candidates, request.shape, pose, actor, bodies, undefined, false, this.terrain,this.vehicleProvider());
+        const issue = friendsPlacementError(candidates, request.shape, pose, actor, bodies, undefined, false, this.terrain,this.vehicleProvider())||this.reserved(request.shape,pose);
         if (issue) return result(false, 'Piece ' + (i + 1) + ': ' + issue);
         const after: FriendsBuildPiece = { ...pose, shape: request.shape, finish: request.finish, id: this.nextId + i, author: (actor.label || 'Friend').slice(0,24), revision: this.revision + 1 };
         candidates.push(after); group.push({after});
@@ -533,7 +535,7 @@ export class FriendsBuilding {
     if (request.action === 'place') {
       if (this.pieces.length >= FRIENDS_BUILD_LIMIT) return result(false, `World budget: ${FRIENDS_BUILD_LIMIT} pieces. Remove a piece to make room.`);
       if (!isFriendsFinish(request.finish)) return result(false, 'Choose a finish.');
-      const issue = friendsPlacementError(this.getPieces(), request.shape, request.pose, actor, bodies, undefined, false, this.terrain,this.vehicleProvider()); if (issue) return result(false, issue);
+      const issue = friendsPlacementError(this.getPieces(), request.shape, request.pose, actor, bodies, undefined, false, this.terrain,this.vehicleProvider())||this.reserved(request.shape,request.pose); if (issue) return result(false, issue);
       const economicIssue = economy?.(undefined, { shape: request.shape!, finish: request.finish! }); if (economicIssue) return result(false, economicIssue);
       const after: FriendsBuildPiece = { ...request.pose!, id: this.nextId++, shape: request.shape!, finish: request.finish, author: (actor.label || 'Friend').slice(0, 24), revision: ++this.revision };
       this.pieces.push(after); edit = { after };
@@ -543,7 +545,7 @@ export class FriendsBuilding {
       if (Math.hypot(resolveAssemblyPose(resolveFriendsBuildPose(before,this.vehicleProvider()),this.pieces,this.craneAngleProvider()).x - actor.x, resolveAssemblyPose(resolveFriendsBuildPose(before,this.vehicleProvider()),this.pieces,this.craneAngleProvider()).y - actor.y, resolveAssemblyPose(resolveFriendsBuildPose(before,this.vehicleProvider()),this.pieces,this.craneAngleProvider()).z - actor.z) > FRIENDS_BUILD_REACH + 64) return result(false, 'Move closer to that piece.');
       if(['move','remove'].includes(request.action)&&this.pieces.some(p=>p.assembly?.parentId===before.id||p.craneRootId===before.id))return result(false,'Dismantle connected arm pieces and consoles from the end before moving or removing their parent.');
       if (request.action === 'paint' && !isFriendsFinish(request.finish)) return result(false, 'Choose a finish.');
-      if (request.action === 'move') { const issue = friendsPlacementError(this.getPieces(), before.shape, request.pose, actor, bodies, before.id, false, this.terrain,this.vehicleProvider()); if (issue) return result(false, issue); }
+      if (request.action === 'move') { const issue = friendsPlacementError(this.getPieces(), before.shape, request.pose, actor, bodies, before.id, false, this.terrain,this.vehicleProvider())||this.reserved(before.shape,request.pose); if (issue) return result(false, issue); }
       const economicIssue = economy?.(before, request.action === 'remove' ? undefined : { shape: before.shape, finish: request.action === 'paint' ? request.finish! : before.finish }); if (economicIssue) return result(false, economicIssue);
       this.revision++; this.pieces = this.pieces.filter(p => p.id !== before.id);
       const after = request.action === 'remove' ? undefined : { ...before, ...(request.action==='move'?{attachment:undefined,vehicleFrame:undefined,assembly:undefined,assemblyFrame:undefined,craneRootId:undefined}:{}), ...(request.action === 'move' ? request.pose : { finish: request.finish! }), revision: this.revision };

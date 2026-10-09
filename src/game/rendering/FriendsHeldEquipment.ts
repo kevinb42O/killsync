@@ -1,55 +1,17 @@
 import * as THREE from 'three';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { poseFriendsArm, type FriendsArmHold } from './FriendsArmPose';
+import type { FriendsArmHold } from './FriendsArmPose';
+import { createFriendsCharacterGrip, loadFriendsCharacterModel } from './FriendsCharacterModel';
 import { fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
 
-/** Artist-made, connected hands/arms from WRAD ARMS (CC0). The grip is posed
- * once on the source rig and baked, keeping the live viewmodel unskinned. */
+/** The same artist-authored Big Walk limbs as the Friends crew avatars. */
 const armTemplates = new Map<string, Promise<THREE.Mesh>>();
-export function loadFriendsGrip(side: 'right' | 'left', hold:FriendsArmHold='tool') {
-  const key=side+':'+hold;let pending=armTemplates.get(key);
-  if(!pending) {
-    pending=loadFriendsAsset('firstPersonArms').then(source=>{
-      const rig=cloneSkeleton(source),suffix=side==='right'?'r':'l',sign=side==='right'?1:-1;
-      for(const finger of ['index','middle','ring','pinky'])for(let joint=1;joint<=3;joint++) {
-        const bone=rig.getObjectByName(`finger_${finger}${joint}${suffix}`);
-        if(bone)bone.rotateZ(sign*(joint === 1 ? .85 : joint === 2 ? 1.1 : .7));
-      }
-      const thumb=rig.getObjectByName(`finger_thumb1${suffix}`);if(thumb)thumb.rotateY(sign*-.35);
-      rig.updateMatrixWorld(true);
-      const wrist=rig.getObjectByName(`wrist${suffix}`)!,socket=rig.getObjectByName(`socket${suffix}`)!;
-      const origin=socket.getWorldPosition(new THREE.Vector3()),inverse=wrist.getWorldQuaternion(new THREE.Quaternion()).invert();
-      // Mirror the left grip across X while keeping palm and finger-spread
-      // axes consistent. Flipping the palm axis puts props on the knuckles.
-      // Both grips enclose a shaft along +Y.
-      const basis=new THREE.Matrix4().makeBasis(new THREE.Vector3(0,0,sign),new THREE.Vector3(-sign,0,0),new THREE.Vector3(0,-1,0));
-      const orient=new THREE.Quaternion().setFromRotationMatrix(basis);
-      // Keep the artist's connected anatomy, with a substantial palm/forearm
-      // and the elbow trailing toward the player instead of sideways.
-      const carry=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,-sign*.68,-sign*.10));
-      let skin!: THREE.SkinnedMesh;rig.traverse(o=>{if(o instanceof THREE.SkinnedMesh)skin=o;});skin.skeleton.update();
-      const frame=new THREE.Matrix4().makeTranslation(-sign*.025,0,.045)
-        .multiply(new THREE.Matrix4().makeRotationFromQuaternion(carry))
-        .multiply(new THREE.Matrix4().makeScale(.1575,.1575*1.12,.1575*1.16))
-        .multiply(new THREE.Matrix4().makeRotationFromQuaternion(orient))
-        .multiply(new THREE.Matrix4().makeRotationFromQuaternion(inverse))
-        .multiply(new THREE.Matrix4().makeTranslation(-origin.x,-origin.y,-origin.z));
-      const joints=poseFriendsArm(rig,skin,frame,side,hold);
-      const geometry=skin.geometry,index=geometry.index!,position=geometry.getAttribute('position'),uv=geometry.getAttribute('uv');
-      const points:number[]=[],uvs:number[]=[],shoulderPoints:number[]=[],p=new THREE.Vector3(),world=new THREE.Vector3();
-      // The downloaded asset contains both arms in one mesh; retain the chosen
-      // connected arm, using the source rig's shoulder side before posing.
-      const skinIndex=geometry.getAttribute('skinIndex'),skinWeight=geometry.getAttribute('skinWeight');
-      const belongs=(i:number)=>{let weight=0;for(let c=0;c<4;c++){const bone=skin.skeleton.bones[skinIndex.getComponent(i,c)];if(bone?.name.endsWith(suffix))weight+=skinWeight.getComponent(i,c);}return weight>.5;};
-      for(let t=0;t<index.count;t+=3){const a=index.getX(t),b=index.getX(t+1),c=index.getX(t+2);if(!belongs(a)&&!belongs(b)&&!belongs(c))continue;
-        for(const i of [a,b,c]){skin.getVertexPosition(i,p);world.copy(p).applyMatrix4(skin.matrixWorld).applyMatrix4(frame);points.push(world.x,world.y,world.z);let shoulderWeight=0;for(let c=0;c<4;c++)if(skin.skeleton.bones[skinIndex.getComponent(i,c)]?.name===`shoulder${suffix}`)shoulderWeight+=skinWeight.getComponent(i,c);if(shoulderWeight>.15)shoulderPoints.push(world.x,world.y,world.z);uvs.push(uv.getX(i),uv.getY(i));}
-      }
-      const baked=new THREE.BufferGeometry();baked.setAttribute('position',new THREE.Float32BufferAttribute(points,3));baked.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));const welded=mergeVertices(baked);baked.dispose();welded.computeVertexNormals();welded.computeBoundingSphere();
-      const material=(skin.material as THREE.MeshStandardMaterial).clone();material.roughness=.86;material.metalness=0;material.side=THREE.FrontSide;material.color.set('#d3cbc1');
-      material.map!.magFilter=THREE.LinearFilter;material.map!.minFilter=THREE.LinearMipmapLinearFilter;material.map!.needsUpdate=true;
-      const mesh=new THREE.Mesh(welded,material);mesh.name=`premade-${side}-arm`;mesh.userData.friendsShared=true;mesh.userData.friendsArmJoints=joints;mesh.userData.friendsShoulderPoints=shoulderPoints;return mesh;
-    });armTemplates.set(key,pending);
+export function loadFriendsGrip(side: 'right' | 'left', hold: FriendsArmHold = 'tool') {
+  const key = side + ':' + hold;
+  let pending = armTemplates.get(key);
+  if (!pending) {
+    pending = loadFriendsCharacterModel().then(source => createFriendsCharacterGrip(source, side, hold))
+      .catch(error => { armTemplates.delete(key); throw error; });
+    armTemplates.set(key, pending);
   }
   return pending;
 }
@@ -61,7 +23,7 @@ const toolTemplates=new Map<FriendsAssetId,Promise<THREE.Group>>();
 export function loadFinishedFriendsTool(asset:FriendsAssetId) {
   let pending=toolTemplates.get(asset);
   if(!pending){pending=loadFriendsAsset(asset).then(source=>{
-    const model=fitFriendsAsset(source,{x:.48,y:.86,z:.26},0,'contain');model.children[0].position.x=0;model.rotation.y=asset.startsWith('toolShovel')?0:-Math.PI/2;model.position.y=-.22;model.name=asset;
+    const model=fitFriendsAsset(source,{x:.48,y:.86,z:.26},0,'contain');model.children[0].position.x=0;model.rotation.y=asset.startsWith('toolShovel')?0:-Math.PI/2;model.position.y=-.264;model.scale.multiplyScalar(1.2);model.name=asset;
     model.traverse(o=>{
       if(!(o instanceof THREE.Mesh))return;
       const material=o.material as THREE.MeshStandardMaterial,texture=material.map;

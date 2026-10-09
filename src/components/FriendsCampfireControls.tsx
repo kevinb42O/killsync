@@ -14,6 +14,6 @@ export function FriendsCampfireControls({ touch, gamepad, eating=false, waiting=
     <button onClick={onStand}>Stand</button>
   </nav>;
   return <><div className="friends-campfire-hint" aria-label="Campfire controls">
-    {gamepad?'Hold RT to roast · ↑ wood · X fresh · Y stand':'Hold click to roast · E wood · R fresh · F stand'}
+    {gamepad?'Hold RT to roast · ↑ wood · X fresh · Y stand':'Hold click to roast · K wood · R fresh · F stand'}
   </div><div className="friends-campfire-eat">{eat}</div></>;
 }

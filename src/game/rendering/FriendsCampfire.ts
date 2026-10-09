@@ -41,11 +41,13 @@ export class FriendsCampfire {
   private disposed=false;
   private fuel=0;
   private size=1;
+  private spatialScale=1;
   setState(state:CampfireSnapshot|undefined){this.fuel=state?.fuelSeconds??0;}
-  constructor(scene:THREE.Scene){
-    const camp=FRIENDS_CAMPFIRE;
+  constructor(scene:THREE.Scene,options?:{id:string;x:number;y:number;z:number;scale:number;seats:boolean}){
+    const camp=options??FRIENDS_CAMPFIRE;
+    if(options){this.spatialScale=options.scale;this.group.scale.setScalar(options.scale);this.light.distance*=options.scale;}
     this.group.name='commons-campfire-gathering';this.group.position.set(camp.x,camp.z,camp.y);scene.add(this.group);
-    this.light.name='commons-campfire-light';this.light.position.set(camp.x,camp.z+48,camp.y);
+    this.light.name=camp.id+'-light';this.light.position.set(camp.x,camp.z+48*this.spatialScale,camp.y);
     this.light.castShadow=false;scene.add(this.light);
     const wood=new THREE.MeshStandardMaterial({color:0x614431,roughness:.96});
     wood.onBeforeCompile=shader=>{
@@ -68,7 +70,7 @@ export class FriendsCampfire {
     const timber=(w:number,h:number,d:number,x:number,y:number,z:number,angle:number)=>{
       const g=new THREE.BoxGeometry(w,h,d);g.rotateY(angle);g.translate(x,y,z);parts.push(g);
     };
-    for(const seat of CAMPFIRE_SEATS){
+    for(const seat of options?.seats===false?[]:CAMPFIRE_SEATS){
       const x=seat.x-camp.x,z=seat.y-camp.y,angle=Math.PI/2-seat.angle;
       timber(42,7,26,x,17,z,angle);
       // Backrests and legs are oriented towards the fire, with open gaps between seats.
@@ -79,7 +81,7 @@ export class FriendsCampfire {
       }
       for(const height of [28,38])timber(44,7,4,x+radialX*13,height,z+radialZ*13,angle);
     }
-    const seats=new THREE.Mesh(mergeGeometries(parts),wood);parts.forEach(g=>g.dispose());
+    const seats=new THREE.Mesh(parts.length?mergeGeometries(parts):new THREE.BufferGeometry(),wood);parts.forEach(g=>g.dispose());
     seats.name='campfire-eight-timber-seats';seats.receiveShadow=true;this.group.add(seats);
     const rocks=new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1,0),stone,22);
     rocks.name='campfire-stone-ring';rocks.receiveShadow=true;
@@ -135,7 +137,7 @@ export class FriendsCampfire {
     const near=enabled&&distance<900*900;
     // Keep the light in the shader layout while zeroing distant contribution.
     const fade=Math.max(0,Math.min(1,(900-Math.sqrt(distance))/300));
-    this.light.intensity=near?65_000*this.size*(.3+.7*(1-daylight))*fade*(1+Math.sin(seconds*7.1)*.045+Math.sin(seconds*11.7)*.025):0;
+    this.light.intensity=near?65_000*this.spatialScale*this.spatialScale*this.size*(.3+.7*(1-daylight))*fade*(1+Math.sin(seconds*7.1)*.045+Math.sin(seconds*11.7)*.025):0;
     this.flame.visible=distance<2_000*2_000;this.sparks.visible=distance<650*650;
     if(this.group.visible)this.time.value=seconds;
   }

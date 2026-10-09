@@ -1,0 +1,76 @@
+{
+  "measurements": [
+    {
+      "name": "Kevin",
+      "scale": [
+        18.1875,
+        9,
+        1
+      ],
+      "opacity": 0.88,
+      "depthTest": true,
+      "canvas": [
+        194,
+        96
+      ]
+    },
+    {
+      "name": "Emma",
+      "scale": [
+        20.0625,
+        9,
+        1
+      ],
+      "opacity": 0.88,
+      "depthTest": true,
+      "canvas": [
+        214,
+        96
+      ]
+    },
+    {
+      "name": "Sam",
+      "scale": [
+        16.125,
+        9,
+        1
+      ],
+      "opacity": 0.88,
+      "depthTest": true,
+      "canvas": [
+        172,
+        96
+      ]
+    },
+    {
+      "name": "Alexandra",
+      "scale": [
+        28.125,
+        9,
+        1
+      ],
+      "opacity": 0.88,
+      "depthTest": true,
+      "canvas": [
+        300,
+        96
+      ]
+    },
+    {
+      "name": "Zoë",
+      "scale": [
+        14.8125,
+        9,
+        1
+      ],
+      "opacity": 0.88,
+      "depthTest": true,
+      "canvas": [
+        158,
+        96
+      ]
+    }
+  ],
+  "errors": [],
+  "glError": 0
+}

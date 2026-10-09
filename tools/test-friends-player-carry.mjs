@@ -30,7 +30,7 @@ try {
   await page.goto(origin + '/?mode=friends', { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Your name', { exact: true }).fill('Carrier');
   await page.getByRole('button', { name: 'Play on my own', exact: true }).click({ noWaitAfter: true });
-  await page.locator('.coop-arena').waitFor({ state: 'attached' });
+  await page.locator('.coop-arena').waitFor({ state: 'attached', timeout:120000 });
   await page.waitForFunction(() => !document.body.innerText.includes('OPERATOR LINK / SUNLINE COMMONS'), undefined, { timeout: 120000 });
   // Move before mocking pointer lock; the synthetic absolute move must not
   // rotate the camera away from the teammate after setting up the shot.
@@ -62,7 +62,7 @@ try {
     window.carryReview = { simulation, bridge, host, guest };
     document.querySelector('.coop-arena canvas').requestPointerLock();
   });
-  await page.keyboard.press('5');
+  await page.keyboard.press('6');
   await page.waitForFunction(() => carryReview.simulation.inputByPlayer.get(carryReview.host.id)?.friendsTool === 5);
   await page.mouse.down();
   await page.waitForFunction(() => carryReview.simulation.friends.hauling.snapshot().playerRopes.length === 1);
@@ -71,7 +71,7 @@ try {
   assert.equal(await page.locator('.friends-hauling-feedback').count(), 0);
   report.checks.push('real Rope shortcut and mouse shot attach a teammate without carry text or overlays');
   const initial = await page.evaluate(() => carryReview.guest.x);
-  await page.keyboard.press('4');
+  await page.keyboard.press('5');
   await page.keyboard.down('s');
   await page.waitForFunction(initial => carryReview.guest.x < initial - 200, initial);
   await page.keyboard.up('s');

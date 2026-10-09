@@ -1,0 +1,79 @@
+{
+  "errors": [],
+  "failedTextures": [],
+  "switchHand": {
+    "lightsOn": true,
+    "by": "review",
+    "visible": true,
+    "palm": [
+      7628.960253833379,
+      1380,
+      21739.02260233002
+    ],
+    "bulbLoaded": true
+  },
+  "near": {
+    "calls": 283,
+    "triangles": 1572029,
+    "textures": 140,
+    "geometries": 918
+  },
+  "programsBefore": 154,
+  "programsAfter": 154,
+  "glError": 0,
+  "frameMs": {
+    "on": 6.5,
+    "off": 6.899999976158142
+  },
+  "active": [
+    "stillwater-house",
+    "skyfalls-bench",
+    "gatewater-bench",
+    "saltwind-camp"
+  ],
+  "seatClaims": [
+    {
+      "vehicleId": "stillwater-house",
+      "index": 1
+    },
+    {
+      "vehicleId": "stillwater-house",
+      "index": 0
+    },
+    {
+      "vehicleId": "stillwater-house",
+      "index": 2
+    }
+  ],
+  "fullCrew": [
+    {
+      "vehicleId": "saltwind-camp",
+      "index": 0
+    },
+    {
+      "vehicleId": "saltwind-camp",
+      "index": 1
+    },
+    {
+      "vehicleId": "saltwind-camp",
+      "index": 2
+    },
+    {
+      "vehicleId": "saltwind-camp",
+      "index": 3
+    },
+    {
+      "vehicleId": "saltwind-camp",
+      "index": 4
+    }
+  ],
+  "secondClient": {
+    "lightsOn": false,
+    "seat": {
+      "vehicleId": "stillwater-house",
+      "index": 0
+    },
+    "warm": 8.19401262398981e-40,
+    "glError": 0
+  }
+}

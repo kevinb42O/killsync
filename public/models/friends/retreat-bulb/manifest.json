@@ -1,0 +1,64 @@
+{
+  "source": "https://polyhaven.com/a/lightbulb_01",
+  "author": "Josh Dean",
+  "license": "CC0-1.0",
+  "files": {
+    "lightbulb_01_1k.gltf": {
+      "include": {
+        "textures/lightbulb_01_diff_1k.jpg": {
+          "size": 310075,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/lightbulb_01/lightbulb_01_diff_1k.jpg",
+          "md5": "754718705441e6924a6a8c72d0de88a6"
+        },
+        "lightbulb_01.bin": {
+          "size": 114776,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/lightbulb_01/lightbulb_01.bin",
+          "md5": "e4db6889652c52d164e649b1101ebffd"
+        },
+        "textures/lightbulb_01_nor_gl_1k.jpg": {
+          "size": 262367,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/lightbulb_01/lightbulb_01_nor_gl_1k.jpg",
+          "md5": "42fa73f5c93d4d89fe6094a4127475c6"
+        },
+        "textures/lightbulb_01_arm_1k.jpg": {
+          "size": 326758,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/lightbulb_01/lightbulb_01_arm_1k.jpg",
+          "md5": "21b7d5796114fe012c9866da9e2cb041"
+        },
+        "textures/lightbulb_01_emissive_1k.jpg": {
+          "size": 22999,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/lightbulb_01/lightbulb_01_emissive_1k.jpg",
+          "md5": "2ede5ca5a42ed8d1e510d35bcc535565"
+        }
+      },
+      "size": 5721,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/lightbulb_01/lightbulb_01_1k.gltf",
+      "md5": "986746bdf4c993214512761ae5efb301"
+    },
+    "textures/lightbulb_01_diff_1k.jpg": {
+      "size": 310075,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/lightbulb_01/lightbulb_01_diff_1k.jpg",
+      "md5": "754718705441e6924a6a8c72d0de88a6"
+    },
+    "lightbulb_01.bin": {
+      "size": 114776,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/lightbulb_01/lightbulb_01.bin",
+      "md5": "e4db6889652c52d164e649b1101ebffd"
+    },
+    "textures/lightbulb_01_nor_gl_1k.jpg": {
+      "size": 262367,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/lightbulb_01/lightbulb_01_nor_gl_1k.jpg",
+      "md5": "42fa73f5c93d4d89fe6094a4127475c6"
+    },
+    "textures/lightbulb_01_arm_1k.jpg": {
+      "size": 326758,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/lightbulb_01/lightbulb_01_arm_1k.jpg",
+      "md5": "21b7d5796114fe012c9866da9e2cb041"
+    },
+    "textures/lightbulb_01_emissive_1k.jpg": {
+      "size": 22999,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/lightbulb_01/lightbulb_01_emissive_1k.jpg",
+      "md5": "2ede5ca5a42ed8d1e510d35bcc535565"
+    }
+  }
+}

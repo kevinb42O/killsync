@@ -1,3 +1,4 @@
+import { retreatWorkReserved } from '../world/FriendsRetreatPaths';
 import { friendsCampfireContains } from '../world/FriendsTerrain';
 import { raycastFriendsBuild, friendsShapeBoxes, worldBox, type FriendsBuildPiece } from './FriendsBuilding';
 import type { FrontierTree, FrontierTool } from './FriendsFrontier';
@@ -20,7 +21,7 @@ export type InteractionTarget = {
 
 /** Shared by host and presentation. No Three.js, camera offsets or visual meshes. */
 export function friendsInteractionTarget(terrain: FriendsTerrain, ray: TerrainRay, tool: FrontierTool,
-  pieces: readonly FriendsBuildPiece[], trees: readonly FrontierTree[], permitted = true, workPlane?: MiningWorkPlane, fill = false): InteractionTarget | undefined {
+  pieces: readonly FriendsBuildPiece[], trees: readonly FrontierTree[], permitted = true, workPlane?: MiningWorkPlane, fill = false, retreatActive:readonly string[]=[]): InteractionTarget | undefined {
   fill = tool === 3 && fill;
   const ground = terrain.raycast(ray, FRIENDS_MINING_REACH);
   const build = raycastFriendsBuild(pieces, ray, FRIENDS_MINING_REACH);
@@ -58,6 +59,7 @@ export function friendsInteractionTarget(terrain: FriendsTerrain, ray: TerrainRa
     const g = result.ground, x = (g.vx + .5) * 32, y = (g.vy + .5) * 32, z = (g.vz + .5) * 32;
     let reason: string | undefined;
     if (friendsFixedPlatformProtected(x, y, z)) reason = friendsSpawnProtected(x,y,z) ? 'The player spawn platform is indestructible.' : friendsCampfireContains(x,y) ? 'Keep the campfire gathering spot intact.' : 'The hauling platform is indestructible.';
+    else if (retreatWorkReserved({x,y,z},retreatActive)) reason = 'Keep the quiet place and its approach intact.';
     else if (scenicTransitProtected(x, y, z)) reason = 'Keep the railway corridor clear.';
     else if (tool === 1) reason = 'Aim the axe at a tree trunk.';
     else if (!fill && g.vz <= -16) reason = 'Bedrock. Explore sideways.';

@@ -1,3 +1,5 @@
+import { FriendsRetreatVisuals } from './FriendsRetreatVisuals';
+import type { RetreatState } from '../world/FriendsRetreatSites';
 import { FriendsTerrainEditFeedback } from './FriendsTerrainEditFeedback';
 import type { ToolAction } from '../multiplayer/FriendsToolActions';
 import { FriendsToolViewmodels } from './FriendsToolViewmodels';
@@ -70,6 +72,7 @@ function disposeGroup(group: THREE.Group) {
   geo.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); group.removeFromParent();
 }
 export class FriendsFrontierVisuals {
+  readonly retreats:FriendsRetreatVisuals;
   readonly terrain = new FriendsTerrain();
   private group = new THREE.Group();
   private chunks = new Map<string, THREE.Mesh>();
@@ -126,7 +129,7 @@ export class FriendsFrontierVisuals {
       fill: scene.children.find(o=>o instanceof THREE.HemisphereLight) as THREE.HemisphereLight,
     };
     this.atmosphere = new FriendsDayNightCycle(scene, renderer, camera, lights);
-    this.campfire=new FriendsCampfire(scene);
+    this.campfire=new FriendsCampfire(scene);this.retreats=new FriendsRetreatVisuals(scene);
     this.group.name = 'frontier-streamed-world'; scene.add(this.group); this.tools = new FriendsToolViewmodels(viewmodel);
     this.group.add(this.birds.mesh);
     this.cave=new FriendsCaveVisuals(scene,camera,this.terrain,renderer);this.group.add(this.cave,this.treasures);
@@ -309,6 +312,7 @@ export class FriendsFrontierVisuals {
   get flashlightEquipped(){return this.flashlight.equipped;}
   get flashlightShining(){return this.flashlight.shining;}
   get flashlightAngle(){return this.flashlight.beamAngle;}
+  setRetreatState(state:RetreatState|undefined){this.retreats.setState(state);}
   setCampfireState(state:CampfireSnapshot|undefined){this.campfire.setState(state);}
   hideHeldTool(){this.tools.hide();}
   setCraneCameraLight(enabled:boolean) {this.flashlight.setMonitor(enabled);}
@@ -320,7 +324,7 @@ export class FriendsFrontierVisuals {
   setEnvironment(change:FriendsEnvironmentChange){this.environmentPreview.change(change);}
   toggleFlashlight() { this.flashlight.toggle(); }
   dispose() {
-    this.campfire.dispose();
+    this.campfire.dispose();this.retreats.dispose();
     this.birds.dispose();
     this.editFeedback.dispose();this.worker?.terminate();this.completed=[];this.surface.dispose();this.blockMaterial.dispose();this.blockCoverage.dispose(); islandBiomeTexture().dispose(); this.forestLOD.dispose();this.fineCoverage.dispose(); for (const mesh of this.chunks.values()) mesh.geometry.dispose(); for (const grove of this.groves.values()) disposeGroup(grove);
     for (const landmark of [...this.group.children].filter(o => o.userData.landmark)) disposeGroup(landmark as THREE.Group);

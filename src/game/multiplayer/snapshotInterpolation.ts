@@ -29,6 +29,9 @@ export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSna
     ...next,
     x: redeployed.has(next.id) ? next.x : lerp(old.x, next.x, progress), y: redeployed.has(next.id) ? next.y : lerp(old.y, next.y, progress), angle: lerpAngle(old.angle, next.angle, progress),
     health: lerp(old.health, next.health, progress), z: redeployed.has(next.id) ? next.z : lerp(old.z, next.z, progress),
+    friendsHands: old.friendsHands && next.friendsHands ? {...next.friendsHands,
+      yaw:lerpAngle(old.friendsHands.yaw,next.friendsHands.yaw,progress),
+      pitch:lerp(old.friendsHands.pitch,next.friendsHands.pitch,progress)} : next.friendsHands,
     friendsFlashlight: old.friendsFlashlight && next.friendsFlashlight ? {
       pitch: lerp(old.friendsFlashlight.pitch, next.friendsFlashlight.pitch, progress),
       cone: lerp(old.friendsFlashlight.cone, next.friendsFlashlight.cone, progress),
@@ -135,6 +138,9 @@ export class CoopSnapshotInterpolator {
         target.x = lerp(old.x, next.x, progress); target.y = lerp(old.y, next.y, progress);
         target.angle = lerpAngle(old.angle, next.angle, progress);
         target.health = lerp(old.health, next.health, progress); target.z = lerp(old.z, next.z, progress);
+        if(old.friendsHands && next.friendsHands) target.friendsHands = {...next.friendsHands,
+          yaw:lerpAngle(old.friendsHands.yaw,next.friendsHands.yaw,progress),
+          pitch:lerp(old.friendsHands.pitch,next.friendsHands.pitch,progress)};
         if(old.friendsFlashlight && next.friendsFlashlight) target.friendsFlashlight = {
           pitch: lerp(old.friendsFlashlight.pitch, next.friendsFlashlight.pitch, progress),
           cone: lerp(old.friendsFlashlight.cone, next.friendsFlashlight.cone, progress),
