@@ -22,4 +22,13 @@ describe('Friends Escape menu', () => {
     expect(html).toContain('Render resolution'); expect(html).toContain('Sun shadows'); expect(html).toContain('Visual effects');
     expect(html).toContain('50%'); expect(html).not.toContain('FPS guarantee');
   });
+  it('shows host dev controls and avoids the QWERTY C crouch conflict', () => {
+    const host = renderToStaticMarkup(<FriendsPauseMenu {...props} host initialTab="controls" controlScheme="QWERTY"/>);
+    const guest = renderToStaticMarkup(<FriendsPauseMenu {...props} initialTab="controls" controlScheme="QWERTY"/>);
+    expect(host).toContain('Developer settings · host only');
+    expect(host).toContain('C / F2');
+    expect(host).toContain('CTRL');
+    expect(guest).not.toContain('Developer settings');
+    expect(guest).toContain('Crouch / slide</span><kbd>C</kbd>');
+  });
 });

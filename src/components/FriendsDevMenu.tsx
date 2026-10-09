@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Plane, Sun, Wind, X, RotateCcw, Pause, Play } from 'lucide-react';
+import { Hammer, Plane, Sun, Wind, X, RotateCcw, Pause, Play } from 'lucide-react';
 import type { FriendsEnvironmentChange, FriendsEnvironmentState } from '../game/world/FriendsEnvironmentPreview';
 
-export function FriendsDevMenu({environment,flight,onFlight,onChange,onClose}:{environment:FriendsEnvironmentState;flight:boolean;onFlight:()=>void;onChange:(change:FriendsEnvironmentChange)=>void;onClose:()=>void}){
+export function FriendsDevMenu({environment,flight,guestsCanBuild,onGuestAccess,onFlight,onChange,onClose}:{environment:FriendsEnvironmentState;flight:boolean;guestsCanBuild:boolean;onGuestAccess:()=>void;onFlight:()=>void;onChange:(change:FriendsEnvironmentChange)=>void;onClose:()=>void}){
   const close=useRef<HTMLButtonElement>(null);
   useEffect(()=>{close.current?.focus();},[]);
   return <div className="friends-dev-backdrop" onPointerDown={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
@@ -15,6 +15,10 @@ export function FriendsDevMenu({environment,flight,onFlight,onChange,onClose}:{e
     }}>
       <header><div><small>FRONTIER LAB</small><h2>Developer settings</h2></div><button ref={close} onClick={onClose} aria-label="Close developer settings"><X size={20}/></button></header>
       <p className="friends-dev-caption">Preview the island in any light. Environment changes apply to your view.</p>
+      <div className="friends-dev-section"><h3><Hammer size={16}/> Guest permissions</h3>
+        <label className="friends-dev-permission"><input type="checkbox" checked={guestsCanBuild} onChange={onGuestAccess}/> Friends can build</label>
+        <p>Allow guests to build, edit terrain, and operate cranes and the railway.</p>
+      </div>
       <div className="friends-dev-section"><h3><Plane size={16}/> Free flight</h3>
         <button className="friends-dev-toggle" aria-pressed={flight} onClick={onFlight}><span>{flight?'Flight enabled':'Flight disabled'}</span><b>{flight?'ON':'OFF'}</b></button>
         <p>Move toward your view · Space rise · Ctrl descend · Shift boost</p>

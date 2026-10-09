@@ -1,0 +1,108 @@
+{
+  "errors": [],
+  "fixture": {
+    "off": {
+      "mean": 0,
+      "white": 0
+    },
+    "on": {
+      "mean": 30.981041666666666,
+      "white": 0
+    },
+    "sunShadowsOff": {
+      "mean": 30.981041666666666,
+      "white": 0,
+      "sunCastShadow": false,
+      "shadowRenderer": true
+    },
+    "offShadows": 0,
+    "before": {
+      "programs": 4,
+      "textures": 12
+    },
+    "after": {
+      "programs": 4,
+      "textures": 12
+    },
+    "firstOnMs": 1.3000000715255737,
+    "eyeContact": {
+      "mean": 100.32330054012345,
+      "white": 0.0003298611111111111,
+      "glare": 0.6555057072460415,
+      "flares": [
+        [
+          0.5042394208714006,
+          0.49623162589208836,
+          0.707592562541748,
+          1
+        ],
+        [
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    "occluded": {
+      "glare": 0.002065937070530189,
+      "flares": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "glarePrograms": 4,
+    "nvgPrograms": 4,
+    "measurements": [
+      {
+        "count": 0,
+        "cpuP50": 0.5,
+        "cpuP95": 0.7999999523162842,
+        "gpuP50": 11.440749,
+        "maxShadowRefresh": 0
+      },
+      {
+        "count": 1,
+        "cpuP50": 0.5,
+        "cpuP95": 0.7000000476837158,
+        "gpuP50": 6.592874,
+        "maxShadowRefresh": 1
+      },
+      {
+        "count": 4,
+        "cpuP50": 0.5,
+        "cpuP95": 0.8000000715255737,
+        "gpuP50": 6.77325,
+        "maxShadowRefresh": 1
+      }
+    ],
+    "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "glError": 0
+  },
+  "cave": {
+    "before": {
+      "programs": 39,
+      "textures": 51
+    },
+    "after": {
+      "programs": 39,
+      "textures": 51
+    },
+    "firstFourMs": 34.200000047683716,
+    "glError": 0
+  }
+}

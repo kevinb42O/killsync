@@ -445,7 +445,7 @@ export class FriendsBuilding {
   /** Pickaxe demolition removes dependent crane sockets in the same transaction. */
   demolish(actor: FriendsBuildActor, pieceId: number, expectedRevision: number, hostId: string, economy?: FriendsBuildEconomy): string | undefined {
     if (actor.lifeState !== 'alive') return 'Return to the valley to build.';
-    if (actor.id !== hostId && !this.guestsCanBuild) return 'The host needs to enable building for guests.';
+    if (actor.id !== hostId && !this.guestsCanBuild) return 'The host needs to press C and enable Friends can build.';
     const piece = this.pieces.find(p => p.id === pieceId && p.revision === expectedRevision);
     if (!piece) return 'The piece changed. Aim at it again.';
     const live = this.getPieces().find(p => p.id === pieceId)!;
@@ -477,7 +477,7 @@ export class FriendsBuilding {
       if (actor.id !== hostId || typeof request.allowed !== 'boolean') return result(false, 'Only the host can change building access.');
       this.guestsCanBuild = request.allowed; this.revision++; return result(true, request.allowed ? 'Friends can edit this world.' : 'Visitors can explore; only the host can edit.');
     }
-    if (actor.id !== hostId && !this.guestsCanBuild) return result(false, 'The host needs to enable building for guests.');
+    if (actor.id !== hostId && !this.guestsCanBuild) return result(false, 'The host needs to press C and enable Friends can build.');
     if (request.action === 'undo' || request.action === 'redo') {
       const from = request.action === 'undo' ? this.undo : this.redo, to = request.action === 'undo' ? this.redo : this.undo;
       const history = from.get(actor.id), edits = history?.at(-1); if (!edits) return result(false, 'There is no edit to reverse.');

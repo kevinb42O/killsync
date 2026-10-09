@@ -297,7 +297,11 @@ export class MultiplayerRendererBridge {
     const renderer = this.renderer.renderer;
     renderer.setPixelRatio(this.nativePixelRatio * settings.renderScale);
     if (this.worldId === 'friends_frontier') {
-      renderer.shadowMap.enabled = settings.shadows;
+      // The sun preference must not disable the depth atlas used by remote
+      // flashlights (or the local beam's occlusion).
+      renderer.shadowMap.enabled = true;
+      this.renderer.dirLight.castShadow = settings.shadows;
+      this.renderer.dirLight.shadow.needsUpdate = settings.shadows;
       renderer.shadowMap.needsUpdate = true;
     }
     this.renderer.lookSensitivityScale = settings.lookSensitivity;

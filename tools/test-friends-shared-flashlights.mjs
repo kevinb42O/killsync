@@ -13,6 +13,7 @@ const report={errors:[]};
 try{
   const page=await browser.newPage({viewport:{width:960,height:540}});
   page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
+  await page.route('**/@vite/client',route=>route.fulfill({contentType:'application/javascript',body:'export function createHotContext(){return {on(){},off(){},prune(){},send(){},acceptExports(){},accept(){},dispose(){},invalidate(){},data:{}}};export function injectQuery(u){return u};export function updateStyle(){};export function removeStyle(){};'}));
   await page.route('**/__shared_flashlights',r=>r.fulfill({contentType:'text/html',body:'<html><body style="margin:0"></body></html>'}));
   await page.goto(origin+'/__shared_flashlights');
   const source=await(await page.request.get(origin+'/src/game/rendering/FriendsSharedFlashlights.ts')).text();
@@ -22,6 +23,7 @@ try{
     const {FriendsSharedFlashlights}=await import('/src/game/rendering/FriendsSharedFlashlights.ts');
     const {FriendsNightVision}=await import('/src/game/rendering/FriendsNightVision.ts');
     const {FriendsFlashlight}=await import('/src/game/rendering/FriendsFlashlight.ts');
+    const {MultiplayerRendererBridge}=await import('/src/game/multiplayer/MultiplayerRendererBridge.ts');
     const {cullInactiveFriendsLights}=await import('/src/game/rendering/FriendsDirectLighting.ts');
     const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});renderer.setSize(960,540);
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;renderer.shadowMap.autoUpdate=false;
@@ -57,6 +59,14 @@ try{
     const sender=(id,x)=>({id,x,y:-300,z:0,angle:-Math.PI/2,lifeState:'alive',friendsFlashlight:{pitch:0,cone:1.35}});
     players=[sender('friend',-180)];const start=performance.now();frame();const firstOnMs=performance.now()-start;
     for(let i=0;i<8;i++)frame();const on=metrics(),after={programs:renderer.info.programs.length,textures:renderer.info.memory.textures};
+    // Apply the actual game preference: sun shadows off used to turn the
+    // receiver's entire shadow renderer off and silently blank remote beams.
+    const sun=new THREE.DirectionalLight(0xffffff,0);sun.castShadow=true;
+    const bridge=Object.assign(Object.create(MultiplayerRendererBridge.prototype),{
+      worldId:'friends_frontier',nativePixelRatio:1,renderer:{renderer,dirLight:sun},
+    });
+    bridge.setLocalPreferences({renderScale:1,shadows:false,lookSensitivity:1});
+    for(let i=0;i<12;i++)frame();const sunShadowsOff={...metrics(),sunCastShadow:sun.castShadow,shadowRenderer:renderer.shadowMap.enabled};
     const images=[{name:'shared-beam.png',image:renderer.domElement.toDataURL()}];
     // A source looks at the receiver's eyes; both look-at and beam tests must pass.
     players=[{...sender('friend',0),y:-500,angle:Math.PI/2}];for(let i=0;i<45;i++)frame();
@@ -81,7 +91,7 @@ try{
       samples.sort((a,b)=>a-b);measurements.push({count,cpuP50:samples[30],cpuP95:samples[57],gpuP50:gpu[Math.floor(gpu.length/2)],maxShadowRefresh});
       for(const q of queries)gl.deleteQuery(q);
     }
-    const result={off,on,offShadows:offShadowDraws,before,after,firstOnMs,eyeContact,occluded,glarePrograms,nvgPrograms,measurements,
+    const result={off,on,sunShadowsOff,offShadows:offShadowDraws,before,after,firstOnMs,eyeContact,occluded,glarePrograms,nvgPrograms,measurements,
       gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unknown',glError:gl.getError(),images};
     shared.dispose();local.dispose();nvg.dispose();renderer.dispose();return result;
   },{threeUrl});
@@ -89,6 +99,8 @@ try{
   const f=report.fixture;
   assert.deepEqual(f.before,f.after,'shared beam activation must reuse shaders and textures');assert.equal(f.offShadows,0);
   assert(f.on.mean>f.off.mean+25,'a teammate must illuminate surfaces on the receiving screen');
+  assert(f.sunShadowsOff.mean>f.off.mean+25,'remote flashlights must illuminate surfaces with sun shadows off');
+  assert.equal(f.sunShadowsOff.sunCastShadow,false);assert.equal(f.sunShadowsOff.shadowRenderer,true);
   assert(f.eyeContact.glare>.4&&f.eyeContact.white<.03,'eye glare must be noticeable and bounded');
   assert(f.occluded.glare<.01&&f.occluded.flares.every(v=>v===0),'walls must suppress flare and eye glare');
   assert.equal(f.glarePrograms,f.before.programs);assert.equal(f.nvgPrograms,f.before.programs);

@@ -94,7 +94,7 @@ export function FriendsBuildPalette({ construction, shape, finish, toolbar, rota
     <i />
     <button type="button" onClick={() => onAction('paint')} title="Paint aimed piece · Y" aria-label="Paint aimed piece"><Paintbrush size={15} /></button>
     <button type="button" onClick={() => onAction('copy')} title="Copy aimed piece · I" aria-label="Copy aimed piece"><Copy size={15} /></button>
-    <button type="button" onClick={() => onAction('move')} title="Move aimed piece · C" aria-label="Move aimed piece" aria-pressed={moving}><Move size={15} /></button>
+    <button type="button" onClick={() => onAction('move')} title={`Move aimed piece · ${host ? 'Shift C' : 'C'}`} aria-label="Move aimed piece" aria-pressed={moving}><Move size={15} /></button>
     <button type="button" onClick={() => onAction('remove')} title="Remove aimed piece · X" aria-label="Remove aimed piece"><X size={15} /></button>
     <i /><button type="button" onClick={() => onAction('undo')} title="Undo · Ctrl/Cmd Z" aria-label="Undo"><Undo2 size={15} /></button>
     <button type="button" onClick={() => onAction('redo')} title="Redo · Ctrl/Cmd Shift Z" aria-label="Redo"><Redo2 size={15} /></button>
@@ -122,7 +122,7 @@ export function FriendsBuildPalette({ construction, shape, finish, toolbar, rota
         </div>
       </div>
     </section>
-    {visible && (!permitted || message || placementHint && !placementHint.startsWith('Ready')) && <div className="build-quickbar-feedback" data-controls-open={controlsOpen} role="status">{!permitted ? 'Host-only building' : message || placementHint}</div>}
+    {visible && (!permitted || message || placementHint && !placementHint.startsWith('Ready')) && <div className="build-quickbar-feedback" data-controls-open={controlsOpen} role="status">{!permitted ? 'Ask the host to press C and enable Friends can build.' : message || placementHint}</div>}
   </div>;
 
   return <div className="build-system build-system--library" onPointerDown={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()}>

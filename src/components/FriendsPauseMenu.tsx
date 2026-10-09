@@ -2,13 +2,14 @@ import { FRIENDS_TOOL_ORDER } from '../game/multiplayer/FriendsToolControls';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, ArrowRight, Check, Gamepad2, Headphones, Keyboard, Leaf, LogOut, Monitor, Play, Settings2, Smartphone, Volume2, VolumeX } from 'lucide-react';
 import { friendsAudio } from '../game/FriendsAudio';
-import { CONTROL_SCHEME_DETAILS, getCoopSlideBinding, isGamepadControlScheme, isMobileControlScheme, type ControlScheme } from '../game/controls';
+import { CONTROL_SCHEME_DETAILS, getFriendsSlideBinding, isGamepadControlScheme, isMobileControlScheme, type ControlScheme } from '../game/controls';
 import type { LocalGamePreferences } from '../game/LocalGamePreferences';
 import type { CinematicProfile } from './CinematicVignetteOverlay';
 import './friends-pause.css';
 
 export type PauseTab = 'overview' | 'audio' | 'controls' | 'performance';
 export type FriendsPauseMenuProps = {
+  host?: boolean;
   controlScheme: ControlScheme; onControlScheme: (scheme: ControlScheme) => void;
   cinematicProfile: CinematicProfile; onCinematicProfile: (profile: CinematicProfile) => void;
   preferences: LocalGamePreferences; onPreferences: (patch: Partial<LocalGamePreferences>) => void;
@@ -26,8 +27,8 @@ export function FriendsPauseMenu(p: FriendsPauseMenuProps) {
   const movement = CONTROL_SCHEME_DETAILS[p.controlScheme].bindings;
   const bindings = keyboard ? [
     ['Move', `${movement.up.toUpperCase()} ${movement.left.toUpperCase()} ${movement.down.toUpperCase()} ${movement.right.toUpperCase()} / ↑ ← ↓ →`],
-    ['Look', 'Mouse'], ['Empty hands', '1'], ['Raise left / right arm', `${p.controlScheme==='AZERTY'?'A':'Q'} / E`], ['Point left / right arm', 'LMB / RMB'], ['Arms sideways', 'Raise + same mouse button'], ['Campfire wood', 'K'], ['Paint · build mode', 'Y'], ['Grenade · Combat', 'J'], ['Jump / jetpack', 'Space / hold'], ['Sprint', 'Shift'], ['Crouch / slide', getCoopSlideBinding(p.controlScheme).toUpperCase()],
-    ['Use / interact', 'F'], ['Build / piece library', 'B / hold'], ['Tools', `1–${FRIENDS_TOOL_ORDER.length} / wheel`], ['Shovel · dig / fill', 'LMB / RMB'], ['Backpack', 'G'], ['Atlas', 'M'], ['Flashlight', 'V'], ['Night vision', 'N'], ['Train horn · aboard / nearby', 'H'],
+    ['Look', 'Mouse'], ['Empty hands', '1'], ['Raise left / right arm', `${p.controlScheme==='AZERTY'?'A':'Q'} / E`], ['Point left / right arm', 'LMB / RMB'], ['Arms sideways', 'Raise + same mouse button'], ['Campfire wood', 'K'], ['Paint · build mode', 'Y'], ['Grenade · Combat', 'J'], ['Jump / jetpack', 'Space / hold'], ['Sprint', 'Shift'], ['Crouch / slide', getFriendsSlideBinding(p.controlScheme, Boolean(p.host)).replace('control','Ctrl').toUpperCase()],
+    ['Use / interact', 'F'], ['Build / piece library', 'B / hold'], ['Tools', `1–${FRIENDS_TOOL_ORDER.length} / wheel`], ['Shovel · dig / fill', 'LMB / RMB'], ['Backpack', 'G'], ['Atlas', 'M'], ['Flashlight', 'V'], ['Night vision', 'N'], ['Train horn · aboard / nearby', 'H'], ...(p.host ? [['Developer settings · host only', 'C / F2']] : []),
   ] : isGamepadControlScheme(p.controlScheme) ? [
     ['Move / look', 'Left / right stick'], ['Jump / jetpack', 'A / hold'], ['Sprint', 'L3'], ['Crouch / slide', 'B'], ['Use / interact', 'Y'], ['Reload', 'X'], ['Fire / aim', 'RT / LT'], ['Shovel · dig / fill', 'RT / LT'], ['Build', 'View'], ['Tools', 'D-pad ← / →'], ['Empty hands · raise left / right', 'LT / RT'], ['Empty hands · point left / right', 'LB / RB'], ['Game menu', 'Start'],
   ] : [['Empty hands · arm gestures', 'Hold arm buttons'], ['Move', 'Left stick'], ['Look', 'Swipe'], ['Jump / jetpack', 'Tap / hold'], ['Sprint / slide', 'Pull / double tap'], ['Use / interact', 'Use'], ['Fire / aim', 'Fire / aim'], ['Shovel · dig / fill', 'Fire / aim'], ['Build', 'Build / place']];

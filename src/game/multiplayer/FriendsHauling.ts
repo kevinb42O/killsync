@@ -206,7 +206,7 @@ export class FriendsHauling {
       if(!state||target?.crane.pieceId!==rootId||target.action!==action||env.vehicles.some(v=>v.pilotId===player.id))return result(false,'Stand beside the hook and core with a clear path to attach or detach it.');
       action=action==='crane_hook_connect'?'crane_connect':'crane_release';
     }
-    if(!ground&&!canOperate)return result(false,'The host needs to enable building access to operate cranes.');
+    if(!ground&&!canOperate)return result(false,'To operate cranes, ask the host to press C and enable Friends can build.');
     if(!piece || !state || !ground && !nearbyCrane((env.builds??[]).filter(p=>p.id===rootId||p.craneRootId===rootId),player) || env.vehicles.some(v=>v.pilotId===player.id))return result(false,'Stand beside the freight crane base to use its controls.');
     if(action==='crane_heartbeat') {
       if(state.operatorId!==player.id)return result(false,'Another crew member has the controls.');

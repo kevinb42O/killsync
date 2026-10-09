@@ -65,6 +65,10 @@ export const getMovementBindings = (scheme: ControlScheme): MovementBindings => 
  * QWERTY needs a separate key because W is forward movement. */
 export const getCoopSlideBinding = (scheme: ControlScheme) => scheme === 'AZERTY' ? 'w' : scheme === 'QWERTY' ? 'c' : '';
 
+/** The Friends host reserves C for developer settings on every layout. */
+export const getFriendsSlideBinding = (scheme: ControlScheme, host: boolean) =>
+  host && scheme === 'QWERTY' ? 'control' : getCoopSlideBinding(scheme);
+
 export const isGamepadControlScheme = (scheme: ControlScheme) => scheme === 'GAMEPAD';
 export const isMobileControlScheme = (scheme: ControlScheme) => scheme === 'MOBILE';
 

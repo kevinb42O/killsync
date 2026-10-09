@@ -69,20 +69,31 @@ describe('temporary Friends developer free flight', () => {
     expect(player.z).toBeLessThan(300);
   });
 
-  it('allows both host and guest to cross map bounds and descend below recovery height', () => {
+  it('allows only the host to cross map bounds and descend below recovery height', () => {
     const simulation = new FriendsSimulation(seeds);
-    for (const id of ['host', 'guest']) {
-      const player = simulation['players'].get(id)!;
-      Object.assign(player, { x: 1, y: 12000, z: -650 });
-      simulation.setInput(id, input(1, { movement: 2, friendsDevFlightDown: true }));
-    }
+    const player = simulation['players'].get('host')!;
+    Object.assign(player, { x: 1, y: 12000, z: -650 });
+    simulation.setInput('host', input(1, { movement: 2, friendsDevFlightDown: true }));
     simulation.tick(COOP_STEP_MS);
-    for (const player of simulation.createSnapshot().players) {
-      expect(player.lifeState).toBe('alive');
-      expect(player.friendsDevFlight).toBe(true);
-      expect(player.x).toBeLessThan(0);
-      expect(player.z).toBeLessThan(-650);
-    }
+    expect(player.lifeState).toBe('alive');
+    expect(player.friendsDevFlight).toBe(true);
+    expect(player.x).toBeLessThan(0);
+    expect(player.z).toBeLessThan(-650);
+  });
+
+  it('rejects guest flight before it can release their aircraft cockpit', () => {
+    const simulation = new FriendsSimulation(seeds);
+    const player = simulation['players'].get('guest')!;
+    const expedition = simulation['friends']!;
+    const aircraft = expedition.vehicles().find(v => v.kind === 'aircraft')!;
+    Object.assign(player, { x: aircraft.x + Math.cos(aircraft.angle) * 100, y: aircraft.y + Math.sin(aircraft.angle) * 100, z: aircraft.z });
+    expedition.interact(player, 0);
+    const frame = input(1, { friendsDevFlightDown: true });
+    simulation.setInput('guest', frame);
+    simulation.tick(COOP_STEP_MS);
+    expect(player.friendsDevFlight).not.toBe(true);
+    expect(expedition.vehicles().find(v => v.kind === 'aircraft')?.pilotId).toBe('guest');
+    expect(frame.friendsDevFlight).toBe(true); // Sanitizing must not mutate the sender's frame.
   });
 
   it('releases the aircraft cockpit when flight is enabled', () => {
@@ -101,7 +112,7 @@ describe('temporary Friends developer free flight', () => {
     expect(player.friendsDevFlight).toBe(true);
   });
 
-  it('replays host and guest flight identically through network snapshots', () => {
+  it('predicts ordinary guest movement when a guest requests developer flight', () => {
     const host = new FriendsSimulation(seeds), prediction = new LocalPlayerPrediction('guest');
     prediction.reconcile(host.createSnapshot());
     for (let sequence = 1; sequence <= 10; sequence++) {
@@ -116,7 +127,8 @@ describe('temporary Friends developer free flight', () => {
     expect(predicted.x).toBeCloseTo(actual.x, 5);
     expect(predicted.y).toBeCloseTo(actual.y, 5);
     expect(predicted.z).toBeCloseTo(actual.z, 5);
-    expect(predicted.friendsDevFlight).toBe(true);
+    expect(actual.friendsDevFlight).toBe(false);
+    expect(predicted.friendsDevFlight).toBe(false);
     prediction.reconcile(snapshot);
     expect(prediction.present(snapshot, input(10), 0, 0).players.find(p => p.id === 'guest')?.z).toBeCloseTo(actual.z, 5);
   });

@@ -1,0 +1,22 @@
+{
+  "checks": [
+    "QWERTY host opens developer settings with C",
+    "C menu guest permission changes replicate to the guest",
+    "AZERTY host opens with C and closes with Escape",
+    "guest cannot open developer settings with C or F2",
+    "host retains F2 access",
+    "actual arenas publish and receive flashlight state in both directions",
+    "guest renders host beam with Sun shadows disabled"
+  ],
+  "errors": [],
+  "lighting": {
+    "shadowRenderer": true,
+    "sunCastShadow": false,
+    "remoteBeams": [
+      20000000,
+      0,
+      0,
+      0
+    ]
+  }
+}

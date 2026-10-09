@@ -54,7 +54,7 @@ export function friendsInteractionTarget(terrain: FriendsTerrain, ray: TerrainRa
     }
   }
   if (!result) return;
-  if (!permitted) return { ...result, valid: false, reason: 'The host needs to enable world editing.' };
+  if (!permitted) return { ...result, valid: false, reason: 'The host needs to press C and enable Friends can build.' };
   if (result.ground) {
     const g = result.ground, x = (g.vx + .5) * 32, y = (g.vy + .5) * 32, z = (g.vz + .5) * 32;
     let reason: string | undefined;

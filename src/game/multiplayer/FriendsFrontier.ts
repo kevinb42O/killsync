@@ -246,7 +246,7 @@ export class FriendsFrontier {
     if (!request || !this.acceptRequest(actor, request.requestId)) return { playerId: actor.id, requestId: request?.requestId || 0, ok: false, message: 'This operation was already handled.' };
     if (actor.lifeState !== 'alive') return result(false, 'Return to your expedition first.');
     if (request.action === 'home') { actor.x = FRIENDS_HUB.x; actor.y = FRIENDS_HUB.y + 90; actor.z = FRIENDS_SPAWN_PLATFORM.top; return result(true, 'Returned to the spawn platform.'); }
-    if (!canEdit) return result(false, 'The host needs to enable world editing.');
+    if (!canEdit) return result(false, 'The host needs to press C and enable Friends can build.');
     const pack = this.pack(actor), workshop = this.nearWorkshop(actor, pieces);
     const train = vehicles.find(v => v.kind === 'train' && !v.closed && !v.scenic && (Math.hypot(actor.x - v.x, actor.y - v.y, actor.z - v.z) < 240 || Math.abs((friendsVehicleFloor([v], actor.x, actor.y, actor.z) ?? Infinity) - actor.z) < 2));
     if (request.action === 'load' || request.action === 'unload') {

@@ -82,7 +82,7 @@ describe('combined shovel secondary action', () => {
     const { sim, frontier } = fixture('guest');
     sim.setFriendsGuestAccess(false); hold(sim, 'guest');
     expect(frontier.terrain.material(250, 250, 0)).toBe(0);
-    expect(frontier.snapshot().feedback.guest.message).toContain('enable world editing');
+    expect(frontier.snapshot().feedback.guest.message).toContain('press C and enable Friends can build');
     sim.setFriendsGuestAccess(true);
     sim.setInput('guest', input(1000, { aiming: false })); sim.tick(16);
     sim.setInput('guest', input(1001));
