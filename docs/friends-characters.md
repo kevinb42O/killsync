@@ -11,7 +11,10 @@ transforms and arm skeletons remain independent. `FriendsCharacterFinish` assign
 Seafoam, Peach, Lilac, Buttercup and Pistachio from replicated crew colour, with
 satin surfaces, subtle grain and preserved eye whites/pupils. First-person hands
 keep the shared yellow source finish, as requested. Each arm has shoulder, elbow
-and wrist bones in one skinned mesh. Raised palms open outward to clear the head.
+and wrist bones in one skinned mesh. Gestures preserve the artist's rigid,
+stepped arm shape and use the authored `raised arms` rotation. They turn around
+the actual shoulder cuboid without moving its attachment or bending apart its
+edge contacts. Released arms return to the authored hands-down pose.
 
 `FriendsCharacterVisuals` mounts these parts only in `friends_frontier` and
 poses them after the shared co-op presentation. Movement uses replicated
@@ -86,9 +89,11 @@ plus tool changes, stale input, flashlight stow/restore and blur. Its captures a
 report are in `artifacts/big-walk/gestures/`. Direction tests check upward, forward
 and outward hand placement; geometry tests prevent raised palms entering the head.
 
-First-person gesture shoulders remain fixed in the camera frame. Solid yellow
-connections continue from the authored shoulder joints below the screen edge;
-they use their own material so atlas transparency cannot cut them away. Framing
-accounts for equipment FOV and narrow screens. The gesture browser checks verify
-zero shoulder gaps and continuous connections at 70°, 98° and 120° in landscape,
-portrait and ultrawide, alongside captures from the playable island.
+First-person gestures use these same authored arms, with their shoulders behind
+the camera and their resting hands down. There are no extra shoulder extensions
+or tool-holding rest poses. Raised hands lean forward only in the local camera
+pose so they peek into view; other players retain the authored raised-arm pose.
+Framing accounts for equipment FOV and narrow screens.
+The gesture browser checks verify fixed shoulder attachments for all sixteen
+combinations at 70°, 98° and 120° in landscape, portrait and ultrawide, alongside
+third-person captures and checks in the playable island.

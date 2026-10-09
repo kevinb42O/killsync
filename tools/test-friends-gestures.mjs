@@ -21,18 +21,41 @@ try{
   }
  }
  report.shoulderConnections=await page.evaluate(()=>{
-  const r=friendsCharacterReview,result=[],v=r.camera.position.clone();r.setMode('hands');r.setMask(3);
+  const r=friendsCharacterReview,result=[],v=r.camera.position.clone();r.setMode('hands');
   for(const aspect of [16/9,2.4,9/16])for(const fov of [70,98,120]){
-   r.handCamera.aspect=aspect;r.handCamera.fov=fov;r.handCamera.updateProjectionMatrix();r.render(r.time+250);r.gestures.root.updateWorldMatrix(true,true);
-   for(const [index,name] of [[2,'left-upper-arm-connection'],[3,'right-upper-arm-connection']]){
-    const connector=r.gestures.root.getObjectByName(name),part=r.gestures.model.parts[index],start=v.clone().set(0,-.5,0);connector.localToWorld(start);
-    const shoulder=part.getWorldPosition(v.clone());const position=connector.geometry.getAttribute('position');let minY=Infinity,maxY=-Infinity;
-    for(let i=0;i<position.count;i++){v.fromBufferAttribute(position,i).applyMatrix4(connector.matrixWorld).project(r.handCamera);minY=Math.min(minY,v.y);maxY=Math.max(maxY,v.y);}
-    result.push({fov,aspect,name,gap:start.distanceTo(shoulder),minY,maxY});
+   r.handCamera.aspect=aspect;r.handCamera.fov=fov;r.handCamera.updateProjectionMatrix();
+   r.gestures.update(0,0,10000,true);r.gestures.root.updateMatrixWorld(true);
+   const shoulders=[2,3].map(index=>r.gestures.model.parts[index].localToWorld(v.clone().fromArray(r.gestures.model.parts[index].userData.shoulderPivot)));
+   for(let mask=0;mask<16;mask++){
+    r.gestures.update(mask,0,10000,true);r.gestures.root.updateMatrixWorld(true);
+    for(const index of [2,3]){
+     const part=r.gestures.model.parts[index],shoulder=part.localToWorld(v.clone().fromArray(part.userData.shoulderPivot));
+     const cameraPoint=shoulder.clone().applyMatrix4(r.handCamera.matrixWorld.clone().invert());
+     result.push({fov,aspect,mask,index,gap:shoulder.distanceTo(shoulders[index-2]),shoulderZ:cameraPoint.z});
+    }
    }
   }r.handCamera.aspect=innerWidth/innerHeight;r.handCamera.fov=98;r.handCamera.updateProjectionMatrix();return result;
  });
- assert(report.shoulderConnections.every(c=>c.gap<.0001&&c.minY< -1&&c.maxY> -1));
+ assert(report.shoulderConnections.every(c=>c.gap<.0001&&c.shoulderZ>0));
+ report.raisedHandsVisible=await page.evaluate(()=>{
+  const r=friendsCharacterReview,checks=[],v=r.camera.position.clone();
+  for(const aspect of [16/9,2.4,9/16])for(const fov of [70,98,120])for(const mask of [1,2,3]){
+   r.handCamera.aspect=aspect;r.handCamera.fov=fov;r.handCamera.updateProjectionMatrix();
+   r.gestures.update(mask,0,10000,true);r.gestures.root.updateMatrixWorld(true);
+   for(let side=0;side<2;side++){
+    if(!(mask&(1<<side)))continue;
+    const mesh=r.gestures.model.parts[side+2].children[0],bounds={min:[Infinity,Infinity],max:[-Infinity,-Infinity]};
+    for(let i=108;i<144;i++){
+     mesh.getVertexPosition(i,v).applyMatrix4(mesh.matrixWorld).project(r.handCamera);
+     for(let a=0;a<2;a++){bounds.min[a]=Math.min(bounds.min[a],v.getComponent(a));bounds.max[a]=Math.max(bounds.max[a],v.getComponent(a));}
+    }
+    checks.push({aspect,fov,mask,side,...bounds});
+   }
+  }
+  r.handCamera.aspect=innerWidth/innerHeight;r.handCamera.fov=98;r.handCamera.updateProjectionMatrix();return checks;
+ });
+ assert(report.raisedHandsVisible.every(c=>c.min.every(Number.isFinite)&&c.max.every(Number.isFinite)&&c.min[0]<1&&c.max[0]>-1&&c.min[1]<1&&c.max[1]>-1));
+ await page.evaluate(()=>friendsCharacterReview.setMask(3));
  for(const fov of [70,98,120]){await page.evaluate(fov=>{friendsCharacterReview.handCamera.fov=fov;friendsCharacterReview.handCamera.updateProjectionMatrix();},fov);await page.waitForTimeout(250);await page.screenshot({path:`${directory}/connected-hands-fov-${fov}.png`});}
  await page.evaluate(()=>{friendsCharacterReview.handCamera.fov=98;friendsCharacterReview.handCamera.updateProjectionMatrix();});
  await page.evaluate(()=>{friendsCharacterReview.setMode('demo');friendsCharacterReview.setDemoView('front');});

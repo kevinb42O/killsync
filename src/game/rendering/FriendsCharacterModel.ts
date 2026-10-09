@@ -78,6 +78,11 @@ export function createFriendsCharacterModel(data:FriendsCharacterData, material:
       const arm=parts.indexOf(part)===2||parts.indexOf(part)===3;
       let mesh:THREE.Mesh;
       if(arm&&palm){
+        // The authored shoulder cuboid is offset from the CPM part origin.
+        // Gestures rotate at this attachment, not around an arbitrary root.
+        const attachment=new THREE.Box3(),vertices=geometry.getAttribute('position');
+        for(let i=0;i<36;i++)attachment.expandByPoint(new THREE.Vector3().fromBufferAttribute(vertices,i));
+        part.userData.shoulderPivot=attachment.getCenter(new THREE.Vector3()).toArray();
         const shoulder=new THREE.Bone(),elbow=new THREE.Bone(),wrist=new THREE.Bone();
         shoulder.name='arm-shoulder';elbow.name='arm-elbow';wrist.name='arm-wrist';
         elbow.position.copy(palm).multiplyScalar(.5);wrist.position.copy(palm).multiplyScalar(.5);

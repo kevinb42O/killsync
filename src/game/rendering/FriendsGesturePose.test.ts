@@ -11,6 +11,30 @@ function direction(mask:number,side:number){
  return hand.sub(shoulder).normalize();
 }
 describe('authored arm directions and shoulder connections',()=>{
+ it('preserves the authored hands-down rest and rotates every gesture around the real shoulder without splitting cuboids',()=>{
+  const m=create(),blend=[0,0,0,0];
+  applyFriendsArmPose(m,0,0,10000,blend);
+  for(const index of [2,3]){
+   expect(m.parts[index].position.distanceTo(m.basePositions[index])).toBeLessThan(1e-10);
+   expect(m.parts[index].rotation.toArray()).toEqual(m.baseRotations[index].toArray());
+  }
+  for(let mask=0;mask<16;mask++)for(const yaw of [-.6,0,.6])for(const pitch of [-.6,0,.6]){
+   const attachments=[2,3].map(index=>{
+    const part=m.parts[index];part.position.copy(m.basePositions[index]);part.rotation.copy(m.baseRotations[index]);
+    return new THREE.Vector3().fromArray(part.userData.shoulderPivot).applyQuaternion(part.quaternion).add(part.position);
+   });
+   applyFriendsArmPose(m,mask,pitch,16.666,blend,false,yaw);m.root.updateMatrixWorld(true);
+   for(let side=0;side<2;side++){
+    const part=m.parts[side+2],mesh=part.children[0] as THREE.SkinnedMesh;
+    const attachment=new THREE.Vector3().fromArray(part.userData.shoulderPivot).applyQuaternion(part.quaternion).add(part.position);
+    expect(attachment.distanceTo(attachments[side]),`shoulder moved at mask ${mask}`).toBeLessThan(1e-10);
+    const positions=mesh.geometry.getAttribute('position');
+    // Every cuboid remains rigid in the authored limb, including its contacts
+    // at the elbow and palm; inspect skinned vertices, not just named joints.
+    for(let i=0;i<positions.count;i++)expect(mesh.getVertexPosition(i,new THREE.Vector3()).distanceTo(new THREE.Vector3().fromBufferAttribute(positions,i))).toBeLessThan(1e-5);
+   }
+  }
+ });
  it('raises BOTH hands above their own shoulders, points forward, and extends outward on the correct side',()=>{
   for(let side=0;side<2;side++){
    const up=direction(side===0?1:2,side),point=direction(side===0?4:8,side),out=direction(side===0?5:10,side),rest=direction(0,side);

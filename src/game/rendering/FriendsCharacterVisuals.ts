@@ -43,11 +43,10 @@ export function updateFriendsCharacter(rig:CoopOperatorRig, player:CoopPlayerSna
     model.parts[4].rotation.x-=step;model.parts[5].rotation.x+=step;
   }
   const hands=player.lifeState==='alive'&&!falling ? player.friendsHands : undefined;
-  applyFriendsArmPose(model,hands?.mask??0,hands?.pitch??0,dt,actor.arms,seated);
+  const delta=hands?Math.atan2(Math.sin(hands.yaw-player.angle),Math.cos(hands.yaw-player.angle)):0;
+  applyFriendsArmPose(model,hands?.mask??0,hands?.pitch??0,dt,actor.arms,seated,delta);
   if(hands){
-    const delta=Math.atan2(Math.sin(hands.yaw-player.angle),Math.cos(hands.yaw-player.angle));
     model.parts[0].rotation.y-=delta*.5;
-    model.parts[2].rotation.y-=delta;model.parts[3].rotation.y-=delta;
   }
   model.parts[0].rotation.x-=THREE.MathUtils.clamp(hands?.pitch??player.friendsFlashlight?.pitch??0,-1.1,1.1)*.55;
   if(action&&!seated&&!downed&&time>=action.start&&time<=action.end){
