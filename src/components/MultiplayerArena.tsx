@@ -495,7 +495,8 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   closeHaulingBriefingRef.current=closeHaulingBriefing;
   const closeFriendsDevAndResume=()=>{setFriendsDevPanelOpen(false);resumeGameplayInteraction();};
   const changeFriendsEnvironment=(change:FriendsEnvironmentChange)=>{
-    rendererRef.current?.setFriendsEnvironment(change);const state=rendererRef.current?.getFriendsEnvironment();if(state)setDevEnvironment(state);
+    if(launch.role!=='host')return;
+    const state=simulationRef.current?.setFriendsEnvironment(launch.localPlayerId,change);if(state)setDevEnvironment(state);
   };
 
   const setTacticalMapPanelOpen = (next: boolean) => {

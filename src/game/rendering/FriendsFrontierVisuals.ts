@@ -4,7 +4,7 @@ import { FriendsTerrainEditFeedback } from './FriendsTerrainEditFeedback';
 import type { ToolAction } from '../multiplayer/FriendsToolActions';
 import { FriendsToolViewmodels } from './FriendsToolViewmodels';
 import { FriendsDayNightCycle, type FrontierCelestialLighting } from './FriendsDayNightCycle';
-import { FriendsEnvironmentPreview, type FriendsEnvironmentChange } from '../world/FriendsEnvironmentPreview';
+import { FriendsEnvironmentPreview, type FriendsEnvironmentChange, type FriendsEnvironmentSnapshot } from '../world/FriendsEnvironmentPreview';
 import { islandBiomeTexture, ISLAND_BIOME_GLSL } from './FriendsIslandBiomes';
 import { createIslandOcean, FriendsIslandOcean, createIslandRuinMaterials, FriendsIslandVisuals } from './FriendsIslandVisuals';
 import { applyFriendsCaveLighting } from './FriendsCaveLighting';
@@ -119,6 +119,7 @@ export class FriendsFrontierVisuals {
   setToolAction(action: ToolAction | undefined, now: number) { this.tools.setAction(action,now); }
   private atmosphere: FriendsDayNightCycle;
   private environmentPreview=new FriendsEnvironmentPreview();
+  private localEnvironmentPreview=false;
   private audioUnderground=false;
   private birds=new FriendsBirds();
   private campfire:FriendsCampfire;
@@ -321,7 +322,10 @@ export class FriendsFrontierVisuals {
   get soundscapeEnvironment(){return { ...this.environmentPreview.state, windSeconds:this.environmentPreview.windSeconds, underground:this.audioUnderground };}
   birdCallSource(yaw:number){return this.birds.closestCall(this.camera.position,yaw,this.environmentPreview.state.daylight);}
   treeCanopy(tree: FrontierTree){return this.forestLOD.canopy(tree);}
-  setEnvironment(change:FriendsEnvironmentChange){this.environmentPreview.change(change);}
+  synchronizeEnvironment(snapshot:FriendsEnvironmentSnapshot){if(!this.localEnvironmentPreview)this.environmentPreview.synchronize(snapshot);}
+  /** Standalone render-review controls explicitly opt into a local preview.
+   * Gameplay controls change the simulation's shared environment instead. */
+  setEnvironment(change:FriendsEnvironmentChange){this.localEnvironmentPreview=!change.reset;this.environmentPreview.change(change);}
   toggleFlashlight() { this.flashlight.toggle(); }
   dispose() {
     this.campfire.dispose();this.retreats.dispose();

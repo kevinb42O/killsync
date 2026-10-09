@@ -1,3 +1,4 @@
+import { FriendsEnvironmentPreview, type FriendsEnvironmentChange } from '../world/FriendsEnvironmentPreview';
 import { sanitizeFriendsArms, type FriendsHandsState } from './FriendsGestureControls';
 import { retreatPathFloor } from '../world/FriendsRetreatPaths';
 import { RETREAT_BOXES, isQuietSeat, retreatFloor, retreatCeiling, collideRetreats } from '../world/FriendsRetreatSites';
@@ -537,6 +538,7 @@ export class CoopSimulation {
   private friendsBuilding?: FriendsBuilding;
   private friendsProjects?: FriendsProjects;
   private friendsHostId = '';
+  private readonly friendsEnvironment = new FriendsEnvironmentPreview();
   private friendsBuildCheckedRevision = -1;
   private friendsEmptySinceMs: number | undefined;
 
@@ -1346,7 +1348,7 @@ export class CoopSimulation {
       world: { id: world.id, tier: world.tier, name: world.name, elapsedMs: Math.round(this.elapsedMs - this.worldStartedAtMs) },
       bridge: { ...this.bridgeState },
       mode: this.mode,
-      friends: this.friends ? { ...this.friends.snapshot(), building: this.friendsBuilding?.snapshot(), projects: this.friendsProjects?.snapshot(), frontier: this.friendsFrontier?.snapshot() } : undefined,
+      friends: this.friends ? { ...this.friends.snapshot(), environment: this.friendsEnvironment.snapshot, building: this.friendsBuilding?.snapshot(), projects: this.friendsProjects?.snapshot(), frontier: this.friendsFrontier?.snapshot() } : undefined,
       realityBreach: this.friends ? undefined : this.realityBreach.snapshot(this.worldElapsedMs()),
       players: [...this.players.values()].map(({ velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, jetLaunchFloor, airborneMs, groundedMs, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastAltFireActionId: _lastAltFireActionId, lastGrenadeActionId: _lastGrenadeActionId, grenadeRechargeAtMs: _grenadeRechargeAtMs, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, artifactTargetId: _artifactTargetId, artifactHitCount: _artifactHitCount, artifactLastActionAtMs: _artifactLastActionAtMs, artifactBarrierExpiresAtMs: _artifactBarrierExpiresAtMs, artifactProcExpiresAtMs: _artifactProcExpiresAtMs, lastArtifactX: _lastArtifactX, lastArtifactY: _lastArtifactY, slipstreamReadyAtMs: _slipstreamReadyAtMs, echoPositions: _echoPositions, ...player }) => ({ ...player, privateExfilAvailable: this.fieldMissionDirector.completions > 0 || this.runDirector.snapshot(this.elapsedMs).contractIndex > 0, privateExfilCalled: this.privateExfilCalled, fabricatorRechargeRemainingMs: this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, jetLaunchFloor, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, jetFuel: player.jetFuel, jetActive: player.jetActive, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
       enemies: this.enemies.map(({ hitFlashUntilMs, deathUntilMs, killedByPlayerId: _killedBy, targetLeaseUntilMs: _lease, nextAttackAtMs: _nextAttack, targetStructureId: _targetStructureId, structureStunUntilMs: _structureStunUntilMs, chillExpiresAtMs: _chillExpiresAtMs, rimeGrantedAtMs: _rimeGrantedAtMs, missionAnchorX: _missionAnchorX, missionAnchorY: _missionAnchorY, cinderhexByOwner: _cinderhexByOwner, ...enemy }) => ({
@@ -1384,6 +1386,13 @@ export class CoopSimulation {
     };
   }
 
+  /** Environment controls share simulation-time anchors with every client. */
+  setFriendsEnvironment(playerId: string, change: FriendsEnvironmentChange) {
+    if (!this.friends || playerId !== this.friendsHostId) return;
+    this.friendsEnvironment.time(this.worldElapsedMs(), this.elapsedMs);
+    this.friendsEnvironment.change(change);
+    return this.friendsEnvironment.state;
+  }
   /** Host-authoritative field fabrication. A client supplies intent and a
    * hologram pose; the simulation repeats every spatial and economy check. */
   setFriendsGuestAccess(allowed: boolean) { this.friendsBuilding?.setGuestAccess(allowed); }

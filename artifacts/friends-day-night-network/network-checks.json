@@ -1,0 +1,18 @@
+{
+  "errors": [],
+  "network": {
+    "checks": [
+      "Guest sees midnight and stays paused while world snapshots continue",
+      "Guest follows accelerated time and host wind settings",
+      "Late joiner receives current accelerated phase",
+      "Both guests see noon after a host preset change",
+      "Both guests return to normal world time and wind on reset"
+    ],
+    "receivedSnapshots": [
+      25,
+      25
+    ],
+    "errors": [],
+    "transport": "actual local WebRTC + Friends baseline + compact snapshot deltas"
+  }
+}

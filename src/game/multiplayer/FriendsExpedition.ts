@@ -1,4 +1,5 @@
 import { FriendsRetreats } from './FriendsRetreats';
+import type { FriendsEnvironmentSnapshot } from '../world/FriendsEnvironmentPreview';
 import type { RetreatState, RetreatSave } from '../world/FriendsRetreatSites';
 import { scenicCargoWagon, SCENIC_TAIL_DISTANCE, type ScenicWagonKind } from '../world/FriendsTrainLayout';
 import { scenicRailway } from '../world/FriendsScenicRailway';
@@ -21,7 +22,7 @@ import { FriendsHauling, type HaulingSave, type HaulingSnapshot } from './Friend
 export type FriendsVehicle = { id: string; kind: 'train' | 'aircraft'; x: number; y: number; z: number; angle: number; length: number; width: number; pilotId?: string; closed?: boolean; pitch?: number; scenic?:boolean; wagonKind?:ScenicWagonKind; routeDistance?:number };
 export type FriendsProgress = { version: 1; discovered: string[]; signals: string[]; salvageCleared: boolean; restored: boolean; openedTreasures?: string[]; caveGold?: number };
 export type FriendsTransportSave = { retreats?:RetreatSave; campfireFuelSeconds?:number; scenicRailway?:ScenicServiceSave | boolean; hauling?: HaulingSave; trainDistance: number; trainStoppedMs: number; lastStop: number; held: boolean; aircraft: FriendsVehicle; railTrain?: { anchor: number; distance: number; direction: 1 | -1; held: boolean } };
-export type FriendsSnapshot = { retreats?:RetreatState; campfire?:CampfireSnapshot; trainHorn?: { serial: number; atMs: number; vehicleId: string }; scenicRailway?:ScenicServiceSnapshot; hauling?: HaulingSnapshot; transport?: FriendsTransportSave; frontier?: FrontierSnapshot; building?: FriendsBuildingSnapshot; projects?: FriendsProjectSnapshot; vehicles: FriendsVehicle[]; trainDistance: number; trainStoppedMs: number; progress: FriendsProgress; salvageState: 'idle' | 'active' | 'cleared'; notice: string; noticeUntilMs: number };
+export type FriendsSnapshot = { environment?:FriendsEnvironmentSnapshot; retreats?:RetreatState; campfire?:CampfireSnapshot; trainHorn?: { serial: number; atMs: number; vehicleId: string }; scenicRailway?:ScenicServiceSnapshot; hauling?: HaulingSnapshot; transport?: FriendsTransportSave; frontier?: FrontierSnapshot; building?: FriendsBuildingSnapshot; projects?: FriendsProjectSnapshot; vehicles: FriendsVehicle[]; trainDistance: number; trainStoppedMs: number; progress: FriendsProgress; salvageState: 'idle' | 'active' | 'cleared'; notice: string; noticeUntilMs: number };
 export const FRIENDS_SAVE_KEY = 'killsync.friends.expedition.v1';
 export const TRAIN_SPEED = 180;
 export const FRIENDS_FLIGHT_CEILING = 6000;

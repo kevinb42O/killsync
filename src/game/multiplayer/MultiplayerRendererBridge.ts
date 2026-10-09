@@ -903,6 +903,7 @@ export class MultiplayerRendererBridge {
     this.scenicRailVisuals?.update(this.renderer.camera,Boolean(snapshot.friends?.scenicRailway));
     this.friendsBuildVisuals.update(snapshot.friends?.building);
     this.friendsBuildVisuals.animate(this.visualElapsedMs);
+    if(snapshot.friends?.environment)this.frontierVisuals?.synchronizeEnvironment(snapshot.friends.environment);
     this.frontierVisuals?.setCampfireState(snapshot.friends?.campfire);
     this.frontierVisuals?.setRetreatState(snapshot.friends?.retreats);
     const retreat=snapshot.friends?.retreats;

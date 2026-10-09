@@ -1,7 +1,13 @@
 import { FRONTIER_DAY_DURATION_MS, sampleFrontierDayNight } from './FriendsDayNight';
 export type FriendsEnvironmentChange = { hour?:number; speed?:number; windSpeed?:number; reset?:boolean };
-/** Local dev overrides never mutate host time or saved progress. Rate changes
- * re-anchor at the current phase, including pause/resume and changing wind. */
+/** Anchors use simulation time so every renderer, including late joiners, can
+ * evaluate the host's settings without relying on its own wall clock. */
+export type FriendsEnvironmentSnapshot = {
+  enabled: boolean; speed: number; resumeSpeed: number; windSpeed: number;
+  timeAnchor: number; sourceAnchor: number; windAnchor: number; windSourceAnchor: number;
+};
+/** Rate changes re-anchor at the current phase, including pause/resume and wind.
+ * Used for local render reviews and the authoritative multiplayer environment. */
 export class FriendsEnvironmentPreview {
   private worldMs=0;
   private windMs=0;
@@ -13,6 +19,14 @@ export class FriendsEnvironmentPreview {
   speed=1;
   resumeSpeed=1;
   windSpeed=1;
+  get snapshot():FriendsEnvironmentSnapshot {
+    return {enabled:this.enabled,speed:this.speed,resumeSpeed:this.resumeSpeed,windSpeed:this.windSpeed,
+      timeAnchor:this.timeAnchor,sourceAnchor:this.sourceAnchor,windAnchor:this.windAnchor,windSourceAnchor:this.windSourceAnchor};
+  }
+  synchronize(snapshot:FriendsEnvironmentSnapshot){
+    this.enabled=snapshot.enabled;this.speed=snapshot.speed;this.resumeSpeed=snapshot.resumeSpeed;this.windSpeed=snapshot.windSpeed;
+    this.timeAnchor=snapshot.timeAnchor;this.sourceAnchor=snapshot.sourceAnchor;this.windAnchor=snapshot.windAnchor;this.windSourceAnchor=snapshot.windSourceAnchor;
+  }
   time(worldMs:number,animationMs=worldMs){this.worldMs=worldMs;this.windMs=animationMs;return this.enabled?this.timeAnchor+(worldMs-this.sourceAnchor)*this.speed:worldMs;}
   get windSeconds(){return (this.windAnchor+(this.windMs-this.windSourceAnchor)*this.windSpeed)/1000;}
   change(change:FriendsEnvironmentChange){

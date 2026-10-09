@@ -12,8 +12,8 @@ still use the underground check. Never cache and restore a daylight background.
 
 1. Derive time from the authoritative world's elapsed milliseconds. One full
    day lasts 24 real minutes, starts at 09:00, and repeats without a midnight
-   jump. All clients and late joiners see the same time. No network schema or
-   saved-world migration is needed.
+   jump. All clients and late joiners see the same time. Host environment anchors
+   travel with the live Friends snapshots; no saved-world migration is needed.
 2. Use continuous solar elevation to blend daylight, golden hour, twilight
    and moonlit night. Move the visible sun and the actual directional light
    together. A separate moon supplies subtle cool light, with bounded shadows
@@ -73,9 +73,11 @@ remain finite when a flying camera lies exactly on a boundary.
 The render-review panel reports visible volumes and cumulative atlas bakes.
 
 C opens the Friends developer menu. Flight remains an existing multiplayer
-movement flag; environment settings are local previews, with exact time, presets,
+movement flag; environment settings are host-controlled and shared with all
+players, with exact time, presets,
 pause/resume, 0.25–120× cycle speed and 0–4× wind. Rate changes re-anchor without
 phase jumps. Pausing the celestial clock does not pause cloud wind, and pausing
-wind does not stop shadow updates when the sun moves. Reset returns to the host's
-world time and normal speeds. The menu blocks gameplay input and returns pointer
+wind does not stop shadow updates when the sun moves. Reset returns everyone to
+the normal world clock and speeds. Local render-review previews remain independent.
+The menu blocks gameplay input and returns pointer
 control when closed with C, Escape or its return button.
