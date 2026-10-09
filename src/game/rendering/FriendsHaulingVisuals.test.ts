@@ -28,11 +28,34 @@ describe('held hauling rope attachment',()=>{
       const mesh=scene.getObjectByName('braided-hauling-rope') as FriendsRopeMesh,p=mesh.geometry.getAttribute('position'),segment=end?mesh.geometry.drawRange.count/(3*8*6):0,centre=new THREE.Vector3(),points=[];
       for(let strand=0;strand<3;strand++)for(let side=0;side<8;side++){const point=new THREE.Vector3().fromBufferAttribute(p,(segment*3+strand)*9+side);points.push(point);centre.add(point);}
       centre.multiplyScalar(1/24);
-      const expected=end?new THREE.Vector3(passenger.x,passenger.z+26,passenger.y):new THREE.Vector3(host.x+8,host.z+26,host.y+10);
+      const expected=end?new THREE.Vector3(passenger.x,passenger.z+16,passenger.y):new THREE.Vector3(host.x+8,host.z+26,host.y+10);
       expect(centre.distanceTo(expected)).toBeLessThan(.02);
       expect(Math.max(...points.map(point=>point.distanceTo(centre)))).toBeGreaterThan(1.4);
     }
     visuals.dispose();
+  });
+  it('draws a straight carry trail like the original ropegun rope without doubling back from the muzzle',()=>{
+    const {scene,visuals,snapshot,project,camera,handCamera}=fixture(),host=snapshot.players[0];
+    const passenger={...host,id:'guest',label:'Friend',x:host.x+120};snapshot.players.push(passenger);
+    const rope={id:host.id,playerId:passenger.id,length:120,bends:Array.from({length:59},(_,i)=>({x:host.x+(i+1)*2,y:host.y,z:host.z+26}))};
+    snapshot.friends!.hauling!.ropes=[];snapshot.friends!.hauling!.playerRopes=[rope];
+    camera.position.set(host.x,host.z+40,host.y);camera.rotation.set(0,-Math.PI/2,0,'YXZ');handCamera.position.copy(camera.position);handCamera.quaternion.copy(camera.quaternion);
+    visuals.update(snapshot,host.id,5,0,project);
+    const mesh=scene.getObjectByName('braided-hauling-rope') as FriendsRopeMesh,positions=Array.from(mesh.geometry.getAttribute('position').array),count=mesh.geometry.drawRange.count;
+    rope.bends=[];visuals.update(snapshot,host.id,5,0,project);
+    expect(mesh.geometry.drawRange.count).toBe(count);
+    expect(Array.from(mesh.geometry.getAttribute('position').array)).toEqual(positions);
+    visuals.dispose();
+  });
+  it('retains real corners in the carry route while attaching below the passenger eye line',()=>{
+    const {scene,visuals,snapshot,project}=fixture(),host=snapshot.players[0];
+    const passenger={...host,id:'guest',x:host.x+120};snapshot.players.push(passenger);
+    snapshot.friends!.hauling!.ropes=[];snapshot.friends!.hauling!.playerRopes=[{id:host.id,playerId:passenger.id,length:180,bends:[{x:host.x+30,y:host.y+40,z:host.z+26},{x:host.x+90,y:host.y+40,z:host.z+26}]}];
+    visuals.update(snapshot,host.id,5,0,project);
+    const mesh=scene.getObjectByName('braided-hauling-rope') as FriendsRopeMesh,p=mesh.geometry.getAttribute('position'),index=mesh.geometry.getIndex()!;
+    let furthest=host.y;
+    for(let i=0;i<mesh.geometry.drawRange.count;i++)furthest=Math.max(furthest,p.getZ(index.getX(i)));
+    expect(furthest).toBeGreaterThan(host.y+38);visuals.dispose();
   });
   it('draws a player rope to the passenger body and removes it when released',()=>{
     const {scene,visuals,snapshot,project}=fixture(),host=snapshot.players[0];
@@ -48,7 +71,7 @@ describe('held hauling rope attachment',()=>{
     const segments=rope.geometry.drawRange.count/(3*8*6);
     for(let strand=0;strand<3;strand++)for(let side=0;side<8;side++)end.add(new THREE.Vector3().fromBufferAttribute(positions,(segments*3+strand)*9+side));
     end.multiplyScalar(1/24);
-    expect(end.x).toBeCloseTo(passenger.x,1);expect(end.y).toBeCloseTo(passenger.z+26,1);expect(end.z).toBeCloseTo(passenger.y,1);
+    expect(end.x).toBeCloseTo(passenger.x,1);expect(end.y).toBeCloseTo(passenger.z+16,1);expect(end.z).toBeCloseTo(passenger.y,1);
     snapshot.friends!.hauling!.playerRopes=[];visuals.update(snapshot,'host',5,16,project);
     expect(rope.parent).toBeNull();visuals.dispose();
   });

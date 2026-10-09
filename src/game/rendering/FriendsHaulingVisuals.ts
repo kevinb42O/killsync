@@ -12,6 +12,20 @@ import { FriendsCargoBeacon } from './FriendsCargoBeacon';
 
 type MuzzleProjector = (point:THREE.Object3D)=>{x:number;y:number;z:number};
 
+// Carry trails contain a point for every simulation step. Keep their corners,
+// but omit collinear samples so a shoulder or muzzle offset cannot make the
+// visible rope double back through the first-person camera.
+function carryRopeBends(start:THREE.Vector3,end:THREE.Vector3,bends:THREE.Vector3[]) {
+  const result:THREE.Vector3[]=[],previous=start.clone(),delta=new THREE.Vector3(),offset=new THREE.Vector3();
+  for(let i=0;i<bends.length;i++) {
+    const next=bends[i+1]??end;
+    delta.subVectors(next,previous);offset.subVectors(bends[i],previous);
+    const t=THREE.MathUtils.clamp(offset.dot(delta)/Math.max(1e-10,delta.lengthSq()),0,1);
+    if(offset.addScaledVector(delta,-t).length()>.25){result.push(bends[i]);previous.copy(bends[i]);}
+  }
+  return result;
+}
+
 /** A small shared mesh set; rope buffers are reused rather than rebuilt per frame. */
 export class FriendsHaulingVisuals {
   private group = new THREE.Group();
@@ -152,7 +166,7 @@ export class FriendsHaulingVisuals {
       if(!player||(!cargo&&!passenger))continue;
       let mesh=this.ropes.get(rope.id);
       if(!mesh){mesh=new FriendsRopeMesh(this.ropeMaterial());this.group.add(mesh);this.ropes.set(rope.id,mesh);}
-      const anchor=cargo&&'cargoId' in rope?cargoAnchor(cargo,rope):{x:passenger!.x,y:passenger!.y,z:passenger!.z+26},forward=Math.cos(player.angle),side=Math.sin(player.angle);
+      const anchor=cargo&&'cargoId' in rope?cargoAnchor(cargo,rope):{x:passenger!.x,y:passenger!.y,z:passenger!.z+16},forward=Math.cos(player.angle),side=Math.sin(player.angle);
       this.start.set(player.x+forward*8-side*10,player.z+26,player.y+side*8+forward*10);
       let startRadius=1.45;
       if(player.id===localId && this.gun.visible){
@@ -163,7 +177,9 @@ export class FriendsHaulingVisuals {
         startRadius=THREE.MathUtils.clamp(this.start.distanceTo(this.rim)*.88,.04,1.45);
       }
       this.end.set(anchor.x,anchor.z,anchor.y);
-      mesh.update(this.start,this.end,rope.length,'tension' in rope?rope.tension:.4,startRadius,rope.bends?.map(p=>new THREE.Vector3(p.x,p.z,p.y)));
+      let bends=rope.bends?.map(p=>new THREE.Vector3(p.x,p.z,p.y));
+      if(passenger&&bends)bends=carryRopeBends(new THREE.Vector3(player.x,player.z+26,player.y),new THREE.Vector3(passenger.x,passenger.z+26,passenger.y),bends);
+      mesh.update(this.start,this.end,rope.length,'tension' in rope?rope.tension:.4,startRadius,bends);
       mesh.material.color.setHex('blocked' in rope&&rope.blocked?0xd9947b:0xffffff);
     }
   }

@@ -94,8 +94,7 @@ try {
       r.originalTick = r.simulation.tick; r.simulation.tick = () => {};
       r.originalRender = r.bridge.render;
       r.bridge.render = function (_snapshot, _localId, dt) {
-        const carrier = r.capturePlayer === r.host.id;
-        this.setFriendsTool(r.captureTool ?? (carrier ? 5 : 0), false, true, false);
+        this.setFriendsTool(5, false, true, false);
         const result = r.originalRender.call(this, r.frozen, r.capturePlayer, dt, undefined, true, false);
         if (r.capturePending) {
           // Read before the WebGL drawing buffer is discarded on presentation.
@@ -110,25 +109,25 @@ try {
     const capture = async filename => {
       await page.evaluate(() => { carryReview.captureImage = undefined; carryReview.capturePending = true; });
       await page.waitForFunction(() => Boolean(carryReview.captureImage));
+      assert.equal(await page.evaluate(() => carryReview.bridge.renderer.viewmodelScene.getObjectByName('rope-launcher')?.visible), true);
       const data = await page.evaluate(() => carryReview.captureImage);
       await writeFile(directory + '/' + filename, Buffer.from(data.split(',')[1], 'base64'));
     };
+    await page.waitForTimeout(800);
     await capture('carrier-ropegun-first-person.png');
-    await page.evaluate(() => { carryReview.captureTool = 0; });
-    await capture('carrier-first-person.png');
     await page.evaluate(() => {
       const r = window.carryReview; r.capturePlayer = r.guest.id;
       r.bridge.renderer.yaw = Math.PI / 2; r.bridge.renderer.pitch = 0;
     });
     // Give the normal camera tracking spring time to settle on the passenger.
     await page.waitForTimeout(800);
-    await capture('passenger-first-person.png');
+    await capture('passenger-ropegun-first-person.png');
     await page.evaluate(() => {
       const r = window.carryReview; r.bridge.render = r.originalRender;
       r.simulation.tick = r.originalTick;
       r.bridge.renderer.yaw = -Math.PI / 2; r.bridge.renderer.pitch = 0;
     });
-    report.checks.push('captured the same connected state from carrier and passenger first-person cameras');
+    report.checks.push('captured the same connected state from both first-person cameras with the ropegun equipped');
   }
   await page.keyboard.press('r');
   await page.waitForFunction(() => carryReview.simulation.friends.hauling.snapshot().playerRopes.length === 0);
