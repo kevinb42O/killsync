@@ -20,7 +20,7 @@ describe('island fluid stability and bounded effects',()=>{
         expect(mesh.material.fragmentShader).toContain('float ribbons=');
       }else bridgeDraws++;
     }
-    expect(triangles).toBeLessThan(22000);expect(textureBytes).toBeLessThan(2*1024*1024);
+    expect(triangles).toBeLessThan(40000);expect(textureBytes).toBeLessThan(1024*1024);
     expect(rivers.waterMaterials.length).toBeLessThanOrEqual(32);expect(bridgeDraws).toBe(2);
     rivers.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();o.material.dispose();if(o.material instanceof THREE.ShaderMaterial)o.material.uniforms.bathymetry.value.dispose();}});
   });

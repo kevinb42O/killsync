@@ -1,0 +1,265 @@
+{
+  "origin": "http://127.0.0.1:3018",
+  "errors": [],
+  "phases": [
+    {
+      "phase": "outer-approach",
+      "frames": 39,
+      "p95Ms": 151,
+      "maxMs": 1265.7000000000044,
+      "stallsOver500Ms": 1,
+      "shaderCompiles": 0,
+      "glError": 0,
+      "warmup": {
+        "submitted": 548,
+        "completed": 548,
+        "queued": 0,
+        "pending": false,
+        "failures": 0,
+        "maxSubmitMs": 54.39999997615814,
+        "maxReadinessMs": 219.89999997615814,
+        "maxScanMs": 41.800000071525574
+      },
+      "terrain": {
+        "surfaceTiles": 16,
+        "surfaceBytes": 6678568,
+        "surfaceJobs": 2,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 2,
+        "volumeActive": 2,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "stages": [
+        {
+          "name": "world",
+          "ms": 1254,
+          "phase": "outer-approach"
+        }
+      ]
+    },
+    {
+      "phase": "viaduct",
+      "frames": 48,
+      "p95Ms": 149.20000000000437,
+      "maxMs": 167.1999999999971,
+      "stallsOver500Ms": 0,
+      "shaderCompiles": 0,
+      "glError": 0,
+      "warmup": {
+        "submitted": 548,
+        "completed": 548,
+        "queued": 0,
+        "pending": false,
+        "failures": 0,
+        "maxSubmitMs": 54.39999997615814,
+        "maxReadinessMs": 219.89999997615814,
+        "maxScanMs": 41.800000071525574
+      },
+      "terrain": {
+        "surfaceTiles": 58,
+        "surfaceBytes": 23294128,
+        "surfaceJobs": 2,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 2,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "stages": []
+    },
+    {
+      "phase": "gate",
+      "frames": 43,
+      "p95Ms": 150,
+      "maxMs": 266.70000000000437,
+      "stallsOver500Ms": 0,
+      "shaderCompiles": 0,
+      "glError": 0,
+      "warmup": {
+        "submitted": 548,
+        "completed": 548,
+        "queued": 0,
+        "pending": false,
+        "failures": 0,
+        "maxSubmitMs": 54.39999997615814,
+        "maxReadinessMs": 219.89999997615814,
+        "maxScanMs": 50.10000002384186
+      },
+      "terrain": {
+        "surfaceTiles": 88,
+        "surfaceBytes": 30568512,
+        "surfaceJobs": 2,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 2,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "stages": []
+    },
+    {
+      "phase": "court",
+      "frames": 93,
+      "p95Ms": 117.29999999999563,
+      "maxMs": 199.5,
+      "stallsOver500Ms": 0,
+      "shaderCompiles": 0,
+      "glError": 0,
+      "warmup": {
+        "submitted": 548,
+        "completed": 548,
+        "queued": 0,
+        "pending": false,
+        "failures": 0,
+        "maxSubmitMs": 54.39999997615814,
+        "maxReadinessMs": 219.89999997615814,
+        "maxScanMs": 58.10000002384186
+      },
+      "terrain": {
+        "surfaceTiles": 90,
+        "surfaceBytes": 29872856,
+        "surfaceJobs": 2,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 2,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "stages": []
+    },
+    {
+      "phase": "keep",
+      "frames": 137,
+      "p95Ms": 66.39999999999418,
+      "maxMs": 150.59999999999127,
+      "stallsOver500Ms": 0,
+      "shaderCompiles": 0,
+      "glError": 0,
+      "warmup": {
+        "submitted": 548,
+        "completed": 548,
+        "queued": 0,
+        "pending": false,
+        "failures": 0,
+        "maxSubmitMs": 54.39999997615814,
+        "maxReadinessMs": 219.89999997615814,
+        "maxScanMs": 164.10000002384186
+      },
+      "terrain": {
+        "surfaceTiles": 96,
+        "surfaceBytes": 29742752,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 2,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "stages": []
+    },
+    {
+      "phase": "roof",
+      "frames": 34,
+      "p95Ms": 250.3000000000029,
+      "maxMs": 1182.300000000003,
+      "stallsOver500Ms": 1,
+      "shaderCompiles": 0,
+      "glError": 0,
+      "warmup": {
+        "submitted": 548,
+        "completed": 548,
+        "queued": 0,
+        "pending": false,
+        "failures": 0,
+        "maxSubmitMs": 54.39999997615814,
+        "maxReadinessMs": 219.89999997615814,
+        "maxScanMs": 164.10000002384186
+      },
+      "terrain": {
+        "surfaceTiles": 96,
+        "surfaceBytes": 29742752,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 2,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "stages": []
+    },
+    {
+      "phase": "return",
+      "frames": 61,
+      "p95Ms": 200,
+      "maxMs": 349.8999999999942,
+      "stallsOver500Ms": 0,
+      "shaderCompiles": 0,
+      "glError": 0,
+      "warmup": {
+        "submitted": 548,
+        "completed": 548,
+        "queued": 0,
+        "pending": false,
+        "failures": 0,
+        "maxSubmitMs": 54.39999997615814,
+        "maxReadinessMs": 219.89999997615814,
+        "maxScanMs": 164.10000002384186
+      },
+      "terrain": {
+        "surfaceTiles": 75,
+        "surfaceBytes": 28073552,
+        "surfaceJobs": 2,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 2,
+        "volumeActive": 2,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "stages": [
+        {
+          "name": "world",
+          "ms": 103.60000002384186,
+          "phase": "return"
+        },
+        {
+          "name": "world",
+          "ms": 125.29999995231628,
+          "phase": "return"
+        },
+        {
+          "name": "world",
+          "ms": 102.60000002384186,
+          "phase": "return"
+        }
+      ]
+    }
+  ],
+  "method": "Actual Friends game render/update loop and terrain workers, shadows enabled. Move the final render camera continuously along a castle survey route; the avatar stays at arrival. Shader compile counters and frame gaps cover streaming, shadow updates, world rendering and HDR composition.",
+  "preparation": {
+    "submitted": 548,
+    "completed": 548,
+    "queued": 0,
+    "pending": false,
+    "failures": 0,
+    "maxSubmitMs": 54.39999997615814,
+    "maxReadinessMs": 219.89999997615814,
+    "maxScanMs": 41.800000071525574
+  },
+  "failure": "AssertionError [ERR_ASSERTION]: Route contains a frame stalled over 500 ms; see the complete phase report",
+  "body": "CLICK TO RESUME CONTROL\nGBACKPACK\nAHEAD\n744 m"
+}

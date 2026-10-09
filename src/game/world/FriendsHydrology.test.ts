@@ -62,7 +62,12 @@ describe('connected frontier rivers', () => {
       if(p.chapter===10&&baseTerrainHeight(p.x,p.y,false)<ISLAND_SEA_LEVEL)continue;
       for(const side of [-80,0,80]) {
         const x=p.x-Math.sin(p.angle)*side,y=p.y+Math.cos(p.angle)*side;
-        expect(baseTerrainHeight(x,y),`foundation at ${d}`).toBe(baseTerrainHeight(x,y,false));
+        const river=riverSampleAt(x,y),original=baseTerrainHeight(x,y,false);
+        // New containing banks can bury part of an existing socket. They
+        // never cut it away or change the original railway generation datum.
+        if(river?.riverId==='skyfalls-river'&&Math.abs(river.level-442.5)<.05)
+          expect(baseTerrainHeight(x,y),`supported foundation at ${d}`).toBeGreaterThanOrEqual(original);
+        else expect(baseTerrainHeight(x,y),`foundation at ${d}`).toBe(original);
       }
     }
     for(const [x,y] of [[31789.7,24988.7],[31901.7,24794.7]])for(const dx of [-96,0,96])for(const dy of [-96,0,96])
@@ -71,6 +76,16 @@ describe('connected frontier rivers', () => {
       expect(baseTerrainHeight(site.x,site.y)).toBe(baseTerrainHeight(site.x,site.y,false));
     for(const route of RETREAT_APPROACHES)for(const p of route.points)
       expect(baseTerrainHeight(p.x,p.y)).toBe(baseTerrainHeight(p.x,p.y,false));
+  });
+
+  it('contains the full Skyfalls water surface beneath the station with solid banks on both sides',()=>{
+    const terrain=new FriendsTerrain();
+    for(const p of FRIENDS_RIVERS[0].points.filter(p=>p.x>7300&&p.x<8400&&Math.abs(p.z-442.5)<.05))for(const side of [-1,1]){
+      const x=p.x-p.ty*p.width*.635*side,y=p.y+p.tx*p.width*.635*side;
+      expect(baseTerrainHeight(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16)).toBeGreaterThan(p.z+2);
+      expect(terrain.floor(x,y,480,0)).toBeGreaterThan(p.z+2);
+      expect(friendsWaterLevel(x,y)).toBeUndefined();
+    }
   });
 });
 

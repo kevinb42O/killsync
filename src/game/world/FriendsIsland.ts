@@ -1,6 +1,6 @@
 import { createHighfallCastle, HIGHFALL_CASTLE } from './FriendsCastle';
-import { ISLAND_SEA_LEVEL, ISLAND_LAKES } from './FriendsWaterBodies';
-import { hydrologyTerrainHeight, deepmereRadius, riverSampleAt } from './FriendsHydrology';
+import { ISLAND_SEA_LEVEL, ISLAND_LAKES, waterBasinRadius } from './FriendsWaterBodies';
+import { hydrologyTerrainHeight, riverSampleAt } from './FriendsHydrology';
 export { ISLAND_SEA_LEVEL, ISLAND_LAKES } from './FriendsWaterBodies';
 /** Authored seed-like landforms. World coordinates and elevations are shared by
  * the voxel field, horizon, atlas and landmark presentation. */
@@ -72,12 +72,7 @@ export function islandVolcanoHeight(x:number,y:number){
   return (cone+rim)*(1-crater)+1980*crater-breach;
 }
 /** Distorted bowls determine both solid lakebeds and the water's shoreline. */
-export function islandLakeRadius(x:number,y:number,lake:typeof ISLAND_LAKES[number]){
-  if(lake.id==='deepmere')return deepmereRadius(x,y);
-  const dx=(x-lake.x)/lake.rx,dy=(y-lake.y)/lake.ry,a=Math.atan2(dy,dx);
-  return Math.hypot(dx,dy)/(1+.13*Math.sin(a*3+.4)+.065*Math.sin(a*7-1.2))
-    +.035*Math.sin(x/170)*Math.sin(y/210);
-}
+export const islandLakeRadius=waterBasinRadius;
 export function islandArchFloor(x:number,y:number){
   const lake=ISLAND_LAKES[1],r=islandLakeRadius(x,y,lake);
   const bank=736+64*Math.sin(y/770)+48*Math.sin(x/510+y/930);

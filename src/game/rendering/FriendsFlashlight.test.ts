@@ -27,7 +27,7 @@ describe('held Friends flashlight', () => {
     expect(light.visible).toBe(true);expect(light.castShadow).toBe(true);expect(light.map).not.toBeNull();
     flashlight.dispose();expect(hand.parent).toBeNull();expect(light.parent).toBeNull();expect(light.target.parent).toBeNull();
   });
-  it('covers the viewport corners at walking and sprint FOV across aspect ratios', () => {
+  it('keeps a focused cone with dark screen edges at wide walking and sprint FOV', () => {
     const camera=new THREE.PerspectiveCamera();
     const scene=new THREE.Scene();
     const renderer={shadowMap:{needsUpdate:false}} as unknown as THREE.WebGLRenderer;
@@ -37,12 +37,17 @@ describe('held Friends flashlight', () => {
       camera.aspect=aspect;camera.fov=fov;camera.updateProjectionMatrix();
       flashlight.syncWithCamera();
       const cornerAngle=Math.atan(Math.tan(THREE.MathUtils.degToRad(fov/2))*Math.hypot(1,aspect));
-      expect(light.angle).toBeGreaterThan(cornerAngle);
-      // The horizontal screen edge must receive substantial penumbra spill.
+      expect(light.angle).toBeLessThan(cornerAngle);
+      expect(light.angle).toBeGreaterThanOrEqual(THREE.MathUtils.degToRad(38));
+      expect(light.angle).toBeLessThanOrEqual(THREE.MathUtils.degToRad(56));
+      // Wide screens keep the beam shape instead of stretching it to the edges.
       const edgeAngle=Math.atan(Math.tan(THREE.MathUtils.degToRad(fov/2))*aspect);
       const weight=THREE.MathUtils.smoothstep(Math.cos(edgeAngle),Math.cos(light.angle),Math.cos(light.angle*(1-light.penumbra)));
-      expect(weight).toBeGreaterThan(.15);
-      expect(light.angle).toBeLessThan(Math.PI/2);
+      if(aspect>=16/9)expect(weight).toBe(0);
+      const halfSpill=THREE.MathUtils.smoothstep(Math.cos(light.angle*.75),Math.cos(light.angle),Math.cos(light.angle*(1-light.penumbra)));
+      expect(halfSpill).toBeGreaterThan(.2);expect(halfSpill).toBeLessThan(.8);
+      const angle=light.angle;camera.aspect=1;
+      expect(friendsFlashlightAngle(camera)).toBe(angle);
     }
     camera.zoom=2;
     expect(friendsFlashlightAngle(camera)).toBeLessThan(light.angle);

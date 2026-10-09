@@ -1,0 +1,192 @@
+{
+  "errors": [],
+  "captures": [
+    {
+      "stage": "rod",
+      "gl": 0,
+      "calls": 94
+    },
+    {
+      "stage": "waiting",
+      "gl": 0,
+      "calls": 107
+    },
+    {
+      "stage": "bite",
+      "gl": 0,
+      "calls": 112
+    },
+    {
+      "stage": "reeling",
+      "gl": 0,
+      "calls": 112
+    },
+    {
+      "stage": "held",
+      "gl": 0,
+      "calls": 112
+    },
+    {
+      "stage": "dry",
+      "gl": 0,
+      "calls": 33
+    },
+    {
+      "stage": "swimming",
+      "gl": 0,
+      "calls": 60
+    }
+  ],
+  "framing": [
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 70,
+      "gap": 1.274587287180115e-13,
+      "finite": true
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 98,
+      "gap": 1.3272888061928477e-13,
+      "finite": true
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 120,
+      "gap": 2.1052686620868974e-13,
+      "finite": true
+    },
+    {
+      "aspect": 2.4,
+      "fov": 70,
+      "gap": 2.5800744678749185e-14,
+      "finite": true
+    },
+    {
+      "aspect": 2.4,
+      "fov": 98,
+      "gap": 1.649845206487078e-13,
+      "finite": true
+    },
+    {
+      "aspect": 2.4,
+      "fov": 120,
+      "gap": 2.2295154832357494e-13,
+      "finite": true
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 70,
+      "gap": 3.3211226478392083e-13,
+      "finite": true
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 98,
+      "gap": 1.972076130056745e-13,
+      "finite": true
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 120,
+      "gap": 3.5673657982110895e-13,
+      "finite": true
+    }
+  ],
+  "performance": {
+    "one_cast": {
+      "baseline": {
+        "cpuP50": 0,
+        "cpuP95": 0,
+        "gpuP50": 15.79025,
+        "gpuP95": 20.602874,
+        "calls": 111
+      },
+      "active": {
+        "cpuP50": 0.10000002384185791,
+        "cpuP95": 0.20000004768371582,
+        "gpuP50": 15.628083,
+        "gpuP95": 19.620249,
+        "calls": 120
+      },
+      "fishPool": 1,
+      "activeFish": 0
+    },
+    "five_casts": {
+      "baseline": {
+        "cpuP50": 0,
+        "cpuP95": 0,
+        "gpuP50": 15.274374,
+        "gpuP95": 18.912958,
+        "calls": 111
+      },
+      "active": {
+        "cpuP50": 0.2999999523162842,
+        "cpuP95": 0.5,
+        "gpuP50": 16.471749,
+        "gpuP95": 20.81925,
+        "calls": 152
+      },
+      "fishPool": 1,
+      "activeFish": 0
+    },
+    "loose_fish_cap": {
+      "baseline": {
+        "cpuP50": 0,
+        "cpuP95": 0,
+        "gpuP50": 15.488666,
+        "gpuP95": 21.592291,
+        "calls": 111
+      },
+      "active": {
+        "cpuP50": 0.2999999523162842,
+        "cpuP95": 0.5,
+        "gpuP50": 17.256208,
+        "gpuP95": 26.720624,
+        "calls": 145
+      },
+      "fishPool": 0,
+      "activeFish": 32
+    },
+    "memory": {
+      "before": {
+        "geometries": 132,
+        "textures": 108
+      },
+      "after": {
+        "geometries": 132,
+        "textures": 108
+      },
+      "presentations": 32
+    }
+  },
+  "assets": {
+    "fishMeshes": 1,
+    "bones": 6,
+    "clips": [
+      "Fish_Armature|Attack",
+      "Fish_Armature|Death",
+      "Fish_Armature|Out_Of_Water",
+      "Fish_Armature|Swimming_Fast",
+      "Fish_Armature|Swimming_Impulse",
+      "Fish_Armature|Swimming_Normal"
+    ]
+  },
+  "toolbar": {
+    "width": 475,
+    "height": 56,
+    "slots": 8
+  },
+  "mobile": {
+    "width": 332,
+    "scroll": 403,
+    "minTarget": 44
+  },
+  "network": {
+    "catch": true,
+    "drop": true,
+    "pickup": true,
+    "swimAway": true,
+    "errors": []
+  }
+}

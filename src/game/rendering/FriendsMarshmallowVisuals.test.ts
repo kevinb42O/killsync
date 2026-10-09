@@ -7,14 +7,42 @@ import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import type { CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
 
 vi.mock('./FriendsAssets',()=>({loadFriendsAsset:vi.fn(async()=>{const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.BoxGeometry(.1,.06,.2)));return g;})}));
-vi.mock('./FriendsHeldEquipment',()=>({loadFriendsGrip:vi.fn(async()=>new THREE.Mesh(new THREE.BoxGeometry(.08,.08,.5)))}));
+vi.mock('./FriendsHeldEquipment',()=>({acquireEquipmentLighting:()=>({setVisible:vi.fn(),dispose:vi.fn()}),loadFriendsGrip:vi.fn(async()=>new THREE.Mesh(new THREE.BoxGeometry(.08,.08,.5)))}));
 const loaded=async()=>{await Promise.resolve();await Promise.resolve();await Promise.resolve();};
 const player=(id='local',seat=2)=>({id,...CAMPFIRE_SEATS[seat],lifeState:'alive',friendsSeat:{vehicleId:FRIENDS_CAMPFIRE.id,index:seat}} as CoopPlayerSnapshot);
 const state=(toast=0,roasting=false,charred=false):CampfireSnapshot=>({fuelSeconds:100,roasts:{local:{toast,roasting,charred,heat:0,burningMs:0,serial:1}}});
 function fixture(){const scene=new THREE.Scene(),p=player(),camera=new THREE.PerspectiveCamera(110,1.5,2,10000);camera.position.set(p.x,p.z+45,p.y);camera.lookAt(FRIENDS_CAMPFIRE.x,FRIENDS_CAMPFIRE.z+35,FRIENDS_CAMPFIRE.y);const visuals=new FriendsMarshmallowVisuals(scene);return {scene,p,camera,visuals};}
 const mesh=(root:THREE.Object3D,name:string)=>root.getObjectByName(name) as THREE.Mesh<THREE.BufferGeometry,THREE.MeshStandardMaterial>;
+const fireSpot=(seat:number)=>new THREE.Vector3(FRIENDS_CAMPFIRE.x+Math.cos(CAMPFIRE_SEATS[seat].angle)*23,FRIENDS_CAMPFIRE.z+48,FRIENDS_CAMPFIRE.y+Math.sin(CAMPFIRE_SEATS[seat].angle)*23);
 
 describe('Campfire marshmallow presentation',()=>{
+  it('projects the local stick into the foreground pass without moving its fire target or grip on screen',async()=>{
+    const scene=new THREE.Scene(),viewmodel=new THREE.Scene(),p=player(),remote=player('remote');
+    const worldCamera=new THREE.PerspectiveCamera(120,1.6,2,10000),viewCamera=new THREE.PerspectiveCamera(98,1.6,.025,1000);
+    scene.add(worldCamera);viewmodel.add(viewCamera);worldCamera.position.set(p.x,p.z+45,p.y);worldCamera.lookAt(FRIENDS_CAMPFIRE.x,FRIENDS_CAMPFIRE.z+35,FRIENDS_CAMPFIRE.y);
+    viewCamera.position.copy(worldCamera.position);viewCamera.quaternion.copy(worldCamera.quaternion);
+    const visuals=new FriendsMarshmallowVisuals(scene,viewmodel);
+    visuals.update([p,remote],{...state(.6,true),equipped:['local','remote']},'local',worldCamera,0,2000);await loaded();scene.updateMatrixWorld(true);viewmodel.updateMatrixWorld(true);
+    const local=visuals.held.children[0],peer=visuals.group.children[0];
+    expect(local.name).toBe('marshmallow-stick-local');expect(peer.name).toBe('marshmallow-stick-remote');
+    const grip=local.getWorldPosition(new THREE.Vector3()).project(viewCamera);expect(grip.x).toBeCloseTo(.48);expect(grip.y).toBeCloseTo(-.64);
+    const tip=mesh(local,'toasting-marshmallow').getWorldPosition(new THREE.Vector3()).project(viewCamera);
+    const fire=fireSpot(p.friendsSeat!.index).project(worldCamera);
+    expect(tip.x).toBeCloseTo(fire.x);expect(tip.y).toBeCloseTo(fire.y);
+    expect(mesh(peer,'toasting-marshmallow').material.depthTest).toBe(true);
+    visuals.update([p,remote],{...state(),equipped:['local','remote']},'local',worldCamera,1,16,false);
+    expect(visuals.held.visible).toBe(false);expect(local.parent).toBe(visuals.group);visuals.dispose();expect(visuals.held.parent).toBeNull();
+  });
+  it('keeps the equipped stick visible while standing and walking and hides it for other Fun slots',async()=>{
+    const {p,camera,visuals}=fixture(),held={...state(.6),equipped:['local']};
+    visuals.update([p],held,'local',camera,0,16);await loaded();const root=visuals.group.children[0];
+    delete p.friendsSeat;p.x+=200;camera.position.x+=200;
+    visuals.update([p],held,'local',camera,1,16);expect(root.parent).toBe(visuals.group);expect(root.visible).toBe(true);
+    const food=mesh(root,'toasting-marshmallow');expect(root.getObjectByName('marshmallow-holding-hand')).toBeDefined();
+    visuals.update([p],{...held,equipped:[]},'local',camera,2,16);expect(root.visible).toBe(false);
+    visuals.update([p],held,'local',camera,3,16);expect(root.visible).toBe(true);expect(mesh(root,'toasting-marshmallow')).toBe(food);
+    visuals.dispose();
+  });
   it('brings the marshmallow to the mouth, hides the bite and returns with a fresh one',()=>{
     const {p,camera,visuals}=fixture(),eating=state(.6);
     eating.roasts.local.eatingMs=1000;
@@ -50,7 +78,7 @@ describe('Campfire marshmallow presentation',()=>{
   it('reaches the real fire, shares geometry and updates cooking uniforms without rebuilding meshes',async()=>{
     const {p,camera,visuals}=fixture(),remote=player('remote',3);visuals.update([p,remote],state(.5,true),'local',camera,0,2000);await loaded();visuals.update([p,remote],state(.5,true),'local',camera,0,2000);
     const root=visuals.group.children[0],food=mesh(root,'toasting-marshmallow'),rod=mesh(root,'long-roasting-stick');visuals.group.updateMatrixWorld(true);
-    expect(food.getWorldPosition(new THREE.Vector3()).distanceTo(new THREE.Vector3(FRIENDS_CAMPFIRE.x,FRIENDS_CAMPFIRE.z+48,FRIENDS_CAMPFIRE.y))).toBeLessThan(.001);
+    expect(food.getWorldPosition(new THREE.Vector3()).distanceTo(fireSpot(p.friendsSeat!.index))).toBeLessThan(.001);
     expect(food.geometry).toBe(mesh(visuals.group.children[1],'toasting-marshmallow').geometry);expect(rod.geometry).toBe(mesh(visuals.group.children[1],'long-roasting-stick').geometry);
     const shader={uniforms:{},vertexShader:'#include <begin_vertex>',fragmentShader:'#include <color_fragment>\n#include <roughnessmap_fragment>'} as unknown as Parameters<typeof food.material.onBeforeCompile>[0];food.material.onBeforeCompile(shader,undefined as unknown as THREE.WebGLRenderer);
     expect(shader.uniforms.roastToast.value).toBe(.5);visuals.update([p,remote],state(1,false,true),'local',camera,5,16);
@@ -59,5 +87,18 @@ describe('Campfire marshmallow presentation',()=>{
   });
   it('does not resurrect asynchronous models after disposal',async()=>{
     const {p,camera,visuals}=fixture();visuals.update([p],state(),'local',camera,0,16);const root=visuals.group.children[0];visuals.dispose();await loaded();expect(root.getObjectByName('marshmallow-holding-hand')).toBeUndefined();
+  });
+  it('gives chairs fixed separated roasting spots and resolves standing players sharing the same side',()=>{
+    const {camera,visuals}=fixture(),crew=Array.from({length:5},(_,i)=>player('roaster-'+i,i));
+    const roasting:CampfireSnapshot={fuelSeconds:100,equipped:crew.map(p=>p.id),roasts:Object.fromEntries(crew.map(p=>[p.id,{toast:.5,roasting:true,charred:false,heat:1,burningMs:0,serial:1}]))};
+    const draw=(players:CoopPlayerSnapshot[])=>{visuals.update(players,roasting,'local',camera,0,2000,false);visuals.group.updateMatrixWorld(true);return new Map(players.map(p=>[p.id,mesh(visuals.group.getObjectByName('marshmallow-stick-'+p.id)!,'toasting-marshmallow').getWorldPosition(new THREE.Vector3())]));};
+    const seated=draw(crew);
+    for(let i=0;i<crew.length;i++)expect(seated.get(crew[i].id)!.distanceTo(fireSpot(i))).toBeLessThan(.001);
+    for(const a of crew)for(const b of crew)if(a!==b)expect(seated.get(a.id)!.distanceTo(seated.get(b.id)!)).toBeGreaterThan(17);
+    draw([...crew].reverse());expect(draw(crew.slice(0,3)).get(crew[0].id)!.distanceTo(seated.get(crew[0].id)!)).toBeLessThan(.001);
+    for(const p of crew){delete p.friendsSeat;p.x=FRIENDS_CAMPFIRE.x+110;p.y=FRIENDS_CAMPFIRE.y;p.z=FRIENDS_CAMPFIRE.z;}
+    const standing=draw(crew),reordered=draw([...crew].reverse());
+    for(const a of crew){expect(standing.get(a.id)!.distanceTo(reordered.get(a.id)!)).toBeLessThan(.001);for(const b of crew)if(a!==b)expect(standing.get(a.id)!.distanceTo(standing.get(b.id)!)).toBeGreaterThan(17);}
+    visuals.dispose();
   });
 });

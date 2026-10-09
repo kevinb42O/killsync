@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createCampfireFlames } from './FriendsCampfire';
-import { loadFriendsGrip } from './FriendsHeldEquipment';
+import { acquireEquipmentLighting, loadFriendsGrip } from './FriendsHeldEquipment';
 import { loadFriendsAsset } from './FriendsAssets';
-import { isCampfireSeat } from '../multiplayer/FriendsCampfireSeats';
+import { CAMPFIRE_SEATS, isCampfireSeat } from '../multiplayer/FriendsCampfireSeats';
 import type { CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
@@ -55,12 +55,16 @@ export function createMarshmallowMaterial(surface:RoastSurface){
   material.customProgramCacheKey=()=> 'pillowy-roasted-marshmallow-v2';return material;
 }
 
-/** World-space tip stays over the real fire. The camera-framed grip and stable
- * palm orientation keep the premade connected arm attached through lowering,
- * looking and turning. No added lights, passes or per-frame mesh creation. */
+/** Preserve the world-space roasting pose, but project the local stick into
+ * the existing depth-cleared equipment pass so scenery cannot cut through it.
+ * Peers retain ordinary world depth and the same shared geometry. */
 export class FriendsMarshmallowVisuals {
   readonly group=new THREE.Group();
+  readonly held=new THREE.Group();
+  private viewCamera?:THREE.PerspectiveCamera;
+  private lighting?:ReturnType<typeof acquireEquipmentLighting>;
   private actors=new Map<string,Stick>();
+  private roastSpots=new Map<string,number>();
   private rodGeometry:THREE.BufferGeometry=new THREE.CylinderGeometry(.58,.95,1,8).translate(0,.5,0);
   private foodGeometry=createMarshmallowGeometry();
   private wood=new THREE.MeshStandardMaterial({color:0x715039,roughness:.94});
@@ -81,8 +85,14 @@ export class FriendsMarshmallowVisuals {
   private cameraQuaternion=new THREE.Quaternion();
   private cameraPosition=new THREE.Vector3();
   private disposed=false;
-  constructor(scene:THREE.Scene){
+  constructor(scene:THREE.Scene,viewmodel?:THREE.Scene){
     this.group.name='campfire-marshmallow-sticks';scene.add(this.group);
+    this.held.name='held-marshmallow-stick';this.held.matrixAutoUpdate=false;
+    if(viewmodel){
+      const parent=viewmodel.getObjectByProperty('type','PerspectiveCamera')||viewmodel;
+      if(parent instanceof THREE.PerspectiveCamera)this.viewCamera=parent;
+      parent.add(this.held);this.lighting=acquireEquipmentLighting(viewmodel);
+    }
     const planes:THREE.BufferGeometry[]=[];
     for(let i=0;i<3;i++){const g=new THREE.PlaneGeometry(15,24,1,3);g.translate(0,12,0);g.rotateY(i*Math.PI/3);planes.push(g);}
     this.flameGeometry=mergeGeometries(planes);planes.forEach(g=>g.dispose());
@@ -119,14 +129,38 @@ export class FriendsMarshmallowVisuals {
     group.add(rod,food,fire);this.group.add(group);
     const entry:Stick={group,rod,food,surface,fire,pose:0,eatPose:0};this.actors.set(id,entry);return entry;
   }
+  private assignRoastSpots(players:readonly CoopPlayerSnapshot[]){
+    this.roastSpots.clear();const used=new Set<number>();
+    const nearby=players.filter(p=>p.lifeState==='alive'&&Math.abs(p.z-FRIENDS_CAMPFIRE.z)<64&&Math.hypot(p.x-FRIENDS_CAMPFIRE.x,p.y-FRIENDS_CAMPFIRE.y)<160);
+    // Chairs keep fixed targets even when someone starts or stops roasting.
+    for(const p of nearby)if(isCampfireSeat(p.friendsSeat)&&CAMPFIRE_SEATS[p.friendsSeat!.index]){this.roastSpots.set(p.id,p.friendsSeat!.index);used.add(p.friendsSeat!.index);}
+    for(const p of nearby.filter(p=>!this.roastSpots.has(p.id)).sort((a,b)=>a.id.localeCompare(b.id))){
+      const angle=Math.atan2(p.y-FRIENDS_CAMPFIRE.y,p.x-FRIENDS_CAMPFIRE.x);let slot=-1,best=-Infinity;
+      for(let i=0;i<CAMPFIRE_SEATS.length;i++)if(!used.has(i)){const alignment=Math.cos(angle-CAMPFIRE_SEATS[i].angle);if(alignment>best){best=alignment;slot=i;}}
+      if(slot>=0){this.roastSpots.set(p.id,slot);used.add(slot);}
+    }
+  }
   update(players:readonly CoopPlayerSnapshot[],state:CampfireSnapshot|undefined,localId:string,camera:THREE.Camera,seconds:number,dt:number,firstPerson=true,handPoint?:(id:string,out:THREE.Vector3)=>boolean){
     if(this.disposed)return;
     this.time.value=seconds;camera.getWorldPosition(this.cameraPosition);camera.getWorldQuaternion(this.cameraQuaternion);
+    if(this.viewCamera){
+      camera.updateWorldMatrix(true,false);
+      const worldTangent=camera instanceof THREE.PerspectiveCamera?Math.tan(THREE.MathUtils.degToRad(camera.getEffectiveFOV()/2)):1.38;
+      const viewTangent=Math.tan(THREE.MathUtils.degToRad(this.viewCamera.getEffectiveFOV()/2));
+      const ratio=viewTangent/worldTangent,worldAspect=camera instanceof THREE.PerspectiveCamera?camera.aspect:this.viewCamera.aspect;
+      // Transform world coordinates into camera-relative equipment coordinates.
+      // The projection ratio preserves every screen position and fire alignment.
+      this.held.matrix.makeScale(.01*ratio*this.viewCamera.aspect/worldAspect,.01*ratio,.01).multiply(camera.matrixWorldInverse);
+      this.held.matrixWorldNeedsUpdate=true;
+    }
+    this.assignRoastSpots(players);let localVisible=false;
     for(const entry of this.actors.values())entry.group.visible=false;
     for(const player of players){
-      if(!isCampfireSeat(player.friendsSeat)||player.lifeState!=='alive'||player.friendsDevFlight)continue;
+      if(!(state?.equipped?state.equipped.includes(player.id):isCampfireSeat(player.friendsSeat))||player.lifeState!=='alive'||player.friendsDevFlight||player.motion?.swimming)continue;
       if(Math.hypot(this.cameraPosition.x-player.x,this.cameraPosition.z-player.y)>800)continue;
       const entry=this.actors.get(player.id)??this.create(player.id),roast=state?.roasts[player.id],local=firstPerson&&player.id===localId;
+      const parent=local&&this.viewCamera?this.held:this.group;if(entry.group.parent!==parent)parent.add(entry.group);
+      if(local)localVisible=true;
       if(local&&!entry.armRequested){
         entry.armRequested=true;
         void loadFriendsGrip('right').then(source=>{
@@ -147,6 +181,8 @@ export class FriendsMarshmallowVisuals {
       }
       this.rest.copy(this.start).addScaledVector(this.forward,64).addScaledVector(this.right,-9);this.rest.y+=40;
       this.target.set(FRIENDS_CAMPFIRE.x,FRIENDS_CAMPFIRE.z+48,FRIENDS_CAMPFIRE.y);
+      const slot=this.roastSpots.get(player.id);
+      if(slot!==undefined){const angle=CAMPFIRE_SEATS[slot].angle;this.target.x+=Math.cos(angle)*23;this.target.z+=Math.sin(angle)*23;}
       entry.pose+=(Number(Boolean(roast?.roasting))-entry.pose)*(1-Math.exp(-Math.max(0,dt)*.009));
       this.target.lerpVectors(this.rest,this.target,entry.pose);
       entry.eatPose+=(Number(Boolean(roast?.eatingMs))-entry.eatPose)*(1-Math.exp(-Math.max(0,dt)*.012));
@@ -168,13 +204,14 @@ export class FriendsMarshmallowVisuals {
       entry.food.material.emissive.setHex(entry.fire.visible?0x371302:0);entry.food.material.emissiveIntensity=.3;
       const shrink=roast?.charred ? 1.1 : 1.25;entry.food.scale.set(shrink,shrink,shrink);
     }
-    for(const [id,entry]of this.actors)if(!players.some(p=>p.id===id&&isCampfireSeat(p.friendsSeat)&&p.lifeState==='alive')){
+    for(const [id,entry]of this.actors)if(!players.some(p=>p.id===id&&p.lifeState==='alive')){
       entry.group.removeFromParent();entry.food.material.dispose();this.actors.delete(id);
     }
+    this.held.visible=localVisible;this.lighting?.setVisible(localVisible);
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;
     for(const entry of this.actors.values())entry.food.material.dispose();this.actors.clear();
-    this.rodGeometry.dispose();this.foodGeometry.dispose();this.flameGeometry.dispose();this.wood.dispose();this.flameMaterial.dispose();this.group.removeFromParent();
+    this.rodGeometry.dispose();this.foodGeometry.dispose();this.flameGeometry.dispose();this.wood.dispose();this.flameMaterial.dispose();this.group.removeFromParent();this.held.removeFromParent();this.lighting?.dispose();
   }
 }

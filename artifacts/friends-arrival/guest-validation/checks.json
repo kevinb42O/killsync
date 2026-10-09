@@ -1,0 +1,19 @@
+{
+  "checks": [
+    "Both connected arenas finish arrival and install streamed masonry",
+    "Guest movement and authoritative snapshots continue after arrival"
+  ],
+  "errors": [],
+  "movement": {
+    "before": {
+      "x": 5920,
+      "y": 5772,
+      "tick": 521
+    },
+    "after": {
+      "x": 5919.999998379523,
+      "y": 5499.997081822219,
+      "tick": 641
+    }
+  }
+}

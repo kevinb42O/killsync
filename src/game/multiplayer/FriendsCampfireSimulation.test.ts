@@ -1,5 +1,5 @@
 import { describe,it,expect } from 'vitest';
-import { FriendsCampfireSimulation, CAMPFIRE_MAX_FUEL, campfireHeat } from './FriendsCampfireSimulation';
+import { FriendsCampfireSimulation, CAMPFIRE_MAX_FUEL, campfireHeat, MARSHMALLOW_TOOL } from './FriendsCampfireSimulation';
 import { CAMPFIRE_SEATS } from './FriendsCampfireSeats';
 import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
 import { FriendsSimulation } from './FriendsSimulation';
@@ -9,7 +9,7 @@ import { packKey } from './FriendsFrontier';
 import { SnapshotDecoder, compactSnapshotWirePayload } from './snapshotReplication';
 import { validFriendsCommand } from './FriendsCommands';
 const player=(id='host')=>({...CAMPFIRE_SEATS[0],id,label:id,lifeState:'alive',friendsSeat:{vehicleId:FRIENDS_CAMPFIRE.id,index:0}});
-const input=(firing=true,angle=CAMPFIRE_SEATS[0].angle+Math.PI)=>({type:'input' as const,version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:0,aimAngle:quantizeAngle(angle),aimPitch:quantizePitch(0),selectedSlot:0,firing,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,friendsTool:1 as const});
+const input=(firing=true,angle=CAMPFIRE_SEATS[0].angle+Math.PI)=>({type:'input' as const,version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:0,aimAngle:quantizeAngle(angle),aimPitch:quantizePitch(0),selectedSlot:0,firing,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,friendsTool:MARSHMALLOW_TOOL});
 function advance(fire:FriendsCampfireSimulation,seconds:number,held=true){const p=player();for(let i=0;i<seconds*20;i++)fire.update(50,[p],new Map([[p.id,input(held)]]));return fire.snapshot().roasts.host;}
 describe('timber fuel and marshmallow roasting',()=>{
   it.each([['raw',0],['golden',10],['dark',16],['burning',20],['charred',26]] as const)('eats a %s marshmallow and waits five seconds before refilling',(_stage,seconds)=>{
@@ -29,7 +29,7 @@ describe('timber fuel and marshmallow roasting',()=>{
     expect(fire.snapshot().roasts.host).toMatchObject({refillMs:100,toast:before?.toast??0,roasting:false,serial:before?.serial??1});
     fire.update(100,[p],new Map([[p.id,input(true)]]));
     expect(fire.snapshot().roasts.host).toEqual({toast:0,heat:0,roasting:false,burningMs:0,charred:false,serial:(before?.serial??1)+1});
-    expect(fire.eat({...p,friendsSeat:undefined})).toBe(false);
+    expect(fire.eat({...p,friendsSeat:undefined},MARSHMALLOW_TOOL)).toBe(true);
     expect(fire.eat({...p,lifeState:'downed'})).toBe(false);
     expect(fire.eat({...p,friendsDevFlight:true})).toBe(false);
   });
@@ -49,7 +49,28 @@ describe('timber fuel and marshmallow roasting',()=>{
     const waiting=sim.createSnapshot();expect(waiting.friends!.campfire!.roasts.host.refillMs).toBe(5000);
     expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(waiting),2)!.friends!.campfire).toEqual(waiting.friends!.campfire);
     delete sim['players'].get('host')!.friendsSeat;sim.tick(50);
-    expect(sim.createSnapshot().friends!.campfire!.roasts.host).toBeUndefined();
+    expect(sim.createSnapshot().friends!.campfire!.roasts.host).toBeDefined();
+  });
+  it('keeps a toasted stick across standing, other Fun slots and walking; only roasts within fire reach',()=>{
+    const fire=new FriendsCampfireSimulation(),p=player();advance(fire,10);const toast=fire.snapshot().roasts.host.toast;
+    const standing={...p,friendsSeat:undefined};
+    fire.update(50,[standing],new Map([[p.id,input(false)]]));expect(fire.snapshot().equipped).toEqual(['host']);expect(fire.snapshot().roasts.host.toast).toBeGreaterThanOrEqual(toast);
+    for(let i=0;i<60;i++)fire.update(50,[p],new Map([[p.id,{...input(),friendsTool:9}]]));
+    expect(fire.snapshot().equipped).toEqual([]);const cooled=fire.snapshot().roasts.host.toast;
+    fire.update(50,[{...standing,x:p.x+1000}],new Map([[p.id,input(true)]]));
+    expect(fire.snapshot().equipped).toEqual(['host']);expect(fire.snapshot().roasts.host).toMatchObject({toast:cooled,roasting:false});
+    expect(fire.eat(standing,9)).toBe(false);expect(fire.replace(standing,9)).toBe(false);
+    expect(fire.eat(standing,MARSHMALLOW_TOOL)).toBe(true);
+    for(let i=0;i<60;i++)fire.update(100,[standing],new Map([[p.id,{...input(false),friendsTool:8}]]));
+    expect(fire.snapshot().roasts.host.toast).toBe(0);expect(fire.replace(standing,MARSHMALLOW_TOOL)).toBe(true);
+    fire.update(50,[{...standing,lifeState:'dead'}],new Map());expect(fire.snapshot().roasts).toEqual({});
+  });
+  it('eats with secondary input once while standing and replicates the equipped stick',()=>{
+    const sim=new FriendsSimulation([{id:'host',label:'host',color:'#fff'}]),p=sim['players'].get('host')!;
+    for(let i=0;i<4;i++){sim.setInput(p.id,{...input(false),sequence:i+1,altFireActionId:1});sim.tick(50);}
+    const frame=sim.createSnapshot();expect(frame.friends!.campfire!.equipped).toEqual(['host']);
+    expect(frame.friends!.campfire!.roasts.host.eatingMs).toBe(850);
+    expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(frame),1)!.friends!.campfire).toEqual(frame.friends!.campfire);
   });
   it('spends real carried timber even in creative tests, rejects empty/far/dead players and replays a request without spending twice',()=>{
     const sim=new FriendsSimulation([{id:'host',label:'host',color:'#fff'}]),p=sim['players'].get('host')!;
@@ -84,16 +105,16 @@ describe('timber fuel and marshmallow roasting',()=>{
     const charred=advance(fire,6,false);expect(charred.charred).toBe(true);expect(charred.burningMs).toBe(0);
     expect(fire.replace(player())).toBe(true);expect(fire.snapshot().roasts.host.toast).toBe(0);
     const hot=new FriendsCampfireSimulation(180),cold=new FriendsCampfireSimulation();expect(advance(hot,10).toast).toBeGreaterThan(advance(cold,10).toast);
-    fire.update(50,[{...player(),friendsSeat:undefined}],new Map());expect(fire.snapshot().roasts).toEqual({});
+    fire.update(50,[{...player(),friendsSeat:undefined}],new Map());expect(fire.snapshot().roasts.host).toMatchObject({toast:0,roasting:false});expect(fire.snapshot().equipped).toEqual([]);
   });
-  it('keeps cooking per player, replicates it, suppresses tool/weapon fire while seated, and restores normal interaction after standing',()=>{
+  it('keeps cooking per player, replicates it, suppresses tool/weapon fire while seated, and keeps the selected marshmallow after standing',()=>{
     const sim=new FriendsSimulation([{id:'host',label:'host',color:'#fff'},{id:'guest',label:'guest',color:'#fc0'}]),p=sim['players'].get('host')!,guest=sim['players'].get('guest')!;
     Object.assign(p,player());Object.assign(guest,player('guest'),CAMPFIRE_SEATS[1],{friendsSeat:{vehicleId:FRIENDS_CAMPFIRE.id,index:1}});
     const weapon=p.weaponStates[0],ammo=weapon.magazineAmmo;
-    for(let i=0;i<180;i++){sim.setInput(p.id,{...input(),sequence:i+1,friendsTool:0});sim.tick(50);}
+    for(let i=0;i<180;i++){sim.setInput(p.id,{...input(),sequence:i+1,friendsTool:MARSHMALLOW_TOOL});sim.tick(50);}
     const snapshot=sim.createSnapshot();expect(snapshot.friends!.campfire!.roasts.host.toast).toBeGreaterThan(.3);expect(snapshot.friends!.campfire!.roasts.guest.toast).toBe(0);
     expect(weapon.magazineAmmo).toBe(ammo);expect(snapshot.projectiles).toEqual([]);
     expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(snapshot),1)!.friends!.campfire).toEqual(snapshot.friends!.campfire);
-    sim.setInput(p.id,{...input(false),sequence:181,jumpPressed:true});sim.tick(50);expect(p.friendsSeat).toBeUndefined();expect(sim.createSnapshot().friends!.campfire!.roasts.host).toBeUndefined();
+    sim.setInput(p.id,{...input(false),sequence:181,jumpPressed:true});sim.tick(50);expect(p.friendsSeat).toBeUndefined();expect(sim.createSnapshot().friends!.campfire!.roasts.host).toBeDefined();
   });
 });

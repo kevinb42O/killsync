@@ -1,0 +1,6 @@
+{
+  "origin": "http://localhost:3020",
+  "errors": [],
+  "method": "Fresh browser context, actual Friends arena, fixed spawn camera. Frame gaps, long tasks, stage CPU times and slow WebGL calls from launch through settling. Menu rendering excluded. These are local Chromium/Metal measurements, not remote player FPS.",
+  "failure": "Error: locator.waitFor: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('.coop-arena')\u001b[22m\n"
+}

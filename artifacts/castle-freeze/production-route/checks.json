@@ -1,0 +1,9 @@
+{
+  "origin": "http://127.0.0.1:3006",
+  "errors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "phases": [],
+  "method": "Actual Friends game render/update loop and terrain workers, shadows enabled. Move the final render camera continuously along a castle survey route; the avatar stays at arrival. Shader compile counters and frame gaps cover streaming, shadow updates, world rendering and HDR composition.",
+  "failure": "TimeoutError: locator.fill: Timeout 180000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByLabel('Your name', { exact: true })\u001b[22m\n"
+}

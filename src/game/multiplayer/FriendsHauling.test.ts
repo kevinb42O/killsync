@@ -14,7 +14,7 @@ const deck = (extra:Partial<FriendsVehicle>={}):FriendsVehicle => ({id:'sunline-
 describe('physical salvage hauling',()=>{
   it('adds the rope tool to the sanitized network schema',()=>{
     expect(clampInputFrame(input()).friendsTool).toBe(5);
-    expect(clampInputFrame(input({friendsTool:99 as 5})).friendsTool).toBe(6);
+    expect(clampInputFrame(input({friendsTool:99 as 5})).friendsTool).toBe(10);
   });
   it('attaches at the hit surface and releases on another primary action',()=>{
     const h=system(),p=actor();h.shoot(p,{x:-1,y:0,z:0},environment(),0);

@@ -1,23 +1,29 @@
 import * as THREE from 'three';
 import { loadFriendsGrip, acquireEquipmentLighting, frameHeldEquipment } from './FriendsHeldEquipment';
 import { FRIENDS_FLASHLIGHT_SOFT_DISTANCE, installFriendsFlashlightFalloff } from './FriendsFlashlightFalloff';
-import { friendsVisionAngle } from './FriendsVision';
 
 /** Camera aim is already shared by mouse/controller look. Keep the light in the
  * world pass and the held prop in the existing, separately rendered hand pass. */
 export const FRIENDS_FLASHLIGHT_RANGE = 3600;
 export const FRIENDS_FLASHLIGHT_INTENSITY = 20_000_000;
 
-/** Cover the viewport with useful spill, including widescreen and sprint FOV.
- * The outer cone extends beyond the corners so its penumbra stays on screen. */
-export const friendsFlashlightAngle = friendsVisionAngle;
+export const FRIENDS_FLASHLIGHT_MIN_ANGLE = THREE.MathUtils.degToRad(38);
+export const FRIENDS_FLASHLIGHT_MAX_ANGLE = THREE.MathUtils.degToRad(56);
+export const FRIENDS_FLASHLIGHT_PENUMBRA = .45;
+
+/** A bounded torch cone with a little extra spill at the game's wide FOV.
+ * Screen aspect must not turn the lamp into a viewport-filling floodlight. */
+export function friendsFlashlightAngle(camera: THREE.PerspectiveCamera) {
+  return THREE.MathUtils.clamp(THREE.MathUtils.degToRad(camera.getEffectiveFOV() / 2),
+    FRIENDS_FLASHLIGHT_MIN_ANGLE, FRIENDS_FLASHLIGHT_MAX_ANGLE);
+}
 
 /** Local and shared beams use the same soft shoulder around the hotspot. */
 export function createFriendsFlashlightProfile() {
   const size=128, pixels=new Uint8Array(size*size*4);
   for(let y=0;y<size;y++)for(let x=0;x<size;x++){
     const radius=Math.hypot((x+.5-size/2)/(size/2),(y+.5-size/2)/(size/2));
-    const brightness=Math.round(255*(.65+.35*Math.exp(-radius*radius*3))),i=(y*size+x)*4;
+    const brightness=Math.round(255*(.42+.58*Math.exp(-radius*radius*3))),i=(y*size+x)*4;
     pixels[i]=pixels[i+1]=pixels[i+2]=brightness;pixels[i+3]=255;
   }
   const texture=new THREE.DataTexture(pixels,size,size);
@@ -26,7 +32,7 @@ export function createFriendsFlashlightProfile() {
 }
 
 export class FriendsFlashlight {
-  private light = new THREE.SpotLight(0xf2f7ff, 0, FRIENDS_FLASHLIGHT_RANGE, 1.35, .22, -FRIENDS_FLASHLIGHT_SOFT_DISTANCE);
+  private light = new THREE.SpotLight(0xf2f7ff, 0, FRIENDS_FLASHLIGHT_RANGE, FRIENDS_FLASHLIGHT_MAX_ANGLE, FRIENDS_FLASHLIGHT_PENUMBRA, -FRIENDS_FLASHLIGHT_SOFT_DISTANCE);
   private beamProfile: THREE.DataTexture;
   private target = new THREE.Object3D();
   private hand = new THREE.Group();

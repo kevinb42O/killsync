@@ -1,37 +1,66 @@
 {
-  "date": "2026-10-09",
-  "aggregateTestsPassed": 1472,
-  "testFiles": 180,
-  "fullSuite": {
-    "command": "npm test -- --maxWorkers=1",
-    "passed": 1470,
-    "timedOut": 2,
-    "timeoutFiles": [
-      "FriendsGesturePose.test.ts",
-      "FriendsFrontier.test.ts"
-    ]
+  "date": "2026-10-09T15:58:48.891258+00:00",
+  "status": "passed",
+  "checks": {
+    "typescript": {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    "productionBuild": {
+      "command": "npm run build",
+      "status": "passed",
+      "note": "Existing large application chunk warning remains."
+    },
+    "suite": {
+      "command": "npm test -- --maxWorkers=1",
+      "filesPassed": 187,
+      "testsPassed": 1510,
+      "status": "passed"
+    },
+    "browser": {
+      "command": "node tools/test-friends-rivers.mjs",
+      "viewpoints": [
+        "boat",
+        "underwater",
+        "underwater_up",
+        "underwater_station",
+        "deepmere",
+        "skyfalls",
+        "skyfalls_underpass",
+        "world_gate",
+        "gate_run",
+        "bridge",
+        "water_bridge",
+        "gorge",
+        "mouth",
+        "island"
+      ],
+      "errors": [],
+      "daylightDuskNight": true,
+      "realTwoOperatorManualRowingAndBackwater": true
+    },
+    "survey": {
+      "command": "node_modules/.bin/tsx tools/river-survey.ts",
+      "status": "passed"
+    }
   },
-  "finalRerun": {
-    "command": "npm test -- src/game/rendering/FriendsGesturePose.test.ts src/game/multiplayer/FriendsFrontier.test.ts src/game/rendering/FriendsTerrainCoverage.test.ts src/game/world/FriendsHydrology.test.ts --maxWorkers=1",
-    "passed": 32,
-    "failed": 0,
-    "files": 4
+  "geometry": {
+    "meshBatches": 31,
+    "triangles": 35456,
+    "depthMaskBytes": 352300
   },
-  "typecheck": {
-    "command": "npm run lint",
-    "passed": true
-  },
-  "productionBuild": {
-    "command": "npm run build",
-    "passed": true,
-    "advisory": "Existing large bundle warning"
-  },
-  "browser": {
-    "passed": true,
-    "viewpoints": 10,
-    "duskAndNight": true,
-    "errors": [],
-    "report": "render-checks.json"
-  },
-  "boatScope": "Landscape and navigation envelope only; one boat is the next implementation step."
+  "verifiedBehaviors": [
+    "Both original lake interiors connect through Deepmere to the sea on a 32-unit navigable raster.",
+    "Steep Skyfalls cascade sheets remain above solid beds across entire collision cells.",
+    "Inland river surface edges terminate against containing terrain, including the Skyfalls station underpass.",
+    "Actual terrain beds, boat hull and seated crew retain clearance throughout the navigable routes.",
+    "Host and guest diving, neutral buoyancy, surfacing and split prediction ticks agree.",
+    "Underwater and upward surface views enable underwater presentation without WebGL errors.",
+    "Manual strokes, separate backwater edges, two reserved seats and saved boat poses survive simulation and replication."
+  ],
+  "asset": {
+    "model": "public/models/friends/watercraft-kit/boat-row-large.glb",
+    "source": "https://kenney.nl/assets/watercraft-kit",
+    "license": "CC0-1.0"
+  }
 }

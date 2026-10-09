@@ -8,7 +8,7 @@ import {friendsBaselineModules} from './friends-baseline-modules.mjs';
 const require=createRequire(import.meta.url);
 let playwright;try{playwright=require('playwright');}catch{playwright=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
 const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3000';
-const directory='artifacts/flashlight-coverage';await mkdir(directory,{recursive:true});
+const directory=process.env.FRIENDS_FLASHLIGHT_DIRECTORY||'artifacts/flashlight-shape';await mkdir(directory,{recursive:true});
 const baseline=process.env.FRIENDS_FLASHLIGHT_BASELINE
   ? await friendsBaselineModules(null,['FriendsFlashlight','FriendsFlashlightFalloff'],process.env.FRIENDS_FLASHLIGHT_BASELINE) : undefined;
 const browser=await playwright.chromium.launch({headless:true,args:['--use-angle=metal']});
@@ -91,16 +91,16 @@ try{
   assert.equal(after.texturesOn,after.texturesBefore,'shadow map and cookie must already exist before activation');
   assert.equal(after.offShadowDraws,0,'off flashlight must skip shadow work when other lights request updates');
   for(const c of after.cases.filter(c=>c.distance===600)){
-    assert(c.litFraction>.9,'useful illumination must cover the wide viewport');
-    assert(c.edge>35,'spill must light the screen edges');
-    assert(c.mean>100,'the beam must clearly illuminate middle-distance surfaces');
+    assert(c.litFraction>.25&&c.litFraction<.65,'wide FOV must show a broad pool of light with dark periphery');
+    assert(c.edge<5,'screen edges must stay outside the torch cone');
+    assert(c.center>100,'the hotspot must clearly illuminate middle-distance surfaces');
   }
   assert(after.cases.filter(c=>c.distance<=600).every(c=>c.whiteFraction<.01),'close surfaces must retain texture');
   if(before){
-    assert(before.programsOn>before.programsBefore,'baseline must reproduce activation shader recompilation');
-    for(const c of after.cases.filter(c=>c.distance>=600&&c.distance<=1600)){
+    for(const c of after.cases.filter(c=>c.distance===600)){
       const b=before.cases.find(b=>b.fov===c.fov&&b.distance===c.distance);
-      assert(c.mean>b.mean*3,'broad illumination must be substantially brighter than the baseline');
+      assert(c.litFraction<b.litFraction*.65,'beam must stay narrower than the original floodlight');
+      assert(c.center>b.center*.85,'focusing must preserve the useful central brightness');
     }
   }
   assert(report.fixtures.every(f=>f.glError===0));

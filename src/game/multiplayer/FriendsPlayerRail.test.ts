@@ -17,7 +17,7 @@ const aircraft=(e:FriendsExpedition)=>e.vehicles().find(v=>v.kind==='aircraft')!
 describe('player-built railway and spawn transport',()=>{
   it('starts with a grounded helicopter and sightseeing service, without player builds',()=>{
     const s=new FriendsSimulation(seeds),f=s.createSnapshot().friends!;
-    expect(f.vehicles.filter(v=>!v.scenic).map(v=>v.kind)).toEqual(['aircraft']);expect(f.vehicles.filter(v=>v.scenic)).toHaveLength(SCENIC_WAGONS.length+1);expect(f.building!.pieces).toEqual([]);expect(friendsRegionObstacles()).toEqual([]);
+    expect(f.vehicles.filter(v=>!v.scenic).map(v=>v.kind)).toEqual(['aircraft','rowboat']);expect(f.vehicles.filter(v=>v.scenic)).toHaveLength(SCENIC_WAGONS.length+1);expect(f.building!.pieces).toEqual([]);expect(friendsRegionObstacles()).toEqual([]);
     expect(aircraft(s['friends']!)).toMatchObject({...FRIENDS_AIRPAD,z:FRIENDS_AIRFIELD_HEIGHT+14});
   });
   it('removes invisible station platform floors and roof ceilings too',()=>{
@@ -28,16 +28,16 @@ describe('player-built railway and spawn transport',()=>{
   it('rejects guest train assembly without spending materials when the host disables editing',()=>{
     const fixture=railFixture(),s=new FriendsSimulation([...seeds,{id:'guest',label:'Guest',color:'#fff'}],1,undefined,fixture.building,undefined,fixture.frontier),p=s['players'].get('guest')!;
     Object.assign(p,{x:4000,y:fixture.building.pieces[0].y-100,z:0});const pack=s['friendsFrontier']!.pack(p);Object.assign(pack,{planks:12,ingots:4});const before={...pack};s.setFriendsGuestAccess(false);
-    expect(s.friendsAction('guest',{requestId:1,action:'train_place'}).ok).toBe(false);expect(pack).toEqual(before);expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(1);
+    expect(s.friendsAction('guest',{requestId:1,action:'train_place'}).ok).toBe(false);expect(pack).toEqual(before);expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(2);
   });
   it('replicates train creation and dismantling through snapshot deltas without stale vehicles',()=>{
     const fixture=railFixture(),s=new FriendsSimulation(seeds,1,undefined,fixture.building,undefined,fixture.frontier),p=s['players'].get('host')!;Object.assign(p,{x:4000,y:fixture.building.pieces[0].y-200,z:0});Object.assign(s['friendsFrontier']!.pack(p),{planks:12,ingots:4});
     const before=s.createSnapshot(),decoder=new SnapshotDecoder();decoder.decode(compactSnapshotWirePayload(before),1);
     expect(s.friendsAction('host',{requestId:1,action:'train_place'}).ok).toBe(true);const built=s.createSnapshot();
-    expect(decoder.decode(compactSnapshotWirePayload(createSnapshotDelta(before,built,1)),2)!.friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(5);
+    expect(decoder.decode(compactSnapshotWirePayload(createSnapshotDelta(before,built,1)),2)!.friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(6);
     // Deltas reference retained keyframes, rather than earlier deltas.
     decoder.decode(compactSnapshotWirePayload(built),2);
-    expect(s.friendsAction('host',{requestId:2,action:'train_remove'}).ok).toBe(true);const removed=s.createSnapshot();expect(decoder.decode(compactSnapshotWirePayload(createSnapshotDelta(built,removed,2)),3)!.friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(1);
+    expect(s.friendsAction('host',{requestId:2,action:'train_remove'}).ok).toBe(true);const removed=s.createSnapshot();expect(decoder.decode(compactSnapshotWirePayload(createSnapshotDelta(built,removed,2)),3)!.friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(2);
   });
   it('snaps a straight and quarter turn with matching position, elevation and tangent',()=>{
     for(let rotation=0;rotation<4;rotation++){
@@ -76,7 +76,7 @@ describe('player-built railway and spawn transport',()=>{
     expect(s.createSnapshot().friends!.vehicles.filter(v=>v.kind==='train'&&!v.scenic)).toHaveLength(1);
     const copy={...f.pack(p)};expect(s.friendsAction('host',{requestId:2,action:'train_place'}).ok).toBe(true);expect(s.friendsAction('host',{requestId:3,action:'train_place'}).ok).toBe(false);expect(f.pack(p)).toEqual(copy);
     expect(s.friendsBuild('host',{requestId:2,action:'remove',pieceId:1,expectedRevision:s.createSnapshot().friends!.building!.pieces[0].revision}).ok).toBe(false);
-    expect(s.friendsAction('host',{requestId:4,action:'train_remove'}).ok).toBe(true);expect(f.snapshot().stock).toMatchObject({wood:0,planks:0,ingots:0});expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(1);
+    expect(s.friendsAction('host',{requestId:4,action:'train_remove'}).ok).toBe(true);expect(f.snapshot().stock).toMatchObject({wood:0,planks:0,ingots:0});expect(s.createSnapshot().friends!.vehicles.filter(v=>!v.scenic)).toHaveLength(2);
   });
   it('shuttles on an open line without running beyond the track or dropping idle passengers',()=>{
     const e=railExpedition(),car=e.vehicles()[0],p={id:'host',x:car.x,y:car.y,z:car.z,lifeState:'alive'};

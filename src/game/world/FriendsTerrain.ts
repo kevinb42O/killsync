@@ -1,3 +1,4 @@
+import { skyfallCascadeAt, interpolateTerrainSurface } from './FriendsWaterBodies';
 import { retreatClearing } from './FriendsRetreatSites';
 import { scenicTransitAir, scenicRailColumns, scenicTransitProtected, scenicTransitSurface, scenicStructureRanges, scenicRailFloor, scenicRailCeiling } from './FriendsRailInfrastructure';
 import { ISLAND_SEA_LEVEL, ISLAND_ARCH, ISLAND_LANDMARK_SITES, islandCoastDistance, islandMountainHeight, islandSeaStackHeight, islandVolcanoHeight, ISLAND_LAKES, islandLakeRadius, islandSmooth, islandArchRange, createIslandRuins, type IslandStoneBox } from './FriendsIsland';
@@ -5,7 +6,7 @@ import { caveColumn, caveEntranceFloor, explorationCave } from './FriendsCave';
 import { FRIENDS_AIRPAD, FRIENDS_CAMPFIRE } from './FriendsRegion';
 import { castleTerrainHeight, HIGHFALL_CASTLE } from './FriendsCastle';
 import { createCastleStairs, type CastleStairs } from './FriendsCastleStairs';
-import { hydrologyTerrainHeight, hydrologyWaterLevel, HYDROLOGY_SITES, RIVER_CROSSING } from './FriendsHydrology';
+import { hydrologyTerrainHeight, hydrologyProtected, hydrologyWaterLevel, HYDROLOGY_SITES, RIVER_CROSSING } from './FriendsHydrology';
 import { createRiverBridge, type RiverBridge } from './FriendsRiverBridge';
 let riverBridgeField:RiverBridge|undefined;
 let castleStairsField:CastleStairs|undefined;
@@ -117,10 +118,36 @@ export function baseTerrainHeight(x: number, y: number, includeRivers=true) {
     ground=grade(ground,x,y,camp.x,camp.y,camp.z,camp.radius,160);
   // Do not remove the World Gate roof: its river carves the cavity floor.
   if(includeRivers){
-    if(!islandArchRange(x,y))ground=hydrologyTerrainHeight(x,y,ground);
+    const arch=islandArchRange(x,y);
+    // A flared cave mouth is open sky when its roof exceeds the mountain.
+    // In that case the cavity floor must be the real terrain surface too.
+    if(arch&&ground<arch[1]+32&&!hydrologyProtected(x,y)
+      &&(islandLakeRadius(x,y,ISLAND_LAKES[1])<1.45||hydrologyWaterLevel(x,y)!==undefined))ground=arch[0];
+    else if(!arch)ground=hydrologyTerrainHeight(x,y,ground);
+    const cascade=skyfallWaterLevelAt(x,y);
+    if(cascade&&!hydrologyProtected(x,y)){
+      // Steep water crosses an entire voxel cell. Its bed must stay below the
+      // lowest part of that sheet, not just the elevation at the cell centre.
+      const y0=Math.floor(y/32)*32;
+      const low=Math.min(...[0,16,32].map(offset=>skyfallWaterLevelAt(x,y0+offset)?.level??cascade.level));
+      const r=cascade.side/(cascade.width/2),bed=low-48;
+      const target=r<1.25?bed+(cascade.level+16-bed)*smooth((r-.7)/.55):Math.max(ground,cascade.level+16);
+      const blend=1-smooth((cascade.side-cascade.width*.625)/(96-cascade.width*.125));
+      const channel=target*blend+ground*(1-blend);
+      ground=cascade.level<=ISLAND_LAKES[0].level&&islandLakeRadius(x,y,ISLAND_LAKES[0])<1.45?Math.min(ground,channel):channel;
+    }
     ground=riverBridgeField?.terrainHeight(x,y,ground)??ground;
   }
   return gridHeight(ground);
+}
+const skyfallLevels=new Map<string,number>();
+export function skyfallWaterLevelAt(x:number,y:number){
+  const s=skyfallCascadeAt(x,y);if(!s)return;
+  const at=(y:number)=>{const key=`${s.index},${y}`;let level=skyfallLevels.get(key);if(level!==undefined)return level;
+    const t=(y-18976)/1312,cx=[6464,7360][s.index]+Math.sin(t*Math.PI)*96+Math.sin(t*8)*40;
+    level=interpolateTerrainSurface(cx,y,(x,y)=>baseTerrainHeight(x,y,false));skyfallLevels.set(key,level);return level;};
+  const y0=Math.floor(y/16)*16,f=(y-y0)/16;
+  return {...s,level:at(y0)*(1-f)+at(y0+16)*f};
 }
 // Vehicles and arrivals follow their individual terrain cells, without grading.
 export const FRIENDS_AIRFIELD_HEIGHT=baseTerrainHeight(FRIENDS_AIRPAD.x,FRIENDS_AIRPAD.y);
@@ -195,7 +222,7 @@ export function islandRuinsAt(x:number,y:number){
 export function terrainProtected(x: number, y: number) {
   // Vegetation clearance around arrival and the aircraft. This is not an
   // excavation reserve: players may reshape this ground.
-  return hydrologyWaterLevel(x,y)!==undefined || Boolean(riverBridgeField?.clearing(x,y)) || retreatClearing(x,y) || friendsCampfireContains(x,y) || Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
+  return skyfallCascadeAt(x,y)!==undefined || hydrologyWaterLevel(x,y)!==undefined || Boolean(riverBridgeField?.clearing(x,y)) || retreatClearing(x,y) || friendsCampfireContains(x,y) || Boolean(friendsFixedPlatformAt(x,y)) || Math.hypot(x - 5900, y - 5630) < 180 || Math.hypot(x - FRIENDS_AIRPAD.x, y - FRIENDS_AIRPAD.y) < 300;
 }
 export function naturalCave(x: number, y: number, z: number, roofLimit=Infinity) {
   const arch=islandArchRange(x,y);if(arch&&z>=arch[0]&&z<arch[1])return true;

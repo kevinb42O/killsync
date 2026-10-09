@@ -1,0 +1,114 @@
+{
+  "errors": [],
+  "method": "Production Friends scene in Chromium/Metal. Pause the game loop and hold castle geometry, camera, terrain and shadows fixed. Change only the camera supplied to the torch light selector, then render. Count actual WebGL shader compiles/links and timed blocking program queries.",
+  "result": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "warmup": {
+      "submitted": 554,
+      "completed": 554,
+      "queued": 0,
+      "pending": false,
+      "failures": 0,
+      "maxSubmitMs": 12.100000023841858
+    },
+    "realPipeline": true,
+    "arrivalView": [
+      {
+        "renderMs": 6.5,
+        "compiled": 0,
+        "linked": 0
+      },
+      {
+        "renderMs": 4.399999976158142,
+        "compiled": 0,
+        "linked": 0
+      }
+    ],
+    "frames": [
+      {
+        "phase": "far-warmup",
+        "updateMs": 0.10000002384185791,
+        "renderMs": 8132.899999976158,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 99,
+        "newPrograms": [],
+        "calls": 2666,
+        "triangles": 1818926
+      },
+      {
+        "phase": "far-steady",
+        "updateMs": 0.10000002384185791,
+        "renderMs": 12.099999904632568,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 99,
+        "newPrograms": [],
+        "calls": 4068,
+        "triangles": 2796287
+      },
+      {
+        "phase": "enter-castle",
+        "updateMs": 0,
+        "renderMs": 9.699999928474426,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 99,
+        "newPrograms": [],
+        "calls": 5470,
+        "triangles": 3773648
+      },
+      {
+        "phase": "castle-steady",
+        "updateMs": 0,
+        "renderMs": 7.799999952316284,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 99,
+        "newPrograms": [],
+        "calls": 6872,
+        "triangles": 4751009
+      },
+      {
+        "phase": "leave-castle",
+        "updateMs": 0,
+        "renderMs": 8.399999976158142,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 99,
+        "newPrograms": [],
+        "calls": 8274,
+        "triangles": 5728370
+      },
+      {
+        "phase": "reenter-castle",
+        "updateMs": 0,
+        "renderMs": 8.600000023841858,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 99,
+        "newPrograms": [],
+        "calls": 9676,
+        "triangles": 6705731
+      }
+    ]
+  }
+}

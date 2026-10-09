@@ -304,5 +304,30 @@
     "pack": "survival-kit",
     "path": "public/models/friends/survival-kit/tool-shovel-upgraded.glb",
     "source": "https://kenney.nl/assets/survival-kit"
+  },
+  {
+    "name": "boat-row-large",
+    "pack": "watercraft-kit",
+    "path": "public/models/friends/watercraft-kit/boat-row-large.glb",
+    "source": "https://kenney.nl/assets/watercraft-kit",
+    "license": "CC0-1.0",
+    "downloaded": "2026-10-09",
+    "version": "2.1"
+  },
+  {
+    "name": "Fishing Rod Lvl5",
+    "pack": "quaternius-cute-fish",
+    "path": "public/models/friends/fishing/rod.glb",
+    "source": "https://quaternius.com/packs/cutefish.html",
+    "mirror": "https://poly.pizza/m/aOabqWh68m",
+    "license": "CC0-1.0"
+  },
+  {
+    "name": "Koi",
+    "pack": "quaternius-cute-fish",
+    "path": "public/models/friends/fishing/koi.glb",
+    "source": "https://quaternius.com/packs/cutefish.html",
+    "mirror": "https://poly.pizza/m/qyGtRmhgzl",
+    "license": "CC0-1.0"
   }
 ]

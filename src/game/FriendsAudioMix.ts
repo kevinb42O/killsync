@@ -15,7 +15,7 @@ const PROFILES: Record<FriendsCue, Profile | undefined> = {
   ropeHook: profile(-21), ropeCreak: profile(-21, -6), reelRatchet: profile(-24, -6),
   flashlight: SMALL, nightVision: SMALL,
   caveDrip: profile(-23, -9), steam: profile(-24, -6),
-  leaves: profile(-25, -6), birdCall: profile(-23, -6), flightFoliage: profile(-24, -6),
+  leaves: profile(-25, -6), birdCall: profile(-23, -6), birdRobin: profile(-18,-6), birdBlueTit: profile(-18,-6), birdSparrow: profile(-18,-6), birdWings: profile(-21,-6), birdStartled: profile(-19,-6), flightFoliage: profile(-24, -6),
   trainDepart: profile(-23, -6), trainBrake: profile(-23, -6), trainStop: profile(-23, -6), trainHorn: profile(-19, -6),
   gunfire: profile(-17, -3), reloadRifle: profile(-30, -6), reloadHandgun: profile(-30, -6), reloadShotgun: profile(-30, -6),
   swing: undefined,

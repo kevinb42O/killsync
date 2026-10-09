@@ -1,0 +1,8 @@
+{
+  "origin": "http://localhost:3012",
+  "errors": [],
+  "phases": [],
+  "method": "Actual Friends game render/update loop and terrain workers, shadows enabled. Move the final render camera continuously along a castle survey route; the avatar stays at arrival. Shader compile counters and frame gaps cover streaming, shadow updates, world rendering and HDR composition.",
+  "failure": "TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.",
+  "body": "OPERATOR LINK / SUNLINE COMMONS\nMATERIALIZING\nCLICK TO RESUME CONTROL\nGBACKPACK\nAHEAD\n744 m"
+}

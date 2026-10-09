@@ -2,6 +2,7 @@ import {describe,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import type {CoopPlayerSnapshot} from '../multiplayer/CoopSimulation';
 import {FriendsSharedFlashlights} from './FriendsSharedFlashlights';
+import {FRIENDS_FLASHLIGHT_MAX_ANGLE} from './FriendsFlashlight';
 
 const actor=(id:string,extra:Partial<CoopPlayerSnapshot>={}):CoopPlayerSnapshot=>({
   id,x:0,y:-500,z:0,angle:Math.PI/2,lifeState:'alive',friendsFlashlight:{pitch:0,cone:1.35},...extra,
@@ -36,7 +37,7 @@ describe('shared Friends flashlight rendering',()=>{
     expect(f.lights.every(l=>l.intensity===0&&l.visible)).toBe(true);expect(f.renderer.shadowMap.needsUpdate).toBe(false);
     players[1].angle=0;players[1].friendsFlashlight={pitch:.4,cone:1,yaw:Math.PI/2};
     f.lamps.update(players,'self',f.camera,300,16,()=>false);f.render();
-    expect(f.lights.find(l=>l.intensity>0)).toBe(light);expect(light.angle).toBe(1);
+    expect(f.lights.find(l=>l.intensity>0)).toBe(light);expect(light.angle).toBe(FRIENDS_FLASHLIGHT_MAX_ANGLE);
     expect(light.target.position.clone().sub(light.position).normalize().y).toBeCloseTo(Math.sin(.4));
     expect(light.target.position.clone().sub(light.position).normalize().z).toBeCloseTo(Math.cos(.4));
     f.lamps.dispose();expect(f.scene.children).toHaveLength(0);

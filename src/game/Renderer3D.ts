@@ -5,6 +5,7 @@ import type { CoopRealityBreachSnapshot } from './multiplayer/CoopRealityBreach'
 import { createBreachCathedral } from './rendering/RealityBreachVisuals';
 import * as THREE from 'three';
 import { FriendsNightVision } from './rendering/FriendsNightVision';
+import { FriendsShaderWarmup } from './rendering/FriendsShaderWarmup';
 import type { FriendsFlashlightGlare } from './rendering/FriendsSharedFlashlights';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { GameEngine } from './Engine';
@@ -109,6 +110,7 @@ export class Renderer3D {
   private speedLineMesh!: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
   private speedLineIntensity = 0;
   private nightVision?: FriendsNightVision;
+  private friendsShaderWarmup?: FriendsShaderWarmup;
   /** Kept wholly separate from desktop settings so touch hardware trades a
    * little invisible rendering detail for materially steadier frame pacing. */
   private readonly mobilePerformance: boolean;
@@ -139,8 +141,11 @@ export class Renderer3D {
   presentationGrounded = false;
   presentationWorldRender?: (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) => boolean;
   presentationViewmodelVisible = true;
+  presentationPreparingWorld = false;
   private readonly friendsVehicleCamera = new FriendsVehicleCamera();
   presentationSprinting: boolean = false;
+  /** Normalized airborne Superjump speed for camera and peripheral streaks. */
+  presentationSuperjumpSpeed: number = 0;
   presentationSliding: boolean = false;
   /** Short-lived first-person body lean supplied by wall-jump presentation. */
   presentationCameraRoll: number = 0;
@@ -475,6 +480,7 @@ export class Renderer3D {
     this.rebuildEnvironment();
     if (this.worldId === 'friends_frontier') this.nightVision = new FriendsNightVision(this.scene,
       this.mobilePerformance ? {maxPixels:1600*900,samples:0} : undefined);
+    if (this.worldId === 'friends_frontier') this.friendsShaderWarmup = new FriendsShaderWarmup(this.renderer, this.scene);
 
     // 6. Setup High-End FPS Viewmodel (Production Cyber Arm & Blaster)
     this.setupFPSViewmodel();
@@ -2650,7 +2656,7 @@ export class Renderer3D {
 
     const adsDamp = 1 - this.adsProgress * 0.88;
 
-    const baseFov = engine.isDashing ? this.WORLD_DASH_FOV : (this.presentationSprinting ? this.WORLD_FOV + 7 : this.WORLD_FOV);
+    const baseFov = engine.isDashing ? this.WORLD_DASH_FOV : this.WORLD_FOV + Math.max(this.presentationSprinting ? 7 : 0, this.presentationSuperjumpSpeed * 12);
     const adsWorldFov = this.presentationScoped ? 28 : this.ADS_FOV;
     const adsViewmodelFov = this.presentationScoped ? 42 : this.VIEWMODEL_ADS_FOV;
     const targetWorldFov = THREE.MathUtils.lerp(baseFov, adsWorldFov, this.adsProgress);
@@ -3036,8 +3042,7 @@ export class Renderer3D {
     beforeSceneRender?.();
     const nightVisionPass = this.nightVision?.beginFrame(this.renderer, this.camera, deltaTime,
       this.worldId === 'friends_frontier' && viewMode === 'FIRST_PERSON' && !this.presentationSpectating);
-    // Streaming and shader initialization must never gate world drawing.
-    // The arrival pass already reveals the scene while assets are loading.
+    if (nightVisionPass && !this.presentationPreparingWorld) this.friendsShaderWarmup?.update(this.camera);
     if (!this.presentationWorldRender?.(this.renderer,this.scene,this.camera)) this.renderer.render(this.scene, this.camera);
     if (viewMode === 'FIRST_PERSON' && this.presentationViewmodelVisible) {
       this.renderer.autoClear = false;
@@ -3055,8 +3060,8 @@ export class Renderer3D {
       // Speed lines are motion feedback, so require a meaningful presented
       // velocity as well; otherwise standing still with Shift produced them.
       const isActuallyMoving = Math.hypot(player.velocity.x, player.velocity.y) > 30;
-      const speedLineTarget = viewMode === 'FIRST_PERSON' && this.presentationSprinting && isActuallyMoving
-        ? 0.26 * (1 - this.adsProgress)
+      const speedLineTarget = viewMode === 'FIRST_PERSON' && (this.presentationSprinting || this.presentationSuperjumpSpeed > 0) && isActuallyMoving
+        ? Math.max(this.presentationSprinting ? .26 : 0, this.presentationSuperjumpSpeed * .42) * (1 - this.adsProgress)
         : 0;
       this.speedLineIntensity = this.damp(this.speedLineIntensity, speedLineTarget, speedLineTarget > 0 ? 8 : 12, deltaTime);
       this.speedLineMaterial.uniforms.time.value += Math.min(deltaTime, 50) / 1000;
@@ -5586,6 +5591,7 @@ export class Renderer3D {
   }
 
   destroy() {
+    this.friendsShaderWarmup?.dispose();
     this.nightVision?.dispose();
     for (const object of this.environmentObjects) { object.userData.skyTexture?.dispose(); object.traverse(child => { child.userData.disposed = true; }); }
     for (const object of this.environmentObjects) if (object.name === 'friends-frontier-environment') object.traverse(child => {

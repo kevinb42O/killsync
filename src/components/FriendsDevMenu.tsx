@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Hammer, Plane, Sun, Wind, X, RotateCcw, Pause, Play } from 'lucide-react';
+import { ArrowUp, Hammer, Plane, Sun, Wind, X, RotateCcw, Pause, Play } from 'lucide-react';
 import type { FriendsEnvironmentChange, FriendsEnvironmentState } from '../game/world/FriendsEnvironmentPreview';
 
-export function FriendsDevMenu({environment,flight,guestsCanBuild,onGuestAccess,onFlight,onChange,onClose}:{environment:FriendsEnvironmentState;flight:boolean;guestsCanBuild:boolean;onGuestAccess:()=>void;onFlight:()=>void;onChange:(change:FriendsEnvironmentChange)=>void;onClose:()=>void}){
+export function FriendsDevMenu({environment,flight,superjump,guestsCanBuild,onGuestAccess,onFlight,onSuperjump,onChange,onClose}:{environment:FriendsEnvironmentState;flight:boolean;superjump:boolean;guestsCanBuild:boolean;onGuestAccess:()=>void;onFlight:()=>void;onSuperjump:()=>void;onChange:(change:FriendsEnvironmentChange)=>void;onClose:()=>void}){
   const close=useRef<HTMLButtonElement>(null);
   useEffect(()=>{close.current?.focus();},[]);
   return <div className="friends-dev-backdrop" onPointerDown={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
@@ -22,6 +22,11 @@ export function FriendsDevMenu({environment,flight,guestsCanBuild,onGuestAccess,
       <div className="friends-dev-section"><h3><Plane size={16}/> Free flight</h3>
         <button className="friends-dev-toggle" aria-pressed={flight} onClick={onFlight}><span>{flight?'Flight enabled':'Flight disabled'}</span><b>{flight?'ON':'OFF'}</b></button>
         <p>Move toward your view · Space rise · Ctrl descend · Shift boost</p>
+      </div>
+      <div className="friends-dev-section"><h3><ArrowUp size={16}/> Superjump</h3>
+        <button className="friends-dev-toggle" aria-pressed={superjump} onClick={onSuperjump}><span>{superjump?'Superjump enabled':'Superjump disabled'}</span><b>{superjump?'ON':'OFF'}</b></button>
+        <p>Move + Space to leap far with 3× jump power · Shift boosts · Steer in the air · Ctrl brakes · Space alone jumps straight up</p>
+        <p>Turn off free flight to jump. Gravity and collisions still apply.</p>
       </div>
       <div className="friends-dev-section"><h3><Sun size={16}/> Time of day <output>{environment.clock}</output></h3>
         <div className="friends-dev-presets">{[['Dawn',6],['Noon',12],['Sunset',18],['Midnight',0]].map(([label,hour])=><button key={label} onClick={()=>onChange({hour:Number(hour)})}>{label}</button>)}</div>

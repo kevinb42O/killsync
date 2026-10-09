@@ -1,0 +1,475 @@
+{
+  "origin": "http://localhost:3021",
+  "errors": [],
+  "method": "Fresh browser context, actual Friends arena, fixed spawn camera. Frame gaps, long tasks, stage CPU times and slow WebGL calls from launch through settling. Menu rendering excluded. These are local Chromium/Metal measurements, not remote player FPS.",
+  "result": {
+    "buckets": [
+      {
+        "at": 0,
+        "frames": 51,
+        "medianMs": 16.700000000000045,
+        "p95Ms": 333.3000000000002,
+        "maxMs": 14516.4,
+        "over100Ms": 7,
+        "compiles": 48
+      },
+      {
+        "at": 5000,
+        "frames": 0,
+        "over100Ms": 0,
+        "compiles": 10
+      },
+      {
+        "at": 10000,
+        "frames": 0,
+        "over100Ms": 0,
+        "compiles": 14
+      },
+      {
+        "at": 15000,
+        "frames": 88,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 32.29999999999927,
+        "maxMs": 50.70000000000073,
+        "over100Ms": 0,
+        "compiles": 34
+      },
+      {
+        "at": 20000,
+        "frames": 65,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.599999999998545,
+        "maxMs": 6766.399999999998,
+        "over100Ms": 1,
+        "compiles": 4
+      },
+      {
+        "at": 25000,
+        "frames": 127,
+        "medianMs": 16.69999999999709,
+        "p95Ms": 17.700000000000728,
+        "maxMs": 66,
+        "over100Ms": 0,
+        "compiles": 14
+      },
+      {
+        "at": 30000,
+        "frames": 155,
+        "medianMs": 16.69999999999709,
+        "p95Ms": 17.600000000002183,
+        "maxMs": 32.60000000000218,
+        "over100Ms": 0,
+        "compiles": 14
+      }
+    ],
+    "tasks": [
+      {
+        "at": 263.3000000715256,
+        "ms": 140
+      },
+      {
+        "at": 455.60000002384186,
+        "ms": 112
+      },
+      {
+        "at": 589.4000000953674,
+        "ms": 1248
+      },
+      {
+        "at": 1842.6000000238419,
+        "ms": 711
+      },
+      {
+        "at": 3068.4000000953674,
+        "ms": 182
+      },
+      {
+        "at": 3311.9000000953674,
+        "ms": 340
+      },
+      {
+        "at": 3661.100000023842,
+        "ms": 73
+      },
+      {
+        "at": 3738.4000000953674,
+        "ms": 175
+      },
+      {
+        "at": 3920.600000023842,
+        "ms": 14514
+      },
+      {
+        "at": 27850,
+        "ms": 59
+      }
+    ],
+    "gl": [
+      {
+        "method": "getProgramInfoLog",
+        "at": 4106,
+        "ms": 674.9000000953674,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5543.900000095367,
+        "ms": 627.0999999046326,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 10710.900000095367,
+        "ms": 573.5999999046326,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 6683.800000071526,
+        "ms": 561,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 11653,
+        "ms": 551.1000000238419,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 8858.400000095367,
+        "ms": 527.1999999284744,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 7677.400000095367,
+        "ms": 506.7999999523163,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 14165.800000071526,
+        "ms": 490.2999999523163,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 15026.100000023842,
+        "ms": 482.39999997615814,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 12601.800000071526,
+        "ms": 460.6999999284744,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 13149.200000047684,
+        "ms": 451.7000000476837,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4914.700000047684,
+        "ms": 451.2000000476837,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as texSubImage2D] (<anonymous>:24:146)\n    at Object.Y [as texSubImage2D] (http://localhost:3021/assets/index-BR3xzVu3.js:4733:14256)\n    at lt (http://localhost:3021/assets/index-BR3xzVu3.js:4733:34108)\n    at ooe.j [as setTexture2D] (http://localhost:3021/assets/index-BR3xzVu3.js:4733:24728)\n    at dre.Bae [as setValue] (http://localhost:3021/assets/index-BR3xzVu3.js:4655:5060)\n    at v_.upload (http://localhost:3021/assets/index-BR3xzVu3.js:4655:9654)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:46723)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 15875.600000023842,
+        "ms": 440,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 16899.800000071526,
+        "ms": 438.7999999523163,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4135)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3075.100000023842,
+        "ms": 170.30000007152557,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6238)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at aoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4733:3694)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3321.600000023842,
+        "ms": 147.80000007152557,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6093)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at aoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4733:3694)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34105)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 1916.3000000715256,
+        "ms": 132.79999995231628,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6238)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at aoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4733:3694)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 2221.7000000476837,
+        "ms": 125.70000004768372,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at re (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38701)\n    at ls (http://localhost:3021/assets/index-BR3xzVu3.js:4757:38237)\n    at Ji (http://localhost:3021/assets/index-BR3xzVu3.js:4757:36266)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34504)\n    at X1e.render (http://localhost:3021/assets/index-BR3xzVu3.js:5610:4742)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3521.4000000953674,
+        "ms": 115.79999995231628,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6093)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at aoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4733:3694)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34105)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3796.4000000953674,
+        "ms": 113.89999997615814,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3021/assets/index-BR3xzVu3.js:4699:338)\n    at Bre.getUniforms (http://localhost:3021/assets/index-BR3xzVu3.js:4706:304)\n    at Ds (http://localhost:3021/assets/index-BR3xzVu3.js:4757:44066)\n    at xoe.renderBufferDirect (http://localhost:3021/assets/index-BR3xzVu3.js:4757:29747)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6238)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at S (http://localhost:3021/assets/index-BR3xzVu3.js:4733:6361)\n    at aoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4733:3694)\n    at xoe.render (http://localhost:3021/assets/index-BR3xzVu3.js:4757:34105)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 2454,
+        "ms": 97.90000009536743
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18091.100000023842,
+        "ms": 97.80000007152557
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18286.100000023842,
+        "ms": 91.80000007152557
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 17910.200000047684,
+        "ms": 84.79999995231628
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 2371.100000023842,
+        "ms": 72.39999997615814
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 2108.100000023842,
+        "ms": 64.70000004768372
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3935.600000023842,
+        "ms": 64.39999997615814
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18242.300000071526,
+        "ms": 33.10000002384186
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3746.9000000953674,
+        "ms": 31.199999928474426
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18394.800000071526,
+        "ms": 31.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3470.4000000953674,
+        "ms": 31
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 2184.3000000715256,
+        "ms": 29.899999976158142
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18032.300000071526,
+        "ms": 29.899999976158142
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 27863.100000023842,
+        "ms": 28
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5430.600000023842,
+        "ms": 27.300000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4805.300000071526,
+        "ms": 27.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 13118.900000095367,
+        "ms": 26.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4888.700000047684,
+        "ms": 25.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5405.400000095367,
+        "ms": 25.199999928474426
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4863.800000071526,
+        "ms": 24.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5497,
+        "ms": 24.600000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 7649.200000047684,
+        "ms": 24.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6192.100000023842,
+        "ms": 23.700000047683716
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 10036.200000047684,
+        "ms": 21.600000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4783.300000071526,
+        "ms": 21.299999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 13097.900000095367,
+        "ms": 21
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4843.5,
+        "ms": 20.200000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5477.400000095367,
+        "ms": 19.59999990463257
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5385.900000095367,
+        "ms": 19.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5458.200000047684,
+        "ms": 19.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6172.800000071526,
+        "ms": 19.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5367,
+        "ms": 18.800000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 13064.5,
+        "ms": 17.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 13081.700000047684,
+        "ms": 16.200000047683716
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18219.5,
+        "ms": 13.100000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 17995.900000095367,
+        "ms": 12.899999976158142
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 2087.5,
+        "ms": 12.600000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18015.600000023842,
+        "ms": 11.100000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18067.800000071526,
+        "ms": 10.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4832.5,
+        "ms": 10.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5521.700000047684,
+        "ms": 10.5
+      }
+    ],
+    "stages": [],
+    "warmup": {
+      "submitted": 106,
+      "completed": 105,
+      "queued": 444,
+      "scanning": false,
+      "pending": true,
+      "failures": 0,
+      "maxSubmitMs": 20.299999952316284,
+      "maxReadinessMs": 35.60000002384186,
+      "maxScanMs": 2.100000023841858
+    },
+    "terrain": {
+      "surfaceTiles": 58,
+      "surfaceBytes": 10509096,
+      "surfaceJobs": 0,
+      "pendingVoxels": 0,
+      "patchDraws": 0,
+      "volumeChunks": 161,
+      "volumeActive": 161,
+      "volumeJobs": 0,
+      "editMeshLatencyP95": 0,
+      "editMeshSamples": 0
+    },
+    "arrival": {
+      "active": false,
+      "age": 3765.7000000000003,
+      "reveal": 1,
+      "settling": 2983.3,
+      "revealing": true
+    },
+    "render": {
+      "drawCalls": 418,
+      "triangles": 280527,
+      "geometries": 192,
+      "textures": 59,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    }
+  }
+}

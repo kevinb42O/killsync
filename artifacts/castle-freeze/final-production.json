@@ -1,0 +1,12 @@
+{
+  "errors": [],
+  "method": "Production Friends scene in Chromium/Metal. Pause the game loop and hold castle geometry, camera, terrain and shadows fixed. Change only the camera supplied to the torch light selector, then render. Count actual WebGL shader compiles/links and timed blocking program queries.",
+  "options": {
+    "cold": false,
+    "shadows": true,
+    "real_pipeline": true,
+    "wait_prepare": true,
+    "trace_all": false
+  },
+  "failure": "TimeoutError: page.waitForFunction: Timeout 90000ms exceeded."
+}

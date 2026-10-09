@@ -1,0 +1,87 @@
+{
+  "errors": [],
+  "method": "Production Friends scene in Chromium/Metal. Pause the game loop and hold castle geometry, camera, terrain and shadows fixed. Change only the camera supplied to the torch light selector, then render. Count actual WebGL shader compiles/links and timed blocking program queries.",
+  "result": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "frames": [
+      {
+        "phase": "far-warmup",
+        "updateMs": 0,
+        "renderMs": 10445.899999976158,
+        "compiled": 114,
+        "linked": 57,
+        "programQueryMs": 14.400000214576721,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 106,
+        "calls": 1854,
+        "triangles": 1332793
+      },
+      {
+        "phase": "far-steady",
+        "updateMs": 0.09999990463256836,
+        "renderMs": 10.900000095367432,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 106,
+        "calls": 3082,
+        "triangles": 2118681
+      },
+      {
+        "phase": "enter-castle",
+        "updateMs": 0.09999990463256836,
+        "renderMs": 7,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 106,
+        "calls": 4310,
+        "triangles": 2904569
+      },
+      {
+        "phase": "castle-steady",
+        "updateMs": 0,
+        "renderMs": 7.700000047683716,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 106,
+        "calls": 5538,
+        "triangles": 3690457
+      },
+      {
+        "phase": "leave-castle",
+        "updateMs": 0,
+        "renderMs": 7.100000023841858,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 106,
+        "calls": 6766,
+        "triangles": 4476345
+      },
+      {
+        "phase": "reenter-castle",
+        "updateMs": 0,
+        "renderMs": 7.799999952316284,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 106,
+        "calls": 7994,
+        "triangles": 5262233
+      }
+    ]
+  }
+}

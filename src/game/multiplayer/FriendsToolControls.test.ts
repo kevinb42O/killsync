@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cycleFriendsTool, friendsToolInput, FRIENDS_TOOL_ORDER, FriendsToolWheel } from './FriendsToolControls';
+import { cycleFriendsTool, friendsToolInput, FRIENDS_TOOL_ORDER, FriendsToolWheel, cycleFriendsFun, FRIENDS_FUN_ORDER } from './FriendsToolControls';
 
 describe('Friends wheel tools', () => {
   it('cycles the displayed belt in either direction, including firearm and rope, with wraparound', () => {
@@ -8,8 +8,12 @@ describe('Friends wheel tools', () => {
       expect(cycleFriendsTool(FRIENDS_TOOL_ORDER[i], -1)).toBe(FRIENDS_TOOL_ORDER[(i + FRIENDS_TOOL_ORDER.length - 1) % FRIENDS_TOOL_ORDER.length]);
     }
   });
+  it('cycles stones, seeds and marshmallows in both directions',()=>{
+    expect(FRIENDS_FUN_ORDER).toEqual([8,9,10]);
+    for(let i=0;i<3;i++){expect(cycleFriendsFun(FRIENDS_FUN_ORDER[i],1)).toBe(FRIENDS_FUN_ORDER[(i+1)%3]);expect(cycleFriendsFun(FRIENDS_FUN_ORDER[i],-1)).toBe(FRIENDS_FUN_ORDER[(i+2)%3]);}
+  });
   it('keeps one shovel slot and maps secondary input to filling only for that tool', () => {
-    expect(FRIENDS_TOOL_ORDER).toEqual([6, 1, 2, 3, 0, 5]);
+    expect(FRIENDS_TOOL_ORDER).toEqual([6, 1, 2, 3, 0, 5, 7]);
     expect(friendsToolInput(3, false, true)).toEqual({ fill: true, held: true });
     expect(friendsToolInput(3, true, true)).toEqual({ fill: true, held: true });
     expect(friendsToolInput(3, true, false)).toEqual({ fill: false, held: true });

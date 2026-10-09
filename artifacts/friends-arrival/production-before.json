@@ -1,0 +1,447 @@
+{
+  "origin": "http://localhost:3020",
+  "errors": [],
+  "method": "Fresh browser context, actual Friends arena, fixed spawn camera. Frame gaps, long tasks, stage CPU times and slow WebGL calls from launch through settling. Menu rendering excluded. These are local Chromium/Metal measurements, not remote player FPS.",
+  "result": {
+    "buckets": [
+      {
+        "at": 0,
+        "frames": 22,
+        "medianMs": 34.40000000000009,
+        "p95Ms": 616.6999999999998,
+        "maxMs": 3033.2000000000003,
+        "over100Ms": 6,
+        "compiles": 92
+      },
+      {
+        "at": 5000,
+        "frames": 168,
+        "medianMs": 32.5,
+        "p95Ms": 50,
+        "maxMs": 316.7000000000007,
+        "over100Ms": 2,
+        "compiles": 56
+      },
+      {
+        "at": 10000,
+        "frames": 274,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 33.29999999999927,
+        "maxMs": 66.59999999999854,
+        "over100Ms": 0,
+        "compiles": 30
+      },
+      {
+        "at": 15000,
+        "frames": 288,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.700000000000728,
+        "maxMs": 34.39999999999782,
+        "over100Ms": 0,
+        "compiles": 22
+      },
+      {
+        "at": 20000,
+        "frames": 247,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 34.20000000000073,
+        "maxMs": 34.400000000001455,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 25000,
+        "frames": 265,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 33.39999999999782,
+        "maxMs": 34.39999999999782,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 30000,
+        "frames": 223,
+        "medianMs": 16.69999999999709,
+        "p95Ms": 17.69999999999709,
+        "maxMs": 17.799999999995634,
+        "over100Ms": 0,
+        "compiles": 0
+      }
+    ],
+    "tasks": [
+      {
+        "at": 23.09999990463257,
+        "ms": 82
+      },
+      {
+        "at": 119.39999997615814,
+        "ms": 237
+      },
+      {
+        "at": 357.5,
+        "ms": 59
+      },
+      {
+        "at": 435.2999999523163,
+        "ms": 180
+      },
+      {
+        "at": 661.8999999761581,
+        "ms": 2448
+      },
+      {
+        "at": 3115,
+        "ms": 578
+      },
+      {
+        "at": 3724.899999976158,
+        "ms": 597
+      },
+      {
+        "at": 4444.899999976158,
+        "ms": 64
+      },
+      {
+        "at": 4618.099999904633,
+        "ms": 130
+      },
+      {
+        "at": 4880.299999952316,
+        "ms": 321
+      },
+      {
+        "at": 5214.599999904633,
+        "ms": 300
+      },
+      {
+        "at": 5525.899999976158,
+        "ms": 87
+      },
+      {
+        "at": 9861.099999904633,
+        "ms": 62
+      },
+      {
+        "at": 11126.099999904633,
+        "ms": 66
+      }
+    ],
+    "gl": [
+      {
+        "method": "getProgramInfoLog",
+        "at": 4905.399999976158,
+        "ms": 71.5
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 4983.5,
+        "ms": 64.69999992847443
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5322.899999976158,
+        "ms": 64.39999997615814
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5393.599999904633,
+        "ms": 55.700000047683716
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5547.299999952316,
+        "ms": 55.200000047683716
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 4633.5,
+        "ms": 50.59999990463257
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 4691.699999928474,
+        "ms": 49.5
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5454.099999904633,
+        "ms": 48.700000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5089.199999928474,
+        "ms": 45.200000047683716
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3459.2999999523163,
+        "ms": 43.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4017.5,
+        "ms": 43.5
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3283.2999999523163,
+        "ms": 41.700000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5134.5,
+        "ms": 40.59999990463257
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 11130.299999952316,
+        "ms": 40.39999997615814
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3240.6999999284744,
+        "ms": 38.10000002384186
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5051.099999904633,
+        "ms": 38
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3508,
+        "ms": 36.799999952316284
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3753.1999999284744,
+        "ms": 36.5
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3794.0999999046326,
+        "ms": 36
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3833.5,
+        "ms": 35
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3555.6999999284744,
+        "ms": 34.700000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 53.199999928474426,
+        "ms": 32.800000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3927.2999999523163,
+        "ms": 30.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3898.6999999284744,
+        "ms": 28.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4142.899999976158,
+        "ms": 27.600000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 9869.299999952316,
+        "ms": 26.299999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3873,
+        "ms": 25.59999990463257
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 28.199999928474426,
+        "ms": 24.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4211.699999928474,
+        "ms": 24.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3992.6999999284744,
+        "ms": 24.800000071525574
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 16562,
+        "ms": 24.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4108.799999952316,
+        "ms": 23.700000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4291.299999952316,
+        "ms": 23.600000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 17224.5,
+        "ms": 23.299999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4188.599999904633,
+        "ms": 23
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3971.399999976158,
+        "ms": 21.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4270.5,
+        "ms": 20.799999952316284
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 10273.699999928474,
+        "ms": 19.399999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4070.7999999523163,
+        "ms": 19
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4089.899999976158,
+        "ms": 18.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4170.599999904633,
+        "ms": 18
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4236.799999952316,
+        "ms": 17.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5175.199999928474,
+        "ms": 17
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4253.899999976158,
+        "ms": 16.600000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 13843.399999976158,
+        "ms": 16.5
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5800.099999904633,
+        "ms": 16.300000071525574
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 7159.299999952316,
+        "ms": 16.299999952316284
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 8981.399999976158,
+        "ms": 15.600000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 13725.599999904633,
+        "ms": 15.300000071525574
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 17042.699999928474,
+        "ms": 14.700000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 86.19999992847443,
+        "ms": 13.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3958.1999999284744,
+        "ms": 13.100000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 16443.099999904633,
+        "ms": 12.200000047683716
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 15542.199999928474,
+        "ms": 10.800000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4132.5,
+        "ms": 10.199999928474426
+      }
+    ],
+    "stages": [],
+    "warmup": {
+      "submitted": 549,
+      "completed": 549,
+      "queued": 0,
+      "scanning": false,
+      "pending": false,
+      "failures": 0,
+      "maxSubmitMs": 6.300000071525574,
+      "maxReadinessMs": 47.5,
+      "maxScanMs": 4
+    },
+    "terrain": {
+      "surfaceTiles": 58,
+      "surfaceBytes": 10509096,
+      "surfaceJobs": 0,
+      "pendingVoxels": 0,
+      "patchDraws": 0,
+      "volumeChunks": 161,
+      "volumeActive": 161,
+      "volumeJobs": 0,
+      "editMeshLatencyP95": 0,
+      "editMeshSamples": 0
+    },
+    "arrival": {
+      "active": false,
+      "age": 3716.699999999999,
+      "reveal": 1,
+      "settling": 3033.2999999999993,
+      "revealing": true
+    },
+    "render": {
+      "drawCalls": 418,
+      "triangles": 280527,
+      "geometries": 192,
+      "textures": 59,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    }
+  }
+}

@@ -1,0 +1,1323 @@
+{
+  "origin": "http://localhost:3012",
+  "errors": [],
+  "method": "Fresh browser context, actual Friends arena, fixed spawn camera. Frame gaps, long tasks, stage CPU times and slow WebGL calls from launch through settling. Menu rendering excluded. These are local Chromium/Metal measurements, not remote player FPS.",
+  "cpu": [
+    {
+      "name": "getProgramInfoLog",
+      "url": "",
+      "line": 0,
+      "ms": 1829.549
+    },
+    {
+      "name": "(program)",
+      "url": "",
+      "line": 0,
+      "ms": 1723.173
+    },
+    {
+      "name": "addObjectDiffToProperties",
+      "url": "http://localhost:3012/node_modules/.vite/deps/react-dom_client.js?v=48c96959",
+      "line": 3081,
+      "ms": 1568.061
+    },
+    {
+      "name": "texSubImage2D",
+      "url": "",
+      "line": 0,
+      "ms": 1271.222
+    },
+    {
+      "name": "addObjectDiffToProperties",
+      "url": "http://localhost:3012/node_modules/.vite/deps/react-dom_client.js?v=48c96959",
+      "line": 3081,
+      "ms": 1087.076
+    },
+    {
+      "name": "FriendsAudio.activate",
+      "url": "http://localhost:3012/src/game/FriendsAudio.ts",
+      "line": 130,
+      "ms": 966.152
+    },
+    {
+      "name": "WebGLRenderer.renderBufferDirect",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 41862,
+      "ms": 664.493
+    },
+    {
+      "name": "",
+      "url": "http://localhost:3012/src/game/rendering/FriendsForestLOD.ts",
+      "line": 286,
+      "ms": 664.184
+    },
+    {
+      "name": "exports.jsxDEV",
+      "url": "http://localhost:3012/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=48c96959",
+      "line": 239,
+      "ms": 656.485
+    },
+    {
+      "name": "(garbage collector)",
+      "url": "",
+      "line": 0,
+      "ms": 593.289
+    },
+    {
+      "name": "exports.jsxDEV",
+      "url": "http://localhost:3012/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=48c96959",
+      "line": 239,
+      "ms": 584.882
+    },
+    {
+      "name": "",
+      "url": "http://localhost:3012/src/game/world/FriendsIslandRuinMesh.ts",
+      "line": 54,
+      "ms": 499.774
+    },
+    {
+      "name": "update",
+      "url": "http://localhost:3012/src/game/rendering/FriendsForestLOD.ts",
+      "line": 170,
+      "ms": 477.845
+    },
+    {
+      "name": "",
+      "url": "http://localhost:3012/src/game/world/FriendsIslandRuinMesh.ts",
+      "line": 54,
+      "ms": 474.353
+    },
+    {
+      "name": "updateMatrixWorld",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 7265,
+      "ms": 435.636
+    },
+    {
+      "name": "meshIslandRuins",
+      "url": "http://localhost:3012/src/game/world/FriendsIslandRuinMesh.ts",
+      "line": 3,
+      "ms": 367.514
+    },
+    {
+      "name": "applyMatrix4",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 2342,
+      "ms": 330.051
+    },
+    {
+      "name": "update",
+      "url": "http://localhost:3012/src/game/rendering/FriendsFrontierVisuals.ts",
+      "line": 287,
+      "ms": 324.956
+    },
+    {
+      "name": "getProgramInfoLog",
+      "url": "",
+      "line": 0,
+      "ms": 321.293
+    },
+    {
+      "name": "meshIslandRuins",
+      "url": "http://localhost:3012/src/game/world/FriendsIslandRuinMesh.ts",
+      "line": 3,
+      "ms": 314.5
+    },
+    {
+      "name": "hydrologyTerrainHeight",
+      "url": "http://localhost:3012/src/game/world/FriendsHydrology.ts",
+      "line": 148,
+      "ms": 309.48
+    },
+    {
+      "name": "projectObject",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 42152,
+      "ms": 291.813
+    },
+    {
+      "name": "setProgram",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 42425,
+      "ms": 291.466
+    },
+    {
+      "name": "createCloudVolume",
+      "url": "http://localhost:3012/src/game/rendering/FriendsCloudVolume.ts",
+      "line": 20,
+      "ms": 279.966
+    },
+    {
+      "name": "updateMatrixWorld",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 7265,
+      "ms": 249.726
+    },
+    {
+      "name": "updateMatrixWorld",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 7265,
+      "ms": 229.992
+    },
+    {
+      "name": "FriendsScenicRailwayVisuals",
+      "url": "http://localhost:3012/src/game/rendering/FriendsScenicRailwayVisuals.ts",
+      "line": 12,
+      "ms": 213.827
+    },
+    {
+      "name": "",
+      "url": "http://localhost:3012/src/game/rendering/FriendsShaderWarmup.ts",
+      "line": 28,
+      "ms": 211.959
+    },
+    {
+      "name": "hydrologyTerrainHeight",
+      "url": "http://localhost:3012/src/game/world/FriendsHydrology.ts",
+      "line": 148,
+      "ms": 200.658
+    },
+    {
+      "name": "renderObject",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 37526,
+      "ms": 198.607
+    },
+    {
+      "name": "exports.createElement",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-NKU67ILE.js?v=48c96959",
+      "line": 761,
+      "ms": 195.977
+    },
+    {
+      "name": "exports.createElement",
+      "url": "http://localhost:3012/node_modules/.vite/deps/chunk-NKU67ILE.js?v=48c96959",
+      "line": 761,
+      "ms": 184.889
+    },
+    {
+      "name": "exports.jsxDEV",
+      "url": "http://localhost:3012/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=48c96959",
+      "line": 239,
+      "ms": 169.591
+    },
+    {
+      "name": "FriendsScenicRailwayVisuals",
+      "url": "http://localhost:3012/src/game/rendering/FriendsScenicRailwayVisuals.ts",
+      "line": 12,
+      "ms": 161.923
+    },
+    {
+      "name": "(idle)",
+      "url": "",
+      "line": 0,
+      "ms": 157.07
+    }
+  ],
+  "result": {
+    "buckets": [
+      {
+        "at": 0,
+        "frames": 8,
+        "medianMs": 17.300000000000182,
+        "p95Ms": 11881.999999999998,
+        "maxMs": 11881.999999999998,
+        "over100Ms": 3,
+        "compiles": 0
+      },
+      {
+        "at": 5000,
+        "frames": 0,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 10000,
+        "frames": 3,
+        "medianMs": 234.3000000000029,
+        "p95Ms": 1249.7999999999993,
+        "maxMs": 1249.7999999999993,
+        "over100Ms": 3,
+        "compiles": 76
+      },
+      {
+        "at": 15000,
+        "frames": 56,
+        "medianMs": 50,
+        "p95Ms": 367.6000000000022,
+        "maxMs": 766.0999999999985,
+        "over100Ms": 7,
+        "compiles": 50
+      },
+      {
+        "at": 20000,
+        "frames": 117,
+        "medianMs": 34.29999999999927,
+        "p95Ms": 67.5,
+        "maxMs": 116.59999999999854,
+        "over100Ms": 1,
+        "compiles": 42
+      },
+      {
+        "at": 25000,
+        "frames": 134,
+        "medianMs": 33.400000000001455,
+        "p95Ms": 66.5,
+        "maxMs": 167.59999999999854,
+        "over100Ms": 1,
+        "compiles": 2
+      },
+      {
+        "at": 30000,
+        "frames": 168,
+        "medianMs": 32.5,
+        "p95Ms": 50.80000000000291,
+        "maxMs": 82.29999999999563,
+        "over100Ms": 0,
+        "compiles": 24
+      },
+      {
+        "at": 35000,
+        "frames": 179,
+        "medianMs": 32.400000000001455,
+        "p95Ms": 50,
+        "maxMs": 51.10000000000582,
+        "over100Ms": 0,
+        "compiles": 20
+      },
+      {
+        "at": 40000,
+        "frames": 133,
+        "medianMs": 33.30000000000291,
+        "p95Ms": 50.400000000001455,
+        "maxMs": 150.09999999999854,
+        "over100Ms": 1,
+        "compiles": 0
+      }
+    ],
+    "tasks": [
+      {
+        "at": 81.89999997615814,
+        "ms": 997
+      },
+      {
+        "at": 1080.1999999284744,
+        "ms": 87
+      },
+      {
+        "at": 1175.7999999523163,
+        "ms": 374
+      },
+      {
+        "at": 1599.6999999284744,
+        "ms": 10329
+      },
+      {
+        "at": 11944.799999952316,
+        "ms": 1535
+      },
+      {
+        "at": 13574.299999952316,
+        "ms": 151
+      },
+      {
+        "at": 13826.599999904633,
+        "ms": 1147
+      },
+      {
+        "at": 14980.799999952316,
+        "ms": 80
+      },
+      {
+        "at": 15082.099999904633,
+        "ms": 125
+      },
+      {
+        "at": 15422.799999952316,
+        "ms": 173
+      },
+      {
+        "at": 15596.699999928474,
+        "ms": 143
+      },
+      {
+        "at": 15818.599999904633,
+        "ms": 97
+      },
+      {
+        "at": 15916.299999952316,
+        "ms": 582
+      },
+      {
+        "at": 16575.299999952316,
+        "ms": 269
+      },
+      {
+        "at": 16906.399999976158,
+        "ms": 59
+      },
+      {
+        "at": 17265.5,
+        "ms": 528
+      },
+      {
+        "at": 20908.399999976158,
+        "ms": 64
+      },
+      {
+        "at": 21352,
+        "ms": 113
+      },
+      {
+        "at": 24047.099999904633,
+        "ms": 52
+      },
+      {
+        "at": 26595.5,
+        "ms": 61
+      }
+    ],
+    "gl": [],
+    "stages": [
+      {
+        "name": "Renderer3D",
+        "at": 12125.5,
+        "ms": 1341.7999999523163
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 12144.799999952316,
+        "ms": 1296.1000000238419
+      },
+      {
+        "name": "Renderer3D",
+        "at": 13832.299999952316,
+        "ms": 1138.7999999523163
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 13835.099999904633,
+        "ms": 1134.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 15933.899999976158,
+        "ms": 556.7999999523163
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 15936.299999952316,
+        "ms": 553.6000000238419
+      },
+      {
+        "name": "Renderer3D",
+        "at": 17372.099999904633,
+        "ms": 418.7000000476837
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 17379.899999976158,
+        "ms": 410.60000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 16588.099999904633,
+        "ms": 253.5
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 16590.699999928474,
+        "ms": 250.70000004768372
+      },
+      {
+        "name": "Renderer3D",
+        "at": 15603.199999928474,
+        "ms": 135.10000002384186
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 15606.099999904633,
+        "ms": 132
+      },
+      {
+        "name": "Renderer3D",
+        "at": 13602,
+        "ms": 118.79999995231628
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 13607,
+        "ms": 113.59999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 15092.799999952316,
+        "ms": 113.20000004768372
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 15095.799999952316,
+        "ms": 110.10000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 21355.899999976158,
+        "ms": 108.69999992847443
+      },
+      {
+        "name": "FriendsFrontierVisuals",
+        "at": 17266.599999904633,
+        "ms": 105
+      },
+      {
+        "name": "FriendsForestLOD",
+        "at": 17269,
+        "ms": 101.59999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20913.099999904633,
+        "ms": 59.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 26601,
+        "ms": 55.199999928474426
+      },
+      {
+        "name": "FriendsFrontierVisuals",
+        "at": 12055,
+        "ms": 52.59999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 16916.5,
+        "ms": 49
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24051.699999928474,
+        "ms": 47
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 16919.199999928474,
+        "ms": 46.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 31849.599999904633,
+        "ms": 40.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 37225.799999952316,
+        "ms": 39.89999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18960.299999952316,
+        "ms": 38.60000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 31656.799999952316,
+        "ms": 38.60000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24430.799999952316,
+        "ms": 38.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 22201.399999976158,
+        "ms": 38.10000002384186
+      },
+      {
+        "name": "FriendsShaderWarmup",
+        "at": 20913.399999976158,
+        "ms": 37.799999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 30172.099999904633,
+        "ms": 36.90000009536743
+      },
+      {
+        "name": "Renderer3D",
+        "at": 37581,
+        "ms": 36.89999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 17868.299999952316,
+        "ms": 36.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 21655.099999904633,
+        "ms": 36.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24002.899999976158,
+        "ms": 36.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 21090.299999952316,
+        "ms": 35.39999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 42870,
+        "ms": 35.199999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19663.099999904633,
+        "ms": 35
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19936.599999904633,
+        "ms": 34.800000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20256.899999976158,
+        "ms": 34.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19379.399999976158,
+        "ms": 34.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 36099.699999928474,
+        "ms": 34.39999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24677.5,
+        "ms": 34.09999990463257
+      },
+      {
+        "name": "FriendsShaderWarmup",
+        "at": 24052.199999928474,
+        "ms": 33.800000071525574
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19664.399999976158,
+        "ms": 33.60000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 17126.099999904633,
+        "ms": 33.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25097.099999904633,
+        "ms": 33.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20023,
+        "ms": 33.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19811.099999904633,
+        "ms": 33
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18422.799999952316,
+        "ms": 32.89999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 33150.39999997616,
+        "ms": 32.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24884.799999952316,
+        "ms": 32.10000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 30858.599999904633,
+        "ms": 32.10000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20496.599999904633,
+        "ms": 31.90000009536743
+      },
+      {
+        "name": "Renderer3D",
+        "at": 17055.899999976158,
+        "ms": 31.899999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 36251.5,
+        "ms": 31.799999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 21928.799999952316,
+        "ms": 31.5
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19812.699999928474,
+        "ms": 31.399999976158142
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20260.299999952316,
+        "ms": 31.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24539,
+        "ms": 31
+      },
+      {
+        "name": "Renderer3D",
+        "at": 15342,
+        "ms": 30.899999976158142
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19383,
+        "ms": 30.899999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20179,
+        "ms": 30.799999952316284
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19940.599999904633,
+        "ms": 30.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19558.899999976158,
+        "ms": 30.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25511.299999952316,
+        "ms": 30.5
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 17128.899999976158,
+        "ms": 30.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 17939.399999976158,
+        "ms": 30.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20395.799999952316,
+        "ms": 30.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 26179.099999904633,
+        "ms": 30.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18123.599999904633,
+        "ms": 30
+      },
+      {
+        "name": "Renderer3D",
+        "at": 21543.799999952316,
+        "ms": 29.899999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19767.199999928474,
+        "ms": 29.800000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20084.599999904633,
+        "ms": 29.800000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 22097.5,
+        "ms": 29.799999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19620.799999952316,
+        "ms": 29.700000047683716
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20026.5,
+        "ms": 29.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 23759,
+        "ms": 29.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 17011.599999904633,
+        "ms": 29.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19133.799999952316,
+        "ms": 29.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20218.699999928474,
+        "ms": 29.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20602.399999976158,
+        "ms": 29.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24929.299999952316,
+        "ms": 29.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25461.599999904633,
+        "ms": 29.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19335.399999976158,
+        "ms": 29.399999976158142
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 17058.299999952316,
+        "ms": 29.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19275.799999952316,
+        "ms": 29.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24296.299999952316,
+        "ms": 29.299999952316284
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19560.099999904633,
+        "ms": 29.200000047683716
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20499.099999904633,
+        "ms": 29.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18526.699999928474,
+        "ms": 29.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24788.199999928474,
+        "ms": 29.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20302,
+        "ms": 29
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19032.299999952316,
+        "ms": 28.899999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19175.699999928474,
+        "ms": 28.899999976158142
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 17876.199999928474,
+        "ms": 28.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19874.699999928474,
+        "ms": 28.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 21199.399999976158,
+        "ms": 28.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18922,
+        "ms": 28.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25355.899999976158,
+        "ms": 28.399999976158142
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19622.099999904633,
+        "ms": 28.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 42983.199999928474,
+        "ms": 28.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 43952.199999928474,
+        "ms": 28.300000071525574
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19768.5,
+        "ms": 28.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 23551.5,
+        "ms": 28.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19728.399999976158,
+        "ms": 28.199999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19986.5,
+        "ms": 28.199999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 27492.199999928474,
+        "ms": 28.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20434.5,
+        "ms": 28.09999990463257
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20603.699999928474,
+        "ms": 28
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25197.899999976158,
+        "ms": 28
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25262.099999904633,
+        "ms": 28
+      },
+      {
+        "name": "Renderer3D",
+        "at": 27656.699999928474,
+        "ms": 28
+      },
+      {
+        "name": "Renderer3D",
+        "at": 37169.799999952316,
+        "ms": 28
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20181.799999952316,
+        "ms": 27.899999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25551.399999976158,
+        "ms": 27.899999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19235.199999928474,
+        "ms": 27.800000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19441.5,
+        "ms": 27.799999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24585.5,
+        "ms": 27.799999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19521.099999904633,
+        "ms": 27.600000023841858
+      },
+      {
+        "name": "FriendsShaderWarmup",
+        "at": 26601.299999952316,
+        "ms": 27.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 26789.699999928474,
+        "ms": 27.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 23177.5,
+        "ms": 27.59999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 26268.899999976158,
+        "ms": 27.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 23280.599999904633,
+        "ms": 27.40000009536743
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19876,
+        "ms": 27.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25831.299999952316,
+        "ms": 27.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 22157.199999928474,
+        "ms": 27.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 22297.199999928474,
+        "ms": 27.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 23133.699999928474,
+        "ms": 27.200000047683716
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 15345.5,
+        "ms": 27.199999928474426
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19729.399999976158,
+        "ms": 27.199999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 23340.099999904633,
+        "ms": 27.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 23411.599999904633,
+        "ms": 27.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 24138.599999904633,
+        "ms": 27.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18022,
+        "ms": 27
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18795.899999976158,
+        "ms": 27
+      },
+      {
+        "name": "Renderer3D",
+        "at": 26703,
+        "ms": 26.899999976158142
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 17014.199999928474,
+        "ms": 26.800000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18252.5,
+        "ms": 26.799999952316284
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20087.599999904633,
+        "ms": 26.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 41784.89999997616,
+        "ms": 26.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 17985.799999952316,
+        "ms": 26.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20564.699999928474,
+        "ms": 26.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 22599.299999952316,
+        "ms": 26.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 27323.199999928474,
+        "ms": 26.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 27430.5,
+        "ms": 26.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18884.899999976158,
+        "ms": 26.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 20763.399999976158,
+        "ms": 26.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18727.799999952316,
+        "ms": 26.299999952316284
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19136.799999952316,
+        "ms": 26.299999952316284
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19338.399999976158,
+        "ms": 26.299999952316284
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20221.799999952316,
+        "ms": 26.299999952316284
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20436.099999904633,
+        "ms": 26.200000047683716
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19278.899999976158,
+        "ms": 26.199999928474426
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 18972.699999928474,
+        "ms": 26.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 22059.199999928474,
+        "ms": 26.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 41849.799999952316,
+        "ms": 26.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 42447.199999928474,
+        "ms": 26.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 25655,
+        "ms": 26.09999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 23935.899999976158,
+        "ms": 26
+      },
+      {
+        "name": "Renderer3D",
+        "at": 26965.399999976158,
+        "ms": 26
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19522.799999952316,
+        "ms": 25.899999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19074.099999904633,
+        "ms": 25.800000071525574
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19178.699999928474,
+        "ms": 25.800000071525574
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19035.399999976158,
+        "ms": 25.799999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 26355.799999952316,
+        "ms": 25.799999952316284
+      },
+      {
+        "name": "FriendsShaderWarmup",
+        "at": 31849.899999976158,
+        "ms": 25.799999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 41957,
+        "ms": 25.799999952316284
+      },
+      {
+        "name": "FriendsShaderWarmup",
+        "at": 37226.199999928474,
+        "ms": 25.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18647.5,
+        "ms": 25.59999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18491.199999928474,
+        "ms": 25.5
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20305.299999952316,
+        "ms": 25.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 30582.299999952316,
+        "ms": 25.5
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 18647.799999952316,
+        "ms": 25.200000047683716
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 20398.299999952316,
+        "ms": 25.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18196.899999976158,
+        "ms": 25.100000023841858
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 19989.5,
+        "ms": 25.09999990463257
+      }
+    ],
+    "warmup": {
+      "submitted": 549,
+      "completed": 549,
+      "queued": 0,
+      "scanning": true,
+      "pending": false,
+      "failures": 0,
+      "maxSubmitMs": 33.700000047683716,
+      "maxReadinessMs": 36.89999997615814,
+      "maxScanMs": 5.600000023841858
+    },
+    "terrain": {
+      "surfaceTiles": 58,
+      "surfaceBytes": 10509096,
+      "surfaceJobs": 0,
+      "pendingVoxels": 0,
+      "patchDraws": 0,
+      "volumeChunks": 161,
+      "volumeActive": 161,
+      "volumeJobs": 0,
+      "editMeshLatencyP95": 0,
+      "editMeshSamples": 0
+    },
+    "arrival": {
+      "active": false,
+      "age": 4098.9000000000015,
+      "reveal": 1,
+      "settling": 3015.5000000000036,
+      "revealing": true
+    },
+    "render": {
+      "drawCalls": 418,
+      "triangles": 280527,
+      "geometries": 215,
+      "textures": 60,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    }
+  }
+}

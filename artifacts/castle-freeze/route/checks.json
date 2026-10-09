@@ -1,0 +1,49 @@
+{
+  "origin": "http://localhost:3005",
+  "errors": [],
+  "phases": [
+    {
+      "phase": "outer-approach",
+      "frames": 1,
+      "p95Ms": 33.40000000000873,
+      "maxMs": 33.40000000000873,
+      "stallsOver500Ms": 0,
+      "shaderCompiles": 0,
+      "glError": 0,
+      "warmup": {
+        "submitted": 555,
+        "completed": 555,
+        "queued": 0,
+        "pending": false,
+        "failures": 0,
+        "maxSubmitMs": 9.099999904632568,
+        "maxReadinessMs": 735.3999999761581,
+        "maxScanMs": 75.39999997615814
+      },
+      "terrain": {
+        "surfaceTiles": 58,
+        "surfaceBytes": 10509096,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 161,
+        "volumeActive": 161,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      }
+    }
+  ],
+  "method": "Actual Friends game render/update loop and terrain workers, shadows enabled. Move the final render camera continuously along a castle survey route; the avatar stays at arrival. Shader compile counters and frame gaps cover streaming, shadow updates, world rendering and HDR composition.",
+  "preparation": {
+    "submitted": 555,
+    "completed": 555,
+    "queued": 0,
+    "pending": false,
+    "failures": 0,
+    "maxSubmitMs": 9.099999904632568,
+    "maxReadinessMs": 735.3999999761581,
+    "maxScanMs": 75.39999997615814
+  },
+  "failure": "AssertionError [ERR_ASSERTION]: outer-approach: insufficient rendered frames"
+}

@@ -1,0 +1,26 @@
+import * as THREE from 'three';
+
+// Match the stronger exploration beam with a larger near-field softening zone:
+// nearby rock retains its texture while mid/distant terrain gets more light.
+export const FRIENDS_FLASHLIGHT_SOFT_DISTANCE = 950;
+
+/** Extend the spot-light shader once, so terrain, buildings and asynchronously
+ * loaded models all receive the same beam. Only a negative spot decay opts in:
+ * its magnitude carries the soft distance; ordinary spot/point lights retain
+ * Three's original attenuation. This avoids material traversal every frame. */
+export function installFriendsFlashlightFalloff() {
+  const chunk = THREE.ShaderChunk.lights_pars_begin;
+  if (chunk.includes('friendsFlashlightFalloff')) return;
+  THREE.ShaderChunk.lights_pars_begin = chunk.replace(
+    'getDistanceAttenuation( lightDistance, spotLight.distance, spotLight.decay );',
+    `getDistanceAttenuation( lightDistance, spotLight.distance, max( spotLight.decay, 0.0 ) );
+      if ( spotLight.decay < 0.0 ) {
+        // friendsFlashlightFalloff: cap nearby irradiance per surface, leaving
+        // distant surfaces in the SAME beam at their original brightness.
+        float softDistance = -spotLight.decay;
+        float nearWeight = 1.0 - smoothstep( 0.0, 2.0 * softDistance, lightDistance );
+        float softenedDistanceSquared = lightDistance * lightDistance + softDistance * softDistance * nearWeight;
+        light.color *= 1.0 / max( softenedDistanceSquared, 0.01 );
+      }`,
+  );
+}

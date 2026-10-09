@@ -1,0 +1,997 @@
+{
+  "origin": "http://localhost:3012",
+  "errors": [],
+  "method": "Fresh browser context, actual Friends arena, fixed spawn camera. Frame gaps, long tasks, stage CPU times and slow WebGL calls from launch through settling. Menu rendering excluded. These are local Chromium/Metal measurements, not remote player FPS.",
+  "result": {
+    "buckets": [
+      {
+        "at": 0,
+        "frames": 28,
+        "medianMs": 16.90000000000009,
+        "p95Ms": 265.8000000000002,
+        "maxMs": 3783.3,
+        "over100Ms": 5,
+        "compiles": 32
+      },
+      {
+        "at": 5000,
+        "frames": 159,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 34.30000000000109,
+        "maxMs": 1466.5999999999985,
+        "over100Ms": 1,
+        "compiles": 108
+      },
+      {
+        "at": 10000,
+        "frames": 253,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 34.30000000000109,
+        "maxMs": 84.29999999999927,
+        "over100Ms": 0,
+        "compiles": 36
+      },
+      {
+        "at": 15000,
+        "frames": 258,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 33.70000000000073,
+        "maxMs": 50.70000000000073,
+        "over100Ms": 0,
+        "compiles": 28
+      },
+      {
+        "at": 20000,
+        "frames": 286,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.700000000000728,
+        "maxMs": 49.30000000000291,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 25000,
+        "frames": 273,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 33.30000000000291,
+        "maxMs": 49,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 30000,
+        "frames": 203,
+        "medianMs": 16.700000000004366,
+        "p95Ms": 48.89999999999418,
+        "maxMs": 250,
+        "over100Ms": 3,
+        "compiles": 0
+      },
+      {
+        "at": 35000,
+        "frames": 201,
+        "medianMs": 17,
+        "p95Ms": 50,
+        "maxMs": 66.69999999999709,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 40000,
+        "frames": 179,
+        "medianMs": 17.69999999999709,
+        "p95Ms": 50.89999999999418,
+        "maxMs": 99.20000000000437,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 45000,
+        "frames": 104,
+        "medianMs": 34.299999999995634,
+        "p95Ms": 100,
+        "maxMs": 265.6999999999971,
+        "over100Ms": 5,
+        "compiles": 0
+      },
+      {
+        "at": 50000,
+        "frames": 123,
+        "medianMs": 34,
+        "p95Ms": 67.59999999999854,
+        "maxMs": 100.09999999999854,
+        "over100Ms": 1,
+        "compiles": 0
+      },
+      {
+        "at": 55000,
+        "frames": 101,
+        "medianMs": 34,
+        "p95Ms": 99.10000000000582,
+        "maxMs": 366.79999999999563,
+        "over100Ms": 5,
+        "compiles": 0
+      }
+    ],
+    "tasks": [
+      {
+        "at": 47.5,
+        "ms": 236
+      },
+      {
+        "at": 332.1999999284744,
+        "ms": 157
+      },
+      {
+        "at": 528.3999999761581,
+        "ms": 2744
+      },
+      {
+        "at": 3288,
+        "ms": 1031
+      },
+      {
+        "at": 4391.699999928474,
+        "ms": 75
+      },
+      {
+        "at": 4663,
+        "ms": 65
+      },
+      {
+        "at": 5371.399999976158,
+        "ms": 71
+      },
+      {
+        "at": 5690.100000023842,
+        "ms": 84
+      },
+      {
+        "at": 5871.399999976158,
+        "ms": 1479
+      },
+      {
+        "at": 11349.699999928474,
+        "ms": 63
+      },
+      {
+        "at": 34092.10000002384,
+        "ms": 156
+      },
+      {
+        "at": 34249.299999952316,
+        "ms": 120
+      },
+      {
+        "at": 34739.5,
+        "ms": 161
+      },
+      {
+        "at": 36039,
+        "ms": 57
+      },
+      {
+        "at": 40387.199999928474,
+        "ms": 111
+      },
+      {
+        "at": 45753,
+        "ms": 53
+      },
+      {
+        "at": 45811.5,
+        "ms": 176
+      },
+      {
+        "at": 46730.799999952316,
+        "ms": 71
+      },
+      {
+        "at": 46858.5,
+        "ms": 61
+      },
+      {
+        "at": 48442.799999952316,
+        "ms": 85
+      },
+      {
+        "at": 49627.60000002384,
+        "ms": 70
+      },
+      {
+        "at": 53693,
+        "ms": 50
+      },
+      {
+        "at": 55893.5,
+        "ms": 59
+      },
+      {
+        "at": 56279.299999952316,
+        "ms": 118
+      },
+      {
+        "at": 56397.39999997616,
+        "ms": 315
+      },
+      {
+        "at": 57123.60000002384,
+        "ms": 60
+      },
+      {
+        "at": 58199.89999997616,
+        "ms": 79
+      }
+    ],
+    "gl": [
+      {
+        "method": "getProgramInfoLog",
+        "at": 3495.6999999284744,
+        "ms": 670,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:15:146)\n    at onFirstUse (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:35999:33)\n    at WebGLProgram.getUniforms (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:36046:7)\n    at setProgram (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42521:34)\n    at WebGLRenderer.renderBufferDirect (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:41865:23)\n    at renderObject (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42318:15)\n    at renderObjects (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42300:11)\n    at renderScene (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42217:37)\n    at WebGLRenderer.render (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42120:11)\n    at FriendsWorldArrival.render (http://localhost:3012/src/game/rendering/FriendsWorldArrival.ts:211:16)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 4174.899999976158,
+        "ms": 122.39999997615814,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:15:146)\n    at onFirstUse (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:35999:33)\n    at WebGLProgram.getUniforms (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:36046:7)\n    at setProgram (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42521:34)\n    at WebGLRenderer.renderBufferDirect (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:41865:23)\n    at renderObject (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42318:15)\n    at renderObjects (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42300:11)\n    at renderScene (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42217:37)\n    at WebGLRenderer.render (http://localhost:3012/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959:42120:11)\n    at FriendsNightVision.endFrame (http://localhost:3012/src/game/rendering/FriendsNightVision.ts:221:18)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 6924.600000023842,
+        "ms": 87.59999990463257
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 6718.699999928474,
+        "ms": 69.60000002384186
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 7045.799999952316,
+        "ms": 68.60000002384186
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 6582.399999976158,
+        "ms": 64.5
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 6650.899999976158,
+        "ms": 63.10000002384186
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5986.699999928474,
+        "ms": 60.300000071525574
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 7179.600000023842,
+        "ms": 58.799999952316284
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 6452,
+        "ms": 57
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 7118.299999952316,
+        "ms": 54.60000002384186
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 7242.600000023842,
+        "ms": 44.09999990463257
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6877.100000023842,
+        "ms": 44
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6214.899999976158,
+        "ms": 37.89999997615814
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3365.2999999523163,
+        "ms": 33.89999997615814
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6080.199999928474,
+        "ms": 32.60000002384186
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6320.699999928474,
+        "ms": 31.600000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5476.699999928474,
+        "ms": 31.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5384.799999952316,
+        "ms": 30.600000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6846.299999952316,
+        "ms": 30.5
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 11354.699999928474,
+        "ms": 29.90000009536743
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6050.399999976158,
+        "ms": 28.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6128.5,
+        "ms": 28.699999928474426
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6186.100000023842,
+        "ms": 28.699999928474426
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6157.399999976158,
+        "ms": 28.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6791.100000023842,
+        "ms": 28.199999928474426
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6421.5,
+        "ms": 28.100000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 19692.199999928474,
+        "ms": 27.300000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6819.399999976158,
+        "ms": 26.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6530.899999976158,
+        "ms": 26.700000047683716
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 12414,
+        "ms": 26.399999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6294.799999952316,
+        "ms": 25.800000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6396,
+        "ms": 25.399999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6353,
+        "ms": 23.199999928474426
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6253.600000023842,
+        "ms": 20.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6274.299999952316,
+        "ms": 20.399999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6510.799999952316,
+        "ms": 20
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 11174.100000023842,
+        "ms": 19.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6376.299999952316,
+        "ms": 19.5
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5417,
+        "ms": 16.899999976158142
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 10832.100000023842,
+        "ms": 16.59999990463257
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 9181.899999976158,
+        "ms": 15.600000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 19478,
+        "ms": 14.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6112.899999976158,
+        "ms": 14.700000047683716
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 18750.299999952316,
+        "ms": 12.800000071525574
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 15007,
+        "ms": 11.799999952316284
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 19333.699999928474,
+        "ms": 11.600000023841858
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 7302.5,
+        "ms": 11.399999976158142
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 14606.299999952316,
+        "ms": 11.399999976158142
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 9091.299999952316,
+        "ms": 10.600000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 6557.799999952316,
+        "ms": 10.5
+      }
+    ],
+    "stages": [
+      {
+        "name": "Renderer3D",
+        "at": 5873.899999976158,
+        "ms": 1474.7999999523163
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 5876.5,
+        "ms": 1471.8999999761581
+      },
+      {
+        "name": "Renderer3D",
+        "at": 3414.399999976158,
+        "ms": 895.7999999523163
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 3425.1999999284744,
+        "ms": 747.2000000476837
+      },
+      {
+        "name": "Renderer3D",
+        "at": 40399.39999997616,
+        "ms": 96.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 58206.799999952316,
+        "ms": 71.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 5373.899999976158,
+        "ms": 68.29999995231628
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 5374.100000023842,
+        "ms": 68
+      },
+      {
+        "name": "Renderer3D",
+        "at": 11354.399999976158,
+        "ms": 58.200000047683716
+      },
+      {
+        "name": "FriendsFrontierVisuals",
+        "at": 34122,
+        "ms": 57.89999997615814
+      },
+      {
+        "name": "FriendsFrontierVisuals",
+        "at": 5690.899999976158,
+        "ms": 56.89999997615814
+      },
+      {
+        "name": "FriendsForestLOD",
+        "at": 5691.399999976158,
+        "ms": 55.89999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 34192.699999928474,
+        "ms": 55.40000009536743
+      },
+      {
+        "name": "Renderer3D",
+        "at": 56336.60000002384,
+        "ms": 54.39999997615814
+      },
+      {
+        "name": "FriendsFrontierVisuals",
+        "at": 3354.5,
+        "ms": 54.10000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 46741.799999952316,
+        "ms": 52.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 55899.89999997616,
+        "ms": 52
+      },
+      {
+        "name": "FriendsFrontierVisuals",
+        "at": 49629.199999928474,
+        "ms": 49.10000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 46871.199999928474,
+        "ms": 46.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 57135.199999928474,
+        "ms": 45.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 12413.799999952316,
+        "ms": 44.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 5472.299999952316,
+        "ms": 42.89999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19689.799999952316,
+        "ms": 42.89999997615814
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 5472.5,
+        "ms": 42.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 53700.199999928474,
+        "ms": 42.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 46678.89999997616,
+        "ms": 41
+      },
+      {
+        "name": "FriendsShaderWarmup",
+        "at": 11354.699999928474,
+        "ms": 39.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 47818.89999997616,
+        "ms": 39.10000002384186
+      },
+      {
+        "name": "Renderer3D",
+        "at": 51448.60000002384,
+        "ms": 36.39999997615814
+      },
+      {
+        "name": "FriendsShaderWarmup",
+        "at": 12414,
+        "ms": 34.39999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 11173.899999976158,
+        "ms": 34.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 4425.899999976158,
+        "ms": 33.39999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 46233.10000002384,
+        "ms": 33.09999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 51742.299999952316,
+        "ms": 33
+      },
+      {
+        "name": "Renderer3D",
+        "at": 9651.399999976158,
+        "ms": 32.89999997615814
+      },
+      {
+        "name": "FriendsShaderWarmup",
+        "at": 19689.899999976158,
+        "ms": 32.39999997615814
+      },
+      {
+        "name": "Renderer3D",
+        "at": 52403.799999952316,
+        "ms": 32.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18638.299999952316,
+        "ms": 32
+      },
+      {
+        "name": "Renderer3D",
+        "at": 16404.399999976158,
+        "ms": 31.799999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 52186,
+        "ms": 31
+      },
+      {
+        "name": "Renderer3D",
+        "at": 50233.39999997616,
+        "ms": 30.799999952316284
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 4428.5,
+        "ms": 30.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 56982,
+        "ms": 30.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 44334.60000002384,
+        "ms": 30.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 51127.5,
+        "ms": 30.199999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 45689.799999952316,
+        "ms": 30.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 9181.699999928474,
+        "ms": 29.90000009536743
+      },
+      {
+        "name": "Renderer3D",
+        "at": 18748.199999928474,
+        "ms": 29.800000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 47479.5,
+        "ms": 29.699999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 41845.89999997616,
+        "ms": 29.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 51602.199999928474,
+        "ms": 29.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 45104,
+        "ms": 29.199999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 57617.5,
+        "ms": 29.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 59075.60000002384,
+        "ms": 29.09999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 11057.199999928474,
+        "ms": 29
+      },
+      {
+        "name": "Renderer3D",
+        "at": 52595.699999928474,
+        "ms": 29
+      },
+      {
+        "name": "Renderer3D",
+        "at": 45941.699999928474,
+        "ms": 28.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 32514.199999928474,
+        "ms": 28.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 45534.299999952316,
+        "ms": 28.5
+      },
+      {
+        "name": "FriendsFrontierVisuals",
+        "at": 56304.799999952316,
+        "ms": 28.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 59176.199999928474,
+        "ms": 28.40000009536743
+      },
+      {
+        "name": "Renderer3D",
+        "at": 44958.39999997616,
+        "ms": 28.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 38051.299999952316,
+        "ms": 28.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 42863.699999928474,
+        "ms": 27.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 11859.399999976158,
+        "ms": 27.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 46062.699999928474,
+        "ms": 27.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 44088.299999952316,
+        "ms": 27
+      },
+      {
+        "name": "Renderer3D",
+        "at": 57770.199999928474,
+        "ms": 27
+      },
+      {
+        "name": "Renderer3D",
+        "at": 10831.899999976158,
+        "ms": 26.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 51820.60000002384,
+        "ms": 26.59999990463257
+      },
+      {
+        "name": "Renderer3D",
+        "at": 15006.799999952316,
+        "ms": 26.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 46595.10000002384,
+        "ms": 26.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 46346.299999952316,
+        "ms": 26.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 9215.100000023842,
+        "ms": 26.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 59857.60000002384,
+        "ms": 26.299999952316284
+      },
+      {
+        "name": "Renderer3D",
+        "at": 35643.89999997616,
+        "ms": 26.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 43589.199999928474,
+        "ms": 26.100000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 8923.100000023842,
+        "ms": 26
+      },
+      {
+        "name": "Renderer3D",
+        "at": 5748.199999928474,
+        "ms": 25.90000009536743
+      },
+      {
+        "name": "Renderer3D",
+        "at": 11563.299999952316,
+        "ms": 25.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 58539.89999997616,
+        "ms": 25.700000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 45421.199999928474,
+        "ms": 25.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 56724.199999928474,
+        "ms": 25.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 58852.799999952316,
+        "ms": 25.600000023841858
+      },
+      {
+        "name": "Renderer3D",
+        "at": 9091.100000023842,
+        "ms": 25.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 50116,
+        "ms": 25.5
+      },
+      {
+        "name": "Renderer3D",
+        "at": 19477.699999928474,
+        "ms": 25.40000009536743
+      },
+      {
+        "name": "Renderer3D",
+        "at": 58672.799999952316,
+        "ms": 25.399999976158142
+      },
+      {
+        "name": "Renderer3D",
+        "at": 48416.699999928474,
+        "ms": 25.300000071525574
+      },
+      {
+        "name": "Renderer3D",
+        "at": 54584.699999928474,
+        "ms": 25.300000071525574
+      },
+      {
+        "name": "FriendsWorldArrival",
+        "at": 8923.899999976158,
+        "ms": 25.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 17798.799999952316,
+        "ms": 25.200000047683716
+      },
+      {
+        "name": "Renderer3D",
+        "at": 47124,
+        "ms": 25.199999928474426
+      },
+      {
+        "name": "Renderer3D",
+        "at": 47528.39999997616,
+        "ms": 25.100000023841858
+      }
+    ],
+    "warmup": {
+      "submitted": 559,
+      "completed": 559,
+      "queued": 0,
+      "scanning": true,
+      "pending": false,
+      "failures": 0,
+      "maxSubmitMs": 7.199999928474426,
+      "maxReadinessMs": 38,
+      "maxScanMs": 17.5
+    },
+    "terrain": {
+      "surfaceTiles": 58,
+      "surfaceBytes": 10509096,
+      "surfaceJobs": 0,
+      "pendingVoxels": 0,
+      "patchDraws": 0,
+      "volumeChunks": 161,
+      "volumeActive": 161,
+      "volumeJobs": 0,
+      "editMeshLatencyP95": 0,
+      "editMeshSamples": 0
+    },
+    "arrival": {
+      "active": false,
+      "age": 4416.500000000002,
+      "reveal": 1,
+      "settling": 2999.9000000000015,
+      "revealing": true
+    },
+    "render": {
+      "drawCalls": 416,
+      "triangles": 280491,
+      "geometries": 206,
+      "textures": 59,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    }
+  }
+}

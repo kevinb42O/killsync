@@ -1,8 +1,7 @@
 import { getWorldWallContact, resolveWorldCollisions } from '../world/WorldLayout';
 import { getWorldDefinition, isWorldSurfaceWalkable, sampleWorldSurface, type WorldId } from '../world/WorldDefinitions';
 import type { MultiplayerInputFrame } from './protocol';
-import { friendsWaterLevel } from '../world/FriendsWaterSurface';
-import { riverWetAt } from '../world/FriendsHydrology';
+import { advanceFriendsSwimming } from './FriendsSwimMovement';
 
 export const COOP_STEP_MS = 1000 / 30;
 export const COOP_PLAYER_RADIUS = 19;
@@ -29,11 +28,18 @@ export const PLAYER_JUMP_BUFFER_MS = 120;
  * former 300-unit walking pace; walking covers 60% of that distance. */
 export const FRIENDS_WALK_SPEED = 180;
 export const FRIENDS_SPRINT_SPEED = 300;
+export const FRIENDS_SUPERJUMP_MULTIPLIER = 3;
+export const FRIENDS_SUPERJUMP_SPEED = 1400;
+export const FRIENDS_SUPERJUMP_BOOST_SPEED = 2200;
+/** Roughly eight operator heights; ordinary jumps and short drops stay quiet. */
+export const FRIENDS_HARD_LANDING_MIN_DROP = 400;
 const MOVEMENT_SUBSTEP_MS = 1000 / 120;
 
 /** Persisted with authoritative snapshots so replay retains momentum and
  * pending actions instead of starting a fresh controller on every packet. */
 export interface PlayerMovementMemory {
+  swimming?: boolean;
+  swimSubmerged?: boolean;
   velocityX?: number;
   velocityY?: number;
   coyoteMs?: number;
@@ -42,13 +48,18 @@ export interface PlayerMovementMemory {
   lastJumpInputSequence?: number;
   slideMs?: number;
   slideHeld?: boolean;
+  /** Highest feet elevation in the current downward arc. */
+  fallPeakZ?: number;
 }
 
 export interface PlayerMovementEnvironment {
   elevationAware: boolean;
+  /** Host presentation hook; prediction does not emit damage effects. */
+  onLanding?: (impactSpeed:number) => void;
   towingScale?: number;
   /** Temporary development shortcut, enabled only by Friends mode. */
   devFlightAllowed?: boolean;
+  devSuperjumpAllowed?: boolean;
   volumetric?: boolean;
   ceiling: number;
   stepHeight?: number;
@@ -62,13 +73,14 @@ export interface PlayerWallContact { normalX: number; normalY: number; }
 export type PlayerWallContactDetector = (position: { x: number; y: number }, radius: number) => PlayerWallContact | undefined;
 /** Optional elevated hardlight surface. It is deliberately separate from
  * horizontal collision so walls can be jumped onto and walked across. */
-export type PlayerFloorResolver = (position: { x: number; y: number }, radius: number) => number | undefined;
+export type PlayerFloorResolver = (position: { x: number; y: number; z?:number }, radius: number) => number | undefined;
 
 export interface PlayerMotionState extends PlayerMovementMemory {
   x: number;
   y: number;
   z: number;
   friendsDevFlight?: boolean;
+  friendsDevSuperjump?: boolean;
   angle: number;
   sprinting: boolean;
   sliding: boolean;
@@ -116,6 +128,7 @@ export function advancePlayerMovement(
 ) {
   const duration = Math.max(0, Math.min(50, deltaMs));
   if (duration === 0) return;
+  player.friendsDevSuperjump = Boolean(transport?.devSuperjumpAllowed && (input ? input.friendsDevSuperjump : player.friendsDevSuperjump));
   const wasFlying = player.friendsDevFlight;
   player.friendsDevFlight = Boolean(transport?.devFlightAllowed && (input ? input.friendsDevFlight : wasFlying));
   if (player.friendsDevFlight || wasFlying) {
@@ -127,6 +140,7 @@ export function advancePlayerMovement(
     player.slideHeld = player.sliding = player.crouching = player.jetActive = false;
     player.jetIgnitedThisAirTime = player.airActionConsumedSinceGrounded = false;
     player.airborneMs = player.groundedMs = 0;
+    player.fallPeakZ = undefined;
     player.sprinting = false;
   }
   if (player.friendsDevFlight) {
@@ -148,7 +162,7 @@ export function advancePlayerMovement(
   }
   // Small shared steps prevent sprint/slide tunnelling and let genuine ramps
   // change elevation gradually without granting a whole block of auto-climb.
-  const idle = !input?.movement && !input?.jumpPressed && !input?.jetHeld && !player.jetActive
+  const idle = !player.swimming && !input?.movement && !input?.jumpPressed && !input?.jetHeld && !player.jetActive
     && !player.sliding && (player.jumpBufferMs ?? 0) === 0 && player.verticalVelocity === 0
     && Math.hypot(player.velocityX ?? 0, player.velocityY ?? 0) === 0;
   const restingSample = transport && idle ? { height: getAdditionalFloor?.(player, COOP_PLAYER_RADIUS) } : undefined;
@@ -176,37 +190,7 @@ function advanceMovementStep(
   const seconds = Math.max(0, Math.min(50, deltaMs)) / 1000;
   const startX = player.x, startY = player.y;
   const floorAtStart = cachedFloor ? cachedFloor.height : getAdditionalFloor?.(player, COOP_PLAYER_RADIUS);
-  if(worldId==='friends_frontier'&&transport?.volumetric){
-    const water=friendsWaterLevel(player.x,player.y);
-    if(water!==undefined&&player.z<water-12&&(floorAtStart===undefined||floorAtStart<water-24)){
-      const jump=Boolean(input?.jumpPressed&&input.sequence!==player.lastJumpInputSequence);
-      player.sliding=player.crouching=player.jetActive=false;player.slideHeld=false;
-      player.platformVelocityX=player.platformVelocityY=player.platformVelocityZ=0;
-      player.airborneMs=player.groundedMs=0;
-      player.jetFuel=Math.min(COOP_JET_FUEL_MAX,(player.jetFuel??COOP_JET_FUEL_MAX)+COOP_JET_RECHARGE_PER_SECOND*seconds);
-      if(jump){
-        player.lastJumpInputSequence=input!.sequence;player.lastJumpSequence=input!.sequence;
-        player.jumpBufferMs=0;player.z=water-12;player.verticalVelocity=COOP_JUMP_VELOCITY;
-        player.airActionConsumedSinceGrounded=false;
-      }else{
-        const yaw=input?input.aimAngle/65535*Math.PI*2:player.angle;player.angle=yaw;
-        const forward=(input?.movement&&input.movement&1?1:0)-(input?.movement&&input.movement&2?1:0);
-        const strafe=(input?.movement&&input.movement&8?1:0)-(input?.movement&&input.movement&4?1:0);
-        const n=Math.max(1,Math.hypot(forward,strafe)),speed=input?.sprinting?150:110;
-        const current=riverWetAt(player.x,player.y),drift=current?8+current.roughness*12:0;
-        const vx=(Math.cos(yaw)*forward-Math.sin(yaw)*strafe)/n*speed+(current?.tx??0)*drift;
-        const vy=(Math.sin(yaw)*forward+Math.cos(yaw)*strafe)/n*speed+(current?.ty??0)*drift;
-        const p={x:player.x+vx*seconds,y:player.y+vy*seconds};
-        resolveAdditionalCollisions?.(p,COOP_PLAYER_RADIUS);
-        player.x=p.x;player.y=p.y;player.velocityX=vx;player.velocityY=vy;
-        const destination=friendsWaterLevel(p.x,p.y)??water;
-        player.z+=(destination-18-player.z)*(1-Math.exp(-12*seconds));
-        player.verticalVelocity=0;player.sprinting=Boolean(input?.sprinting);
-        player.coyoteMs=player.jumpBufferMs=0;player.airActionConsumedSinceGrounded=false;
-        return;
-      }
-    }
-  }
+  if(worldId==='friends_frontier'&&transport?.volumetric&&advanceFriendsSwimming(player,input,seconds,resolveAdditionalCollisions,getAdditionalFloor,transport))return;
   const boardingFloor = floorAtStart !== undefined && floorAtStart > player.z && floorAtStart - player.z <= 18
     && player.verticalVelocity <= 0 ? transport?.boardingFloor?.(player) : undefined;
   if (boardingFloor !== undefined && floorAtStart === boardingFloor && player.verticalVelocity <= 0
@@ -275,20 +259,40 @@ function advanceMovementStep(
     let displacementY = movement.y * speed * seconds;
     if (transport) {
       const hasInput = forward !== 0 || strafe !== 0;
-      // Exact exponential integration keeps acceleration consistent between
-      // host ticks and the client's fractional presentation frames.
-      const response = player.sliding ? (groundSurface.kind === 'thin_ice' ? .7 : 1.8) : grounded ? (hasInput ? 24 : 32) : hasInput ? 7 : 0;
-      const oldX = player.velocityX ?? 0, oldY = player.velocityY ?? 0;
-      const steeringSpeed = grounded ? speed : Math.max(speed, Math.hypot(oldX, oldY));
-      const targetX = player.sliding || !hasInput ? 0 : movement.x * steeringSpeed;
-      const targetY = player.sliding || !hasInput ? 0 : movement.y * steeringSpeed;
-      const decay = Math.exp(-response * seconds);
-      const travel = response > 0 ? (1 - decay) / response : seconds;
-      displacementX = targetX * seconds + (oldX - targetX) * travel;
-      displacementY = targetY * seconds + (oldY - targetY) * travel;
-      player.velocityX = targetX + (oldX - targetX) * decay;
-      player.velocityY = targetY + (oldY - targetY) * decay;
-      if (grounded && !hasInput && Math.hypot(player.velocityX, player.velocityY) < 1) player.velocityX = player.velocityY = 0;
+      if (player.friendsDevSuperjump && !grounded) {
+        // Steer the launch vector without throwing away speed in a turn.
+        // Releasing movement coasts; crouch brakes instead of starting a slide.
+        const oldX = player.velocityX ?? 0, oldY = player.velocityY ?? 0;
+        const oldSpeed = Math.hypot(oldX, oldY);
+        const targetSpeed = Math.max(oldSpeed, player.sprinting ? FRIENDS_SUPERJUMP_BOOST_SPEED : FRIENDS_SUPERJUMP_SPEED);
+        const airSpeed = input.sliding ? oldSpeed * Math.exp(-4 * seconds)
+          : hasInput ? targetSpeed + (oldSpeed - targetSpeed) * Math.exp(-3 * seconds) : oldSpeed;
+        let heading = oldSpeed > 1 ? Math.atan2(oldY, oldX) : Math.atan2(requested.y, requested.x);
+        if (hasInput && oldSpeed > 1) {
+          const desired = Math.atan2(requested.y, requested.x);
+          const turn = Math.atan2(Math.sin(desired - heading), Math.cos(desired - heading));
+          heading += Math.max(-4 * seconds, Math.min(4 * seconds, turn));
+        }
+        player.velocityX = Math.cos(heading) * airSpeed;
+        player.velocityY = Math.sin(heading) * airSpeed;
+        displacementX = (oldX + player.velocityX) * .5 * seconds;
+        displacementY = (oldY + player.velocityY) * .5 * seconds;
+      } else {
+        // Exact exponential integration keeps acceleration consistent between
+        // host ticks and the client's fractional presentation frames.
+        const response = player.sliding ? (groundSurface.kind === 'thin_ice' ? .7 : 1.8) : grounded ? (hasInput ? 24 : 32) : hasInput ? 7 : 0;
+        const oldX = player.velocityX ?? 0, oldY = player.velocityY ?? 0;
+        const steeringSpeed = grounded ? speed : Math.max(speed, Math.hypot(oldX, oldY));
+        const targetX = player.sliding || !hasInput ? 0 : movement.x * steeringSpeed;
+        const targetY = player.sliding || !hasInput ? 0 : movement.y * steeringSpeed;
+        const decay = Math.exp(-response * seconds);
+        const travel = response > 0 ? (1 - decay) / response : seconds;
+        displacementX = targetX * seconds + (oldX - targetX) * travel;
+        displacementY = targetY * seconds + (oldY - targetY) * travel;
+        player.velocityX = targetX + (oldX - targetX) * decay;
+        player.velocityY = targetY + (oldY - targetY) * decay;
+        if (grounded && !hasInput && Math.hypot(player.velocityX, player.velocityY) < 1) player.velocityX = player.velocityY = 0;
+      }
     }
     const contactBeforeMovement = !grounded
       ? getWorldWallContact(player.x, player.y, COOP_PLAYER_RADIUS, 3, worldId, transport?.elevationAware ? player.z : undefined) || getAdditionalWallContact?.(player, COOP_PLAYER_RADIUS)
@@ -322,14 +326,19 @@ function advanceMovementStep(
     if (wantsJump) {
       if (grounded || (transport && (player.coyoteMs ?? 0) > 0)) {
         player.lastJumpSequence = jumpSequence;
-        player.verticalVelocity = COOP_JUMP_VELOCITY + (transport ? player.platformVelocityZ || 0 : 0);
+        player.verticalVelocity = COOP_JUMP_VELOCITY * (player.friendsDevSuperjump ? FRIENDS_SUPERJUMP_MULTIPLIER : 1) + (transport ? player.platformVelocityZ || 0 : 0);
         player.coyoteMs = 0;
         player.jumpBufferMs = 0;
+        if (player.friendsDevSuperjump && (forward !== 0 || strafe !== 0)) {
+          const launchSpeed = player.sprinting ? FRIENDS_SUPERJUMP_BOOST_SPEED : FRIENDS_SUPERJUMP_SPEED;
+          player.velocityX = requested.x * launchSpeed;
+          player.velocityY = requested.y * launchSpeed;
+        }
       }
       else if (!player.airActionConsumedSinceGrounded && (wallContact || worldCollision.collided || touchedAdditionalSurface)) {
         player.lastJumpSequence = jumpSequence;
         player.jumpBufferMs = 0;
-        player.verticalVelocity = COOP_WALL_JUMP_VELOCITY;
+        player.verticalVelocity = COOP_WALL_JUMP_VELOCITY * (player.friendsDevSuperjump ? FRIENDS_SUPERJUMP_MULTIPLIER : 1);
         player.airActionConsumedSinceGrounded = true;
         player.lastWallJumpSequence = jumpSequence;
         // Resting contact supplies a stable outward normal even when the
@@ -337,8 +346,9 @@ function advanceMovementStep(
         player.wallJumpDirectionX = wallContact?.normalX ?? -movement.x;
         player.wallJumpDirectionY = wallContact?.normalY ?? -movement.y;
         if (transport) {
-          player.velocityX = player.wallJumpDirectionX * 330;
-          player.velocityY = player.wallJumpDirectionY * 330;
+          const wallSpeed = player.friendsDevSuperjump ? (player.sprinting ? FRIENDS_SUPERJUMP_BOOST_SPEED : FRIENDS_SUPERJUMP_SPEED) : 330;
+          player.velocityX = player.wallJumpDirectionX * wallSpeed;
+          player.velocityY = player.wallJumpDirectionY * wallSpeed;
         }
       }
     }
@@ -349,14 +359,14 @@ function advanceMovementStep(
     const canAirIgnite = !grounded && !player.airActionConsumedSinceGrounded
       && !player.jetIgnitedThisAirTime && (player.airborneMs || 0) >= COOP_JET_IGNITION_DELAY_MS
       && (player.jetFuel || 0) > 0;
-    if (input.jetHeld && !player.carryingHostage && (canGroundLaunch || canAirIgnite)) {
+    if (input.jetHeld && !player.friendsDevSuperjump && !player.carryingHostage && (canGroundLaunch || canAirIgnite)) {
       if (canGroundLaunch) player.verticalVelocity = Math.max(player.verticalVelocity, COOP_JUMP_VELOCITY);
       player.jetIgnitedThisAirTime = true;
       player.airActionConsumedSinceGrounded = true;
       player.jetActive = true;
       player.lastDoubleJumpSequence = input.sequence;
     }
-    if (!input.jetHeld || player.carryingHostage || (player.jetFuel || 0) <= 0) player.jetActive = false;
+    if (!input.jetHeld || player.friendsDevSuperjump || player.carryingHostage || (player.jetFuel || 0) <= 0) player.jetActive = false;
     if (player.jetActive) {
       const launchFloor = transport ? player.jetLaunchFloor ?? 0 : 0;
       const hardCeiling = Math.min(transport?.ceiling ?? Infinity, launchFloor + COOP_JET_HARD_CEILING);
@@ -385,6 +395,7 @@ function advanceMovementStep(
   // A jump retains its upward velocity; stepping off a balcony still falls.
   if (transport && elevatedGrounded && player.verticalVelocity <= 0 && floorAfterMovement !== undefined && Math.abs(floorAfterMovement - (floorAtStart ?? 0)) <= (transport.stepHeight ?? 0)) player.z = floorAfterMovement;
   const zBeforeGravity = player.z;
+  player.fallPeakZ = player.verticalVelocity >= 0 ? player.z : Math.max(player.fallPeakZ ?? player.z, player.z);
   player.verticalVelocity -= getWorldDefinition(worldId).movementGravity * seconds;
   player.z += player.verticalVelocity * seconds;
   // Keep the full operator beneath an open cabin's canopy. Outside its bounds,
@@ -392,9 +403,14 @@ function advanceMovementStep(
   if (overhead !== undefined && player.verticalVelocity > 0 && player.z + 50 > overhead) { player.z = Math.min(zBeforeGravity, overhead - 50); player.verticalVelocity = 0; }
   const landedOnHardlight = floorAfterMovement !== undefined && player.verticalVelocity <= 0
     && zBeforeGravity >= floorAfterMovement - .001 && player.z <= floorAfterMovement;
+  // Superjump follows a ballistic arc above the ordinary jetpack limit.
+  const ascentCeiling = transport && Math.min(transport.ceiling, player.friendsDevSuperjump ? Infinity : (player.jetLaunchFloor ?? 0) + COOP_JET_HARD_CEILING);
   if (landedOnHardlight || (!transport?.volumetric && player.z <= 0)) {
+    if (landedOnHardlight && player.verticalVelocity < -900
+      && player.fallPeakZ - floorAfterMovement! >= FRIENDS_HARD_LANDING_MIN_DROP) transport?.onLanding?.(-player.verticalVelocity);
     player.z = landedOnHardlight ? floorAfterMovement! : 0;
     player.verticalVelocity = 0;
+    player.fallPeakZ = undefined;
     if (transport) { player.platformVelocityX = 0; player.platformVelocityY = 0; player.platformVelocityZ = 0; }
     player.airActionConsumedSinceGrounded = false;
     player.jetActive = false;
@@ -405,10 +421,10 @@ function advanceMovementStep(
       const surface = sampleWorldSurface(worldId, player.x, player.y);
       player.jetFuel = Math.min(COOP_JET_FUEL_MAX, (player.jetFuel ?? COOP_JET_FUEL_MAX) + COOP_JET_RECHARGE_PER_SECOND * surface.jetRechargeMultiplier * seconds);
     }
-  } else if (transport && player.verticalVelocity > 0 && player.z > Math.min(transport.ceiling, (player.jetLaunchFloor ?? 0) + COOP_JET_HARD_CEILING)) {
+  } else if (transport && player.verticalVelocity > 0 && player.z > ascentCeiling) {
     // Limit ascent only. Falling off a high vehicle must follow gravity, never
     // snap down to the ground jet ceiling or become suspended at its limit.
-    player.z = Math.max(zBeforeGravity, Math.min(transport.ceiling, (player.jetLaunchFloor ?? 0) + COOP_JET_HARD_CEILING));
+    player.z = Math.max(zBeforeGravity, ascentCeiling);
     player.verticalVelocity = 0;
   } else if (!transport && player.z >= Math.max(COOP_JET_HARD_CEILING, floorAtStart ?? 0)) {
     player.z = Math.max(transport?.ceiling ?? COOP_JET_HARD_CEILING, floorAtStart ?? 0);

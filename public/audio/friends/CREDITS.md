@@ -1,6 +1,7 @@
 # Sunline / Friends audio credits
 
-Downloaded from the original publishers on 2026-10-08. Effects use CC0-1.0;
+Downloaded from the original publishers on 2026-10-08 and 2026-10-09. Effects use
+CC0-1.0 except the attributed feeding-bird recordings documented below;
 the two music tracks and campfire recording use the Pixabay Content License.
 Per-file licenses, publisher labels, source URLs and hashes are preserved in
 `sources.json`. Assets are bundled locally; gameplay does not contact the
@@ -212,3 +213,38 @@ tail. The exact processing and original/output hashes are in `sources.json`.
 No dynamic loudness processing is applied to the new excerpts. Playback
 adds an 800 ms seam crossfade to environmental loops and 80 ms to the motor.
 Cave reflections use four filtered delay taps on the existing recordings.
+
+## Feeding birds — field recordings added 2026-10-09
+
+These are recordings of real birds. The bundled excerpts preserve native pitch
+and dynamics. They are trimmed, filtered to reduce distant rumble, faded at the
+cuts, given a bounded linear gain and encoded as mono 32 kHz Vorbis q5.
+Exact excerpt times, original and output hashes, edits and licenses are recorded
+under `birdFieldRecordings` in `sources.json`.
+
+- `bird_robin_000.ogg`, `bird_robin_001.ogg`, `bird_robin_002.ogg`:
+  **Robin #1, #4 and #7**, recorded by **Joseph Sardin / BigSoundBank**.
+  [Robin #1](https://bigsoundbank.com/robin-1-s1667.html),
+  [Robin #4](https://bigsoundbank.com/rouge-gorge-4-s1670.html),
+  [Robin #7](https://bigsoundbank.com/rouge-gorge-7-s1673.html).
+  [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+- `bird_blue_tit_000.ogg`, `bird_blue_tit_001.ogg`,
+  `bird_wings_000.ogg`, `bird_wings_001.ogg`:
+  **Eurasian Blue Tit Call and Wing Sounds**, recorded by **David /
+  naturenotesuk** with a Zoom H1essential and clippy microphone.
+  [Original recording and publisher](https://freesound.org/people/naturenotesuk/sounds/830034/).
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  Edited from the publisher's publicly provided high-quality preview.
+- `bird_sparrow_000.ogg`, `bird_sparrow_001.ogg`,
+  `bird_sparrow_002.ogg`, `bird_startled_000.ogg`, `bird_startled_001.ogg`:
+  **House Sparrow — XC86749**, recorded by **Jonathon Jongsma** at Powderhorn
+  Park, Minneapolis, on 2011-08-03.
+  [Original recording and attribution](https://commons.wikimedia.org/wiki/File:Passer_domesticus_-_House_Sparrow_-_XC86749.ogg),
+  [xeno-canto source](https://xeno-canto.org/86749).
+  These edited audio files are distributed under
+  [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
+In-game calls are individual phrases with quiet gaps; wing flutters accompany
+arrival and departure. Calls use the visible species, stereo direction and
+distance, and the player's Ambience volume. The short startled cue is a recorded
+sparrow chirp used for the campfire reaction. Audio assets stay local during play.

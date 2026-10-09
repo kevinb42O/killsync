@@ -1,3 +1,5 @@
+import { interpolateTerrainSurface } from './FriendsWaterBodies';
+import { hydrologyWaterLevel } from './FriendsHydrology';
 import { scenicTransitSurface, scenicTransitRanges } from './FriendsRailInfrastructure';
 import { meshIslandVault } from './FriendsIslandVolume';
 import { islandArchRange } from './FriendsIsland';
@@ -118,10 +120,17 @@ export function meshOrganicHorizon(tx:number,ty:number,tile=4096,sampleHeight=ba
   };
   for(let y=0;y<cells&&ty+y*step<FRONTIER_SIZE;y++)for(let x=0;x<cells&&tx+x*step<FRONTIER_SIZE;x++){
     // Hidden sea floor is represented by bathymetry, not millions of triangles.
-    if(Math.max(h(x,y),h(x+1,y),h(x,y+1),h(x+1,y+1))<-192)continue;
+    if(Math.max(h(x,y),h(x+1,y),h(x,y+1),h(x+1,y+1))<-192){
+      const water=hydrologyWaterLevel(tx+(x+.5)*step,ty+(y+.5)*step);
+      if(water===undefined||water<=-168.5)continue;
+    }
     const a=vertex(x,y),b=vertex(x,y+1),c=vertex(x+1,y+1),d=vertex(x+1,y);
     // Alternating diagonals avoid a visible single-direction triangulation.
     if((x+y)%2)indices.push(a,b,d,b,c,d);else indices.push(a,b,c,a,c,d);
   }
   return {tx,ty,positions:new Int16Array(positions),normals:new Int8Array(normals),uv:new Float32Array(uv),colors:new Uint8Array(colors),indices:new Uint32Array(indices)};
 }
+
+/** The exact triangle surface used by the ordinary 64-unit horizon. Decorative
+ * cascades conform to it rather than hovering above an averaged height. */
+export function organicHorizonHeightAt(x:number,y:number){return interpolateTerrainSurface(x,y,baseTerrainHeight);}

@@ -1,0 +1,88 @@
+{
+  "origin": "http://127.0.0.1:3019",
+  "checks": [
+    {
+      "mode": "never-ready",
+      "captures": [
+        {
+          "phase": "arrival",
+          "colors": 58,
+          "brightness": 7639922,
+          "draws": 182043,
+          "glError": 0,
+          "warmup": {
+            "submitted": 1,
+            "completed": 0,
+            "queued": 548,
+            "scanning": false,
+            "pending": true,
+            "failures": 0,
+            "maxSubmitMs": 1.7999999523162842,
+            "maxReadinessMs": 0,
+            "maxScanMs": 3.600000023841858
+          }
+        },
+        {
+          "phase": "turned",
+          "colors": 204,
+          "brightness": 3777374,
+          "draws": 211044,
+          "glError": 0,
+          "warmup": {
+            "submitted": 1,
+            "completed": 0,
+            "queued": 548,
+            "scanning": false,
+            "pending": true,
+            "failures": 0,
+            "maxSubmitMs": 1.7999999523162842,
+            "maxReadinessMs": 0,
+            "maxScanMs": 3.600000023841858
+          }
+        }
+      ]
+    },
+    {
+      "mode": "no-parallel-extension",
+      "captures": [
+        {
+          "phase": "arrival",
+          "colors": 76,
+          "brightness": 8354799,
+          "draws": 188158,
+          "glError": 0,
+          "warmup": {
+            "submitted": 205,
+            "completed": 205,
+            "queued": 344,
+            "scanning": false,
+            "pending": false,
+            "failures": 0,
+            "maxSubmitMs": 2.700000047683716,
+            "maxReadinessMs": 0,
+            "maxScanMs": 2
+          }
+        },
+        {
+          "phase": "turned",
+          "colors": 202,
+          "brightness": 3774293,
+          "draws": 253703,
+          "glError": 0,
+          "warmup": {
+            "submitted": 266,
+            "completed": 266,
+            "queued": 283,
+            "scanning": false,
+            "pending": false,
+            "failures": 0,
+            "maxSubmitMs": 2.700000047683716,
+            "maxReadinessMs": 0,
+            "maxScanMs": 2
+          }
+        }
+      ]
+    }
+  ],
+  "errors": []
+}

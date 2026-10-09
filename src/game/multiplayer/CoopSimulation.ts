@@ -1,7 +1,9 @@
+import { isRowboatSeat } from './FriendsRowboat';
 import { FriendsEnvironmentPreview, type FriendsEnvironmentChange } from '../world/FriendsEnvironmentPreview';
 import { sanitizeFriendsArms, type FriendsHandsState } from './FriendsGestureControls';
 import { retreatPathFloor } from '../world/FriendsRetreatPaths';
 import { RETREAT_BOXES, isQuietSeat, retreatFloor, retreatCeiling, collideRetreats } from '../world/FriendsRetreatSites';
+import { MARSHMALLOW_TOOL } from './FriendsCampfireSimulation';
 import { friendsToolInput } from './FriendsToolControls';
 import { orientedBuildBox } from './FriendsAssemblyPose';
 import { dequantizeFriendsFlashlightCone, type FriendsFlashlightState } from './FriendsFlashlightState';
@@ -18,7 +20,7 @@ import { routeHaulingRope } from './FriendsRopePath';
 import { collidePhysicalCargo, physicalCargoBuildBodies, type HaulingEnvironment } from './FriendsHauling';
 import { FriendsProjects, type FriendsProjectSnapshot } from './FriendsProjects';
 import { insideFriendsCombat, FRIENDS_SALVAGE } from '../world/FriendsRegion';
-import { FriendsExpedition, friendsCockpitInteraction, friendsWorldFloor, friendsVehicleFloor, friendsVehicleCeiling, FRIENDS_FLIGHT_CEILING, resolveFriendsVehicleCollisions, type FriendsTransportSave, type FriendsProgress, type FriendsSnapshot } from './FriendsExpedition';
+import { FriendsExpedition, friendsCockpitInteraction, friendsRowboatInteraction, friendsWorldFloor, friendsVehicleFloor, friendsVehicleCeiling, FRIENDS_FLIGHT_CEILING, resolveFriendsVehicleCollisions, type FriendsTransportSave, type FriendsProgress, type FriendsSnapshot } from './FriendsExpedition';
 import type { CoopGameMode } from './CoopGameMode';
 import { FRIENDS_HUB, FRIENDS_MARKETS, FRIENDS_FOUNDRY } from '../world/FriendsRegion';
 import { COOP_SPELLS, isCoopSpell, MANA_MAX, MANA_REGEN_PER_SECOND, type CoopSpellId } from '../combat/coopSpells';
@@ -239,6 +241,7 @@ export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   jetActive?: boolean;
   friendsSeat?: {vehicleId:string;index:number};
   friendsDevFlight?: boolean;
+  friendsDevSuperjump?: boolean;
   lastProcessedInput?: number;
   lastProcessedFireAction?: number;
   platformVelocityX?: number;
@@ -879,7 +882,7 @@ export class CoopSimulation {
     this.latestInputSequence.set(playerId, frame.sequence);
     // Enforce host-only dev access before expedition/vehicle updates see input.
     this.inputByPlayer.set(playerId, this.friends && playerId !== this.friendsHostId
-      ? { ...frame, friendsDevFlight: false, friendsDevFlightDown: false } : frame);
+      ? { ...frame, friendsDevFlight: false, friendsDevFlightDown: false, friendsDevSuperjump: false } : frame);
     this.inputReceivedAtMs.set(playerId, this.elapsedMs);
     this.inputAgeMs.set(playerId, clamp(estimatedAgeMs, 0, COOP_MAX_SHOT_COMPENSATION_MS));
   }
@@ -913,12 +916,12 @@ export class CoopSimulation {
       const input = rawInput && player.carryingHostage
         ? { ...rawInput, firing: false, aiming: false, sprinting: false, sliding: false, jetHeld: false, dashPressed: false, reloadPressed: false, altFireActionId: player.lastAltFireActionId }
         : rawInput;
-      const handsAllowed = Boolean(this.friends && !stale && input?.friendsTool === 6 && player.lifeState === 'alive'
-        && !isCampfireSeat(player.friendsSeat) && !this.friends.vehicles().some(v => v.pilotId === player.id));
+      const handsAllowed = Boolean(this.friends && !stale && input?.friendsTool === 6 && !this.friends.fishing.held(player.id) && player.lifeState === 'alive'
+        && !isQuietSeat(player.friendsSeat) && !this.friends.vehicles().some(v => v.pilotId === player.id));
       if (handsAllowed) player.friendsHands = {mask:sanitizeFriendsArms(input!.friendsArms),
         yaw:input!.aimAngle/65535*Math.PI*2, pitch:dequantizePitch(input!.aimPitch)};
       else delete player.friendsHands;
-      if(this.friends && !stale && input?.friendsFlashlight === true && input.friendsTool !== 6 && player.lifeState === 'alive'
+      if(this.friends && !stale && input?.friendsFlashlight === true && input.friendsTool !== 6 && !this.friends.fishing.held(player.id) && player.lifeState === 'alive'
         && !this.friends.vehicles().some(v => v.kind==='aircraft' && v.pilotId === player.id))
         player.friendsFlashlight = { pitch: dequantizePitch(input.aimPitch), cone: dequantizeFriendsFlashlightCone(input.friendsFlashlightCone),
           yaw: Math.round(input.aimAngle / 65535 * Math.PI * 2 * 1000) / 1000 };
@@ -961,7 +964,7 @@ export class CoopSimulation {
       }
       if (input) {
         player.lastProcessedInput = input.sequence;
-        if(player.friendsSeat)player.angle=input.aimAngle/65535*Math.PI*2;
+        if(player.friendsSeat&&!isRowboatSeat(player.friendsSeat))player.angle=input.aimAngle/65535*Math.PI*2;
         const piloting = this.friends?.vehicles().some(v => v.pilotId === player.id);
         const carried = this.friends?.hauling.playerCarry.isCarried(player.id);
         if (carried) player.angle = input.aimAngle / 65535 * Math.PI * 2;
@@ -973,7 +976,7 @@ export class CoopSimulation {
           (position, radius) => this.getPlayerStructureWallContact(position, player.z, radius),
           (position, radius) => this.getPlayerStructureFloor(position, radius),
           this.currentWorldId,
-          this.friends ? { elevationAware: true, towingScale: this.friends.hauling.movementScale(player.id), devFlightAllowed: player.id === this.friendsHostId, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined,
+          this.friends ? { elevationAware: true, onLanding: () => this.emitCombatEvent({kind:'player_damaged',x:player.x,y:player.y,playerId:player.id,amount:0,color:'#fb7185'}), towingScale: this.friends.hauling.movementScale(player.id), devFlightAllowed: player.id === this.friendsHostId, devSuperjumpAllowed: player.id === this.friendsHostId, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined,
         );
         if (Math.hypot(player.x - player.lastArtifactX, player.y - player.lastArtifactY) >= 60) {
           player.echoPositions.push({ x: player.x, y: player.y });
@@ -993,8 +996,8 @@ export class CoopSimulation {
         if (requestedSlot !== player.selectedSlot && !player.isSwitching) this.switchWeapon(player, requestedSlot);
         player.selectedWeaponId = this.weapon(player).weaponId;
         player.selectedWeaponLevel = this.weapon(player).level;
-        player.isAiming = !(this.friends && (input.friendsTool === 3 || input.friendsTool === 6)) && !isQuietSeat(player.friendsSeat) && !isCoopSpell(player.selectedWeaponId) && Boolean(input.aiming) && player.selectedSlot !== 3 && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
-        if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; if (this.friends && (carried || this.friends.hauling.playerCarry.hasCarrier(player.id))) this.friends.hauling.detach(player.id); else if (this.friends && isCampfireSeat(player.friendsSeat)) this.friends.campfire.replace(player); else if (this.friends && input.friendsTool === 5) this.friends.hauling.detach(player.id); else if (!isQuietSeat(player.friendsSeat) && !(this.friends && input.friendsTool===6)) this.startReload(player); }
+        player.isAiming = !(this.friends && (input.friendsTool === 3 || input.friendsTool === 6 || input.friendsTool === 7 || input.friendsTool === 8 || input.friendsTool === 9 || input.friendsTool === MARSHMALLOW_TOOL)) && !isQuietSeat(player.friendsSeat) && !isCoopSpell(player.selectedWeaponId) && Boolean(input.aiming) && player.selectedSlot !== 3 && player.selectedWeaponId !== 'combat_shotgun' && !player.isReloading;
+        if (input.reloadPressed && input.sequence !== player.lastReloadSequence) { player.lastReloadSequence = input.sequence; if (this.friends && (carried || this.friends.hauling.playerCarry.hasCarrier(player.id))) this.friends.hauling.detach(player.id); else if (this.friends && input.friendsTool === MARSHMALLOW_TOOL) this.friends.campfire.replace(player,MARSHMALLOW_TOOL); else if (this.friends && input.friendsTool === 5) this.friends.hauling.detach(player.id); else if (!isQuietSeat(player.friendsSeat) && !(this.friends && (input.friendsTool===6||input.friendsTool===7||input.friendsTool===8||input.friendsTool===9||input.friendsTool===MARSHMALLOW_TOOL))) this.startReload(player); }
         this.advanceWeaponActions(player);
         const fireActionId = input.fireActionId || 0;
         const triggerPressed = fireActionId > player.lastFireActionId || (input.fireActionId === undefined && input.firing && !player.previousFiring);
@@ -1007,7 +1010,8 @@ export class CoopSimulation {
         const altFireActionId = input.altFireActionId || 0;
         if (altFireActionId > player.lastAltFireActionId) {
           player.lastAltFireActionId = altFireActionId;
-          if (!isQuietSeat(player.friendsSeat) && !(this.friends && input.friendsTool) && (player.selectedSlot === 3 || player.operatorId === 'royal_inferno')) this.tryArtifactSpender(player);
+          if(this.friends&&input.friendsTool===MARSHMALLOW_TOOL&&!stale&&!piloting&&!input.friendsFishingBlocked)this.friends.campfire.eat(player,MARSHMALLOW_TOOL);
+          else if (!isQuietSeat(player.friendsSeat) && !(this.friends && input.friendsTool) && (player.selectedSlot === 3 || player.operatorId === 'royal_inferno')) this.tryArtifactSpender(player);
         }
         const grenadeActionId = input.grenadeActionId || 0;
         if (grenadeActionId > player.lastGrenadeActionId) { player.lastGrenadeActionId = grenadeActionId; if (!isQuietSeat(player.friendsSeat) && !(this.friends && input.friendsTool)) this.throwGrenade(player); }
@@ -1024,7 +1028,7 @@ export class CoopSimulation {
         if (!piloting && !isQuietSeat(player.friendsSeat) && !(this.friendsFrontier && input.friendsTool) && input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
       }
-      if (!input && !player.friendsSeat && !this.friends?.hauling.playerCarry.isCarried(player.id)) advancePlayerMovement(player, undefined, dt, this.friends ? (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius) : undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId, this.friends ? { elevationAware: true, devFlightAllowed: player.id === this.friendsHostId, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined);
+      if (!input && !player.friendsSeat && !this.friends?.hauling.playerCarry.isCarried(player.id)) advancePlayerMovement(player, undefined, dt, this.friends ? (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius) : undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId, this.friends ? { elevationAware: true, onLanding: () => this.emitCombatEvent({kind:'player_damaged',x:player.x,y:player.y,playerId:player.id,amount:0,color:'#fb7185'}), devFlightAllowed: player.id === this.friendsHostId, devSuperjumpAllowed: player.id === this.friendsHostId, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined);
     }
 
     this.friendsFrontier?.tickTools(this.elapsedMs, new Set(this.players.keys()), new Set([...this.players.values()]
@@ -1032,7 +1036,11 @@ export class CoopSimulation {
     if (this.friends) {
       const validInputs = new Map<string, MultiplayerInputFrame>();
       for (const [id, input] of this.inputByPlayer) if (this.elapsedMs - (this.inputReceivedAtMs.get(id) ?? -Infinity) <= COOP_STALE_INPUT_MS) validInputs.set(id, input);
-      this.friends.hauling.update(dt, this.elapsedMs, [...this.players.values()], validInputs, this.haulingEnvironment());
+      const fishingEnvironment=this.haulingEnvironment();
+      this.friends.hauling.update(dt, this.elapsedMs, [...this.players.values()], validInputs, fishingEnvironment);
+      this.friends.fishing.update(dt,this.elapsedMs,[...this.players.values()],validInputs,{...fishingEnvironment,piloting:id=>this.friends!.vehicles().some(v=>v.pilotId===id)});
+      this.friends.stones.update(dt,this.elapsedMs,[...this.players.values()],validInputs,{...fishingEnvironment,piloting:id=>this.friends!.vehicles().some(v=>v.pilotId===id)||this.friends!.hauling.playerCarry.isCarried(id)},(playerId,point)=>this.emitCombatEvent({kind:'player_damaged',x:point.x,y:point.y,playerId,amount:0,color:'#fb7185'}));
+      this.friends.birds.update(dt,this.elapsedMs,[...this.players.values()],validInputs,{...fishingEnvironment,outdoors:p=>!Number.isFinite(this.friendsOverhead(p)),piloting:id=>this.friends!.vehicles().some(v=>v.pilotId===id)||this.friends!.hauling.playerCarry.isCarried(id)});
       for(const [id,angle] of this.friends.hauling.getCraneAngles())if(!this.friends.hauling.craneArmIsMoving(id))this.friendsBuilding?.parkCrane(id,angle);
     }
 
@@ -1350,7 +1358,7 @@ export class CoopSimulation {
       mode: this.mode,
       friends: this.friends ? { ...this.friends.snapshot(), environment: this.friendsEnvironment.snapshot, building: this.friendsBuilding?.snapshot(), projects: this.friendsProjects?.snapshot(), frontier: this.friendsFrontier?.snapshot() } : undefined,
       realityBreach: this.friends ? undefined : this.realityBreach.snapshot(this.worldElapsedMs()),
-      players: [...this.players.values()].map(({ velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, jetLaunchFloor, airborneMs, groundedMs, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastAltFireActionId: _lastAltFireActionId, lastGrenadeActionId: _lastGrenadeActionId, grenadeRechargeAtMs: _grenadeRechargeAtMs, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, artifactTargetId: _artifactTargetId, artifactHitCount: _artifactHitCount, artifactLastActionAtMs: _artifactLastActionAtMs, artifactBarrierExpiresAtMs: _artifactBarrierExpiresAtMs, artifactProcExpiresAtMs: _artifactProcExpiresAtMs, lastArtifactX: _lastArtifactX, lastArtifactY: _lastArtifactY, slipstreamReadyAtMs: _slipstreamReadyAtMs, echoPositions: _echoPositions, ...player }) => ({ ...player, privateExfilAvailable: this.fieldMissionDirector.completions > 0 || this.runDirector.snapshot(this.elapsedMs).contractIndex > 0, privateExfilCalled: this.privateExfilCalled, fabricatorRechargeRemainingMs: this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, jetLaunchFloor, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, jetFuel: player.jetFuel, jetActive: player.jetActive, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
+      players: [...this.players.values()].map(({ swimming, swimSubmerged, velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, fallPeakZ, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, jetLaunchFloor, airborneMs, groundedMs, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastAltFireActionId: _lastAltFireActionId, lastGrenadeActionId: _lastGrenadeActionId, grenadeRechargeAtMs: _grenadeRechargeAtMs, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, artifactTargetId: _artifactTargetId, artifactHitCount: _artifactHitCount, artifactLastActionAtMs: _artifactLastActionAtMs, artifactBarrierExpiresAtMs: _artifactBarrierExpiresAtMs, artifactProcExpiresAtMs: _artifactProcExpiresAtMs, lastArtifactX: _lastArtifactX, lastArtifactY: _lastArtifactY, slipstreamReadyAtMs: _slipstreamReadyAtMs, echoPositions: _echoPositions, ...player }) => ({ ...player, privateExfilAvailable: this.fieldMissionDirector.completions > 0 || this.runDirector.snapshot(this.elapsedMs).contractIndex > 0, privateExfilCalled: this.privateExfilCalled, fabricatorRechargeRemainingMs: this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { swimming, swimSubmerged, velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, fallPeakZ, jetLaunchFloor, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, jetFuel: player.jetFuel, jetActive: player.jetActive, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: player.weaponStates.map(state => ({ ...state })), weaponLevels: player.weaponStates.map(state => state.level) })),
       enemies: this.enemies.map(({ hitFlashUntilMs, deathUntilMs, killedByPlayerId: _killedBy, targetLeaseUntilMs: _lease, nextAttackAtMs: _nextAttack, targetStructureId: _targetStructureId, structureStunUntilMs: _structureStunUntilMs, chillExpiresAtMs: _chillExpiresAtMs, rimeGrantedAtMs: _rimeGrantedAtMs, missionAnchorX: _missionAnchorX, missionAnchorY: _missionAnchorY, cinderhexByOwner: _cinderhexByOwner, ...enemy }) => ({
         ...enemy,
         hitFlashMs: Math.max(0, hitFlashUntilMs - this.elapsedMs),
@@ -1453,12 +1461,12 @@ export class CoopSimulation {
         return {playerId,requestId:request.requestId,ok,message};
       };
       if(request.action==='campfire_eat'){
-        const ok=this.friends.campfire.eat(player);
-        return result(ok,ok?'Enjoy your marshmallow! A fresh one arrives in a moment.':'Sit at the campfire and wait until your marshmallow is ready.');
+        const ok=this.friends.campfire.eat(player,this.inputByPlayer.get(player.id)?.friendsTool);
+        return result(ok,ok?'Enjoy your marshmallow! A fresh one arrives in a moment.':'Equip your marshmallow and wait until it is ready.');
       }
       if(request.action==='campfire_fresh'){
-        const ok=this.friends.campfire.replace(player);
-        return result(ok,ok?'Fresh marshmallow on your stick.':'Sit at the campfire and wait until your marshmallow is ready.');
+        const ok=this.friends.campfire.replace(player,this.inputByPlayer.get(player.id)?.friendsTool);
+        return result(ok,ok?'Fresh marshmallow on your stick.':'Equip your marshmallow and wait until it is ready.');
       }
       const error=this.friends.campfire.fuelError(player);if(error)return result(false,error);
       const pack=this.friendsFrontier.pack(player);
@@ -1925,7 +1933,8 @@ export class CoopSimulation {
   }
 
   private handleFieldInteraction(player: CoopPlayer) {
-    if (this.friends && (player.friendsSeat || friendsCockpitInteraction(this.friends.vehicles(), player))) { this.friends.interact(player, this.elapsedMs); return; }
+    if(this.friends?.fishing.pickup(player,this.inputByPlayer.get(player.id)?.friendsTool??6,this.elapsedMs))return;
+    if (this.friends && (player.friendsSeat || friendsCockpitInteraction(this.friends.vehicles(), player)||friendsRowboatInteraction(this.friends.vehicles(),player))) { this.friends.interact(player, this.elapsedMs); return; }
     if (this.collectManualDrop(player)) return;
     if (this.friends) {
       if (this.friends.hauling.interact(player, this.haulingEnvironment(), this.elapsedMs)) return;

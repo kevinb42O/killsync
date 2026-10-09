@@ -1,0 +1,426 @@
+{
+  "origin": "http://localhost:3026",
+  "errors": [],
+  "method": "Fresh browser context, actual Friends arena, fixed spawn camera. Frame gaps, long tasks, stage CPU times and slow WebGL calls from launch through settling. Menu rendering excluded. These are local Chromium/Metal measurements, not remote player FPS.",
+  "result": {
+    "buckets": [
+      {
+        "at": 0,
+        "frames": 35,
+        "medianMs": 16.700000000000045,
+        "p95Ms": 616.5999999999999,
+        "maxMs": 3017.2000000000003,
+        "over100Ms": 6,
+        "compiles": 34
+      },
+      {
+        "at": 5000,
+        "frames": 247,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.600000000000364,
+        "maxMs": 367,
+        "over100Ms": 2,
+        "compiles": 34
+      },
+      {
+        "at": 10000,
+        "frames": 268,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.5,
+        "maxMs": 18199.1,
+        "over100Ms": 1,
+        "compiles": 22
+      },
+      {
+        "at": 15000,
+        "frames": 0,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 20000,
+        "frames": 0,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 25000,
+        "frames": 0,
+        "over100Ms": 0,
+        "compiles": 4
+      },
+      {
+        "at": 30000,
+        "frames": 67,
+        "medianMs": 17.19999999999709,
+        "p95Ms": 49.900000000001455,
+        "maxMs": 183.29999999999563,
+        "over100Ms": 3,
+        "compiles": 6
+      }
+    ],
+    "tasks": [
+      {
+        "at": 84,
+        "ms": 562
+      },
+      {
+        "at": 646.8999999761581,
+        "ms": 59
+      },
+      {
+        "at": 721,
+        "ms": 189
+      },
+      {
+        "at": 947.8999999761581,
+        "ms": 1478
+      },
+      {
+        "at": 2433.600000023842,
+        "ms": 1522
+      },
+      {
+        "at": 4004.7000000476837,
+        "ms": 57
+      },
+      {
+        "at": 4318.700000047684,
+        "ms": 90
+      },
+      {
+        "at": 4771.700000047684,
+        "ms": 279
+      },
+      {
+        "at": 5061.600000023842,
+        "ms": 50
+      },
+      {
+        "at": 5144.200000047684,
+        "ms": 61
+      },
+      {
+        "at": 5222.600000023842,
+        "ms": 207
+      },
+      {
+        "at": 5505.600000023842,
+        "ms": 78
+      },
+      {
+        "at": 5588,
+        "ms": 361
+      },
+      {
+        "at": 8971.300000071526,
+        "ms": 115
+      },
+      {
+        "at": 14453.399999976158,
+        "ms": 18215
+      },
+      {
+        "at": 32747.800000071526,
+        "ms": 76
+      },
+      {
+        "at": 32855.700000047684,
+        "ms": 59
+      }
+    ],
+    "gl": [
+      {
+        "method": "getProgramInfoLog",
+        "at": 17934.5,
+        "ms": 5432.5,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36262)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at rve.render (http://localhost:3026/assets/index-BWtHHZSf.js:5609:4839)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 14463.300000071526,
+        "ms": 1930.2999999523163,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36262)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at rve.render (http://localhost:3026/assets/index-BWtHHZSf.js:5609:4839)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 25265.700000047684,
+        "ms": 1484.6999999284744,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36262)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at rve.render (http://localhost:3026/assets/index-BWtHHZSf.js:5609:4839)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 27935.399999976158,
+        "ms": 1178.8000000715256,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36262)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at rve.render (http://localhost:3026/assets/index-BWtHHZSf.js:5609:4839)"
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 16631.800000071526,
+        "ms": 868.7999999523163,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as texSubImage2D] (<anonymous>:24:146)\n    at Object.Y [as texSubImage2D] (http://localhost:3026/assets/index-BWtHHZSf.js:4733:14246)\n    at Je (http://localhost:3026/assets/index-BWtHHZSf.js:4733:34107)\n    at goe.j [as setTexture2D] (http://localhost:3026/assets/index-BWtHHZSf.js:4733:24720)\n    at bre.Yae [as setValue] (http://localhost:3026/assets/index-BWtHHZSf.js:4655:5060)\n    at k_.upload (http://localhost:3026/assets/index-BWtHHZSf.js:4655:9654)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:46716)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 29129.600000023842,
+        "ms": 845.8999999761581,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36262)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at rve.render (http://localhost:3026/assets/index-BWtHHZSf.js:5609:4839)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 2562,
+        "ms": 509.7000000476837,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6235)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at poe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4733:3695)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 32226.300000071526,
+        "ms": 230,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36314)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at rve.render (http://localhost:3026/assets/index-BWtHHZSf.js:5609:4839)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 4779.399999976158,
+        "ms": 213,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6092)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at poe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4733:3695)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34102)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3437.399999976158,
+        "ms": 204.60000002384186,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36262)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at rve.render (http://localhost:3026/assets/index-BWtHHZSf.js:5609:5534)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5229.399999976158,
+        "ms": 196,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6092)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at poe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4733:3695)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34102)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5596,
+        "ms": 171.20000004768372,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6235)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at poe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4733:3695)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3806,
+        "ms": 145.89999997615814,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36262)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at due.endFrame (http://localhost:3026/assets/index-BWtHHZSf.js:4867:3367)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 5797.300000071526,
+        "ms": 144.89999997615814,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6235)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at S (http://localhost:3026/assets/index-BWtHHZSf.js:4733:6358)\n    at poe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4733:3695)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34102)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3687.2000000476837,
+        "ms": 100.69999992847443,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramInfoLog] (<anonymous>:24:146)\n    at E (http://localhost:3026/assets/index-BWtHHZSf.js:4699:338)\n    at Yre.getUniforms (http://localhost:3026/assets/index-BWtHHZSf.js:4706:304)\n    at Fs (http://localhost:3026/assets/index-BWtHHZSf.js:4757:44062)\n    at Eoe.renderBufferDirect (http://localhost:3026/assets/index-BWtHHZSf.js:4757:29744)\n    at re (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38699)\n    at us (http://localhost:3026/assets/index-BWtHHZSf.js:4757:38235)\n    at ss (http://localhost:3026/assets/index-BWtHHZSf.js:4757:36262)\n    at Eoe.render (http://localhost:3026/assets/index-BWtHHZSf.js:4757:34501)\n    at due.endFrame (http://localhost:3026/assets/index-BWtHHZSf.js:4867:3092)"
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3255.3000000715256,
+        "ms": 93
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3367.600000023842,
+        "ms": 52.299999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 16551.399999976158,
+        "ms": 51
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17752.5,
+        "ms": 45.39999997615814
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 32571.300000071526,
+        "ms": 42.59999990463257
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 3200.899999976158,
+        "ms": 39.40000009536743
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 16427.600000023842,
+        "ms": 38.60000002384186
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17654.899999976158,
+        "ms": 34
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 16469.600000023842,
+        "ms": 33.299999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17575.300000071526,
+        "ms": 33.299999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17873.5,
+        "ms": 32.300000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4993.899999976158,
+        "ms": 30.200000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 16602.5,
+        "ms": 29.200000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17797.899999976158,
+        "ms": 29.200000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17627.100000023842,
+        "ms": 27.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5172.600000023842,
+        "ms": 26.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17689,
+        "ms": 26.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 16525.300000071526,
+        "ms": 26
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17848.300000071526,
+        "ms": 25.09999990463257
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17727.5,
+        "ms": 24.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17527.899999976158,
+        "ms": 24.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17552.200000047684,
+        "ms": 21.799999952316284
+      },
+      {
+        "method": "getShaderInfoLog",
+        "at": 16396.300000071526,
+        "ms": 19.09999990463257
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 16503,
+        "ms": 15.800000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17608.600000023842,
+        "ms": 15.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17827.200000047684,
+        "ms": 14.399999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17905.899999976158,
+        "ms": 13.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 17715.600000023842,
+        "ms": 11.200000047683716
+      }
+    ],
+    "stages": [],
+    "programs": {
+      "checked": 49,
+      "pending": 1,
+      "failed": []
+    },
+    "glError": 0,
+    "warmup": {
+      "submitted": 1,
+      "completed": 0,
+      "queued": 549,
+      "scanning": false,
+      "pending": true,
+      "pendingCount": 1,
+      "failures": 0,
+      "maxSubmitMs": 15.600000023841858,
+      "maxReadinessMs": 0,
+      "maxScanMs": 2.600000023841858
+    },
+    "spawnPreparation": {
+      "submitted": 101,
+      "completed": 97,
+      "queued": 7,
+      "scanning": false,
+      "pending": true,
+      "pendingCount": 4,
+      "failures": 0,
+      "maxSubmitMs": 106.5,
+      "maxReadinessMs": 3.8000000715255737,
+      "maxScanMs": 2.100000023841858,
+      "ready": true,
+      "fallback": true
+    },
+    "terrain": {
+      "surfaceTiles": 58,
+      "surfaceBytes": 10509096,
+      "surfaceJobs": 0,
+      "pendingVoxels": 0,
+      "patchDraws": 0,
+      "volumeChunks": 161,
+      "volumeActive": 161,
+      "volumeJobs": 0,
+      "editMeshLatencyP95": 0,
+      "editMeshSamples": 0
+    },
+    "arrival": {
+      "active": true,
+      "age": 11849,
+      "reveal": 0.6249642857142862,
+      "settling": 1849.9000000000015,
+      "revealing": true
+    },
+    "render": {
+      "drawCalls": 831,
+      "triangles": 280529,
+      "geometries": 190,
+      "textures": 64,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    }
+  }
+}

@@ -31,7 +31,7 @@ export const RETREAT_SEATS:RetreatSeat[] = RETREAT_SITES.flatMap(site=>{
   });
 });
 export function isRetreatSeat(seat:{vehicleId:string;index:number}|undefined){return Boolean(seat&&RETREAT_SITES.some(s=>s.id===seat.vehicleId));}
-export function isQuietSeat(seat:{vehicleId:string;index:number}|undefined){return isRetreatSeat(seat)||seat?.vehicleId==='commons-campfire';}
+export function isQuietSeat(seat:{vehicleId:string;index:number}|undefined){return isRetreatSeat(seat)||seat?.vehicleId==='commons-campfire'||seat?.vehicleId==='reedwater-skiff';}
 export function insideStillwater(p:RetreatPoint,active:readonly string[]=RETREAT_SITES.map(s=>s.id)){
   const l=retreatLocal(STILLWATER,p);return active.includes(STILLWATER.id)&&Math.abs(l.u)<STILLWATER.w/2&&Math.abs(l.v)<STILLWATER.d/2&&p.z>=STILLWATER.z-2&&p.z<STILLWATER.z+STILLWATER.height;
 }

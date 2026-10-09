@@ -1,12 +1,18 @@
 import type { FrontierTool } from './FriendsFrontier';
 
-export const FRIENDS_TOOL_ORDER: readonly FrontierTool[] = [6, 1, 2, 3, 0, 5];
+export const FRIENDS_FUN_ORDER: readonly FrontierTool[] = [8,9,10];
+export function cycleFriendsFun(tool:FrontierTool,direction:number):FrontierTool {
+  const index=Math.max(0,FRIENDS_FUN_ORDER.indexOf(tool));
+  return FRIENDS_FUN_ORDER[(index+Math.sign(direction)+FRIENDS_FUN_ORDER.length)%FRIENDS_FUN_ORDER.length];
+}
+
+export const FRIENDS_TOOL_ORDER: readonly FrontierTool[] = [6, 1, 2, 3, 0, 5, 7];
 
 /** The held secondary input places soil only with Shovel. It takes priority
  * over digging when both buttons are held. Other tools retain secondary aim. */
 export function friendsToolInput(tool: FrontierTool, firing: boolean, aiming: boolean) {
   const fill = tool === 3 && aiming;
-  return { fill, held: tool !== 6 && (firing || fill) };
+  return { fill, held: (tool === 1 || tool === 2 || tool === 3) && (firing || fill) };
 }
 
 export function cycleFriendsTool(tool: FrontierTool, direction: number): FrontierTool {

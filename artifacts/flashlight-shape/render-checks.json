@@ -1,0 +1,320 @@
+{
+  "errors": [],
+  "fixtures": [
+    {
+      "name": "before",
+      "programsBefore": 7,
+      "programsOn": 7,
+      "texturesBefore": 5,
+      "texturesOn": 5,
+      "offShadowDraws": 0,
+      "firstToggleMs": 0.5,
+      "toggleFrames": [
+        {
+          "ms": 0.2999999523162842,
+          "programs": 7
+        },
+        {
+          "ms": 0.6999999284744263,
+          "programs": 7
+        },
+        {
+          "ms": 0.7999999523162842,
+          "programs": 7
+        },
+        {
+          "ms": 0.40000009536743164,
+          "programs": 7
+        },
+        {
+          "ms": 0.19999992847442627,
+          "programs": 7
+        },
+        {
+          "ms": 0.3999999761581421,
+          "programs": 7
+        },
+        {
+          "ms": 0.2999999523162842,
+          "programs": 7
+        },
+        {
+          "ms": 0.3999999761581421,
+          "programs": 7
+        },
+        {
+          "ms": 0.30000007152557373,
+          "programs": 7
+        },
+        {
+          "ms": 0.7999999523162842,
+          "programs": 7
+        },
+        {
+          "ms": 0.5,
+          "programs": 7
+        },
+        {
+          "ms": 0.30000007152557373,
+          "programs": 7
+        }
+      ],
+      "cases": [
+        {
+          "fov": 108,
+          "distance": 100,
+          "litFraction": 1,
+          "mean": 142.33702227177005,
+          "whiteFraction": 0,
+          "center": 222,
+          "edge": 96.66666666666667
+        },
+        {
+          "fov": 108,
+          "distance": 600,
+          "litFraction": 1,
+          "mean": 116.11637898178186,
+          "whiteFraction": 0,
+          "center": 217,
+          "edge": 56.333333333333336
+        },
+        {
+          "fov": 108,
+          "distance": 1200,
+          "litFraction": 0.6876143118427069,
+          "mean": 58.25441926410054,
+          "whiteFraction": 0,
+          "center": 192.33333333333334,
+          "edge": 6.333333333333333
+        },
+        {
+          "fov": 108,
+          "distance": 1600,
+          "litFraction": 0.41631182365493064,
+          "mean": 31.658208384142267,
+          "whiteFraction": 0,
+          "center": 161.33333333333334,
+          "edge": 0
+        },
+        {
+          "fov": 108,
+          "distance": 2200,
+          "litFraction": 0.18107948483462888,
+          "mean": 10.192693250520552,
+          "whiteFraction": 0,
+          "center": 101,
+          "edge": 0
+        },
+        {
+          "fov": 115,
+          "distance": 100,
+          "litFraction": 1,
+          "mean": 136.4406134100877,
+          "whiteFraction": 0,
+          "center": 222,
+          "edge": 81
+        },
+        {
+          "fov": 115,
+          "distance": 600,
+          "litFraction": 0.9973303421734492,
+          "mean": 105.33209574877516,
+          "whiteFraction": 0,
+          "center": 217,
+          "edge": 39.666666666666664
+        },
+        {
+          "fov": 115,
+          "distance": 1200,
+          "litFraction": 0.5930069730224051,
+          "mean": 47.7170988289559,
+          "whiteFraction": 0,
+          "center": 192.33333333333334,
+          "edge": 1
+        },
+        {
+          "fov": 115,
+          "distance": 1600,
+          "litFraction": 0.32431936823654933,
+          "mean": 24.900455024639353,
+          "whiteFraction": 0,
+          "center": 161.33333333333334,
+          "edge": 0
+        },
+        {
+          "fov": 115,
+          "distance": 2200,
+          "litFraction": 0.14005582228318852,
+          "mean": 7.879892388100521,
+          "whiteFraction": 0,
+          "center": 101,
+          "edge": 0
+        }
+      ],
+      "glError": 0
+    },
+    {
+      "name": "after",
+      "programsBefore": 7,
+      "programsOn": 7,
+      "texturesBefore": 5,
+      "texturesOn": 5,
+      "offShadowDraws": 0,
+      "firstToggleMs": 0.2999999523162842,
+      "toggleFrames": [
+        {
+          "ms": 0.20000004768371582,
+          "programs": 7
+        },
+        {
+          "ms": 0.8000000715255737,
+          "programs": 7
+        },
+        {
+          "ms": 0.6999999284744263,
+          "programs": 7
+        },
+        {
+          "ms": 1,
+          "programs": 7
+        },
+        {
+          "ms": 0.7000000476837158,
+          "programs": 7
+        },
+        {
+          "ms": 0.2999999523162842,
+          "programs": 7
+        },
+        {
+          "ms": 0.7000000476837158,
+          "programs": 7
+        },
+        {
+          "ms": 0.3999999761581421,
+          "programs": 7
+        },
+        {
+          "ms": 0.6000000238418579,
+          "programs": 7
+        },
+        {
+          "ms": 0.8000000715255737,
+          "programs": 7
+        },
+        {
+          "ms": 0.3999999761581421,
+          "programs": 7
+        },
+        {
+          "ms": 0.7000000476837158,
+          "programs": 7
+        }
+      ],
+      "cases": [
+        {
+          "fov": 108,
+          "distance": 100,
+          "litFraction": 0.3194444444444444,
+          "mean": 41.676206148711344,
+          "whiteFraction": 0,
+          "center": 221.66666666666666,
+          "edge": 0
+        },
+        {
+          "fov": 108,
+          "distance": 600,
+          "litFraction": 0.34192577351013564,
+          "mean": 42.10162164050783,
+          "whiteFraction": 0,
+          "center": 217,
+          "edge": 0
+        },
+        {
+          "fov": 108,
+          "distance": 1200,
+          "litFraction": 0.27679660112787685,
+          "mean": 28.17797321927173,
+          "whiteFraction": 0,
+          "center": 192.33333333333334,
+          "edge": 0
+        },
+        {
+          "fov": 108,
+          "distance": 1600,
+          "litFraction": 0.2267161065386374,
+          "mean": 18.572220475792236,
+          "whiteFraction": 0,
+          "center": 161.33333333333334,
+          "edge": 0
+        },
+        {
+          "fov": 108,
+          "distance": 2200,
+          "litFraction": 0.13829589620484684,
+          "mean": 7.676250603311998,
+          "whiteFraction": 0,
+          "center": 101,
+          "edge": 0
+        },
+        {
+          "fov": 115,
+          "distance": 100,
+          "litFraction": 0.27572254610577657,
+          "mean": 35.32587924858747,
+          "whiteFraction": 0,
+          "center": 221.66666666666666,
+          "edge": 0
+        },
+        {
+          "fov": 115,
+          "distance": 600,
+          "litFraction": 0.29402672991921963,
+          "mean": 35.35994894070709,
+          "whiteFraction": 0,
+          "center": 217,
+          "edge": 0
+        },
+        {
+          "fov": 115,
+          "distance": 1200,
+          "litFraction": 0.22990969364426156,
+          "mean": 23.253369024025567,
+          "whiteFraction": 0,
+          "center": 192.33333333333334,
+          "edge": 0
+        },
+        {
+          "fov": 115,
+          "distance": 1600,
+          "litFraction": 0.18529473403444596,
+          "mean": 15.15137983920276,
+          "whiteFraction": 0,
+          "center": 161.33333333333334,
+          "edge": 0
+        },
+        {
+          "fov": 115,
+          "distance": 2200,
+          "litFraction": 0.1104728699893309,
+          "mean": 6.139660493826889,
+          "whiteFraction": 0,
+          "center": 101,
+          "edge": 0
+        }
+      ],
+      "glError": 0
+    }
+  ],
+  "world": {
+    "before": 33,
+    "afterWorld": 33,
+    "afterHands": 34,
+    "worldMs": 4.100000023841858,
+    "totalMs": 26.700000047683716,
+    "glError": 0,
+    "fov": 108,
+    "angle": 0.9424777960769379,
+    "volumes": 25
+  }
+}

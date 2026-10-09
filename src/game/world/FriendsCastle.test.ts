@@ -10,9 +10,12 @@ describe('Crown of Highfall fortress',()=>{
     expect(castle.boxes.length).toBeGreaterThan(700);
     expect(Math.max(...castle.boxes.map(b=>b.z+b.h))-c.floor).toBeGreaterThan(1800);
     for(const b of castle.boxes)expect([b.x-b.w/2,b.y-b.d/2,b.z,b.w,b.d,b.h].every(n=>n%32===0)).toBe(true);
-    const heights=[-3000,-1500,0,1500,3000].map(dx=>baseTerrainHeight(c.x+dx,c.y));
+    // The original mountain remains broad. Exposed arch mouths use their
+    // actual cavity floor rather than rendering a solid mountain above air.
+    const heights=[-3000,-1500,0,1500,3000].map(dx=>baseTerrainHeight(c.x+dx,c.y,false));
     expect(new Set(heights).size).toBe(5);expect(heights[0]).toBeGreaterThan(1400);expect(heights[4]).toBeGreaterThan(1400);
     expect(heights[2]).toBeLessThan(c.foundation);
+    expect(baseTerrainHeight(c.x-3000,c.y)).toBe(islandArchRange(c.x-3000,c.y)![0]);
     const t=new FriendsTerrain(),x=17040,y=12016,arch=islandArchRange(x,y)!;
     expect(t.material(Math.floor(x/32),Math.floor(y/32),arch[0]/32+4)).toBe(0);
   });

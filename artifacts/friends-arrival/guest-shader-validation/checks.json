@@ -1,0 +1,61 @@
+{
+  "checks": [
+    "Both connected arenas finish arrival and install streamed masonry",
+    "Guest movement and authoritative snapshots continue after arrival"
+  ],
+  "errors": [],
+  "preparation": [
+    {
+      "role": "host",
+      "stats": {
+        "submitted": 118,
+        "completed": 118,
+        "queued": 0,
+        "scanning": true,
+        "pending": false,
+        "pendingCount": 0,
+        "texturesQueued": 0,
+        "failures": 0,
+        "maxSubmitMs": 234.89999997615814,
+        "maxReadinessMs": 58,
+        "maxScanMs": 13.600000023841858,
+        "maxTextureMs": 174.09999990463257,
+        "ready": true,
+        "fallback": false
+      },
+      "glError": 0
+    },
+    {
+      "role": "guest",
+      "stats": {
+        "submitted": 144,
+        "completed": 144,
+        "queued": 0,
+        "scanning": true,
+        "pending": false,
+        "pendingCount": 0,
+        "texturesQueued": 0,
+        "failures": 0,
+        "maxSubmitMs": 316.39999997615814,
+        "maxReadinessMs": 177.80000007152557,
+        "maxScanMs": 17.799999952316284,
+        "maxTextureMs": 138.39999997615814,
+        "ready": true,
+        "fallback": false
+      },
+      "glError": 0
+    }
+  ],
+  "movement": {
+    "before": {
+      "x": 5920,
+      "y": 5772,
+      "tick": 413
+    },
+    "after": {
+      "x": 5919.999339925177,
+      "y": 5497.957070284801,
+      "tick": 540
+    }
+  }
+}

@@ -1,0 +1,197 @@
+{
+  "errors": [],
+  "checks": [
+    "T opens a compact Fun bar and equips the stone in the shipped character hand",
+    "holding left mouse charges the throw; release produces real lake skips and replicated ripples",
+    "actual stone throw hits the peer once and preserves health",
+    "hard landing triggers the survival red overlay without a text notice",
+    "T closes to empty hands, fishing still uses slot 7, and switching between Build and Fun stows the other mode",
+    "slot 2 shows seeds in the palm; scattering brings a small flock that lands and pecks",
+    "holding right mouse extends the seed hand; the rare visit approaches, perches on the actual arm and eats seeds",
+    "the hand visitor finishes the seeds and stays attached as a companion until the arm is lowered",
+    "the same arm feeding works on Skyfalls Bench while seated",
+    "an opaque obstacle in front of the camera cannot cover the hand, stick or marshmallow; peers stay in the world pass",
+    "F seats at the Commons fire and automatically selects marshmallow slot 3 with the original roasting stick and hand",
+    "seeds tossed toward the real campfire attract birds which visibly ignite and fly away",
+    "seated wheel cycles stone, seeds and marshmallow; stones hit friends from the chair and seeds still extend the hand",
+    "F stands without stowing the stick; movement walks with it still visible and right mouse eats the carried marshmallow",
+    "all 12 internet bird excerpts decode; native Web Audio plays species calls, flutter and startled chirps with stereo direction through Ambience"
+  ],
+  "birdSounds": [
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.4094700878923617,
+      "options": {
+        "ambience": true,
+        "pan": 2.217980870215029e-16
+      }
+    },
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.4096250871816052,
+      "options": {
+        "ambience": true,
+        "pan": 1.7817876316577755e-16
+      }
+    },
+    {
+      "cue": "birdBlueTit",
+      "started": true,
+      "volume": 0.42735632183908046,
+      "options": {
+        "ambience": true,
+        "pan": 3.367720791302923e-16
+      }
+    },
+    {
+      "cue": "birdBlueTit",
+      "started": true,
+      "volume": 0.42735632183908046,
+      "options": {
+        "ambience": true,
+        "pan": 3.367720791302923e-16
+      }
+    },
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.32288989004405755,
+      "options": {
+        "ambience": true,
+        "pan": 0.1542923285822622
+      }
+    },
+    {
+      "cue": "birdBlueTit",
+      "started": true,
+      "volume": 0.42735632183908046,
+      "options": {
+        "ambience": true,
+        "pan": 3.367720791302923e-16
+      }
+    },
+    {
+      "cue": "birdBlueTit",
+      "started": true,
+      "volume": 0.42735632183908046,
+      "options": {
+        "ambience": true,
+        "pan": 3.367720791302923e-16
+      }
+    },
+    {
+      "cue": "birdRobin",
+      "started": true,
+      "volume": 0.62,
+      "options": {
+        "ambience": true,
+        "pan": 0.22
+      }
+    },
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.6027728240234711,
+      "options": {
+        "ambience": true,
+        "pan": 0.5005173307126194
+      }
+    },
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.33275949323034004,
+      "options": {
+        "ambience": true,
+        "pan": 0.7367673302697032
+      }
+    },
+    {
+      "cue": "birdRobin",
+      "started": true,
+      "volume": 0.62,
+      "options": {
+        "ambience": true,
+        "pan": 0.22
+      }
+    },
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.6008594166404123,
+      "options": {
+        "ambience": true,
+        "pan": 0.5255550183945713
+      }
+    },
+    {
+      "cue": "birdBlueTit",
+      "started": true,
+      "volume": 0.17566791422671765,
+      "options": {
+        "ambience": true,
+        "pan": 0.16644615234636362
+      }
+    },
+    {
+      "cue": "birdBlueTit",
+      "started": true,
+      "volume": 0.17566791694245323,
+      "options": {
+        "ambience": true,
+        "pan": -0.16644615423672307
+      }
+    },
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.3711949911544452,
+      "options": {
+        "ambience": true,
+        "pan": 0.4842540402547404
+      }
+    },
+    {
+      "cue": "birdRobin",
+      "started": true,
+      "volume": 0.37559800480254607,
+      "options": {
+        "ambience": true,
+        "pan": 0.0732817956700659
+      }
+    },
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.4234733478695881,
+      "options": {
+        "ambience": true,
+        "pan": 0.07323512439565973
+      }
+    },
+    {
+      "cue": "birdStartled",
+      "started": true,
+      "volume": 0.44396399373424567,
+      "options": {
+        "ambience": true,
+        "pan": 0.07323512439565973
+      }
+    },
+    {
+      "cue": "birdWings",
+      "started": true,
+      "volume": 0.568274020185373,
+      "options": {
+        "ambience": true,
+        "pan": 0.008147036591302252
+      }
+    }
+  ],
+  "framing": {
+    "width": 290.84375,
+    "height": 56
+  }
+}

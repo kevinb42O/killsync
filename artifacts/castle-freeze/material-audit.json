@@ -1,0 +1,320 @@
+{
+  "errors": [],
+  "method": "Production Friends scene in Chromium/Metal. Pause the game loop and hold castle geometry, camera, terrain and shadows fixed. Change only the camera supplied to the torch light selector, then render. Count actual WebGL shader compiles/links and timed blocking program queries.",
+  "result": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "realPipeline": true,
+    "arrivalView": [
+      {
+        "renderMs": 5.100000023841858,
+        "compiled": 0,
+        "linked": 0
+      },
+      {
+        "renderMs": 5.5,
+        "compiled": 0,
+        "linked": 0
+      }
+    ],
+    "frames": [
+      {
+        "phase": "far-warmup",
+        "updateMs": 0,
+        "renderMs": 700.1000000238419,
+        "compiled": 54,
+        "linked": 27,
+        "programQueryMs": 6.599999666213989,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 75,
+        "newPrograms": [
+          {
+            "id": 79,
+            "objects": [
+              "campfire-stone-ring"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388611,8520707,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 80,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "46,47,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8522753,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 81,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8520707,srgb,onBeforeCompile(){}:cloud-optical-shadow-v5"
+          },
+          {
+            "id": 82,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8520707,srgb,onBeforeCompile(){}:cloud-optical-shadow-v5"
+          },
+          {
+            "id": 83,
+            "objects": [
+              "crown-of-highfall-standard"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,uv,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8389120,8522755,srgb,highfall-woven-standard:cloud-optical-shadow-v5"
+          },
+          {
+            "id": 84,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,uv,false,false,false,false,uv,false,false,false,uv,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388672,8520707,srgb,island-ruins-v3:cloud-optical-shadow-v5"
+          },
+          {
+            "id": 85,
+            "objects": [
+              "unified-voxel-masonry"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,uv,false,false,false,false,uv,false,false,false,uv,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388672,8520707,srgb,island-ruins-v3:terrain-coverage-horizon-v2:cloud-optical-shadow-v5"
+          },
+          {
+            "id": 86,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8522755,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 87,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,uv,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8522755,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 88,
+            "objects": [
+              "scenic-locomotive-roof",
+              "scenic-exhaust",
+              "scenic-body-fittings",
+              "scenic-articulated-running-gear",
+              "scenic-carriage-canopy",
+              "scenic-speed-controller",
+              "rail-station-canopy",
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8520707,srgb,railway-finish-paint-v2"
+          },
+          {
+            "id": 89,
+            "objects": [
+              "scenic-body-fittings",
+              "scenic-articulated-running-gear",
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8520707,srgb,railway-finish-metal-v2"
+          },
+          {
+            "id": 90,
+            "objects": [
+              "scenic-body-fittings",
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8520707,srgb,railway-finish-timber-v2"
+          },
+          {
+            "id": 91,
+            "objects": [
+              "scenic-throttle",
+              "Mesh",
+              "scenic-body-fittings",
+              "rail-tunnel-portal",
+              "rail-portal-arch-stone"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8520707,srgb,railway-finish-concrete-v2"
+          },
+          {
+            "id": 92,
+            "objects": [
+              "scenic-body-fittings",
+              "Mesh"
+            ],
+            "cacheKey": "basic,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,0,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8520707,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 93,
+            "objects": [
+              "scenic-locomotive-roof",
+              "scenic-exhaust",
+              "scenic-body-fittings",
+              "scenic-articulated-running-gear",
+              "scenic-carriage-canopy",
+              "scenic-speed-controller",
+              "rail-station-canopy",
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8520707,srgb,railway-finish-paint-v2"
+          },
+          {
+            "id": 94,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8520707,srgb,railway-finish-ballast-v2"
+          },
+          {
+            "id": 95,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8520707,srgb,railway-finish-masonry-v2"
+          },
+          {
+            "id": 96,
+            "objects": [
+              "rail-tunnel-lining"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8520707,srgb,railway-finish-masonry-v2:cave-lighting-v5"
+          },
+          {
+            "id": 97,
+            "objects": [
+              "rail-tunnel-exterior"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8524803,srgb,railway-finish-masonry-v2"
+          },
+          {
+            "id": 98,
+            "objects": [
+              "rail-tunnel-ribs"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8520707,srgb,railway-finish-concrete-v2:cave-lighting-v5"
+          },
+          {
+            "id": 99,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,uv,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8520707,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 100,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "basic,highp,srgb-linear,false,,uv,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,0,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8522755,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 101,
+            "objects": [
+              "Mesh",
+              "scenic-body-fittings",
+              "scenic-articulated-running-gear"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8520707,srgb,railway-finish-metal-v2"
+          },
+          {
+            "id": 102,
+            "objects": [
+              "campfire-flowing-flames"
+            ],
+            "cacheKey": "48,49,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8391681,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 103,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8393731,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 104,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "physical,STANDARD,,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388608,8389635,srgb,onBeforeCompile(){}"
+          },
+          {
+            "id": 105,
+            "objects": [
+              "Mesh"
+            ],
+            "cacheKey": "50,51,highp,srgb-linear,false,,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,,true,false,0,,4,26,7,1,1,0,0,1,3,1,0,1,0,0,0,0,8388609,8391681,srgb,onBeforeCompile(){}"
+          }
+        ],
+        "calls": 2904,
+        "triangles": 2000236
+      },
+      {
+        "phase": "far-steady",
+        "updateMs": 0.10000002384185791,
+        "renderMs": 10.599999904632568,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 75,
+        "newPrograms": [],
+        "calls": 4288,
+        "triangles": 2887951
+      },
+      {
+        "phase": "enter-castle",
+        "updateMs": 0.10000002384185791,
+        "renderMs": 11.5,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 75,
+        "newPrograms": [],
+        "calls": 5672,
+        "triangles": 3775666
+      },
+      {
+        "phase": "castle-steady",
+        "updateMs": 0,
+        "renderMs": 10.700000047683716,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 75,
+        "newPrograms": [],
+        "calls": 7056,
+        "triangles": 4663381
+      },
+      {
+        "phase": "leave-castle",
+        "updateMs": 0,
+        "renderMs": 13.699999928474426,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 75,
+        "newPrograms": [],
+        "calls": 8440,
+        "triangles": 5551096
+      },
+      {
+        "phase": "reenter-castle",
+        "updateMs": 0.10000002384185791,
+        "renderMs": 10.799999952316284,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 75,
+        "newPrograms": [],
+        "calls": 9824,
+        "triangles": 6438811
+      }
+    ]
+  }
+}

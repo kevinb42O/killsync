@@ -4,7 +4,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { CARGO_WIDTH, CARGO_DEPTH, CARGO_HEIGHT, cargoAnchor } from '../multiplayer/FriendsHauling';
 import type { CoopSnapshot } from '../multiplayer/CoopSimulation';
-import { isCampfireSeat } from '../multiplayer/FriendsCampfireSeats';
+import { isQuietSeat } from '../world/FriendsRetreatSites';
 import { FriendsRopeMesh, ropeFibreTextures } from './FriendsRopeMesh';
 import { cargoRotation, cargoHullPoints } from '../multiplayer/FriendsCargoPose';
 import { FRIENDS_DELIVERY_BAY, FRIENDS_HAULING_JOBS, haulingJob, cargoDelivered, type HaulingGoal } from '../world/FriendsHaulingGoal';
@@ -139,7 +139,7 @@ export class FriendsHaulingVisuals {
   update(snapshot:CoopSnapshot,localId:string,tool:number,elapsed:number,projectMuzzle:MuzzleProjector,firstPerson=true) {
     const hauling=snapshot.friends?.hauling, local=snapshot.players.find(p=>p.id===localId);
     this.group.visible=Boolean(hauling);
-    this.gun.visible=Boolean(firstPerson && hauling && tool===5 && local?.lifeState==='alive' && !isCampfireSeat(local.friendsSeat) && !snapshot.friends?.vehicles.some(v=>v.pilotId===localId));
+    this.gun.visible=Boolean(firstPerson && hauling && tool===5 && local?.lifeState==='alive' && !isQuietSeat(local.friendsSeat) && !local.motion?.swimming && !snapshot.friends?.vehicles.some(v=>v.pilotId===localId));
     this.gun.position.set(.30,-.28+Math.sin(elapsed/1000)*.003,-.73); this.gun.rotation.set(-.07,-.12,-.04);
     this.reel.rotation.x=-elapsed/600*(hauling?.ropes.find(r=>r.id===localId)?.tension??0);
     this.gun.updateWorldMatrix(true,true);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import { COOP_MAX_PLAYERS } from '../multiplayer/protocol';
 import { COOP_FIRST_PERSON_EYE_HEIGHT } from '../multiplayer/playerMovement';
-import { FRIENDS_FLASHLIGHT_INTENSITY, FRIENDS_FLASHLIGHT_RANGE } from './FriendsFlashlight';
+import { FRIENDS_FLASHLIGHT_INTENSITY, FRIENDS_FLASHLIGHT_RANGE, FRIENDS_FLASHLIGHT_MAX_ANGLE, FRIENDS_FLASHLIGHT_PENUMBRA } from './FriendsFlashlight';
 import { installFriendsFlashlightFalloff, FRIENDS_FLASHLIGHT_SOFT_DISTANCE } from './FriendsFlashlightFalloff';
 import { FriendsSharedFlashlightAtlas } from './FriendsSharedFlashlightAtlas';
 
@@ -32,7 +32,7 @@ export class FriendsSharedFlashlights {
     installFriendsFlashlightFalloff();
     this.atlas=new FriendsSharedFlashlightAtlas(scene,renderer,mobile?256:512);
     for(let i=0;i<CAPACITY;i++){
-      const light=new THREE.SpotLight(0xf2f7ff,0,FRIENDS_FLASHLIGHT_RANGE,1.35,.22,-FRIENDS_FLASHLIGHT_SOFT_DISTANCE);
+      const light=new THREE.SpotLight(0xf2f7ff,0,FRIENDS_FLASHLIGHT_RANGE,FRIENDS_FLASHLIGHT_MAX_ANGLE,FRIENDS_FLASHLIGHT_PENUMBRA,-FRIENDS_FLASHLIGHT_SOFT_DISTANCE);
       // Remote spots share the local falloff but use no cookie sampler. Four
       // extra cookies can exceed mobile texture-unit limits alongside terrain.
       const target=new THREE.Object3D();light.target=target;
@@ -69,7 +69,7 @@ export class FriendsSharedFlashlights {
           .addScaledVector(s.direction,18);
         s.light.position.x+=Math.sin(yaw)*10;s.light.position.z-=Math.cos(yaw)*10;
         s.target.position.copy(s.light.position).addScaledVector(s.direction,FRIENDS_FLASHLIGHT_RANGE);
-        s.light.angle=THREE.MathUtils.clamp(state.cone,.35,THREE.MathUtils.degToRad(85));
+        s.light.angle=THREE.MathUtils.clamp(state.cone,.35,FRIENDS_FLASHLIGHT_MAX_ANGLE);
         const distance=s.light.position.distanceTo(this.eye);
         s.active=distance<FRIENDS_FLASHLIGHT_RANGE+1600;
         if(s.active){
@@ -77,7 +77,7 @@ export class FriendsSharedFlashlights {
           if(score>=1 && (!refresh || score>priority)){refresh=s;priority=score;}
           this.toEye.copy(this.eye).sub(s.light.position).normalize();
           const beamFacing=s.direction.dot(this.toEye),viewFacing=-this.view.dot(this.toEye);
-          const spill=THREE.MathUtils.smoothstep(beamFacing,Math.cos(s.light.angle),Math.cos(s.light.angle*(1-.22)));
+          const spill=THREE.MathUtils.smoothstep(beamFacing,Math.cos(s.light.angle),Math.cos(s.light.angle*(1-s.light.penumbra)));
           if(eyesAvailable && distance<FRIENDS_FLASHLIGHT_RANGE && distance>5 && viewFacing>0 && spill>0){
             this.screen.copy(s.light.position).project(camera);
             if(this.screen.z>=-1 && this.screen.z<=1 && Math.abs(this.screen.x)<1.15 && Math.abs(this.screen.y)<1.15){

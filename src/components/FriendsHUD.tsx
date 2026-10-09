@@ -10,7 +10,7 @@ import { friendsVehicleFloor, vehicleLocal } from '../game/multiplayer/FriendsEx
 import { FriendsHaulingCompass } from './FriendsHaulingCompass';
 import { haulingInteraction } from '../game/multiplayer/FriendsHauling';
 
-export function FriendsHUD({ snapshot, player, interactionLabel, toolbeltVisible = false, resumeControlVisible = false }: { snapshot: CoopSnapshot; player?: CoopPlayerSnapshot; interactionLabel: string; toolbeltVisible?: boolean; resumeControlVisible?: boolean }) {
+export function FriendsHUD({ snapshot, player, interactionLabel, tool = 6, toolbeltVisible = false, resumeControlVisible = false }: { snapshot: CoopSnapshot; player?: CoopPlayerSnapshot; interactionLabel: string; tool?:number; toolbeltVisible?: boolean; resumeControlVisible?: boolean }) {
   const expedition = snapshot.friends;
   if (!expedition || !player || isCampfireSeat(player.friendsSeat)) return null;
   const service=expedition.scenicRailway;
@@ -27,7 +27,10 @@ export function FriendsHUD({ snapshot, player, interactionLabel, toolbeltVisible
   const hook=hauling&&craneHookInteraction(hauling.cranes??[],hauling.cargo,player);
   const seatLabel = seatPrompt && !isCampfireSeat(seatPrompt.seat) ? player.friendsSeat ? 'Stand up' : seatPrompt.label : seatPrompt?.label;
   const lightPrompt=retreatSwitchPrompt(player,expedition.retreats);
-  const prompt = lightPrompt ? lightPrompt.label : crane ? 'Freight crane controls' : hook?hook.label:scenicControlNearby(player,expedition.vehicles) ? 'Train speed controls' : seatLabel ? seatLabel : piloting ? 'Release pilot controls' : canPilot ? 'Pilot the Sunskiff' : cargoTarget ? cargoTarget.label : treasure ? `Open ${treasure.name} · ${treasure.gold.toLocaleString('en-US')} gold` : '';
+  const fishing=expedition.fishing;
+  const handsAvailable=(tool===6||tool===7)&&!player.friendsSeat&&!player.motion?.swimming&&!player.friendsDevFlight&&!fishing?.fish.some(f=>f.ownerId===player.id)&&!fishing?.casts.some(c=>c.playerId===player.id);
+  const nearbyFish=handsAvailable&&fishing?.fish.some(f=>f.phase==='dry'&&Math.hypot(f.x-player.x,f.y-player.y,f.z-player.z-8)<55);
+  const prompt = nearbyFish ? 'Pick up fish' : lightPrompt ? lightPrompt.label : crane ? 'Freight crane controls' : hook?hook.label:scenicControlNearby(player,expedition.vehicles) ? 'Train speed controls' : seatLabel ? seatLabel : piloting ? 'Release pilot controls' : canPilot ? 'Pilot the Sunskiff' : cargoTarget ? cargoTarget.label : treasure ? `Open ${treasure.name} · ${treasure.gold.toLocaleString('en-US')} gold` : '';
   const trainDock = !player.friendsDevFlight && vehicle?.scenic;
   return <>
     {hauling && <FriendsHaulingCompass hauling={hauling} player={player}/>}

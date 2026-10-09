@@ -235,7 +235,13 @@ function interpolateFriends(previous: FriendsSnapshot | undefined, current: Frie
     cranes: current.hauling.cranes?.map(next=>{const old=previous.hauling?.cranes?.find(c=>c.pieceId===next.pieceId);return old && old.cargoId===next.cargoId ? {...next,length:lerp(old.length,next.length,alpha),angle:old.angle!==undefined&&next.angle!==undefined?lerpAngle(old.angle,next.angle,alpha):next.angle} : next;}),
     ropes: interpolateEntities(previous.hauling.ropes, current.hauling.ropes, alpha, (old,next) => ({...next, tension:lerp(old.tension,next.tension,alpha), length:lerp(old.length,next.length,alpha)})),
   } : current.hauling;
-  return { ...current, vehicles, hauling, building:current.building&&{...current.building,pieces:resolveFriendsBuildPieces(current.building.pieces,vehicles,new Map((hauling?.cranes??[]).filter(c=>c.angle!==undefined).map(c=>[c.pieceId,c.angle!])))} };
+  const fishing=current.fishing&&previous.fishing?{...current.fishing,
+    casts:interpolateEntities(previous.fishing.casts,current.fishing.casts,alpha,(old,next)=>old.phase===next.phase?{...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha)}:next),
+    fish:interpolateEntities(previous.fishing.fish,current.fishing.fish,alpha,(old,next)=>old.phase===next.phase&&old.ownerId===next.ownerId?{...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha),angle:lerpAngle(old.angle,next.angle,alpha)}:next),
+  }:current.fishing;
+  const stones=current.stones&&previous.stones?{...current.stones,stones:interpolateEntities(previous.stones.stones,current.stones.stones,alpha,(old,next)=>old.skips===next.skips?{...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha)}:next)}:current.stones;
+  const birds=current.birds&&previous.birds?{...current.birds,birds:interpolateEntities(previous.birds.birds,current.birds.birds,alpha,(old,next)=>old.phase===next.phase?{...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha),angle:lerpAngle(old.angle,next.angle,alpha)}:next)}:current.birds;
+  return { ...current, vehicles, hauling, fishing, stones, birds, building:current.building&&{...current.building,pieces:resolveFriendsBuildPieces(current.building.pieces,vehicles,new Map((hauling?.cranes??[]).filter(c=>c.angle!==undefined).map(c=>[c.pieceId,c.angle!])))} };
 }
 function passengerAnchor(vehicles: FriendsVehicle[], player: CoopPlayerSnapshot,pieces:readonly FriendsBuildPiece[]=[]) {
   if (player.friendsDevFlight) return undefined;

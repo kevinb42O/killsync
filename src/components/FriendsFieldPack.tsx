@@ -1,13 +1,13 @@
 import { PLAYER_TRAIN_COST } from '../game/world/FriendsPlayerRail';
 import { FRIENDS_TOOL_ORDER } from '../game/multiplayer/FriendsToolControls';
 import { useState } from 'react';
-import { Axe, Pickaxe, Shovel, Sprout, Crosshair, X, Package, TrainFront, Hammer, Compass, ArrowRight, Cable, Hand } from 'lucide-react';
+import { Axe, Pickaxe, Shovel, Sprout, Crosshair, X, Package, TrainFront, Hammer, Compass, ArrowRight, Cable, Hand, Fish } from 'lucide-react';
 import { FRONTIER_TOOLS, MATERIAL_NAMES, PACK_CAPACITY, emptyMaterials, packKey, packWeight, canAfford, frontierContract, type FrontierSnapshot, type FrontierRequest, type FrontierTool, type Resource } from '../game/multiplayer/FriendsFrontier';
 import type { CoopPlayerSnapshot } from '../game/multiplayer/CoopSimulation';
 import { FRONTIER_SITES } from '../game/world/FriendsTerrain';
-const icons = { 0: Crosshair, 1: Axe, 2: Pickaxe, 3: Shovel, 5: Cable, 6: Hand };
+const icons = { 0: Crosshair, 1: Axe, 2: Pickaxe, 3: Shovel, 5: Cable, 6: Hand, 7: Fish, 8: Hand, 9: Sprout, 10: Sprout };
 const formatCost = (cost: Partial<Record<Resource, number>>) => Object.entries(cost).map(([r, n]) => `${n} ${MATERIAL_NAMES[r as Resource].toLowerCase()}`).join(' · ');
-export function FriendsToolbelt({ frontier, player, tool, onTool, onPack, elapsed, workLocked=false, onWorkPlane, showProgress=false, visible=true }: { frontier: FrontierSnapshot; player: CoopPlayerSnapshot; tool: FrontierTool; onTool: (tool: FrontierTool) => void; onPack: () => void; elapsed: number; visible?:boolean; showProgress?:boolean;workLocked?:boolean;onWorkPlane?:()=>void }) {
+export function FriendsToolbelt({ frontier, player, tool, onTool, onPack, elapsed, workLocked=false, onWorkPlane, showProgress=false, visible=true, onFun }: { frontier: FrontierSnapshot; player: CoopPlayerSnapshot; tool: FrontierTool; onTool: (tool: FrontierTool) => void; onPack: () => void; elapsed: number; visible?:boolean; onFun?:()=>void; showProgress?:boolean;workLocked?:boolean;onWorkPlane?:()=>void }) {
   const pack = frontier.packs[packKey(player)] || emptyMaterials(), feedback = frontier.feedback[player.id];
   const action=frontier.interaction?.actions[player.id];
   const damage=frontier.interaction?.damage.find(d=>d.id===action?.targetId&&d.until>elapsed);
@@ -18,10 +18,9 @@ export function FriendsToolbelt({ frontier, player, tool, onTool, onPack, elapse
     {showProgress&&damage&&<div className="frontier-harvest-progress frontier-harvest-progress--compact"><span>{tool===1?'Cutting':'Mining'}</span><progress aria-label="Mining progress" value={damage.value} max={damage.total}/></div>}
     {gains.size>0&&<div className="frontier-resource-gains" role="status" aria-live="polite">{[...gains].slice(0,3).map(([name,amount])=><span key={name}>+{amount} {name}</span>)}</div>}
     <section className="frontier-toolbelt" data-visible={visible} aria-hidden={!visible} inert={!visible} aria-label="Frontier tools" onMouseDown={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
-      <div className="frontier-toolbelt__stock"><span><Package size={13} /> {packWeight(pack)}/{frontier.testing ? '∞' : PACK_CAPACITY}</span><span>{pack.wood} timber</span><span>{pack.stone} stone</span><span>{pack.copper + pack.iron} ore</span></div>
-      <div className="frontier-toolbelt__slots">{FRIENDS_TOOL_ORDER.map((id, i) => { const Icon = icons[id]; return <button key={id} type="button" aria-pressed={tool === id} onClick={() => onTool(id)} title={id === 3 ? 'Left-click digs · Right-click places soil' : id === 2 ? 'Hold left-click to mine or break built pieces' : FRONTIER_TOOLS[id]}><kbd>{i + 1}</kbd><Icon size={23} /><span>{FRONTIER_TOOLS[id]}</span></button>; })}<button type="button" onClick={onPack}><kbd>G</kbd><Package size={23} /><span>Field pack</span></button></div>
+      <div className="frontier-toolbelt__slots">{FRIENDS_TOOL_ORDER.map((id, i) => { const Icon = icons[id]; return <button key={id} type="button" aria-pressed={tool === id} onClick={() => onTool(id)} title={id === 3 ? 'Left-click digs · Right-click places soil' : id === 2 ? 'Hold left-click to mine or break built pieces' : FRONTIER_TOOLS[id]}><kbd>{i + 1}</kbd><Icon size={19} /><span>{FRONTIER_TOOLS[id]}</span></button>; })}{onFun&&<button type="button" onClick={onFun} title="Fun bar"><kbd>T</kbd><Sprout size={19}/><span>Fun</span></button>}<button type="button" onClick={onPack}><kbd>G</kbd><Package size={19} /><span>Pack <em>{packWeight(pack)}/{frontier.testing ? '∞' : PACK_CAPACITY}</em></span></button></div>
       {(tool===2||tool===3)&&onWorkPlane&&<button className="frontier-work-plane" type="button" aria-pressed={workLocked} onClick={onWorkPlane}>{workLocked?'Unlock work face':'Lock work face'} <kbd>P</kbd></button>}
-      <small>{tool === 6 ? 'A / Q raises left · E raises right · Click points · Hold key + click for sideways arms' : tool === 5 ? 'Click attach / release · hold aim to reel · crouch + aim feeds rope · R release · F secure / unload' : `${frontier.testing ? 'FREE BUILDING · UNLIMITED PACK · ' : ''}Hold click to ${tool === 1 ? 'cut a tree trunk' : tool === 2 ? 'mine stone and ore · break built pieces' : tool === 3 ? 'excavate earth · Hold right-click to place soil' : 'fire'} · B build · M atlas`}</small>
+      {tool!==7&&<small>{tool===6?'Q / E arms · Click point':tool===5?'Click attach · Aim reel · R release':tool===3?'Click dig · Right-click soil':tool===2?'Hold click mine / break':tool===1?'Hold click cut':'Click fire'} · T fun · B build · M atlas</small>}
     </section>
   </>;
 }

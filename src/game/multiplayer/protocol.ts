@@ -7,10 +7,10 @@ import { sanitizeFriendsArms } from './FriendsGestureControls';
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v51 adds empty hands and compact, independently controlled arm gestures. Incrementing this makes
+/** v57 adds lingering bird companions and shared campfire ignition. Incrementing this makes
  * a stale tab fail the handshake cleanly instead of silently misreading the
  * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 51;
+export const MULTIPLAYER_PROTOCOL_VERSION = 57;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
@@ -32,7 +32,9 @@ export interface MultiplayerInputFrame {
   aimAngle: number;
   /** Quantized camera pitch. Zero is the lowest valid look angle. */
   aimPitch: number;
-  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6;
+  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10;
+  /** Menus/building stow fishing equipment without changing the selected slot. */
+  friendsFishingBlocked?: boolean;
   /** Four held arm buttons; validated by the host, never persisted. */
   friendsArms?: number;
   /** Held state travels with normal input; no toggle edges can be lost. */
@@ -43,6 +45,8 @@ export interface MultiplayerInputFrame {
   /** Temporary C-toggle for unrestricted flight; only Friends accepts it. */
   friendsDevFlight?: boolean;
   friendsDevFlightDown?: boolean;
+  /** Temporary host-only boost to Friends jump launch velocity. */
+  friendsDevSuperjump?: boolean;
   selectedSlot: number;
   firing: boolean;
   /** Monotonic trigger-pull id. Repeated input frames make semi-auto fire
@@ -212,13 +216,15 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   movement: boundedInteger(frame.movement, 15),
   aimAngle: boundedInteger(frame.aimAngle, 65535),
   aimPitch: boundedInteger(frame.aimPitch, 65535),
-  friendsTool: (boundedInteger(frame.friendsTool, 6) === 4 ? 0 : boundedInteger(frame.friendsTool, 6)) as 0 | 1 | 2 | 3 | 5 | 6,
+  friendsTool: (boundedInteger(frame.friendsTool, 10) === 4 ? 0 : boundedInteger(frame.friendsTool, 10)) as 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10,
+  friendsFishingBlocked: Boolean(frame.friendsFishingBlocked),
   friendsArms: sanitizeFriendsArms(frame.friendsArms),
   friendsFlashlight: frame.friendsFlashlight === true ? true : undefined,
   friendsFlashlightCone: frame.friendsFlashlight === true ? boundedInteger(frame.friendsFlashlightCone, 255) : undefined,
   friendsWorkPlane: frame.friendsWorkPlane && [0,1,2].includes(frame.friendsWorkPlane.axis) && Number.isFinite(frame.friendsWorkPlane.value) && frame.friendsWorkPlane.value>=-512 && frame.friendsWorkPlane.value<=48000 ? {axis:frame.friendsWorkPlane.axis,value:Math.round(frame.friendsWorkPlane.value/32)*32} : undefined,
   friendsDevFlight: Boolean(frame.friendsDevFlight),
   friendsDevFlightDown: Boolean(frame.friendsDevFlightDown),
+  friendsDevSuperjump: Boolean(frame.friendsDevSuperjump),
   // The simulation clamps this against the real live weapon catalogue. Keep
   // the transport future-proof without letting malformed packets grow unbound.
   selectedSlot: boundedInteger(frame.selectedSlot, 31),

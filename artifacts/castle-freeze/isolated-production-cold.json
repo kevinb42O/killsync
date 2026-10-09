@@ -1,0 +1,329 @@
+{
+  "errors": [],
+  "method": "Production Friends scene in Chromium/Metal. Pause the game loop and hold castle geometry, camera, terrain and shadows fixed. Change only the camera supplied to the torch light selector, then render. Count actual WebGL shader compiles/links and timed blocking program queries.",
+  "result": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "warmup": {
+      "submitted": 548,
+      "completed": 548,
+      "queued": 0,
+      "pending": false,
+      "failures": 0,
+      "maxSubmitMs": 482.60000002384186,
+      "maxReadinessMs": 574.1999999284744,
+      "maxScanMs": 20.899999976158142
+    },
+    "realPipeline": true,
+    "arrivalView": [
+      {
+        "renderMs": 5.199999928474426,
+        "compiled": 0,
+        "linked": 0
+      },
+      {
+        "renderMs": 6.299999952316284,
+        "compiled": 0,
+        "linked": 0
+      }
+    ],
+    "frames": [
+      {
+        "phase": "far-warmup",
+        "updateMs": 0,
+        "renderMs": 118.09999990463257,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "glTimings": {
+          "bufferData": {
+            "calls": 1894,
+            "totalMs": 33.89999997615814,
+            "maxMs": 2.1999999284744263
+          },
+          "bufferSubData": {
+            "calls": 30,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "useProgram": {
+            "calls": 200,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "bindVertexArray": {
+            "calls": 1284,
+            "totalMs": 0.2999999523162842,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElements": {
+            "calls": 470,
+            "totalMs": 0.20000004768371582,
+            "maxMs": 0.10000002384185791
+          },
+          "drawArrays": {
+            "calls": 612,
+            "totalMs": 0.19999992847442627,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElementsInstanced": {
+            "calls": 310,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "drawArraysInstanced": {
+            "calls": 4,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "texSubImage2D": {
+            "calls": 33,
+            "totalMs": 56.99999976158142,
+            "maxMs": 24.699999928474426
+          }
+        },
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 100,
+        "newPrograms": [],
+        "calls": 2648,
+        "triangles": 1818938
+      },
+      {
+        "phase": "far-steady",
+        "updateMs": 0.10000002384185791,
+        "renderMs": 10.100000023841858,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "glTimings": {
+          "useProgram": {
+            "calls": 200,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "bindVertexArray": {
+            "calls": 1284,
+            "totalMs": 1.1000001430511475,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElements": {
+            "calls": 470,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "drawArrays": {
+            "calls": 612,
+            "totalMs": 0.09999990463256836,
+            "maxMs": 0.09999990463256836
+          },
+          "drawElementsInstanced": {
+            "calls": 310,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "drawArraysInstanced": {
+            "calls": 4,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 100,
+        "newPrograms": [],
+        "calls": 4044,
+        "triangles": 2796299
+      },
+      {
+        "phase": "enter-castle",
+        "updateMs": 0,
+        "renderMs": 5992.200000047684,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "glTimings": {
+          "useProgram": {
+            "calls": 200,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "bindVertexArray": {
+            "calls": 1284,
+            "totalMs": 0.3999999761581421,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElements": {
+            "calls": 470,
+            "totalMs": 0.30000007152557373,
+            "maxMs": 0.10000002384185791
+          },
+          "drawArrays": {
+            "calls": 612,
+            "totalMs": 0.10000002384185791,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElementsInstanced": {
+            "calls": 310,
+            "totalMs": 0.09999990463256836,
+            "maxMs": 0.09999990463256836
+          },
+          "drawArraysInstanced": {
+            "calls": 4,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 100,
+        "newPrograms": [],
+        "calls": 5440,
+        "triangles": 3773660
+      },
+      {
+        "phase": "castle-steady",
+        "updateMs": 0.10000002384185791,
+        "renderMs": 554.1000000238419,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "glTimings": {
+          "useProgram": {
+            "calls": 200,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "bindVertexArray": {
+            "calls": 1284,
+            "totalMs": 0.30000007152557373,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElements": {
+            "calls": 470,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "drawArrays": {
+            "calls": 612,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "drawElementsInstanced": {
+            "calls": 310,
+            "totalMs": 0.09999990463256836,
+            "maxMs": 0.09999990463256836
+          },
+          "drawArraysInstanced": {
+            "calls": 4,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 100,
+        "newPrograms": [],
+        "calls": 6836,
+        "triangles": 4751021
+      },
+      {
+        "phase": "leave-castle",
+        "updateMs": 0,
+        "renderMs": 15.399999976158142,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "glTimings": {
+          "useProgram": {
+            "calls": 200,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "bindVertexArray": {
+            "calls": 1284,
+            "totalMs": 1.0000001192092896,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElements": {
+            "calls": 470,
+            "totalMs": 0.20000004768371582,
+            "maxMs": 0.10000002384185791
+          },
+          "drawArrays": {
+            "calls": 612,
+            "totalMs": 0.19999992847442627,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElementsInstanced": {
+            "calls": 310,
+            "totalMs": 0.09999990463256836,
+            "maxMs": 0.09999990463256836
+          },
+          "drawArraysInstanced": {
+            "calls": 4,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "visibleTorchLights": 8,
+        "activeTorchLights": 0,
+        "programs": 100,
+        "newPrograms": [],
+        "calls": 8232,
+        "triangles": 5728382
+      },
+      {
+        "phase": "reenter-castle",
+        "updateMs": 0,
+        "renderMs": 11.5,
+        "compiled": 0,
+        "linked": 0,
+        "programQueryMs": 0,
+        "glTimings": {
+          "useProgram": {
+            "calls": 200,
+            "totalMs": 0.10000002384185791,
+            "maxMs": 0.10000002384185791
+          },
+          "bindVertexArray": {
+            "calls": 1284,
+            "totalMs": 0.5,
+            "maxMs": 0.10000002384185791
+          },
+          "drawElements": {
+            "calls": 470,
+            "totalMs": 0.20000004768371582,
+            "maxMs": 0.10000002384185791
+          },
+          "drawArrays": {
+            "calls": 612,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "drawElementsInstanced": {
+            "calls": 310,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "drawArraysInstanced": {
+            "calls": 4,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "visibleTorchLights": 8,
+        "activeTorchLights": 8,
+        "programs": 100,
+        "newPrograms": [],
+        "calls": 9628,
+        "triangles": 6705743
+      }
+    ],
+    "preparationFrames": {
+      "count": 1196,
+      "p95Ms": 17.599999999998545,
+      "maxMs": 6249.5999999999985,
+      "stallsOver500Ms": 1
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "method": "Warm both mesher functions, then alternate A/B and B/A for four pairs. Check every output byte and material group outside timed work.",
+  "baselineMs": [
+    441.6282910000001,
+    424.953,
+    420.5926250000002,
+    892.0084999999999
+  ],
+  "candidateMs": [
+    235.9802920000002,
+    182.18883400000004,
+    206.69337499999983,
+    274.13962500000025
+  ],
+  "baselineMeanMs": 544.795604,
+  "candidateMeanMs": 224.75053150000008,
+  "reductionPercent": 58.74589848929836,
+  "vertices": 25140,
+  "exact": true
+}

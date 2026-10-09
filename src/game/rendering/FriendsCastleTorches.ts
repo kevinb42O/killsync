@@ -36,7 +36,9 @@ export class FriendsCastleTorches extends THREE.Group {
     });
     for(const mesh of [stems,bowls,flames]){mesh.computeBoundingSphere();this.add(mesh);}
     stems.castShadow=bowls.castShadow=true;
-    for(let i=0;i<8;i++){const light=new THREE.PointLight('#ffaf54',65000,520,2);light.visible=false;this.lights.push(light);this.add(light);}
+    // Keep all eight slots in the shader layout from the first frame. Toggling
+    // visibility at the castle boundary recompiles every lit world material.
+    for(let i=0;i<8;i++){const light=new THREE.PointLight('#ffaf54',0,520,2);this.lights.push(light);this.add(light);}
     // Woven crimson-and-gold standards give the huge stone silhouette a scale
     // cue. The bottom hem moves; the top stays attached to its iron crossbar.
     const width=64,height=128,pixels=new Uint8Array(width*height*4);
@@ -66,7 +68,7 @@ export class FriendsCastleTorches extends THREE.Group {
     this.flames.uniforms.time.value=seconds;
     this.clothTime.value=seconds;
     const nearest=this.positions.map((p,i)=>({p,i,d:p.distanceToSquared(camera)})).sort((a,b)=>a.d-b.d);
-    this.lights.forEach((light,i)=>{const t=nearest[i];light.visible=Boolean(t&&t.d<2800*2800);if(!t)return;light.position.copy(t.p);light.intensity=65000*(1+.055*Math.sin(seconds*8.3+t.i)+.035*Math.sin(seconds*19+t.i*2));});
+    this.lights.forEach((light,i)=>{const t=nearest[i];if(!t){light.intensity=0;return;}light.position.copy(t.p);light.intensity=t.d<2800*2800?65000*(1+.055*Math.sin(seconds*8.3+t.i)+.035*Math.sin(seconds*19+t.i*2)):0;});
   }
   dispose(){const geometry=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>();this.traverse(o=>{if(o instanceof THREE.Mesh){geometry.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])materials.add(m);if(o instanceof THREE.InstancedMesh)o.dispose();}});geometry.forEach(g=>g.dispose());materials.forEach(m=>{m.userData.castleHeraldry?.dispose();m.dispose();});this.removeFromParent();}
 }

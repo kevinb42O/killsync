@@ -1,8 +1,8 @@
-import { ISLAND_LAKES, ISLAND_SEA_LEVEL } from './FriendsWaterBodies';
+import { ISLAND_LAKES, ISLAND_SEA_LEVEL, waterBasinRadius } from './FriendsWaterBodies';
 import { scenicRailway } from './FriendsScenicRailway';
 import { RETREAT_SITES, RETREAT_APPROACHES } from './FriendsRetreatSites';
 
-export const HYDROLOGY_VERSION = 1;
+export const HYDROLOGY_VERSION = 2;
 export const RIVER_BANK_APRON = 160;
 export type RiverPoint = {x:number;y:number;z:number;width:number;distance:number;tx:number;ty:number;roughness:number};
 export type River = {id:string;name:string;points:RiverPoint[];length:number;source:'skyfalls'|'gate'|'deepmere';roughness:number};
@@ -18,12 +18,12 @@ const sky:Knot[]=[
   [10900,25600,154.5,384],[11500,24600,154.5,384],
 ];
 const gate:Knot[]=[
-  [15120,11900,602.5,336],[14880,13000,602.5,336],[14800,13600,602.5,336],[14560,14400,554.5,320],
+  [15120,11900,602.5,560],[14880,13000,602.5,480],[14800,13600,602.5,336],[14560,14400,554.5,320],
   [13800,15800,490.5,352],[12900,17400,330.5,384],[12000,18680,298.5,360],
   [11080,19800,266.5,336],[11360,20800,154.5,352],[12128,22300,154.5,384],
 ];
 const main:Knot[]=[
-  [14400,24200,154.5,384],[16000,25000,122.5,384],[18000,25600,85.0,432],
+  [14000,23900,154.5,384],[15400,24700,154.5,384],[16000,25000,122.5,384],[18000,25600,85.0,432],
   [20000,26900,42.25,432],[22500,28000,-6.7,456],[24800,27500,-48.9,384],
   [27000,26700,-90.85,360],[28900,25700,-129.34,384],[30200,25300,-153.72,432],
   [31000,25500,ISLAND_SEA_LEVEL,456],[31500,25300,ISLAND_SEA_LEVEL,456],
@@ -98,16 +98,25 @@ export function hydrologyProtected(x:number,y:number){
     if((x-a.x-dx*f)**2+(y-a.y-dy*f)**2<100**2)return true;
   }return false;
 }
-export function deepmereRadius(x:number,y:number){
-  const dx=(x-deep.x)/deep.rx,dy=(y-deep.y)/deep.ry,a=Math.atan2(dy,dx);
-  return Math.hypot(dx,dy)/(1+.065*Math.sin(a*3+.4)+.025*Math.sin(a*7));
-}
+export function deepmereRadius(x:number,y:number){return waterBasinRadius(x,y,deep);}
 /** Ground sampler; keep unauthored terrain exactly unchanged outside the field. */
 export function hydrologyTerrainHeight(x:number,y:number,natural:number,includeLake=true){
   const lakeRadius=includeLake&&Math.abs(x-deep.x)<deep.rx*1.2&&Math.abs(y-deep.y)<deep.ry*1.2?deepmereRadius(x,y):Infinity;
   const river=riverSampleAt(x,y);
   if(lakeRadius>=1.15&&!river)return natural;
   if(hydrologyProtected(x,y)){
+    // The Skyfalls station spans low ground. Fill its channel banks from
+    // bedrock instead of leaving the elevated water ribbon exposed to air.
+    // This only adds ground below the original truss; railway alignment,
+    // decks and authored pier sockets keep their original generation field.
+    if(river?.riverId==='skyfalls-river'&&Math.abs(river.level-442.5)<.05){
+      const inner=river.width*.58,outer=river.width*.68;
+      if(river.side>=inner&&river.side<outer+96){
+        const top=Math.ceil((river.level+2)/32)*32;
+        const fill=top+(natural-top)*smooth((river.side-outer)/96);
+        return Math.max(natural,fill);
+      }
+    }
     // The existing cove span has no ordinary piers between its towers. Only
     // deepen the already submerged central boat lane, far from tower bases;
     // never grade rail approaches or raise ground beneath the deck.
@@ -126,14 +135,16 @@ export function hydrologyTerrainHeight(x:number,y:number,natural:number,includeL
   if(river){
     const r=river.side/(river.width/2),bed=Math.max(-416,river.level-112+16*Math.min(1,r*r));
     // Raised bank collars only where necessary to contain an elevated tributary.
-    const cross=bed+(river.level+32-bed)*smooth((r-.86)/.28);
-    const target=r<1.15?cross:Math.max(natural,river.level+32);
-    const blend=1-smooth((river.side-river.width*.575)/(RIVER_BANK_APRON-river.width*.075));
+    const cross=bed+(river.level+32-bed)*smooth((r-.95)/.32);
+    const target=r<1.35?cross:Math.max(natural,river.level+32);
+    const blend=1-smooth((river.side-river.width*.675)/(RIVER_BANK_APRON-river.width*.175));
     const channel=target*blend+natural*(1-blend);
-    ground=lakeRadius<.95?Math.min(ground,channel):channel;
+    // Cutting an outlet must never build a submerged dam across a lake bowl.
+    const lakeJoin=ISLAND_LAKES.some(l=>Math.abs(river.level-l.level)<.05&&Math.abs(x-l.x)<l.rx*1.5&&Math.abs(y-l.y)<l.ry*1.5&&waterBasinRadius(x,y,l)<1.45);
+    ground=lakeRadius<1.15||lakeJoin?Math.min(ground,channel):channel;
   }return ground;
 }
-export function riverWetAt(x:number,y:number){const s=riverSampleAt(x,y);return s&&s.side<s.width*.53?s:undefined;}
+export function riverWetAt(x:number,y:number){const s=riverSampleAt(x,y);return s&&s.side<s.width*.65?s:undefined;}
 export function hydrologyWaterLevel(x:number,y:number):number|undefined{
   let level:number|undefined;
   if(Math.abs(x-deep.x)<deep.rx*1.15&&Math.abs(y-deep.y)<deep.ry*1.15&&deepmereRadius(x,y)<1.05)level=deep.level;

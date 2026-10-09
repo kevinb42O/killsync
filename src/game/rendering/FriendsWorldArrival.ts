@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FriendsShaderWarmup } from './FriendsShaderWarmup';
 
 /** Hold the hologram until actual local streaming is ready; the camera and
  * simulation continue normally throughout. A failed asset cannot trap arrival. */
@@ -9,11 +10,11 @@ export class FriendsArrivalSequence {
   private settling=0;
   private revealing=false;
   start(){this.active=true;this.age=this.reveal=this.settling=0;this.revealing=false;}
-  update(deltaMs:number,ready:boolean){
+  update(deltaMs:number,ready:boolean,allowFallback=true){
     if(!this.active)return;
     const dt=Math.max(0,Math.min(100,deltaMs));this.age+=dt;
     this.settling=ready?this.settling+dt:0;
-    if(!this.revealing && this.age>=950 && (this.settling>=200 || this.age>=12000))this.revealing=true;
+    if(!this.revealing && this.age>=950 && (this.settling>=200 || (allowFallback && this.age>=12000)))this.revealing=true;
     if(this.revealing)this.reveal=Math.min(1,this.reveal+dt/2800);
     if(this.reveal===1)this.active=false;
   }
@@ -94,6 +95,13 @@ export class FriendsWorldArrival {
   private title?:HTMLElement;
   private bar?:HTMLElement;
   private previousStage='';
+  private warmup?:FriendsShaderWarmup;
+  private shadersReady=false;
+  private startedAt=0;
+  private preparationFallback=false;
+
+  get preparingShaders(){return this.sequence.active && this.sequence.reveal===0 && !this.shadersReady;}
+  get preparationStats(){return { ...this.warmup?.stats, ready:this.shadersReady, fallback:this.preparationFallback };}
 
   constructor(){this.quad.frustumCulled=false;this.pass.add(this.quad);}
   mount(container:HTMLElement){
@@ -105,10 +113,10 @@ export class FriendsWorldArrival {
     this.bar=document.createElement('div');this.bar.style.cssText='height:1px;background:#b5ffe0;box-shadow:0 0 10px #8de6ce;transform-origin:left;transform:scaleX(0)';track.append(this.bar);
     this.status.append(location,this.title,track);container.append(this.status);
   }
-  start(x:number,y:number,z:number){this.sequence.start();this.previousStage='';this.material.uniforms.origin.value.set(x,z,y);}
+  start(x:number,y:number,z:number){this.sequence.start();this.previousStage='';this.material.uniforms.origin.value.set(x,z,y);this.shadersReady=false;this.preparationFallback=false;this.startedAt=performance.now();this.warmup?.invalidate();}
   update(deltaMs:number,readiness:{ready:boolean;progress:number},enabled=true){
     if(!enabled){this.sequence.active=false;}
-    this.sequence.update(deltaMs,readiness.ready);
+    this.sequence.update(deltaMs,readiness.ready && this.shadersReady,this.shadersReady);
     this.material.uniforms.time.value+=Math.max(0,deltaMs)/1000;
     this.material.uniforms.reveal.value=this.sequence.reveal;
     if(this.status){
@@ -146,12 +154,26 @@ export class FriendsWorldArrival {
     const target=renderer.getRenderTarget(),autoClear=renderer.autoClear,override=scene.overrideMaterial,background=scene.background,fog=scene.fog;
     const hidden:THREE.Object3D[]=[];
     try{
-      renderer.autoClear=true;renderer.setRenderTarget(this.image!);renderer.render(scene,camera);
+      renderer.autoClear=true;renderer.setRenderTarget(this.image!);
+      if(this.sequence.reveal===0){
+        // Compile against the actual HDR capture and final scene lights. The
+        // wire view continues drawing while the driver prepares local shaders.
+        // Unsupported extensions/errors have a bounded wall-clock fallback.
+        if(!renderer.extensions?.has('KHR_parallel_shader_compile') || performance.now()-this.startedAt>=30000){
+          this.shadersReady=true;this.preparationFallback=true;
+        }else{
+          this.warmup??=new FriendsShaderWarmup(renderer,scene,{initialView:true});
+          this.warmup.update(camera);this.shadersReady=this.warmup.ready;
+        }
+      }
+      const captureWorld=this.shadersReady || this.sequence.reveal>0;
+      if(captureWorld)renderer.render(scene,camera);
       scene.traverse(node=>{if(node.visible&&(node.name==='frontier-day-night-sky'||node.name==='frontier-volumetric-cumulus'||node.name==='the-surrounding-ocean'||node.name==='friends-player-arrivals'||node.name.includes('smoke')||node instanceof THREE.Sprite)){hidden.push(node);node.visible=false;}});
       scene.overrideMaterial=this.wireMaterial;scene.background=new THREE.Color(0x000000);scene.fog=null;
       renderer.setRenderTarget(this.wire!);renderer.render(scene,camera);
       scene.overrideMaterial=override;scene.background=background;scene.fog=fog;for(const node of hidden)node.visible=true;
       this.material.uniforms.inverseProjection.value.copy(camera.projectionMatrixInverse);this.material.uniforms.cameraWorld.value.copy(camera.matrixWorld);
+      this.material.uniforms.worldDepth.value=captureWorld?this.image!.depthTexture:this.wire!.depthTexture;
       renderer.setRenderTarget(target);renderer.render(this.pass,this.camera);
     }finally{
       scene.overrideMaterial=override;scene.background=background;scene.fog=fog;for(const node of hidden)node.visible=true;
@@ -160,5 +182,5 @@ export class FriendsWorldArrival {
     return true;
   }
   private releaseBuffers(){this.image?.dispose();this.image=undefined;this.wire?.dispose();this.wire=undefined;this.atlas?.dispose();this.atlas=undefined;}
-  dispose(){this.releaseBuffers();this.quad.geometry.dispose();this.material.dispose();this.wireMaterial.dispose();this.status?.remove();}
+  dispose(){this.warmup?.dispose();this.releaseBuffers();this.quad.geometry.dispose();this.material.dispose();this.wireMaterial.dispose();this.status?.remove();}
 }

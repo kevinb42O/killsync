@@ -43,8 +43,11 @@ export function meshIslandRuins(): RuinMeshData {
   const buckets=Array.from({length:4},()=>({p:[]as number[],n:[]as number[],uv:[]as number[]}));
   for(const plane of planes.values()){
     const {axis,direction,slice,cells,tint}=plane,u=(axis+1)%3,v=(axis+2)%3;
-    for(const key of [...cells].sort((a,b)=>{const [ax,ay]=a.split(',').map(Number),[bx,by]=b.split(',').map(Number);return ay-by||ax-bx;})){
-      if(!cells.has(key))continue;const [i,j]=key.split(',').map(Number);let w=1,h=1;
+    // Decode coordinates once per cell. Parsing both strings in every sort
+    // comparison dominated cold world construction for large castle planes.
+    const ordered=[...cells].map(key=>{const [i,j]=key.split(',').map(Number);return {key,i,j};}).sort((a,b)=>a.j-b.j||a.i-b.i);
+    for(const {key,i,j} of ordered){
+      if(!cells.has(key))continue;let w=1,h=1;
       while(cells.has(`${i+w},${j}`))w++;
       outer:while(true){for(let k=0;k<w;k++)if(!cells.has(`${i+k},${j+h}`))break outer;h++;}
       const p=[0,0,0];p[axis]=slice;p[u]=i;p[v]=j;

@@ -1,9 +1,10 @@
+import { rowboatWaterCutout } from './FriendsWaterClip';
+import { createRowboatVisual, updateRowboatVisual } from './FriendsRowboatVisuals';
 import { addFriendsAsset, fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
 import * as THREE from 'three';
 import { createScenicTrainVisual,updateScenicTrainVisual } from './FriendsScenicTrainVisuals';
 import { FRIENDS_SPAWN_PLATFORM } from '../world/FriendsTerrain';
-import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
-import { FRIENDS_DELIVERY_BAY, FRIENDS_HAULING_JOBS } from '../world/FriendsHaulingGoal';
+import { FRIENDS_HAULING_JOBS } from '../world/FriendsHaulingGoal';
 import { trainGangways, type FriendsSnapshot, type FriendsVehicle } from '../multiplayer/FriendsExpedition';
 
 const palette = { grass: 0x476955, metal: 0x23464b, cream: 0xe9dfbe, dark: 0x19353a, mint: 0x8de6ce, amber: 0xffcf8a, purple: 0xc9b2eb };
@@ -23,9 +24,6 @@ function label(text: string, color = '#e9dfbe') {
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false })); sprite.scale.set(240, 30, 1); return sprite;
 }
-function sign(group: THREE.Object3D, text: string, x: number, y: number, z: number, width = 240, color?: string) {
-  const sprite = label(text, color); sprite.position.set(x, y, z); sprite.scale.set(width * .42, width / 8 * .42, 1); group.add(sprite); return sprite;
-}
 function vehicleNameplates(group: THREE.Group, text: string, x: number, y: number, sideOffset: number, width: number) {
   // Vehicle labels are mounted on their sides. Camera-facing sprites sliced
   // through roofs and seats as passengers looked around the cabin.
@@ -44,9 +42,6 @@ export function createFriendsEnvironment(): THREE.Group {
   }
   const ring = new THREE.Mesh(new THREE.RingGeometry(76, 79, 48), glow);
   ring.rotation.x = -Math.PI / 2; ring.position.set(p.x, p.top + .6, p.y); group.add(ring);
-  sign(group, 'PLAYER SPAWN', p.x, p.top + 70, p.y - 120, 360, '#8de6ce');
-  sign(group, 'CAMPFIRE →', p.x+116, p.top+43, p.y-65, 170, '#ffd494');
-  sign(group, 'EMBER COMMONS', FRIENDS_CAMPFIRE.x, FRIENDS_CAMPFIRE.z+58, FRIENDS_CAMPFIRE.y-166, 180, '#ffd494');
   for(const job of FRIENDS_HAULING_JOBS){
   const bay=job.pickup,color=job.number===1?'#ffc36e':job.goal.color,paint=new THREE.MeshBasicMaterial({color});
   for(const side of [-1,1]){
@@ -56,10 +51,7 @@ export function createFriendsEnvironment(): THREE.Group {
     box(group,84,.5,2,bay.x,bay.top+.5,bay.y+side*34,paint);
     box(group,2,.5,68,bay.x+side*42,bay.top+.5,bay.y,paint);
   }
-  sign(group,bay.name,bay.x,bay.top+70,bay.y-92,340,color);
   }
-  const goal=FRIENDS_DELIVERY_BAY;
-  sign(group,'DELIVERY BAY · GOAL',goal.x,goal.z+125,goal.y,440,goal.color);
   return group;
 }
 
@@ -136,13 +128,15 @@ export class FriendsVehicleVisuals {
   constructor(scene: THREE.Scene) { this.group.name = 'friends-vehicles'; scene.add(this.group); }
   update(snapshot: FriendsSnapshot | undefined, elapsedMs: number) {
     this.group.visible = Boolean(snapshot);
-    if (!snapshot) return;
+    if (!snapshot){rowboatWaterCutout.value.x=1e8;return;}
+    const boat=snapshot.vehicles.find(v=>v.kind==='rowboat');
+    if(boat)rowboatWaterCutout.value.set(boat.x,boat.y,boat.angle,boat.z-5);else rowboatWaterCutout.value.x=1e8;
     for(const mesh of this.vehicles.values())mesh.visible=false;
     for(const mesh of this.gangways.values())mesh.visible=false;
     for (const vehicle of snapshot.vehicles) {
       let mesh = this.vehicles.get(vehicle.id);
-      if (!mesh) { mesh = vehicle.kind === 'train' ? vehicle.scenic ? createScenicTrainVisual(Boolean(vehicle.closed),Number(vehicle.id.split('-').at(-1)),vehicle.wagonKind) : vehicle.closed ? createLocomotive() : createTrainCar(Number(vehicle.id.at(-1))) : createAircraft(); mesh.name = vehicle.id; this.vehicles.set(vehicle.id, mesh); this.group.add(mesh); }
-      mesh.visible=true; this.pose(mesh, vehicle);if(vehicle.scenic)updateScenicTrainVisual(mesh,vehicle);
+      if (!mesh) { mesh = vehicle.kind==='rowboat' ? createRowboatVisual() : vehicle.kind === 'train' ? vehicle.scenic ? createScenicTrainVisual(Boolean(vehicle.closed),Number(vehicle.id.split('-').at(-1)),vehicle.wagonKind) : vehicle.closed ? createLocomotive() : createTrainCar(Number(vehicle.id.at(-1))) : createAircraft(); mesh.name = vehicle.id; this.vehicles.set(vehicle.id, mesh); this.group.add(mesh); }
+      mesh.visible=true; this.pose(mesh, vehicle);if(vehicle.kind==='rowboat')updateRowboatVisual(mesh,vehicle,elapsedMs);if(vehicle.scenic)updateScenicTrainVisual(mesh,vehicle);
       mesh.traverse(child => { if (child.name === 'sunskiff-rotor') child.rotation.y = elapsedMs * (vehicle.pilotId ? .06 : .018); });
     }
     for (const link of trainGangways(snapshot.vehicles)) {

@@ -1,0 +1,279 @@
+{
+  "origin": "http://localhost:3027",
+  "errors": [],
+  "method": "Fresh browser context, actual Friends arena, fixed spawn camera. Frame gaps, long tasks, stage CPU times and slow WebGL calls from launch through settling. Menu rendering excluded. These are local Chromium/Metal measurements, not remote player FPS.",
+  "result": {
+    "buckets": [
+      {
+        "at": 0,
+        "frames": 164,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 66.59999999999991,
+        "maxMs": 1332.4,
+        "over100Ms": 4,
+        "compiles": 126
+      },
+      {
+        "at": 5000,
+        "frames": 300,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.30000000000109,
+        "maxMs": 17.700000000000728,
+        "over100Ms": 0,
+        "compiles": 64
+      },
+      {
+        "at": 10000,
+        "frames": 300,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.30000000000109,
+        "maxMs": 17.700000000000728,
+        "over100Ms": 0,
+        "compiles": 20
+      },
+      {
+        "at": 15000,
+        "frames": 300,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.399999999997817,
+        "maxMs": 17.700000000000728,
+        "over100Ms": 0,
+        "compiles": 0
+      },
+      {
+        "at": 20000,
+        "frames": 116,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.399999999997817,
+        "maxMs": 17.600000000002183,
+        "over100Ms": 0,
+        "compiles": 0
+      }
+    ],
+    "tasks": [
+      {
+        "at": 252.89999997615814,
+        "ms": 131
+      },
+      {
+        "at": 427.89999997615814,
+        "ms": 104
+      },
+      {
+        "at": 557.5,
+        "ms": 1229
+      },
+      {
+        "at": 1792.2999999523163,
+        "ms": 114
+      },
+      {
+        "at": 2105.5,
+        "ms": 60
+      },
+      {
+        "at": 2326.2999999523163,
+        "ms": 93
+      },
+      {
+        "at": 2800.600000023842,
+        "ms": 57
+      },
+      {
+        "at": 2863.5,
+        "ms": 77
+      },
+      {
+        "at": 3626.1999999284744,
+        "ms": 130
+      }
+    ],
+    "gl": [
+      {
+        "method": "texSubImage2D",
+        "at": 2666.600000023842,
+        "ms": 31.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2538.899999976158,
+        "ms": 27
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2979.899999976158,
+        "ms": 25.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2468.7999999523163,
+        "ms": 25.200000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2430.6999999284744,
+        "ms": 24.600000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3359.399999976158,
+        "ms": 23.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2586.899999976158,
+        "ms": 23.299999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3082.6999999284744,
+        "ms": 23
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2803,
+        "ms": 22.699999928474426
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2830.899999976158,
+        "ms": 22.200000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2639.7999999523163,
+        "ms": 19.200000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3634,
+        "ms": 19
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2747,
+        "ms": 18.699999928474426
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3673.5,
+        "ms": 18.699999928474426
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3331.899999976158,
+        "ms": 18.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3692.5,
+        "ms": 18.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3711.2999999523163,
+        "ms": 18.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3654.7999999523163,
+        "ms": 18.300000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3731.899999976158,
+        "ms": 18.200000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2951.2999999523163,
+        "ms": 18.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 2504.100000023842,
+        "ms": 13.399999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3392.600000023842,
+        "ms": 11.599999904632568
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3127.100000023842,
+        "ms": 10.899999976158142
+      },
+      {
+        "method": "getProgramInfoLog",
+        "at": 6829.399999976158,
+        "ms": 10.899999976158142
+      }
+    ],
+    "stages": [],
+    "programs": {
+      "checked": 103,
+      "pending": 0,
+      "failed": []
+    },
+    "glError": 0,
+    "warmup": {
+      "submitted": 550,
+      "completed": 550,
+      "queued": 0,
+      "scanning": true,
+      "pending": false,
+      "pendingCount": 0,
+      "texturesQueued": 0,
+      "failures": 0,
+      "maxSubmitMs": 2.6999999284744263,
+      "maxReadinessMs": 11.799999952316284,
+      "maxScanMs": 2,
+      "maxTextureMs": 0
+    },
+    "spawnPreparation": {
+      "submitted": 118,
+      "completed": 118,
+      "queued": 0,
+      "scanning": false,
+      "pending": false,
+      "pendingCount": 0,
+      "texturesQueued": 0,
+      "failures": 0,
+      "maxSubmitMs": 88,
+      "maxReadinessMs": 9.300000071525574,
+      "maxScanMs": 2.600000023841858,
+      "maxTextureMs": 31.5,
+      "ready": true,
+      "fallback": false
+    },
+    "terrain": {
+      "surfaceTiles": 58,
+      "surfaceBytes": 10509096,
+      "surfaceJobs": 0,
+      "pendingVoxels": 0,
+      "patchDraws": 0,
+      "volumeChunks": 161,
+      "volumeActive": 161,
+      "volumeJobs": 0,
+      "editMeshLatencyP95": 0,
+      "editMeshSamples": 0
+    },
+    "arrival": {
+      "active": false,
+      "age": 5200.6,
+      "reveal": 1,
+      "settling": 3015.5,
+      "revealing": true
+    },
+    "render": {
+      "drawCalls": 713,
+      "triangles": 414968,
+      "geometries": 192,
+      "textures": 62,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    }
+  }
+}

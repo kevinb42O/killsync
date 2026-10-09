@@ -1,0 +1,458 @@
+{
+  "origin": "http://localhost:3022",
+  "errors": [],
+  "method": "Fresh browser context, actual Friends arena, fixed spawn camera. Frame gaps, long tasks, stage CPU times and slow WebGL calls from launch through settling. Menu rendering excluded. These are local Chromium/Metal measurements, not remote player FPS.",
+  "result": {
+    "buckets": [
+      {
+        "at": 0,
+        "frames": 48,
+        "medianMs": 16.700000000000273,
+        "p95Ms": 299.1999999999998,
+        "maxMs": 13782.8,
+        "over100Ms": 7,
+        "compiles": 48
+      },
+      {
+        "at": 5000,
+        "frames": 0,
+        "over100Ms": 0,
+        "compiles": 14
+      },
+      {
+        "at": 10000,
+        "frames": 0,
+        "over100Ms": 0,
+        "compiles": 14
+      },
+      {
+        "at": 15000,
+        "frames": 148,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.700000000000728,
+        "maxMs": 50,
+        "over100Ms": 0,
+        "compiles": 34
+      },
+      {
+        "at": 20000,
+        "frames": 12,
+        "medianMs": 16.80000000000291,
+        "p95Ms": 6383.0999999999985,
+        "maxMs": 6383.0999999999985,
+        "over100Ms": 1,
+        "compiles": 0
+      },
+      {
+        "at": 25000,
+        "frames": 203,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.600000000002183,
+        "maxMs": 66.59999999999854,
+        "over100Ms": 0,
+        "compiles": 28
+      },
+      {
+        "at": 30000,
+        "frames": 147,
+        "medianMs": 16.69999999999709,
+        "p95Ms": 17.700000000000728,
+        "maxMs": 17.799999999999272,
+        "over100Ms": 0,
+        "compiles": 14
+      }
+    ],
+    "tasks": [
+      {
+        "at": 262.6999999284744,
+        "ms": 156
+      },
+      {
+        "at": 471.39999997615814,
+        "ms": 102
+      },
+      {
+        "at": 593.6999999284744,
+        "ms": 1227
+      },
+      {
+        "at": 1825.7999999523163,
+        "ms": 625
+      },
+      {
+        "at": 2965,
+        "ms": 301
+      },
+      {
+        "at": 3304.5,
+        "ms": 173
+      },
+      {
+        "at": 3489.5999999046326,
+        "ms": 147
+      },
+      {
+        "at": 3665.1999999284744,
+        "ms": 13783
+      },
+      {
+        "at": 26589.799999952316,
+        "ms": 73
+      }
+    ],
+    "gl": [
+      {
+        "method": "getProgramParameter",
+        "at": 3813.2999999523163,
+        "ms": 587.2000000476837,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 5090.299999952316,
+        "ms": 558.5,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 9788.5,
+        "ms": 538.6999999284744,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 10693.899999976158,
+        "ms": 529.7999999523163,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 6114.799999952316,
+        "ms": 514.5,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 13175.899999976158,
+        "ms": 490.10000002384186,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 14042.699999928474,
+        "ms": 486.60000002384186,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 8094.699999928474,
+        "ms": 476.5,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 7021.199999928474,
+        "ms": 473.2000000476837,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 11610.5,
+        "ms": 471.2999999523163,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 12167.299999952316,
+        "ms": 451.89999997615814,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 15919.299999952316,
+        "ms": 443.5,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 14893.099999904633,
+        "ms": 440.10000002384186,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4522.5,
+        "ms": 411.1999999284744,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as texSubImage2D] (<anonymous>:24:146)\n    at Object.Y [as texSubImage2D] (http://localhost:3022/assets/index-DDcAuzXO.js:4733:14256)\n    at lt (http://localhost:3022/assets/index-DDcAuzXO.js:4733:34109)\n    at coe.j [as setTexture2D] (http://localhost:3022/assets/index-DDcAuzXO.js:4733:24728)\n    at fre.Vae [as setValue] (http://localhost:3022/assets/index-DDcAuzXO.js:4655:5060)\n    at M_.upload (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9654)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:46723)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 2971.899999976158,
+        "ms": 156.39999997615814,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at S (http://localhost:3022/assets/index-DDcAuzXO.js:4733:6238)\n    at S (http://localhost:3022/assets/index-DDcAuzXO.js:4733:6361)\n    at S (http://localhost:3022/assets/index-DDcAuzXO.js:4733:6361)\n    at S (http://localhost:3022/assets/index-DDcAuzXO.js:4733:6361)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 2129,
+        "ms": 114.5,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at re (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38701)\n    at cs (http://localhost:3022/assets/index-DDcAuzXO.js:4757:38237)\n    at Ji (http://localhost:3022/assets/index-DDcAuzXO.js:4757:36266)\n    at boe.render (http://localhost:3022/assets/index-DDcAuzXO.js:4757:34504)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 3313.5999999046326,
+        "ms": 110,
+        "stack": "Error\n    at WebGL2RenderingContext.<computed> [as getProgramParameter] (<anonymous>:24:146)\n    at new M_ (http://localhost:3022/assets/index-DDcAuzXO.js:4655:9086)\n    at E (http://localhost:3022/assets/index-DDcAuzXO.js:4706:228)\n    at Vre.getUniforms (http://localhost:3022/assets/index-DDcAuzXO.js:4706:304)\n    at Ds (http://localhost:3022/assets/index-DDcAuzXO.js:4757:44066)\n    at boe.renderBufferDirect (http://localhost:3022/assets/index-DDcAuzXO.js:4757:29747)\n    at S (http://localhost:3022/assets/index-DDcAuzXO.js:4733:6238)\n    at S (http://localhost:3022/assets/index-DDcAuzXO.js:4733:6361)\n    at S (http://localhost:3022/assets/index-DDcAuzXO.js:4733:6361)\n    at S (http://localhost:3022/assets/index-DDcAuzXO.js:4733:6361)"
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 2350.5999999046326,
+        "ms": 99
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17105.299999952316,
+        "ms": 98.20000004768372
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17300.399999976158,
+        "ms": 92.39999997615814
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 1904.6999999284744,
+        "ms": 90.39999997615814
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 3544.2999999523163,
+        "ms": 88.20000004768372
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 3151.0999999046326,
+        "ms": 85.40000009536743
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 16927.299999952316,
+        "ms": 83.70000004768372
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 2267.5,
+        "ms": 72.69999992847443
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 3674.1999999284744,
+        "ms": 51.300000071525574
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 2045.2999999523163,
+        "ms": 34.5
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17256.599999904633,
+        "ms": 33.10000002384186
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17409.799999952316,
+        "ms": 31.200000047683716
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 2091.6999999284744,
+        "ms": 30.100000023841858
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17047.399999976158,
+        "ms": 29.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 12136.099999904633,
+        "ms": 28.600000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3236.899999976158,
+        "ms": 26.600000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 3424,
+        "ms": 25.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4498.399999976158,
+        "ms": 24
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4990.399999976158,
+        "ms": 23.899999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4422.099999904633,
+        "ms": 23.800000071525574
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4475.199999928474,
+        "ms": 23.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5048.699999928474,
+        "ms": 22.399999976158142
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 6995.599999904633,
+        "ms": 22
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4968.799999952316,
+        "ms": 21.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5666.899999976158,
+        "ms": 20.600000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 12115.899999976158,
+        "ms": 20.100000023841858
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 9167.699999928474,
+        "ms": 20
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4402.199999928474,
+        "ms": 19.399999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4456.5,
+        "ms": 18.59999990463257
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4951.199999928474,
+        "ms": 17.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5031.299999952316,
+        "ms": 17.399999976158142
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5649.699999928474,
+        "ms": 17.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 12082.899999976158,
+        "ms": 17.100000023841858
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 5014.599999904633,
+        "ms": 16.700000047683716
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4934.599999904633,
+        "ms": 16.5
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 12100.099999904633,
+        "ms": 15.700000047683716
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17233.899999976158,
+        "ms": 13.5
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17011.899999976158,
+        "ms": 12.199999928474426
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 2026,
+        "ms": 11.799999952316284
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17030.699999928474,
+        "ms": 10.899999976158142
+      },
+      {
+        "method": "getProgramParameter",
+        "at": 17082.399999976158,
+        "ms": 10.799999952316284
+      },
+      {
+        "method": "texSubImage2D",
+        "at": 4445.899999976158,
+        "ms": 10.100000023841858
+      }
+    ],
+    "stages": [],
+    "warmup": {
+      "submitted": 152,
+      "completed": 151,
+      "queued": 398,
+      "scanning": false,
+      "pending": true,
+      "failures": 0,
+      "maxSubmitMs": 40.39999997615814,
+      "maxReadinessMs": 6.200000047683716,
+      "maxScanMs": 2
+    },
+    "terrain": {
+      "surfaceTiles": 58,
+      "surfaceBytes": 10509096,
+      "surfaceJobs": 0,
+      "pendingVoxels": 0,
+      "patchDraws": 0,
+      "volumeChunks": 161,
+      "volumeActive": 161,
+      "volumeJobs": 0,
+      "editMeshLatencyP95": 0,
+      "editMeshSamples": 0
+    },
+    "arrival": {
+      "active": false,
+      "age": 3749,
+      "reveal": 1,
+      "settling": 3032.3,
+      "revealing": true
+    },
+    "render": {
+      "drawCalls": 418,
+      "triangles": 280527,
+      "geometries": 192,
+      "textures": 59,
+      "batchedEnemies": 0,
+      "enemyBatches": 0,
+      "enemyCount": 0
+    }
+  }
+}

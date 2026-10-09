@@ -2,12 +2,12 @@
   "errors": [],
   "views": [
     {
-      "name": "deepmere",
-      "draws": 307,
-      "triangles": 2078190,
+      "name": "boat",
+      "draws": 669,
+      "triangles": 1901847,
       "terrain": {
-        "surfaceTiles": 82,
-        "surfaceBytes": 19617104,
+        "surfaceTiles": 84,
+        "surfaceBytes": 24774048,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -17,7 +17,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 12.8416666696469,
+      "frameMs": 8.093333333730698,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -29,18 +29,84 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     },
     {
-      "name": "skyfalls",
-      "draws": 323,
-      "triangles": 1167478,
+      "name": "underwater",
+      "draws": 238,
+      "triangles": 1853339,
+      "terrain": {
+        "surfaceTiles": 93,
+        "surfaceBytes": 25708696,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 7.558333333333334,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "name": "underwater_up",
+      "draws": 272,
+      "triangles": 1407910,
+      "terrain": {
+        "surfaceTiles": 93,
+        "surfaceBytes": 25708696,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 0,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 5.932499996821085,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "name": "underwater_station",
+      "draws": 190,
+      "triangles": 894921,
       "terrain": {
         "surfaceTiles": 92,
-        "surfaceBytes": 20418424,
+        "surfaceBytes": 20227376,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -50,7 +116,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 15.190833336114883,
+      "frameMs": 7.518333338697752,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -62,18 +128,51 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     },
     {
-      "name": "skyfalls_underpass",
-      "draws": 214,
-      "triangles": 806642,
+      "name": "deepmere",
+      "draws": 674,
+      "triangles": 2200232,
       "terrain": {
-        "surfaceTiles": 95,
-        "surfaceBytes": 20461792,
+        "surfaceTiles": 96,
+        "surfaceBytes": 22507576,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 23,
+        "volumeActive": 0,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 9.844999999801319,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "name": "skyfalls",
+      "draws": 540,
+      "triangles": 1192778,
+      "terrain": {
+        "surfaceTiles": 94,
+        "surfaceBytes": 20573384,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -83,7 +182,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 13.278333337108295,
+      "frameMs": 11.771666662891706,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -95,18 +194,51 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
+        }
+      ],
+      "bridgeGround": -64
+    },
+    {
+      "name": "skyfalls_underpass",
+      "draws": 231,
+      "triangles": 822346,
+      "terrain": {
+        "surfaceTiles": 95,
+        "surfaceBytes": 20449104,
+        "surfaceJobs": 0,
+        "pendingVoxels": 0,
+        "patchDraws": 0,
+        "volumeChunks": 35,
+        "volumeActive": 23,
+        "volumeJobs": 0,
+        "editMeshLatencyP95": 0,
+        "editMeshSamples": 0
+      },
+      "frameMs": 10.829166667660077,
+      "rivers": [
+        {
+          "id": "skyfalls-river",
+          "metres": 853.7004754741441
+        },
+        {
+          "id": "gate-river",
+          "metres": 981.2203072476985
+        },
+        {
+          "id": "reedwater",
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     },
     {
       "name": "world_gate",
-      "draws": 268,
-      "triangles": 968967,
+      "draws": 270,
+      "triangles": 969259,
       "terrain": {
         "surfaceTiles": 96,
-        "surfaceBytes": 29998384,
+        "surfaceBytes": 29920800,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -116,7 +248,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 11.410000001390776,
+      "frameMs": 7.4191666632890705,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -128,18 +260,18 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     },
     {
       "name": "gate_run",
-      "draws": 310,
-      "triangles": 1903732,
+      "draws": 345,
+      "triangles": 1915363,
       "terrain": {
         "surfaceTiles": 97,
-        "surfaceBytes": 30524416,
+        "surfaceBytes": 30446832,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -149,7 +281,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 16.275000004967055,
+      "frameMs": 10.235833323995273,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -161,18 +293,18 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     },
     {
       "name": "bridge",
-      "draws": 375,
-      "triangles": 2982455,
+      "draws": 592,
+      "triangles": 3426027,
       "terrain": {
         "surfaceTiles": 90,
-        "surfaceBytes": 21393424,
+        "surfaceBytes": 21434920,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -182,7 +314,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 16.802500001589458,
+      "frameMs": 15.888333332538604,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -194,18 +326,18 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     },
     {
       "name": "water_bridge",
-      "draws": 231,
-      "triangles": 1897996,
+      "draws": 248,
+      "triangles": 1896178,
       "terrain": {
         "surfaceTiles": 92,
-        "surfaceBytes": 22239776,
+        "surfaceBytes": 22281272,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -215,7 +347,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 15.161666668454806,
+      "frameMs": 9.912499997019768,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -227,18 +359,18 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     },
     {
       "name": "gorge",
-      "draws": 56,
-      "triangles": 491678,
+      "draws": 144,
+      "triangles": 668802,
       "terrain": {
-        "surfaceTiles": 97,
-        "surfaceBytes": 24093784,
+        "surfaceTiles": 99,
+        "surfaceBytes": 23608624,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -248,7 +380,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 8.354999992251397,
+      "frameMs": 7.902499995628992,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -260,7 +392,7 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
@@ -268,10 +400,10 @@
     {
       "name": "mouth",
       "draws": 159,
-      "triangles": 331988,
+      "triangles": 334030,
       "terrain": {
-        "surfaceTiles": 97,
-        "surfaceBytes": 25391184,
+        "surfaceTiles": 96,
+        "surfaceBytes": 25185160,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -281,7 +413,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 7.930833338697751,
+      "frameMs": 7.504166664679845,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -293,18 +425,18 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     },
     {
       "name": "island",
-      "draws": 302,
-      "triangles": 4922697,
+      "draws": 659,
+      "triangles": 4967919,
       "terrain": {
-        "surfaceTiles": 97,
-        "surfaceBytes": 25391184,
+        "surfaceTiles": 96,
+        "surfaceBytes": 25185160,
         "surfaceJobs": 0,
         "pendingVoxels": 0,
         "patchDraws": 0,
@@ -314,7 +446,7 @@
         "editMeshLatencyP95": 0,
         "editMeshSamples": 0
       },
-      "frameMs": 10.193333333730697,
+      "frameMs": 8.747500000397364,
       "rivers": [
         {
           "id": "skyfalls-river",
@@ -326,16 +458,76 @@
         },
         {
           "id": "reedwater",
-          "metres": 1687.428342503078
+          "metres": 1728.7784341462702
         }
       ],
       "bridgeGround": -64
     }
   ],
-  "date": "2026-10-09T04:08:01.102Z",
+  "date": "2026-10-09T15:51:02.549Z",
   "addedGeometry": {
-    "meshBatches": 28,
-    "triangles": 19680,
-    "depthMaskBytes": 958464
+    "meshBatches": 31,
+    "triangles": 35456,
+    "depthMaskBytes": 352300
+  },
+  "rowing": {
+    "before": {
+      "id": "reedwater-skiff",
+      "kind": "rowboat",
+      "x": 13680,
+      "y": 22560,
+      "z": 159.5,
+      "angle": 2.55,
+      "pitch": 0,
+      "length": 164,
+      "width": 82,
+      "rowing": {
+        "left": {
+          "atMs": -10000,
+          "direction": 1,
+          "playerId": "review-right"
+        },
+        "right": {
+          "atMs": -10000,
+          "direction": 1,
+          "playerId": "review"
+        },
+        "speed": 0
+      }
+    },
+    "after": {
+      "id": "reedwater-skiff",
+      "kind": "rowboat",
+      "x": 13625.740494940685,
+      "y": 22596.455049223696,
+      "z": 159.5,
+      "angle": 2.55,
+      "pitch": 0,
+      "length": 164,
+      "width": 82,
+      "rowing": {
+        "left": {
+          "atMs": 2900.580000000007,
+          "direction": 1,
+          "playerId": "review-right"
+        },
+        "right": {
+          "atMs": 2900.580000000007,
+          "direction": 1,
+          "playerId": "review"
+        },
+        "speed": 56.8387746275605
+      }
+    },
+    "seats": [
+      {
+        "vehicleId": "reedwater-skiff",
+        "index": 1
+      },
+      {
+        "vehicleId": "reedwater-skiff",
+        "index": 0
+      }
+    ]
   }
 }

@@ -1,0 +1,7 @@
+{
+  "origin": "http://localhost:3005",
+  "errors": [],
+  "phases": [],
+  "method": "Actual Friends game render/update loop and terrain workers, shadows enabled. Move the final render camera continuously along a castle survey route; the avatar stays at arrival. Shader compile counters and frame gaps cover streaming, shadow updates, world rendering and HDR composition.",
+  "failure": "Error: page.waitForFunction: Target page, context or browser has been closed"
+}

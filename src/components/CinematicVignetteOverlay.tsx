@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 
 export type CinematicProfile = 'full' | 'subtle' | 'off';
 
@@ -57,18 +57,16 @@ export const CinematicVignetteOverlay: React.FC<CinematicVignetteOverlayProps> =
   className = '',
 }) => {
   const [hitFlashActive, setHitFlashActive] = useState(false);
-  const prevHitTimeRef = useRef(lastHitTime);
 
   // Trigger brief punchy peripheral flash on hit
   useEffect(() => {
-    if (lastHitTime > 0 && lastHitTime !== prevHitTimeRef.current) {
-      prevHitTimeRef.current = lastHitTime;
-      setHitFlashActive(true);
-      const timer = setTimeout(() => {
-        setHitFlashActive(false);
-      }, 220);
-      return () => clearTimeout(timer);
-    }
+    // Clearing the hit must also clear the flash: effect cleanup can cancel
+    // its timer when another impact arrives just before the parent resets it.
+    // A later impact may reuse the same counter after passing through zero.
+    setHitFlashActive(lastHitTime > 0);
+    if (lastHitTime <= 0) return;
+    const timer = setTimeout(() => setHitFlashActive(false), 220);
+    return () => clearTimeout(timer);
   }, [lastHitTime]);
 
   if (profile === 'off') {

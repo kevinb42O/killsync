@@ -8,6 +8,7 @@ const QUIET_SOUNDSCAPE: FriendsSoundscapeMix = { wind: 0, birds: 0, crickets: 0,
 
 export type SurfaceCue = 'grass' | 'woodStep' | 'stoneStep' | 'snow' | 'waterStep' | 'mudStep';
 export type FriendsCue = SurfaceCue | 'wood' | 'stone' | 'soil' | 'ore' | 'dig' | 'landing' | 'leaves' | 'treeBreak' | 'birdCall'
+  | 'birdRobin' | 'birdBlueTit' | 'birdSparrow' | 'birdWings' | 'birdStartled'
   | 'trainDepart' | 'trainBrake' | 'trainStop' | 'trainHorn' | 'flightFoliage'
   | 'click' | 'hover' | 'success' | 'error' | 'collect' | 'pack' | 'jump' | 'swing' | 'chest' | 'chime'
   | 'gunfire' | 'reloadRifle' | 'reloadHandgun' | 'reloadShotgun' | 'eat'
@@ -23,6 +24,8 @@ export const FRIENDS_CUE_ASSETS: Readonly<Record<Cue, readonly string[]>> = {
   wood: variants('impactWood_medium'), stone: variants('impactMining', 5), soil: variants('impactSoft_medium'), ore: variants('impactMetal_light'),
   dig: [ROOT + 'shovel.ogg'], landing: [ROOT + 'landing.wav'], leaves: [ROOT + 'leaves.ogg'], treeBreak: variants('impactWood_heavy'),
   birdCall: variants('bird_call', 4),
+  birdRobin: variants('bird_robin',3), birdBlueTit: variants('bird_blue_tit',2), birdSparrow: variants('bird_sparrow',3),
+  birdWings: variants('bird_wings',2), birdStartled: variants('bird_startled',2),
   flightFoliage: variants('flight_foliage'),
   trainDepart: [ROOT + 'train_depart.ogg'], trainBrake: [ROOT + 'train_brake.ogg'], trainStop: [ROOT + 'train_stop.ogg'], trainHorn: [ROOT + 'train_horn.ogg'],
   click: [ROOT + 'click_001.ogg'], hover: [ROOT + 'select_001.ogg'], success: [ROOT + 'confirmation_001.ogg'], error: [ROOT + 'error_001.ogg'],
@@ -231,7 +234,7 @@ export class FriendsAudio {
     if (!this.context) return;
     if (!this.preloaded) {
       this.preloaded = true;
-      for (const url of new Set(Object.entries(CUES).filter(([cue]) => !['birdCall','flightFoliage','caveDrip','steam'].includes(cue) && !cue.startsWith('train')).flatMap(([, urls]) => urls))) void this.load(url);
+      for (const url of new Set(Object.entries(CUES).filter(([cue]) => !cue.startsWith('bird') && !['flightFoliage','caveDrip','steam'].includes(cue) && !cue.startsWith('train')).flatMap(([, urls]) => urls))) void this.load(url);
     }
   }
   private load(url: string, loop = false, seamSeconds = 2): Promise<void> {
@@ -258,7 +261,7 @@ export class FriendsAudio {
     const previous = this.lastVariant.get(cue) ?? -1;
     // Drops use random selection without immediate repeats, not a five-beat cycle.
     let index = (previous + 1) % urls.length;
-    if (cue === 'caveDrip') {
+    if (cue === 'caveDrip' || cue.startsWith('bird')) {
       index = Math.floor(Math.random() * (urls.length - (previous >= 0 ? 1 : 0)));
       if (previous >= 0 && index >= previous) index++;
     }
@@ -441,6 +444,10 @@ export class FriendsAudio {
     this.trainMix = mix;
     if (mix.nearby && this.active && this.activated && !this.settings.muted && this.settings.effects > 0) for (const cue of ['trainDepart', 'trainBrake', 'trainStop', 'trainHorn'] as const) for (const url of CUES[cue]) void this.load(url);
     this.syncTrain();
+  }
+  prepareBirds() {
+    if(this.active&&this.activated&&!this.settings.muted&&this.settings.ambience>0)
+      for(const cue of ['birdRobin','birdBlueTit','birdSparrow','birdWings','birdStartled'] as const)for(const url of CUES[cue])if(!this.buffers.has(url)&&!this.loads.has(url))void this.load(url);
   }
   prepareFlightFoliage() {
     if (this.active && this.activated && !this.settings.muted && this.settings.effects > 0)

@@ -32,6 +32,13 @@ export function FriendsPauseMenu(p: FriendsPauseMenuProps) {
   ] : isGamepadControlScheme(p.controlScheme) ? [
     ['Move / look', 'Left / right stick'], ['Jump / jetpack', 'A / hold'], ['Sprint', 'L3'], ['Crouch / slide', 'B'], ['Use / interact', 'Y'], ['Reload', 'X'], ['Fire / aim', 'RT / LT'], ['Shovel · dig / fill', 'RT / LT'], ['Build', 'View'], ['Tools', 'D-pad ← / →'], ['Empty hands · raise left / right', 'LT / RT'], ['Empty hands · point left / right', 'LB / RB'], ['Game menu', 'Start'],
   ] : [['Empty hands · arm gestures', 'Hold arm buttons'], ['Move', 'Left stick'], ['Look', 'Swipe'], ['Jump / jetpack', 'Tap / hold'], ['Sprint / slide', 'Pull / double tap'], ['Use / interact', 'Use'], ['Fire / aim', 'Fire / aim'], ['Shovel · dig / fill', 'Fire / aim'], ['Build', 'Build / place']];
+  bindings.push(...(keyboard ? [
+    ['Swim · dive / rise', 'Hold Ctrl / Space'], ['Row · stroke / backwater', 'LMB / RMB · one stroke'], ['Rowboat · board / leave', 'F / F or Space'],
+  ] : isGamepadControlScheme(p.controlScheme) ? [
+    ['Swim · dive / rise', 'Hold B / A'], ['Row · stroke / backwater', 'RT / LT · one stroke'], ['Rowboat · board / leave', 'Y / Y or A'],
+  ] : [
+    ['Swim · dive / rise', 'Slide / Jump'], ['Row · stroke / backwater', 'Fire / Aim · one stroke'], ['Rowboat · board / leave', 'Use / Use or Jump'],
+  ]));
   const chooseTab = (next: PauseTab) => { setTab(next); friendsAudio.play('click', .16); };
   return <div className="friends-pause-backdrop" onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
     <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="friends-pause-title" className="friends-pause" onKeyDown={event => {

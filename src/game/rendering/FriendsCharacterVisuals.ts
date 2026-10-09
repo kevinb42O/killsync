@@ -1,3 +1,5 @@
+import type { SeedHand } from '../multiplayer/FriendsBirds';
+import type { StoneHand } from '../multiplayer/FriendsStones';
 import { finishFriendsCharacter } from './FriendsCharacterFinish';
 import { applyFriendsArmPose } from './FriendsGesturePose';
 import * as THREE from 'three';
@@ -21,7 +23,7 @@ export function mountFriendsCharacter(rig:CoopOperatorRig, color:string) {
 
 /** Apply after the shared co-op presentation. Gameplay/collision positions stay
  * authoritative; this only changes the Friends character's articulated pose. */
-export function updateFriendsCharacter(rig:CoopOperatorRig, player:CoopPlayerSnapshot, time:number, action?:ToolAction, falling=false) {
+export function updateFriendsCharacter(rig:CoopOperatorRig, player:CoopPlayerSnapshot, time:number, action?:ToolAction, falling=false,rowingPhase?:number,fishingHold?:'rod'|'fish'|'stone'|'seeds'|'marshmallow',stoneHand?:StoneHand,seedHand?:SeedHand) {
   const actor=actors.get(rig);if(!actor)return;
   const {model}=actor,dt=Math.max(0,Math.min(100,time-actor.previousTime));actor.previousTime=time;
   const speed=Math.hypot((player.motion?.velocityX??0)-(player.platformVelocityX??0),(player.motion?.velocityY??0)-(player.platformVelocityY??0));
@@ -44,7 +46,7 @@ export function updateFriendsCharacter(rig:CoopOperatorRig, player:CoopPlayerSna
   }
   const hands=player.lifeState==='alive'&&!falling ? player.friendsHands : undefined;
   const delta=hands?Math.atan2(Math.sin(hands.yaw-player.angle),Math.cos(hands.yaw-player.angle)):0;
-  applyFriendsArmPose(model,hands?.mask??0,hands?.pitch??0,dt,actor.arms,seated,delta);
+  applyFriendsArmPose(model,fishingHold==='fish'?12:fishingHold==='rod'||fishingHold==='stone'||fishingHold==='seeds'||fishingHold==='marshmallow'?8:hands?.mask??0,hands?.pitch??0,dt,actor.arms,seated,delta);
   if(hands){
     model.parts[0].rotation.y-=delta*.5;
   }
@@ -54,19 +56,48 @@ export function updateFriendsCharacter(rig:CoopOperatorRig, player:CoopPlayerSna
     model.parts[3].rotation.x=time<action.contact?-.45-.8*Math.sin(windup*Math.PI/2):.7*(1-recovery)**2;
     model.parts[3].rotation.z=.12;
   }
+  if(stoneHand){
+    const arm=model.parts[3],pivot=new THREE.Vector3().fromArray(arm.userData.shoulderPivot),attachment=pivot.clone().applyQuaternion(arm.quaternion).add(arm.position);
+    const charge=stoneHand.chargeAt===undefined?0:Math.min(1,(time-stoneHand.chargeAt)/900),release=stoneHand.throwAt===undefined?1:Math.min(1,(time-stoneHand.throwAt)/350);
+    arm.rotation.x=-.85-charge*.8+Math.sin(release*Math.PI)*(1-release)*1.8;
+    arm.rotation.z=.12;arm.position.copy(attachment).sub(pivot.applyQuaternion(arm.quaternion));
+  }
+  if(seedHand){
+    const arm=model.parts[3],pivot=new THREE.Vector3().fromArray(arm.userData.shoulderPivot),attachment=pivot.clone().applyQuaternion(arm.quaternion).add(arm.position);
+    const toss=seedHand.scatterAt===undefined?1:Math.min(1,(time-seedHand.scatterAt)/500);
+    arm.rotation.x=(seedHand.holding?-1.15:-.6)-Math.sin(toss*Math.PI)*(1-toss)*.9;
+    arm.rotation.z=.10;arm.position.copy(attachment).sub(pivot.applyQuaternion(arm.quaternion));
+  }
+  if(rowingPhase!==undefined){
+    const drive=rowingPhase<1?Math.sin(rowingPhase*Math.PI*2):0;
+    model.parts[1].rotation.x+=drive*.12;
+    for(const arm of [model.parts[2],model.parts[3]]){
+      const pivot=new THREE.Vector3().fromArray(arm.userData.shoulderPivot),attachment=pivot.clone().applyQuaternion(arm.quaternion).add(arm.position);
+      arm.rotation.x=-.8+drive*.35;arm.position.copy(attachment).sub(pivot.applyQuaternion(arm.quaternion));
+    }
+  }
+  if(player.motion?.swimming&&!seated){
+    const stroke=Math.sin(time*.005),kick=Math.sin(time*.009);
+    model.parts[2].rotation.x=-1.05+stroke*.42;model.parts[3].rotation.x=-1.05-stroke*.42;
+    model.parts[4].rotation.x=kick*.22;model.parts[5].rotation.x=-kick*.22;
+  }
   rig.root.scale.set(1,1,1);
   // The old chassis is centred at y=29. Our model already stands on its feet.
   rig.avatar.position.set(0,downed?12:0,0);
-  if(!falling)rig.avatar.rotation.set(0,0,downed?Math.PI/2:0);
+  if(!falling)rig.avatar.rotation.set(player.motion?.swimSubmerged?-.55:0,0,downed?Math.PI/2:0);
   for(const child of rig.avatar.children)child.visible=child===model.root;
   rig.seatedLegs.visible=false;
-  if(hands)rig.firearm.group.visible=false;
+  if(fishingHold||hands||player.friendsSeat?.vehicleId==='reedwater-skiff'||player.motion?.swimming)rig.firearm.group.visible=false;
   rig.nameplate.position.y=downed?32:seated||player.crouching?47:62;
   rig.avatar.updateWorldMatrix(true,true);
 }
 
-export function friendsCharacterHandPoint(rig:CoopOperatorRig, out:THREE.Vector3) {
+const otherHandPoint=new THREE.Vector3();
+export function friendsCharacterHandPoint(rig:CoopOperatorRig, out:THREE.Vector3,bothHands=false) {
   const socket=actors.get(rig)?.model.parts[3].getObjectByName('big-walk-hand-socket');
   if(!socket)return false;
-  socket.getWorldPosition(out);rig.root.worldToLocal(out);return true;
+  socket.getWorldPosition(out);
+  const other=bothHands?actors.get(rig)?.model.parts[2].getObjectByName('big-walk-hand-socket'):undefined;
+  if(other){other.getWorldPosition(otherHandPoint);out.lerp(otherHandPoint,.5);}
+  rig.root.worldToLocal(out);return true;
 }

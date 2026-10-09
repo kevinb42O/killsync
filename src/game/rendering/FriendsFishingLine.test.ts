@@ -1,0 +1,11 @@
+import { describe,expect,it } from 'vitest';
+import * as THREE from 'three';
+import { FriendsFishingLine } from './FriendsFishingLine';
+
+describe('bounded fishing filament',()=>{
+  it('keeps its anchors pinned, reuses buffers and stays finite through slack, retrieval and teleports',()=>{
+    const line=new FriendsFishingLine(),from=new THREE.Vector3(0,40,0),end=new THREE.Vector3(200,0,-50),camera=new THREE.Vector3(0,35,6),buffer=line.geometry.getAttribute('position').array;
+    for(let i=0;i<300;i++){if(i===100)from.x=5000;if(i===200)end.copy(from);line.update(from,end,i<150?20:1,i===120?5000:16,camera);expect(line.points[0].distanceTo(from)).toBeLessThan(1e-6);expect(line.points.at(-1)!.distanceTo(end)).toBeLessThan(1e-6);}
+    expect(line.geometry.getAttribute('position').array).toBe(buffer);expect([...buffer].every(Number.isFinite)).toBe(true);expect(line.points).toHaveLength(25);line.dispose();
+  });
+});

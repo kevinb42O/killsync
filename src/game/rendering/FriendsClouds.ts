@@ -83,7 +83,9 @@ export class FriendsClouds extends THREE.InstancedMesh<THREE.BoxGeometry,THREE.S
     if(options.stableProjection)this.stableProjection=new THREE.Vector3(0,1,0);
     this.cloudTop=Math.max(...clouds.map(c=>c.altitude+c.height));
     this.renderEntries=clouds.map((_,index)=>({index,depth:0}));
-    this.name='frontier-volumetric-cumulus';this.renderOrder=5;this.frustumCulled=false;
+    // Clouds form the transparent background. Drawing them after foreground
+    // effects blends them over flames/embers, which intentionally do not write depth.
+    this.name='frontier-volumetric-cumulus';this.renderOrder=-1;this.frustumCulled=false;
     const seeds=new THREE.InstancedBufferAttribute(new Float32Array(clouds.flatMap(c=>c.shape)),4);
     this.geometry.setAttribute('cloudSeed',seeds);
     const matrix=new THREE.Matrix4(),rotation=new THREE.Quaternion();
