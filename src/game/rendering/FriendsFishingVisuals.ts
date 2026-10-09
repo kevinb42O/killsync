@@ -129,7 +129,7 @@ export class FriendsFishingVisuals {
       if(local&&s.phase==='held'){
         if(f.root.parent!==this.held)this.held.add(f.root);this.held.visible=true;this.lighting.setVisible(true);
         const tangent=Math.tan(THREE.MathUtils.degToRad((this.camera?.fov??98)/2)),scale=tangent/Math.tan(THREE.MathUtils.degToRad(49)),narrow=Math.min(1,(this.camera?.aspect??16/9)/1.25);
-        this.held.position.set(0,-.46*scale*narrow,-1.08);this.held.scale.set(scale*narrow,scale*narrow,1);f.root.position.set(0,.035+Math.sin(now*.003)*.006,-.02);f.root.scale.setScalar(.022*s.size);f.root.rotation.set(.04,Math.PI/2,.025*Math.sin(now*.004));
+        this.held.position.set(0,-.46*scale*narrow,-1.08);this.held.scale.set(scale*narrow,scale*narrow,1);f.root.position.set(0,.035+Math.sin(now*.003)*.006,-.02);f.root.scale.setScalar(.022*s.size);f.root.rotation.set(.04,0,.025*Math.sin(now*.004));
       }else{
         if(f.root.parent!==this.group)this.group.add(f.root);
         if(owner){if(!handPoint(owner.id,this.end,true))this.end.set(owner.x,owner.z+25,owner.y);}
