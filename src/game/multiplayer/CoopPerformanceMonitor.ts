@@ -13,7 +13,7 @@ export interface CoopRenderStats {
 
 type MemoryPerformance = Performance & { memory?: { usedJSHeapSize: number } };
 
-/** Development-only co-op telemetry. Press `=` to show or hide it. */
+/** Co-op telemetry. Press `=` to show or hide it. */
 export class CoopPerformanceMonitor {
   private readonly element: HTMLPreElement;
   private visible: boolean;
@@ -39,8 +39,7 @@ export class CoopPerformanceMonitor {
   private snapshotTotalMs = 0;
   private simulationSamples = 0;
 
-  static mount(container: HTMLElement): CoopPerformanceMonitor | undefined {
-    if (!import.meta.env.DEV) return undefined;
+  static mount(container: HTMLElement): CoopPerformanceMonitor {
     return new CoopPerformanceMonitor(container);
   }
 
