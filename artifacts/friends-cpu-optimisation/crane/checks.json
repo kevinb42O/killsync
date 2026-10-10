@@ -1,0 +1,108 @@
+{
+  "checks": [
+    "joint, two booms, winch and console pass host placement using ray socket previews",
+    "remote console opens unified controls; mission compass, F prompt, minimap, squad overlay and combat reticle are absent",
+    "mouse release outside the rotation button brakes the arm while keyboard-held lifting continues; Space release brakes the winch",
+    "lift and rotation run together; hook remains vertical; live camera frames cargo beside controls; stopped angle parks for saving",
+    "whole-crane view frames the pivot, arm and load",
+    "right and lower move while held and brake on release; window blur brakes a held direction",
+    "touch hold starts rotation and touch cancellation brakes it",
+    "ground crew detach through validated host command without taking console ownership",
+    "mobile controls fit; Escape brakes and restores the player camera and previous flashlight state",
+    "actual ground-level F prompt connects and disconnects without opening the motor menu"
+  ],
+  "errors": [],
+  "held": {
+    "c": {
+      "pieceId": 401,
+      "x": 7832,
+      "y": 8000,
+      "z": 720,
+      "rotation": 0,
+      "length": 367.6278848193394,
+      "mode": "hold",
+      "blocked": false,
+      "angle": 0.26893951023931967,
+      "armMode": "hold",
+      "outletLocal": {
+        "x": 192,
+        "y": 0,
+        "z": 124
+      },
+      "winchId": 404,
+      "hasWinch": true,
+      "memberCount": 3,
+      "operatorId": "friend-92a2b130c64a316a5ab6eba4e6ee4357",
+      "leaseUntilMs": 11366.66666666664,
+      "cargoId": "lantern-core",
+      "anchorX": 0.00001709847517341028,
+      "anchorY": -0.000018128181255746398,
+      "anchorZ": 48.00000000000121,
+      "swayAngle": 0,
+      "angularSpeed": 0
+    },
+    "cargo": {
+      "id": "lantern-core",
+      "x": 8017.098197349851,
+      "y": 8051.016187524823,
+      "z": 428.3726865078093,
+      "angle": -6.001171659413013e-14,
+      "vx": 0,
+      "vy": 0,
+      "vz": 0,
+      "spin": 0,
+      "angularVelocityX": 0,
+      "angularVelocityY": 0,
+      "orientation": [
+        -4.234892317122648e-9,
+        4.014347353705022e-8,
+        -2.983585500940033e-14,
+        0.9999999999999993
+      ]
+    },
+    "outlet": {
+      "x": 8017.0982183021,
+      "y": 8051.016169803192,
+      "z": 844
+    },
+    "anchor": {
+      "x": 8017.0982183021,
+      "y": 8051.016169803192,
+      "z": 476.37268650780914
+    },
+    "projected": [
+      -0.40000011737059576,
+      -0.02139691805658066,
+      0.9881360627461583
+    ],
+    "angle": 0.26893951023931967,
+    "view": {
+      "id": 401,
+      "options": {
+        "mode": "load",
+        "orbit": 0.7853981633974483,
+        "elevation": 0.5763752205911837,
+        "distance": 280,
+        "light": true
+      }
+    },
+    "info": {
+      "frame": 1095,
+      "calls": 145,
+      "triangles": 243380,
+      "points": 3672,
+      "lines": 0
+    }
+  },
+  "teamwork": {
+    "detached": {
+      "playerId": "ground-crew",
+      "requestId": 100,
+      "ok": true,
+      "message": "Load released. Unsupported cargo falls under gravity.",
+      "silent": false
+    },
+    "before": "friend-92a2b130c64a316a5ab6eba4e6ee4357",
+    "after": "friend-92a2b130c64a316a5ab6eba4e6ee4357"
+  }
+}

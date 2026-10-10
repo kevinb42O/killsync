@@ -1,0 +1,1054 @@
+{
+  "date": "2026-10-10T20:41:50.260Z",
+  "hardware": "Apple M1",
+  "baselineRoot": "/tmp/friends-cpu-baseline.sDjQHf",
+  "rounds": 7,
+  "method": "Warmed paired Node/tsx CPU benchmarks, alternating order; median per call. Not whole-game FPS.",
+  "sink": 778475263.0846344,
+  "results": [
+    {
+      "name": "construction floor + ceiling + collision",
+      "iterations": 3000,
+      "pieces": 0,
+      "localCandidates": 0,
+      "contact": false,
+      "beforeMsPerCall": 0.00008169466666667328,
+      "afterMsPerCall": 0.00044826366666666216,
+      "savedMsPerCall": -0.0003665689999999889,
+      "speedup": 0.18224690676842892,
+      "runs": [
+        {
+          "beforeMs": 0.37912500000004457,
+          "afterMs": 1.6179159999999229
+        },
+        {
+          "beforeMs": 0.3197499999999991,
+          "afterMs": 1.493249999999989
+        },
+        {
+          "beforeMs": 0.27699999999992997,
+          "afterMs": 2.083499999999958
+        },
+        {
+          "beforeMs": 0.24508400000001984,
+          "afterMs": 1.3249999999999318
+        },
+        {
+          "beforeMs": 0.24108300000000327,
+          "afterMs": 1.3447909999999865
+        },
+        {
+          "beforeMs": 0.21708300000000236,
+          "afterMs": 1.2345420000000331
+        },
+        {
+          "beforeMs": 0.21612500000003365,
+          "afterMs": 1.2407910000000584
+        }
+      ]
+    },
+    {
+      "name": "unchanged build pose read",
+      "iterations": 10000,
+      "pieces": 0,
+      "attached": false,
+      "beforeMsPerCall": 0.00002362500000000409,
+      "afterMsPerCall": 0.00000963329999999587,
+      "savedMsPerCall": 0.000013991700000008222,
+      "speedup": 2.452430631249335,
+      "runs": [
+        {
+          "beforeMs": 0.24300000000005184,
+          "afterMs": 0.31762499999990723
+        },
+        {
+          "beforeMs": 0.2571659999999838,
+          "afterMs": 0.09825000000000728
+        },
+        {
+          "beforeMs": 0.2360840000000053,
+          "afterMs": 0.0963329999999587
+        },
+        {
+          "beforeMs": 0.23625000000004093,
+          "afterMs": 0.09541699999999764
+        },
+        {
+          "beforeMs": 0.21924999999998818,
+          "afterMs": 0.09145799999998871
+        },
+        {
+          "beforeMs": 0.6404580000000806,
+          "afterMs": 0.0908750000000964
+        },
+        {
+          "beforeMs": 0.09199999999998454,
+          "afterMs": 0.10883400000000165
+        }
+      ]
+    },
+    {
+      "name": "complete stationary host simulation tick",
+      "iterations": 300,
+      "pieces": 0,
+      "tickRate": 30,
+      "beforeMsPerCall": 0.3930361099999997,
+      "afterMsPerCall": 0.396422083333332,
+      "savedMsPerCall": -0.0033859733333322928,
+      "speedup": 0.9914586662154107,
+      "runs": [
+        {
+          "beforeMs": 123.91220799999996,
+          "afterMs": 123.24429200000009
+        },
+        {
+          "beforeMs": 120.20116599999983,
+          "afterMs": 119.30345800000009
+        },
+        {
+          "beforeMs": 119.31833299999994,
+          "afterMs": 119.58220900000015
+        },
+        {
+          "beforeMs": 117.91083299999991,
+          "afterMs": 118.67108399999984
+        },
+        {
+          "beforeMs": 117.23537499999975,
+          "afterMs": 118.60275000000001
+        },
+        {
+          "beforeMs": 117.14520799999991,
+          "afterMs": 117.15504199999987
+        },
+        {
+          "beforeMs": 117.8912919999998,
+          "afterMs": 118.9266249999996
+        }
+      ]
+    },
+    {
+      "name": "complete guest presentation movement",
+      "iterations": 1000,
+      "pieces": 0,
+      "beforeMsPerCall": 0.1719826250000001,
+      "afterMsPerCall": 0.16811733400000048,
+      "savedMsPerCall": 0.003865290999999632,
+      "speedup": 1.0229916267884644,
+      "runs": [
+        {
+          "beforeMs": 172.30308399999967,
+          "afterMs": 171.33495799999992
+        },
+        {
+          "beforeMs": 171.9826250000001,
+          "afterMs": 170.30666699999983
+        },
+        {
+          "beforeMs": 172.90387500000043,
+          "afterMs": 167.94700000000012
+        },
+        {
+          "beforeMs": 171.11574999999993,
+          "afterMs": 168.11733400000048
+        },
+        {
+          "beforeMs": 171.98833300000024,
+          "afterMs": 168.88412499999959
+        },
+        {
+          "beforeMs": 169.48670799999945,
+          "afterMs": 162.76770900000065
+        },
+        {
+          "beforeMs": 170.0209159999995,
+          "afterMs": 166.8507499999996
+        }
+      ]
+    },
+    {
+      "name": "construction floor + ceiling + collision",
+      "iterations": 3000,
+      "pieces": 64,
+      "localCandidates": 4,
+      "contact": false,
+      "beforeMsPerCall": 0.005469430666666691,
+      "afterMsPerCall": 0.0014653473333334356,
+      "savedMsPerCall": 0.004004083333333255,
+      "speedup": 3.7325148394849115,
+      "runs": [
+        {
+          "beforeMs": 16.27508399999988,
+          "afterMs": 7.36029199999939
+        },
+        {
+          "beforeMs": 16.24291699999958,
+          "afterMs": 4.365124999999352
+        },
+        {
+          "beforeMs": 16.472708999999668,
+          "afterMs": 4.360916999999972
+        },
+        {
+          "beforeMs": 16.408292000000074,
+          "afterMs": 4.46087499999976
+        },
+        {
+          "beforeMs": 16.540124999999534,
+          "afterMs": 4.396042000000307
+        },
+        {
+          "beforeMs": 16.647291999999652,
+          "afterMs": 4.354209000000083
+        },
+        {
+          "beforeMs": 16.316749999999956,
+          "afterMs": 4.587583999999879
+        }
+      ]
+    },
+    {
+      "name": "construction collision with conservative replay",
+      "iterations": 1000,
+      "pieces": 64,
+      "contact": true,
+      "beforeMsPerCall": 0.0019745419999999286,
+      "afterMsPerCall": 0.0027046669999999723,
+      "savedMsPerCall": -0.0007301250000000437,
+      "speedup": 0.7300499469990017,
+      "runs": [
+        {
+          "beforeMs": 2.035624999999527,
+          "afterMs": 2.6968750000005457
+        },
+        {
+          "beforeMs": 1.976792000000387,
+          "afterMs": 2.6830840000002354
+        },
+        {
+          "beforeMs": 1.9642080000003261,
+          "afterMs": 3.0926250000002256
+        },
+        {
+          "beforeMs": 2.0119170000007216,
+          "afterMs": 2.7614999999996144
+        },
+        {
+          "beforeMs": 1.9745419999999285,
+          "afterMs": 2.704666999999972
+        },
+        {
+          "beforeMs": 1.971958000000086,
+          "afterMs": 2.685833000000457
+        },
+        {
+          "beforeMs": 1.9721659999995609,
+          "afterMs": 2.765124999999898
+        }
+      ]
+    },
+    {
+      "name": "unchanged build pose read",
+      "iterations": 10000,
+      "pieces": 64,
+      "attached": false,
+      "beforeMsPerCall": 0.00009021670000001904,
+      "afterMsPerCall": 0.000014549999999962893,
+      "savedMsPerCall": 0.00007566670000005615,
+      "speedup": 6.200460481116778,
+      "runs": [
+        {
+          "beforeMs": 0.9056659999996555,
+          "afterMs": 0.5320830000000569
+        },
+        {
+          "beforeMs": 0.9021670000001905,
+          "afterMs": 0.255209000000832
+        },
+        {
+          "beforeMs": 0.9028749999997672,
+          "afterMs": 0.14549999999962893
+        },
+        {
+          "beforeMs": 0.9009160000005068,
+          "afterMs": 0.1452500000004875
+        },
+        {
+          "beforeMs": 0.9046250000001237,
+          "afterMs": 0.14533300000039162
+        },
+        {
+          "beforeMs": 0.900749999999789,
+          "afterMs": 0.1453750000000582
+        },
+        {
+          "beforeMs": 0.8999590000003082,
+          "afterMs": 0.15120899999965332
+        }
+      ]
+    },
+    {
+      "name": "unchanged build pose read",
+      "iterations": 10000,
+      "pieces": 64,
+      "attached": true,
+      "beforeMsPerCall": 0.0005975416000000223,
+      "afterMsPerCall": 0.00012172499999996944,
+      "savedMsPerCall": 0.0004758166000000528,
+      "speedup": 4.908947217089112,
+      "runs": [
+        {
+          "beforeMs": 17.09966600000007,
+          "afterMs": 1.9390830000002097
+        },
+        {
+          "beforeMs": 9.3535839999995,
+          "afterMs": 1.9143330000006245
+        },
+        {
+          "beforeMs": 6.115041000000019,
+          "afterMs": 1.2172499999996944
+        },
+        {
+          "beforeMs": 5.724666999999499,
+          "afterMs": 1.183165999999801
+        },
+        {
+          "beforeMs": 5.975416000000223,
+          "afterMs": 1.196541000000252
+        },
+        {
+          "beforeMs": 5.926542000000154,
+          "afterMs": 1.234625000000051
+        },
+        {
+          "beforeMs": 5.822000000000116,
+          "afterMs": 1.1854999999995925
+        }
+      ]
+    },
+    {
+      "name": "complete stationary host simulation tick",
+      "iterations": 300,
+      "pieces": 64,
+      "tickRate": 30,
+      "beforeMsPerCall": 0.4191822199999994,
+      "afterMsPerCall": 0.40625319666666654,
+      "savedMsPerCall": 0.012929023333332845,
+      "speedup": 1.031825037782881,
+      "runs": [
+        {
+          "beforeMs": 127.66995899999984,
+          "afterMs": 123.60958299999947
+        },
+        {
+          "beforeMs": 127.27362499999981,
+          "afterMs": 121.75729199999932
+        },
+        {
+          "beforeMs": 126.78070899999966,
+          "afterMs": 123.2412919999997
+        },
+        {
+          "beforeMs": 125.72733299999982,
+          "afterMs": 121.74204199999986
+        },
+        {
+          "beforeMs": 125.17450000000008,
+          "afterMs": 121.12470800000028
+        },
+        {
+          "beforeMs": 124.29212499999994,
+          "afterMs": 123.11420799999996
+        },
+        {
+          "beforeMs": 125.75466599999982,
+          "afterMs": 121.87595899999997
+        }
+      ]
+    },
+    {
+      "name": "complete guest presentation movement",
+      "iterations": 1000,
+      "pieces": 64,
+      "beforeMsPerCall": 0.19492841600000066,
+      "afterMsPerCall": 0.16817883299999994,
+      "savedMsPerCall": 0.026749583000000715,
+      "speedup": 1.1590543977671717,
+      "runs": [
+        {
+          "beforeMs": 196.21008400000028,
+          "afterMs": 168.37233299999934
+        },
+        {
+          "beforeMs": 194.29929099999936,
+          "afterMs": 170.39620900000045
+        },
+        {
+          "beforeMs": 194.27358300000014,
+          "afterMs": 168.14799999999923
+        },
+        {
+          "beforeMs": 196.0186250000006,
+          "afterMs": 169.04704200000015
+        },
+        {
+          "beforeMs": 195.9204580000005,
+          "afterMs": 168.17883299999994
+        },
+        {
+          "beforeMs": 194.92841600000065,
+          "afterMs": 168.14000000000124
+        },
+        {
+          "beforeMs": 189.69762499999888,
+          "afterMs": 167.45858299999963
+        }
+      ]
+    },
+    {
+      "name": "construction floor + ceiling + collision",
+      "iterations": 3000,
+      "pieces": 256,
+      "localCandidates": 4,
+      "contact": false,
+      "beforeMsPerCall": 0.024515374999999645,
+      "afterMsPerCall": 0.0015477780000001076,
+      "savedMsPerCall": 0.022967596999999538,
+      "speedup": 15.839077051100313,
+      "runs": [
+        {
+          "beforeMs": 74.08100000000013,
+          "afterMs": 4.64270900000156
+        },
+        {
+          "beforeMs": 73.54612499999894,
+          "afterMs": 4.88433299999997
+        },
+        {
+          "beforeMs": 73.53129100000115,
+          "afterMs": 4.643334000000323
+        },
+        {
+          "beforeMs": 73.54662500000086,
+          "afterMs": 4.85425000000032
+        },
+        {
+          "beforeMs": 73.44979200000125,
+          "afterMs": 4.8037919999987935
+        },
+        {
+          "beforeMs": 73.50454199999876,
+          "afterMs": 4.625124999998661
+        },
+        {
+          "beforeMs": 73.5825420000001,
+          "afterMs": 4.5934589999997115
+        }
+      ]
+    },
+    {
+      "name": "construction collision with conservative replay",
+      "iterations": 1000,
+      "pieces": 256,
+      "contact": true,
+      "beforeMsPerCall": 0.008849874999999884,
+      "afterMsPerCall": 0.00958037499999955,
+      "savedMsPerCall": -0.0007304999999996654,
+      "speedup": 0.9237503751158279,
+      "runs": [
+        {
+          "beforeMs": 9.155000000000655,
+          "afterMs": 9.580374999999549
+        },
+        {
+          "beforeMs": 8.879209000000628,
+          "afterMs": 9.49604200000067
+        },
+        {
+          "beforeMs": 8.678334000000177,
+          "afterMs": 9.794708999999784
+        },
+        {
+          "beforeMs": 8.93408400000044,
+          "afterMs": 9.37066699999923
+        },
+        {
+          "beforeMs": 8.848125000000437,
+          "afterMs": 9.469209000000774
+        },
+        {
+          "beforeMs": 8.697124999998778,
+          "afterMs": 9.65349999999853
+        },
+        {
+          "beforeMs": 8.849874999999884,
+          "afterMs": 9.677083000000493
+        }
+      ]
+    },
+    {
+      "name": "unchanged build pose read",
+      "iterations": 10000,
+      "pieces": 256,
+      "attached": false,
+      "beforeMsPerCall": 0.0010698957999999037,
+      "afterMsPerCall": 0.000013983299999927112,
+      "savedMsPerCall": 0.0010559124999999765,
+      "speedup": 76.51239693101633,
+      "runs": [
+        {
+          "beforeMs": 10.665082999999868,
+          "afterMs": 0.1547499999996944
+        },
+        {
+          "beforeMs": 10.84033399999862,
+          "afterMs": 0.13862499999959255
+        },
+        {
+          "beforeMs": 10.714708999999857,
+          "afterMs": 0.14066700000148558
+        },
+        {
+          "beforeMs": 10.630167000001165,
+          "afterMs": 0.1387910000012198
+        },
+        {
+          "beforeMs": 10.698957999999038,
+          "afterMs": 0.15483399999902758
+        },
+        {
+          "beforeMs": 10.734624999999141,
+          "afterMs": 0.13895899999988615
+        },
+        {
+          "beforeMs": 10.628833000000668,
+          "afterMs": 0.13983299999927112
+        }
+      ]
+    },
+    {
+      "name": "unchanged build pose read",
+      "iterations": 10000,
+      "pieces": 256,
+      "attached": true,
+      "beforeMsPerCall": 0.0020193000000001122,
+      "afterMsPerCall": 0.00014284999999999854,
+      "savedMsPerCall": 0.0018764500000001136,
+      "speedup": 14.135806790340448,
+      "runs": [
+        {
+          "beforeMs": 47.39904100000058,
+          "afterMs": 1.8722080000006827
+        },
+        {
+          "beforeMs": 21.223500000000058,
+          "afterMs": 1.925959000000148
+        },
+        {
+          "beforeMs": 20.17279100000087,
+          "afterMs": 1.2079160000012052
+        },
+        {
+          "beforeMs": 20.19300000000112,
+          "afterMs": 1.2078330000003916
+        },
+        {
+          "beforeMs": 20.05004199999894,
+          "afterMs": 1.1959589999987656
+        },
+        {
+          "beforeMs": 20.310083000000304,
+          "afterMs": 1.4284999999999854
+        },
+        {
+          "beforeMs": 20.060583000000406,
+          "afterMs": 1.4355409999989206
+        }
+      ]
+    },
+    {
+      "name": "complete stationary host simulation tick",
+      "iterations": 300,
+      "pieces": 256,
+      "tickRate": 30,
+      "beforeMsPerCall": 0.4471020833333387,
+      "afterMsPerCall": 0.4080669433333302,
+      "savedMsPerCall": 0.03903514000000846,
+      "speedup": 1.095658667377334,
+      "runs": [
+        {
+          "beforeMs": 133.24737500000083,
+          "afterMs": 122.42008299999907
+        },
+        {
+          "beforeMs": 134.27108299999963,
+          "afterMs": 122.56908300000032
+        },
+        {
+          "beforeMs": 134.1306250000016,
+          "afterMs": 121.92829199999869
+        },
+        {
+          "beforeMs": 136.40245800000048,
+          "afterMs": 129.50683400000162
+        },
+        {
+          "beforeMs": 133.50316700000076,
+          "afterMs": 122.81104199999936
+        },
+        {
+          "beforeMs": 134.6214170000003,
+          "afterMs": 122.33970799999952
+        },
+        {
+          "beforeMs": 133.51237500000025,
+          "afterMs": 121.27504100000078
+        }
+      ]
+    },
+    {
+      "name": "complete guest presentation movement",
+      "iterations": 1000,
+      "pieces": 256,
+      "beforeMsPerCall": 0.2558423329999987,
+      "afterMsPerCall": 0.16676458300000013,
+      "savedMsPerCall": 0.08907774999999857,
+      "speedup": 1.534152686365057,
+      "runs": [
+        {
+          "beforeMs": 254.328042000001,
+          "afterMs": 166.47899999999936
+        },
+        {
+          "beforeMs": 256.91833399999996,
+          "afterMs": 168.93637500000114
+        },
+        {
+          "beforeMs": 255.19458300000042,
+          "afterMs": 165.9555419999997
+        },
+        {
+          "beforeMs": 258.5521669999998,
+          "afterMs": 169.7469999999994
+        },
+        {
+          "beforeMs": 255.8423329999987,
+          "afterMs": 166.76458300000013
+        },
+        {
+          "beforeMs": 256.7497919999987,
+          "afterMs": 167.69758300000103
+        },
+        {
+          "beforeMs": 254.12462500000038,
+          "afterMs": 165.16400000000067
+        }
+      ]
+    },
+    {
+      "name": "construction floor + ceiling + collision",
+      "iterations": 3000,
+      "pieces": 1024,
+      "localCandidates": 4,
+      "contact": false,
+      "beforeMsPerCall": 0.09843316666666578,
+      "afterMsPerCall": 0.0015658470000004551,
+      "savedMsPerCall": 0.09686731966666533,
+      "speedup": 62.862570012675036,
+      "runs": [
+        {
+          "beforeMs": 294.9205839999995,
+          "afterMs": 5.175041999998939
+        },
+        {
+          "beforeMs": 295.07350000000224,
+          "afterMs": 4.963917000000947
+        },
+        {
+          "beforeMs": 298.2977089999986,
+          "afterMs": 4.974166999996669
+        },
+        {
+          "beforeMs": 294.323042,
+          "afterMs": 4.685750000000553
+        },
+        {
+          "beforeMs": 295.29949999999735,
+          "afterMs": 4.600833999997121
+        },
+        {
+          "beforeMs": 295.41408299999966,
+          "afterMs": 4.592666000000463
+        },
+        {
+          "beforeMs": 295.50495899999805,
+          "afterMs": 4.697541000001365
+        }
+      ]
+    },
+    {
+      "name": "construction collision with conservative replay",
+      "iterations": 1000,
+      "pieces": 1024,
+      "contact": true,
+      "beforeMsPerCall": 0.035060582999998584,
+      "afterMsPerCall": 0.03610095799999908,
+      "savedMsPerCall": -0.0010403750000004958,
+      "speedup": 0.9711815126900366,
+      "runs": [
+        {
+          "beforeMs": 35.13129199999821,
+          "afterMs": 36.55008299999827
+        },
+        {
+          "beforeMs": 35.009791000000405,
+          "afterMs": 36.29699999999866
+        },
+        {
+          "beforeMs": 35.111417000000074,
+          "afterMs": 36.33354099999997
+        },
+        {
+          "beforeMs": 35.06058299999859,
+          "afterMs": 36.10095799999908
+        },
+        {
+          "beforeMs": 35.047999999998865,
+          "afterMs": 36.065708000001905
+        },
+        {
+          "beforeMs": 34.972499999999854,
+          "afterMs": 35.77412499999991
+        },
+        {
+          "beforeMs": 35.15266699999847,
+          "afterMs": 36.0690829999985
+        }
+      ]
+    },
+    {
+      "name": "unchanged build pose read",
+      "iterations": 10000,
+      "pieces": 1024,
+      "attached": false,
+      "beforeMsPerCall": 0.0038139542000000803,
+      "afterMsPerCall": 0.000013858299999992596,
+      "savedMsPerCall": 0.0038000959000000878,
+      "speedup": 275.2108267249315,
+      "runs": [
+        {
+          "beforeMs": 38.1395420000008,
+          "afterMs": 0.14020800000071176
+        },
+        {
+          "beforeMs": 38.10583300000144,
+          "afterMs": 0.1381249999976717
+        },
+        {
+          "beforeMs": 38.13466700000208,
+          "afterMs": 0.13858299999992596
+        },
+        {
+          "beforeMs": 38.13991700000042,
+          "afterMs": 0.1382499999999709
+        },
+        {
+          "beforeMs": 38.254707999996754,
+          "afterMs": 0.142375000003085
+        },
+        {
+          "beforeMs": 38.17341699999815,
+          "afterMs": 0.13779100000101607
+        },
+        {
+          "beforeMs": 38.08204200000182,
+          "afterMs": 0.1389999999992142
+        }
+      ]
+    },
+    {
+      "name": "unchanged build pose read",
+      "iterations": 10000,
+      "pieces": 1024,
+      "attached": true,
+      "beforeMsPerCall": 0.007956258300000263,
+      "afterMsPerCall": 0.00011688749999993888,
+      "savedMsPerCall": 0.007839370800000325,
+      "speedup": 68.06765736288673,
+      "runs": [
+        {
+          "beforeMs": 80.47970799999894,
+          "afterMs": 1.1662079999987327
+        },
+        {
+          "beforeMs": 79.42266699999891,
+          "afterMs": 1.1653750000004948
+        },
+        {
+          "beforeMs": 79.56258300000263,
+          "afterMs": 1.1688749999993888
+        },
+        {
+          "beforeMs": 79.77833299999838,
+          "afterMs": 1.211749999998574
+        },
+        {
+          "beforeMs": 79.42324999999983,
+          "afterMs": 1.1737920000014128
+        },
+        {
+          "beforeMs": 79.31949999999779,
+          "afterMs": 1.167250000002241
+        },
+        {
+          "beforeMs": 79.59308299999975,
+          "afterMs": 1.175041999998939
+        }
+      ]
+    },
+    {
+      "name": "complete stationary host simulation tick",
+      "iterations": 300,
+      "pieces": 1024,
+      "tickRate": 30,
+      "beforeMsPerCall": 0.5792355566666689,
+      "afterMsPerCall": 0.4243934733333299,
+      "savedMsPerCall": 0.15484208333333904,
+      "speedup": 1.3648550061742395,
+      "runs": [
+        {
+          "beforeMs": 174.8627090000009,
+          "afterMs": 129.593958999998
+        },
+        {
+          "beforeMs": 173.77066700000069,
+          "afterMs": 128.9025419999998
+        },
+        {
+          "beforeMs": 174.17920899999808,
+          "afterMs": 129.82554100000198
+        },
+        {
+          "beforeMs": 172.26566599999933,
+          "afterMs": 126.91554200000246
+        },
+        {
+          "beforeMs": 171.7913750000007,
+          "afterMs": 127.08891699999731
+        },
+        {
+          "beforeMs": 173.70691700000316,
+          "afterMs": 127.09000000000015
+        },
+        {
+          "beforeMs": 174.0193330000002,
+          "afterMs": 127.31804199999897
+        }
+      ]
+    },
+    {
+      "name": "complete guest presentation movement",
+      "iterations": 1000,
+      "pieces": 1024,
+      "beforeMsPerCall": 0.4995144159999982,
+      "afterMsPerCall": 0.17818683299999974,
+      "savedMsPerCall": 0.3213275829999984,
+      "speedup": 2.8033183349748345,
+      "runs": [
+        {
+          "beforeMs": 649.7878750000018,
+          "afterMs": 178.81366700000217
+        },
+        {
+          "beforeMs": 501.0686659999992,
+          "afterMs": 178.23529199999757
+        },
+        {
+          "beforeMs": 495.552040999999,
+          "afterMs": 175.70987500000047
+        },
+        {
+          "beforeMs": 499.0187920000026,
+          "afterMs": 182.4852499999979
+        },
+        {
+          "beforeMs": 499.51441599999816,
+          "afterMs": 178.18683299999975
+        },
+        {
+          "beforeMs": 500.2545829999981,
+          "afterMs": 178.0777089999974
+        },
+        {
+          "beforeMs": 496.7967080000017,
+          "afterMs": 175.82187499999782
+        }
+      ]
+    },
+    {
+      "name": "guest tree collision warm cache",
+      "iterations": 2000,
+      "harvested": 1000,
+      "region": [
+        20,
+        8
+      ],
+      "beforeMsPerCall": 0.08107391649999954,
+      "afterMsPerCall": 0.0003827289999990171,
+      "savedMsPerCall": 0.08069118750000052,
+      "speedup": 211.83112986005173,
+      "runs": [
+        {
+          "beforeMs": 163.16891600000235,
+          "afterMs": 0.7654579999980342
+        },
+        {
+          "beforeMs": 162.6934169999986,
+          "afterMs": 0.7601250000006985
+        },
+        {
+          "beforeMs": 162.14783299999908,
+          "afterMs": 0.7758329999996931
+        },
+        {
+          "beforeMs": 162.08799999999974,
+          "afterMs": 0.760416000000987
+        },
+        {
+          "beforeMs": 162.0591659999991,
+          "afterMs": 0.7839579999999842
+        },
+        {
+          "beforeMs": 162.23341699999946,
+          "afterMs": 0.7826249999998254
+        },
+        {
+          "beforeMs": 161.7985000000008,
+          "afterMs": 0.7626670000026934
+        }
+      ]
+    },
+    {
+      "name": "complete guest reconciliation with 30 pending inputs in woodland",
+      "iterations": 100,
+      "pieces": 0,
+      "harvested": 1000,
+      "pendingInputs": 30,
+      "beforeMsPerCall": 4.30606667,
+      "afterMsPerCall": 2.260103339999987,
+      "savedMsPerCall": 2.045963330000013,
+      "speedup": 1.905252115595752,
+      "runs": [
+        {
+          "beforeMs": 432.6012499999997,
+          "afterMs": 229.44979100000273
+        },
+        {
+          "beforeMs": 431.6060839999991,
+          "afterMs": 225.5370839999996
+        },
+        {
+          "beforeMs": 428.4711249999964,
+          "afterMs": 226.0103339999987
+        },
+        {
+          "beforeMs": 430.8327500000014,
+          "afterMs": 224.85916599999473
+        },
+        {
+          "beforeMs": 424.5302079999965,
+          "afterMs": 225.33354099999997
+        },
+        {
+          "beforeMs": 427.07337499999994,
+          "afterMs": 227.48737500000425
+        },
+        {
+          "beforeMs": 430.606667,
+          "afterMs": 231.01312500000495
+        }
+      ]
+    },
+    {
+      "name": "complete guest reconciliation with 30 pending inputs in woodland",
+      "iterations": 100,
+      "pieces": 1024,
+      "harvested": 1000,
+      "pendingInputs": 30,
+      "beforeMsPerCall": 8.328346249999958,
+      "afterMsPerCall": 2.272396249999947,
+      "savedMsPerCall": 6.055950000000012,
+      "speedup": 3.6650061581470013,
+      "runs": [
+        {
+          "beforeMs": 828.5869160000002,
+          "afterMs": 227.34912500000064
+        },
+        {
+          "beforeMs": 835.0515830000004,
+          "afterMs": 226.5693339999998
+        },
+        {
+          "beforeMs": 831.6934589999946,
+          "afterMs": 227.56920900000114
+        },
+        {
+          "beforeMs": 834.0429589999985,
+          "afterMs": 226.9669170000052
+        },
+        {
+          "beforeMs": 828.950499999999,
+          "afterMs": 226.54020799999853
+        },
+        {
+          "beforeMs": 837.3926670000001,
+          "afterMs": 227.62750000000233
+        },
+        {
+          "beforeMs": 832.8346249999959,
+          "afterMs": 227.2396249999947
+        }
+      ]
+    },
+    {
+      "name": "grove cell ordering",
+      "iterations": 10000,
+      "cells": 121,
+      "beforeMsPerCall": 0.036081483299999675,
+      "afterMsPerCall": 0.000008983399999851826,
+      "savedMsPerCall": 0.036072499899999826,
+      "speedup": 4016.461840794667,
+      "runs": [
+        {
+          "beforeMs": 362.3892080000005,
+          "afterMs": 0.21016700000473065
+        },
+        {
+          "beforeMs": 359.0942089999953,
+          "afterMs": 0.19916699999885168
+        },
+        {
+          "beforeMs": 358.6699159999989,
+          "afterMs": 0.08995900000445545
+        },
+        {
+          "beforeMs": 360.8148329999967,
+          "afterMs": 0.0834580000009737
+        },
+        {
+          "beforeMs": 359.4048330000005,
+          "afterMs": 0.08983399999851827
+        },
+        {
+          "beforeMs": 368.89545800000633,
+          "afterMs": 0.0887079999956768
+        },
+        {
+          "beforeMs": 366.45683400000416,
+          "afterMs": 0.08899999999994179
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,399 @@
+{
+  "date": "2026-10-10T21:16:05.525Z",
+  "browser": "151.0.7922.34",
+  "origin": "http://localhost:3002",
+  "errors": [],
+  "method": "Actual Friends spawn, fixed 9 AM camera, unchanged HDR MSAA target. Alternating baseline/budget: 20 warm + 40 disjoint-checked GPU queries each. Whole-frame includes bridge presentation, shadow updates, world, viewmodel, HDR composite. Pixel comparisons freeze world and compare synchronous RGBA readback after HDR composition.",
+  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+  "viewport": [
+    1600,
+    900
+  ],
+  "phases": [
+    {
+      "name": "baseline-world",
+      "enabled": false,
+      "fullFrame": false,
+      "dpr": 1,
+      "gpuMs": {
+        "mean": 35.669953675,
+        "p50": 35.844375,
+        "p95": 37.345583
+      },
+      "cpuMs": {
+        "mean": 9.250000000372529,
+        "p50": 9.299999997019768,
+        "p95": 10.100000001490116
+      },
+      "calls": {
+        "mean": 1552,
+        "p50": 1552,
+        "p95": 1552
+      },
+      "triangles": {
+        "mean": 5131778,
+        "p50": 5131778,
+        "p95": 5131778
+      }
+    },
+    {
+      "name": "budget-world",
+      "enabled": true,
+      "fullFrame": false,
+      "dpr": 1,
+      "gpuMs": {
+        "mean": 26.93796615,
+        "p50": 26.987249,
+        "p95": 29.155541
+      },
+      "cpuMs": {
+        "mean": 9.304999999888242,
+        "p50": 9.300000004470348,
+        "p95": 9.800000004470348
+      },
+      "calls": {
+        "mean": 1552,
+        "p50": 1552,
+        "p95": 1552
+      },
+      "triangles": {
+        "mean": 5131778,
+        "p50": 5131778,
+        "p95": 5131778
+      }
+    },
+    {
+      "name": "baseline-world",
+      "enabled": false,
+      "fullFrame": false,
+      "dpr": 1,
+      "gpuMs": {
+        "mean": 35.185520275,
+        "p50": 35.082249,
+        "p95": 37.804499
+      },
+      "cpuMs": {
+        "mean": 9.69750000052154,
+        "p50": 9.700000002980232,
+        "p95": 10.300000004470348
+      },
+      "calls": {
+        "mean": 1552,
+        "p50": 1552,
+        "p95": 1552
+      },
+      "triangles": {
+        "mean": 5131778,
+        "p50": 5131778,
+        "p95": 5131778
+      }
+    },
+    {
+      "name": "budget-world",
+      "enabled": true,
+      "fullFrame": false,
+      "dpr": 1,
+      "gpuMs": {
+        "mean": 26.88851195,
+        "p50": 26.969874,
+        "p95": 29.517374
+      },
+      "cpuMs": {
+        "mean": 9.200000000558793,
+        "p50": 9.199999995529652,
+        "p95": 9.900000005960464
+      },
+      "calls": {
+        "mean": 1552,
+        "p50": 1552,
+        "p95": 1552
+      },
+      "triangles": {
+        "mean": 5131778,
+        "p50": 5131778,
+        "p95": 5131778
+      }
+    },
+    {
+      "name": "baseline-whole-frame",
+      "enabled": false,
+      "fullFrame": true,
+      "dpr": 1,
+      "gpuMs": {
+        "mean": 38.93807974999999,
+        "p50": 39.1595,
+        "p95": 41.166333
+      },
+      "cpuMs": {
+        "mean": 12.889999999850989,
+        "p50": 12.5,
+        "p95": 19.799999997019768
+      },
+      "calls": {
+        "mean": 1681,
+        "p50": 1806,
+        "p95": 1806
+      },
+      "triangles": {
+        "mean": 5180641.5,
+        "p50": 5229405,
+        "p95": 5229405
+      }
+    },
+    {
+      "name": "budget-whole-frame",
+      "enabled": true,
+      "fullFrame": true,
+      "dpr": 1,
+      "gpuMs": {
+        "mean": 32.05388080000001,
+        "p50": 31.930291,
+        "p95": 34.6445
+      },
+      "cpuMs": {
+        "mean": 11.905000000074505,
+        "p50": 11.899999998509884,
+        "p95": 14
+      },
+      "calls": {
+        "mean": 1680.025,
+        "p50": 1805,
+        "p95": 1805
+      },
+      "triangles": {
+        "mean": 5180639.55,
+        "p50": 5229403,
+        "p95": 5229403
+      }
+    },
+    {
+      "name": "baseline-whole-frame",
+      "enabled": false,
+      "fullFrame": true,
+      "dpr": 1,
+      "gpuMs": {
+        "mean": 37.724196375000005,
+        "p50": 37.635958,
+        "p95": 40.319625
+      },
+      "cpuMs": {
+        "mean": 11.965000000409782,
+        "p50": 11.799999997019768,
+        "p95": 14.200000002980232
+      },
+      "calls": {
+        "mean": 1673,
+        "p50": 1798,
+        "p95": 1798
+      },
+      "triangles": {
+        "mean": 5180365.5,
+        "p50": 5229129,
+        "p95": 5229129
+      }
+    },
+    {
+      "name": "budget-whole-frame",
+      "enabled": true,
+      "fullFrame": true,
+      "dpr": 1,
+      "gpuMs": {
+        "mean": 30.082593324999994,
+        "p50": 29.84925,
+        "p95": 32.773
+      },
+      "cpuMs": {
+        "mean": 11.655000000633299,
+        "p50": 11.700000002980232,
+        "p95": 13.800000004470348
+      },
+      "calls": {
+        "mean": 1660.5,
+        "p50": 1548,
+        "p95": 1798
+      },
+      "triangles": {
+        "mean": 5175489.15,
+        "p50": 5131602,
+        "p95": 5229129
+      }
+    },
+    {
+      "name": "baseline-world-dpr2",
+      "enabled": false,
+      "fullFrame": false,
+      "dpr": 2,
+      "gpuMs": {
+        "mean": 68.27539329999999,
+        "p50": 68.512708,
+        "p95": 70.825583
+      },
+      "cpuMs": {
+        "mean": 11.330000000260771,
+        "p50": 11.399999998509884,
+        "p95": 13.099999994039536
+      },
+      "calls": {
+        "mean": 1545,
+        "p50": 1545,
+        "p95": 1545
+      },
+      "triangles": {
+        "mean": 5131504,
+        "p50": 5131504,
+        "p95": 5131504
+      }
+    },
+    {
+      "name": "budget-world-dpr2",
+      "enabled": true,
+      "fullFrame": false,
+      "dpr": 2,
+      "gpuMs": {
+        "mean": 50.143835975000016,
+        "p50": 50.105208,
+        "p95": 53.18875
+      },
+      "cpuMs": {
+        "mean": 10.914999999850988,
+        "p50": 11.100000001490116,
+        "p95": 11.899999998509884
+      },
+      "calls": {
+        "mean": 1545,
+        "p50": 1545,
+        "p95": 1545
+      },
+      "triangles": {
+        "mean": 5131504,
+        "p50": 5131504,
+        "p95": 5131504
+      }
+    },
+    {
+      "name": "baseline-world-dpr2",
+      "enabled": false,
+      "fullFrame": false,
+      "dpr": 2,
+      "gpuMs": {
+        "mean": 68.81481415,
+        "p50": 68.796125,
+        "p95": 76.215083
+      },
+      "cpuMs": {
+        "mean": 11.582500000111759,
+        "p50": 11.899999998509884,
+        "p95": 12.800000004470348
+      },
+      "calls": {
+        "mean": 1545,
+        "p50": 1545,
+        "p95": 1545
+      },
+      "triangles": {
+        "mean": 5131504,
+        "p50": 5131504,
+        "p95": 5131504
+      }
+    },
+    {
+      "name": "budget-world-dpr2",
+      "enabled": true,
+      "fullFrame": false,
+      "dpr": 2,
+      "gpuMs": {
+        "mean": 50.308302624999996,
+        "p50": 50.4325,
+        "p95": 53.880541
+      },
+      "cpuMs": {
+        "mean": 10.227499999850988,
+        "p50": 10,
+        "p95": 11.700000002980232
+      },
+      "calls": {
+        "mean": 1545,
+        "p50": 1545,
+        "p95": 1545
+      },
+      "triangles": {
+        "mean": 5131504,
+        "p50": 5131504,
+        "p95": 5131504
+      }
+    }
+  ],
+  "equivalence": [
+    {
+      "name": "daylight",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 5760000
+    },
+    {
+      "name": "flashlight-and-infrared",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 5760000
+    },
+    {
+      "name": "all-point-lights",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 5760000
+    },
+    {
+      "name": "switched-off-after-growth",
+      "maxChannelDifference": 0,
+      "rmsChannelDifference": 0,
+      "changedChannels": 0,
+      "totalChannels": 5760000
+    }
+  ],
+  "slots": [
+    {
+      "name": "",
+      "intensity": 5,
+      "shadow": false
+    },
+    {
+      "name": "commons-campfire-light",
+      "intensity": 16277.810355940424,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "intensity": 17618.574560878547,
+      "shadow": true
+    },
+    {
+      "name": "",
+      "intensity": 14721563.499199118,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "intensity": 1371703.737005519,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "intensity": 1325230.132088389,
+      "shadow": false
+    },
+    {
+      "name": "friends-point-light-padding",
+      "intensity": 0,
+      "shadow": false
+    },
+    {
+      "name": "friends-point-light-padding",
+      "intensity": 0,
+      "shadow": false
+    }
+  ],
+  "visibleAuthoredPoints": 27
+}

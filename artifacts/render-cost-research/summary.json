@@ -1,0 +1,90 @@
+{
+  "worldTotals": {
+    "calls": 1552,
+    "triangles": 5131778
+  },
+  "byRoot": [
+    {
+      "name": "frontier-streamed-world",
+      "calls": 830,
+      "triangles": 1203306
+    },
+    {
+      "name": "sunline-grand-traverse",
+      "calls": 300,
+      "triangles": 222224
+    },
+    {
+      "name": "friends-vehicles",
+      "calls": 253,
+      "triangles": 41180
+    },
+    {
+      "name": "friends-hauling",
+      "calls": 57,
+      "triangles": 700
+    },
+    {
+      "name": "friends-quiet-places",
+      "calls": 32,
+      "triangles": 28292
+    },
+    {
+      "name": "friends-ambient-inhabitants",
+      "calls": 28,
+      "triangles": 1096
+    },
+    {
+      "name": "friends-frontier-environment",
+      "calls": 27,
+      "triangles": 408
+    },
+    {
+      "name": "frontier-instanced-3d-forests",
+      "calls": 15,
+      "triangles": 3630318
+    },
+    {
+      "name": "commons-campfire-gathering",
+      "calls": 7,
+      "triangles": 1950
+    },
+    {
+      "name": "frontier-day-night-sky",
+      "calls": 1,
+      "triangles": 2208
+    },
+    {
+      "name": "Points",
+      "calls": 1,
+      "triangles": 0
+    },
+    {
+      "name": "projectile-impact-marks",
+      "calls": 1,
+      "triangles": 96
+    },
+    {
+      "name": "friends-interaction-feedback",
+      "calls": 0,
+      "triangles": 0
+    }
+  ],
+  "treeAssets": [
+    {
+      "species": "pine",
+      "woodTriangles": 1496,
+      "foliageTriangles": 632
+    },
+    {
+      "species": "birch",
+      "woodTriangles": 2688,
+      "foliageTriangles": 1910
+    },
+    {
+      "species": "maple",
+      "woodTriangles": 2984,
+      "foliageTriangles": 864
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { applyFriendsSwimPose, createFriendsSwimPose, type FriendsSwimPose } from './FriendsSwimPose';
 import type { SeedHand } from '../multiplayer/FriendsBirds';
 import { isRowboatSeat } from '../world/FriendsFishingDock';
 import type { StoneHand } from '../multiplayer/FriendsStones';
@@ -11,7 +12,7 @@ import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import type { ToolAction } from '../multiplayer/FriendsToolActions';
 import { cloneFriendsCharacterModel, loadFriendsCharacterModel, type FriendsCharacterModel } from './FriendsCharacterModel';
 
-type Actor = { model:FriendsCharacterModel; previousTime:number; stride:number; movement:number; arms:number[] };
+type Actor = { model:FriendsCharacterModel; previousTime:number; stride:number; movement:number; arms:number[]; swim:FriendsSwimPose };
 const actors=new WeakMap<PlayerVisualRig,Actor>();
 
 /** Friends owns only its authored character and caption, with no survival chassis. */
@@ -49,7 +50,7 @@ export function mountFriendsCharacter(rig:PlayerVisualRig, color:string) {
     if(rig.root.userData.disposed)return;
     const model=cloneFriendsCharacterModel(source);finishFriendsCharacter(model,color);
     for(const part of [model.parts[2],model.parts[3]]){const socket=new THREE.Object3D();socket.name='big-walk-hand-socket';const wrist=part.getObjectByName('arm-wrist');if(wrist)wrist.add(socket);else{socket.position.fromArray(part.userData.palm);part.add(socket);};}
-    actors.set(rig,{model,previousTime:0,stride:0,movement:0,arms:[0,0,0,0]});rig.avatar.add(model.root);
+    actors.set(rig,{model,previousTime:0,stride:0,movement:0,arms:[0,0,0,0],swim:createFriendsSwimPose(rig.nameplate.uuid)});rig.avatar.add(model.root);
   }).catch(error=>{console.warn('Friends character load failed.',error);});
 }
 
@@ -60,7 +61,7 @@ export function updateFriendsCharacter(rig:PlayerVisualRig, player:CoopPlayerSna
   const {model}=actor,dt=Math.max(0,Math.min(100,time-actor.previousTime));actor.previousTime=time;
   const speed=Math.hypot((player.motion?.velocityX??0)-(player.platformVelocityX??0),(player.motion?.velocityY??0)-(player.platformVelocityY??0));
   const seated=Boolean(player.friendsSeat),downed=player.lifeState==='downed';
-  const movement=seated||downed||falling||player.friendsDevFlight?0:Math.min(1,speed/120);
+  const movement=seated||downed||falling||player.friendsDevFlight||player.motion?.swimming?0:Math.min(1,speed/120);
   actor.movement+=(movement-actor.movement)*(1-Math.exp(-dt*.014));actor.stride+=dt*.001*Math.min(12,speed*.07);
   for(let i=0;i<6;i++){model.parts[i].position.copy(model.basePositions[i]);model.parts[i].rotation.copy(model.baseRotations[i]);model.parts[i].scale.setScalar(1);}
   if(seated||player.crouching||player.sliding){
@@ -112,19 +113,15 @@ export function updateFriendsCharacter(rig:PlayerVisualRig, player:CoopPlayerSna
       arm.rotation.x=-.8+drive*.35;arm.position.copy(attachment).sub(pivot.applyQuaternion(arm.quaternion));
     }
   }
-  if(player.motion?.swimming&&!seated){
-    const stroke=Math.sin(time*.005),kick=Math.sin(time*.009);
-    model.parts[2].rotation.x=-1.05+stroke*.42;model.parts[3].rotation.x=-1.05-stroke*.42;
-    model.parts[4].rotation.x=kick*.22;model.parts[5].rotation.x=-kick*.22;
-  }
   rig.root.scale.set(1,1,1);
   // The old chassis is centred at y=29. Our model already stands on its feet.
   rig.avatar.position.set(0,downed?12:0,0);
-  if(!falling)rig.avatar.rotation.set(player.motion?.swimSubmerged?-.55:0,0,downed?Math.PI/2:0);
+  if(!falling)rig.avatar.rotation.set(0,0,downed?Math.PI/2:0);
+  applyFriendsSwimPose(model,rig.avatar,player,dt,actor.swim,falling);
   for(const child of rig.avatar.children)child.visible=child===model.root;
   if ('seatedLegs' in rig) (rig.seatedLegs as THREE.Group).visible=false;
   if(fishingHold||hands||isRowboatSeat(player.friendsSeat)||player.motion?.swimming)rig.firearm && (rig.firearm.group.visible=false);
-  rig.nameplate.position.y=downed?32:seated||player.crouching?47:62;
+  rig.nameplate.position.y=downed?32:seated||player.crouching?47:62-actor.swim.blend*18;
   if (player.friendsWeaponEquipped && player.lifeState === 'alive' && !falling && !seated && !player.motion?.swimming) {
     if (!rig.firearm) { rig.firearm = new CoopFirearmVisualRig(false); rig.root.add(rig.firearm.group); }
     const weapon = player.weaponStates[player.selectedSlot], hand = new THREE.Vector3();

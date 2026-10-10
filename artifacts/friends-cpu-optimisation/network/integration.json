@@ -1,0 +1,335 @@
+{
+  "date": "2026-10-10T20:41:58.764Z",
+  "origin": "http://localhost:3001",
+  "browser": "151.0.7922.34",
+  "checks": [
+    {
+      "name": "4 simultaneous playable late joins",
+      "detail": [
+        {
+          "id": "friend-72b1b0e83391fdc2f951be962cc2b99c",
+          "label": "Network Host",
+          "x": 5965,
+          "y": 5710,
+          "z": 736
+        },
+        {
+          "id": "friend-b5d71aacd86d7f7fe4605658b6e196a8",
+          "label": "Friend 4",
+          "x": 5932.5,
+          "y": 5766.291651245989,
+          "z": 736
+        },
+        {
+          "id": "friend-5c0f4c19069090ac66591fc3f5456388",
+          "label": "Friend 3",
+          "x": 5867.5,
+          "y": 5766.291651245989,
+          "z": 736
+        },
+        {
+          "id": "friend-9e45840a9baf644112fffb1cb0c5959e",
+          "label": "Friend 1",
+          "x": 5835,
+          "y": 5710,
+          "z": 736
+        },
+        {
+          "id": "friend-8946d364ae59d9a761a4b8ccd5c0de43",
+          "label": "Friend 2",
+          "x": 5867.5,
+          "y": 5653.708348754011,
+          "z": 736
+        }
+      ]
+    },
+    {
+      "name": "distinct crew identities",
+      "detail": [
+        "friend-9e45840a9baf644112fffb1cb0c5959e",
+        "friend-8946d364ae59d9a761a4b8ccd5c0de43",
+        "friend-5c0f4c19069090ac66591fc3f5456388",
+        "friend-b5d71aacd86d7f7fe4605658b6e196a8"
+      ]
+    },
+    {
+      "name": "guest input reaches authority",
+      "detail": {
+        "before": {
+          "id": "friend-9e45840a9baf644112fffb1cb0c5959e",
+          "label": "Friend 1",
+          "x": 5835,
+          "y": 5710,
+          "z": 736
+        },
+        "after": {
+          "id": "friend-9e45840a9baf644112fffb1cb0c5959e",
+          "label": "Friend 1",
+          "x": 5998.500000000946,
+          "y": 5710,
+          "z": 736
+        }
+      }
+    },
+    {
+      "name": "lost reply retries without duplicate mutation",
+      "detail": {
+        "trees": 1
+      }
+    },
+    {
+      "name": "host editing permissions reject guest mutations",
+      "detail": "The host needs to press C and enable Friends can build."
+    },
+    {
+      "name": "building retries commit exactly one shared piece",
+      "detail": "Block placed."
+    },
+    {
+      "name": "another guest edits the shared construction",
+      "detail": "Finish applied."
+    },
+    {
+      "name": "guest builds a usable workshop",
+      "detail": "Field workbench placed."
+    },
+    {
+      "name": "shared construction converges on all guests"
+    },
+    {
+      "name": "crafting retry spends materials once",
+      "detail": {
+        "wood": 16,
+        "soil": 0,
+        "stone": 12,
+        "copper": 0,
+        "iron": 0,
+        "planks": 4,
+        "ingots": 0,
+        "saplings": 2
+      }
+    },
+    {
+      "name": "guest storage transfers conserve crew materials",
+      "detail": {
+        "wood": 0,
+        "soil": 0,
+        "stone": 12,
+        "copper": 0,
+        "iron": 0,
+        "planks": 4,
+        "ingots": 0,
+        "saplings": 2
+      }
+    },
+    {
+      "name": "populated fixture reaches terrain capacity",
+      "detail": {
+        "edits": 6000
+      }
+    },
+    {
+      "name": "all guests catch up after a dropped bulk fragment and 25% motion packet loss",
+      "detail": {
+        "edits": 6000,
+        "delayMs": 100
+      }
+    },
+    {
+      "name": "rejoin with renamed crew restores identity",
+      "detail": {
+        "oldId": "friend-9e45840a9baf644112fffb1cb0c5959e",
+        "newId": "friend-9e45840a9baf644112fffb1cb0c5959e"
+      }
+    },
+    {
+      "name": "spent pack survives reconnect and rename"
+    },
+    {
+      "name": "browser mirror and IndexedDB save",
+      "detail": {
+        "mirror": true,
+        "database": true
+      }
+    },
+    {
+      "name": "IndexedDB recovers corrupt current and previous mirrors",
+      "detail": {
+        "world": "world-a0a1c880f428fe0c282229d7d47706f8",
+        "pieces": 2,
+        "mirror": true
+      }
+    },
+    {
+      "name": "mirror quota failure still saves IndexedDB",
+      "detail": {
+        "mirror": false,
+        "database": true
+      }
+    },
+    {
+      "name": "5-player populated-world soak continues under motion faults",
+      "detail": {
+        "durationMs": 60000,
+        "ticks": [
+          1847,
+          1850,
+          1850,
+          1850
+        ]
+      }
+    },
+    {
+      "name": "host departure tears down guest peer"
+    },
+    {
+      "name": "no browser runtime exceptions",
+      "detail": []
+    },
+    {
+      "name": "Survival raw-snapshot WebRTC regression",
+      "detail": "survival"
+    },
+    {
+      "name": "Survival input still moves the authoritative player",
+      "detail": {
+        "before": {
+          "id": "ce1c6ddb-66a4-4bdd-88c4-2e51c39251d8",
+          "label": "Survival Guest",
+          "x": 6030.901699437495,
+          "y": 6095.105651629516,
+          "z": 0
+        },
+        "after": {
+          "id": "ce1c6ddb-66a4-4bdd-88c4-2e51c39251d8",
+          "label": "Survival Guest",
+          "x": 6315.901699437495,
+          "y": 6095.105651629516,
+          "z": 0
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "beforeSoak": [
+    {
+      "type": "candidate-pair",
+      "state": "succeeded",
+      "nominated": true,
+      "localCandidateType": "host",
+      "remoteCandidateType": "host",
+      "bytesSent": 24040,
+      "bytesReceived": 2530
+    },
+    {
+      "type": "candidate-pair",
+      "state": "waiting",
+      "nominated": false,
+      "localCandidateType": "host",
+      "remoteCandidateType": "srflx",
+      "bytesSent": 0,
+      "bytesReceived": 0
+    },
+    {
+      "type": "candidate-pair",
+      "state": "succeeded",
+      "nominated": true,
+      "localCandidateType": "host",
+      "remoteCandidateType": "srflx",
+      "bytesSent": 0,
+      "bytesReceived": 134382
+    },
+    {
+      "type": "data-channel",
+      "state": "open",
+      "label": "input",
+      "bytesSent": 13623,
+      "bytesReceived": 0
+    },
+    {
+      "type": "data-channel",
+      "state": "open",
+      "label": "state",
+      "bytesSent": 0,
+      "bytesReceived": 17920
+    },
+    {
+      "type": "data-channel",
+      "state": "open",
+      "label": "reliable",
+      "bytesSent": 622,
+      "bytesReceived": 1755
+    },
+    {
+      "type": "data-channel",
+      "state": "open",
+      "label": "friends-world",
+      "bytesSent": 0,
+      "bytesReceived": 107987
+    },
+    {
+      "type": "local-candidate",
+      "candidateType": "host"
+    },
+    {
+      "type": "local-candidate",
+      "candidateType": "host"
+    }
+  ],
+  "route": [
+    {
+      "type": "candidate-pair",
+      "state": "succeeded",
+      "nominated": true,
+      "localCandidateType": "host",
+      "remoteCandidateType": "host",
+      "bytesSent": 807782,
+      "bytesReceived": 2530
+    },
+    {
+      "type": "candidate-pair",
+      "state": "succeeded",
+      "nominated": true,
+      "localCandidateType": "host",
+      "remoteCandidateType": "srflx",
+      "bytesSent": 0,
+      "bytesReceived": 1798632
+    },
+    {
+      "type": "data-channel",
+      "state": "open",
+      "label": "input",
+      "bytesSent": 701133,
+      "bytesReceived": 0
+    },
+    {
+      "type": "data-channel",
+      "state": "open",
+      "label": "state",
+      "bytesSent": 0,
+      "bytesReceived": 1575322
+    },
+    {
+      "type": "data-channel",
+      "state": "open",
+      "label": "reliable",
+      "bytesSent": 622,
+      "bytesReceived": 1755
+    },
+    {
+      "type": "data-channel",
+      "state": "open",
+      "label": "friends-world",
+      "bytesSent": 0,
+      "bytesReceived": 107987
+    },
+    {
+      "type": "local-candidate",
+      "candidateType": "host"
+    },
+    {
+      "type": "local-candidate",
+      "candidateType": "host"
+    }
+  ]
+}

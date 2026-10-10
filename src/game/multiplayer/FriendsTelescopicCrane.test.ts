@@ -21,6 +21,14 @@ function fixture(dimensions={mastExtension:0,boomExtension:0}) {
   return {piece,actor,h,env,command,run,state:()=>h.snapshot().cranes![0],cargo:h.getCargo()[0]};
 }
 describe('telescopic prefab crane',()=>{
+  it('invalidates cached poses for in-place live crane motion and state removal',()=>{
+    const f=fixture(),b=new FriendsBuilding({pieces:[f.piece]}),states=[{...f.state()}];
+    b.craneMotionProvider=()=>states;
+    const first=b.getPieces();expect(first).toHaveLength(1);expect(b.getPieces()).toBe(first);
+    Object.assign(states[0],{angle:.5,mastExtension:100,boomExtension:200});
+    const moved=b.getPieces();expect(moved).not.toBe(first);expect(moved[0]).toMatchObject({craneAngle:.5,mastExtension:100,boomExtension:200});expect(b.getPieces()).toBe(moved);
+    states.pop();expect(b.getPieces()[0]).toMatchObject({mastExtension:0,boomExtension:0});
+  });
   it('keeps the original hook position and turns around the mast, including quarter-turn placements',()=>{
     for(let rotation=0;rotation<4;rotation++){
       const f=fixture();const p={...f.state(),rotation,angle:Math.PI};const out=craneOutlet(p),a=rotation*Math.PI/2;

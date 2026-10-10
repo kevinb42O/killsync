@@ -131,3 +131,52 @@ describe('imported Big Walk characters',()=>{
   });
 
 });
+
+
+describe('remote Friends aquatic presentation',()=>{
+  const swimmer=(speed=140,vertical=0,submerged=false)=>player({motion:{swimming:true,swimSubmerged:submerged,velocityX:speed,velocityY:0,verticalVelocity:vertical} as any});
+  async function rig(){const r=createFriendsCharacterRig('#fbbf24','Swimmer');await Promise.resolve();await Promise.resolve();return r;}
+  function advance(r:ReturnType<typeof createFriendsCharacterRig>,p:CoopPlayerSnapshot,start=0,duration=2000,step=16){
+    for(let t=start;t<=start+duration;t+=step){placeFriendsCharacter(r,p);updateFriendsCharacter(r,p,t);}
+  }
+  it('treads upright at rest and lays forward when swimming, without moving the authoritative root',async()=>{
+    const idle=await rig(),moving=await rig();advance(idle,swimmer(0));advance(moving,swimmer());
+    expect(idle.avatar.rotation.x).toBeGreaterThan(0);expect(idle.avatar.rotation.x).toBeLessThan(.4);
+    expect(moving.avatar.rotation.x).toBeGreaterThan(1);expect(moving.avatar.rotation.x).toBeLessThan(Math.PI/2);
+    expect(moving.root.position.toArray()).toEqual([0,0,0]);expect(moving.root.scale.toArray()).toEqual([1,1,1]);
+    disposeFriendsCharacterRig(idle);disposeFriendsCharacterRig(moving);
+  });
+  it('pitches downward for a dive and upward for an ascent using replicated motion',async()=>{
+    const dive=await rig(),level=await rig(),ascent=await rig();
+    advance(dive,swimmer(100,-80,true));advance(level,swimmer(140,0,true));advance(ascent,swimmer(100,80,true));
+    expect(dive.avatar.rotation.x).toBeGreaterThan(Math.PI/2);
+    expect(ascent.avatar.rotation.x).toBeLessThan(level.avatar.rotation.x);
+    expect(level.avatar.rotation.x).toBeLessThan(dive.avatar.rotation.x);
+    for(const r of [dive,level,ascent])disposeFriendsCharacterRig(r);
+  });
+  it('keeps both shoulder contacts fixed throughout the stroke and produces moving hands',async()=>{
+    const r=await rig(),p=swimmer();advance(r,p);
+    const basis=r.avatar.children[0].children[0],arms=[basis.children[2],basis.children[3]];
+    const shoulder=(arm:THREE.Object3D)=>new THREE.Vector3().fromArray(arm.userData.shoulderPivot).applyQuaternion(arm.quaternion).add(arm.position);
+    const contacts=arms.map(shoulder),before=new THREE.Vector3(),sample=new THREE.Vector3();friendsCharacterHandPoint(r,before);let travel=0;
+    for(let t=2016;t<3200;t+=16){placeFriendsCharacter(r,p);updateFriendsCharacter(r,p,t);for(let i=0;i<2;i++)expect(shoulder(arms[i]).distanceTo(contacts[i])).toBeLessThan(.00001);friendsCharacterHandPoint(r,sample);travel=Math.max(travel,sample.distanceTo(before));}
+    expect(travel).toBeGreaterThan(1);
+    disposeFriendsCharacterRig(r);
+  });
+  it('eases water entry and exit, and restores land pose and nameplate height',async()=>{
+    const r=await rig(),p=swimmer();advance(r,player());
+    placeFriendsCharacter(r,p);updateFriendsCharacter(r,p,2016);expect(r.avatar.rotation.x).toBeLessThan(.1);
+    advance(r,p,2032);const swimmingPitch=r.avatar.rotation.x;
+    placeFriendsCharacter(r,player());updateFriendsCharacter(r,player(),4048);
+    expect(r.avatar.rotation.x).toBeGreaterThan(.8);expect(r.avatar.rotation.x).toBeLessThan(swimmingPitch);
+    advance(r,player(),4064);expect(r.avatar.rotation.x).toBeCloseTo(0,4);expect(r.avatar.position.length()).toBeCloseTo(0,3);expect(r.nameplate.position.y).toBeCloseTo(62,3);
+    disposeFriendsCharacterRig(r);
+  });
+  it('gives seats, downed state and falling presentation priority over stale swimming flags',async()=>{
+    const r=await rig();advance(r,swimmer());
+    const seated=swimmer();seated.friendsSeat={vehicleId:'campfire',index:0};placeFriendsCharacter(r,seated);updateFriendsCharacter(r,seated,2100);expect(r.avatar.rotation.x).toBe(0);
+    const downed=swimmer();downed.lifeState='downed';placeFriendsCharacter(r,downed);updateFriendsCharacter(r,downed,2200);expect(r.avatar.rotation.z).toBe(Math.PI/2);
+    placeFriendsCharacter(r,swimmer(),.3);const rotation=r.avatar.rotation.clone();updateFriendsCharacter(r,swimmer(),2300,undefined,true);expect(r.avatar.rotation.toArray()).toEqual(rotation.toArray());
+    disposeFriendsCharacterRig(r);
+  });
+});

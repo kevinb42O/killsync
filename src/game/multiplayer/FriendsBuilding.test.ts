@@ -9,10 +9,34 @@ import { FRIENDS_AIRPAD, FRIENDS_HUB, FRIENDS_SALVAGE, insideFriendsCombat } fro
 import { compactSnapshotWirePayload, SnapshotDecoder } from './snapshotReplication';
 import { encodeSnapshotPackets } from './snapshotTransport';
 import { RAIL_STATIONS, railwayDistance, sampleTrainRoute, TRAIN_LOOP_LENGTH } from '../world/FriendsRailway';
+import type { FriendsVehicle } from './FriendsExpedition';
 const actor = { id: 'host', label: 'Host', x: 6150, y: 6144, z: 0, lifeState: 'alive' };
 const piece = (shape: FriendsBuildPiece['shape'], extra: Partial<FriendsBuildPiece> = {}): FriendsBuildPiece => ({ id: 1, x: 6400, y: 6144, z: 0, rotation: 0, shape, finish: 'stone', author: 'Host', revision: 1, ...extra });
 const pose = { x: 6400, y: 6144, z: 0, rotation: 0 };
 describe('permanent Friends building', () => {
+  it('reuses resolved builds and observes in-place vehicle changes without a build revision', () => {
+    const vehicle: FriendsVehicle = { id: 'grand-3', kind: 'train', x: 6400, y: 6144, z: 100, angle: 0, length: 210, width: 120, scenic: true, wagonKind: 'flatbed' };
+    const b = new FriendsBuilding({ pieces: [piece('cube', { attachment: { vehicleId: vehicle.id, x: 16, y: 0, z: 0 } })] });
+    b.vehicleProvider = () => [vehicle];
+    const first = b.getPieces(), revision = b.getRevision();
+    expect(first).toHaveLength(1);
+    expect(first[0].x).toBe(6416);
+    expect(b.getPieces()).toBe(first);
+    vehicle.x += 10;
+    const moved = b.getPieces();
+    expect(moved).not.toBe(first);
+    expect(moved[0].x).toBe(6426);
+    expect(first[0].x).toBe(6416);
+    vehicle.angle = Math.PI / 2;
+    expect(b.getPieces()[0].y).toBeCloseTo(6160);
+    vehicle.pitch = Math.PI / 6;
+    expect(b.getPieces()[0].z).toBeCloseTo(108);
+    vehicle.wagonKind = 'touring';
+    expect(b.getPieces()[0].vehicleFrame).toBeUndefined();
+    expect(b.getRevision()).toBe(revision);
+    b.setGuestAccess(false);
+    expect(b.getPieces()).not.toBe(moved);
+  });
   it('stacks, shares and restores pieces without tactical charges or expiry', () => {
     const building = new FriendsBuilding();
     expect(building.request(actor, { requestId: 1, action: 'place', shape: 'cube', finish: 'stone', pose }, 'host', [actor]).ok).toBe(true);

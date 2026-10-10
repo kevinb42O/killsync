@@ -1,3 +1,4 @@
+import { FriendsBuildSpatialIndex } from './FriendsInteractionTargeting';
 import { applyCraneMotion } from './FriendsTelescopicCrane';
 import { craneCollisionPieces, friendsPieceBoxes } from './FriendsBuilding';
 import { friendsLiveWaterAt, friendsLiveWaterSurface } from '../world/FriendsFloodWater';
@@ -18,7 +19,7 @@ import { FriendsCommandResults, validFriendsCommand } from './FriendsCommands';
 import { FRIENDS_STEP_HEIGHT, FRIENDS_SPAWN_PLATFORM } from '../world/FriendsTerrain';
 import { PLAYER_TRAIN_COST, isPlayerRail, railSamples } from '../world/FriendsPlayerRail';
 import { FriendsFrontier, type FrontierSnapshot, type FrontierRequest, type FrontierActor } from './FriendsFrontier';
-import { FriendsBuilding, FRIENDS_BUILD_CATALOG, friendsShapeBoxes, isSlope, worldBox, friendsBuildFloor, friendsWalkFloor, friendsInclineConnects, friendsBuildCeiling, friendsVehicleBuildBodies, resolveFriendsBuildCollisions, raycastFriendsBuild, type FriendsBuildingSnapshot, type FriendsBuildRequest, type FriendsBuildResult } from './FriendsBuilding';
+import { FriendsBuilding, FRIENDS_BUILD_CATALOG, friendsShapeBoxes, isSlope, worldBox, friendsBuildFloor, friendsWalkFloor, friendsInclineConnects, friendsBuildCeiling, friendsVehicleBuildBodies, raycastFriendsBuild, type FriendsBuildingSnapshot, type FriendsBuildRequest, type FriendsBuildResult } from './FriendsBuilding';
 import type { CargoStaticCollider } from './FriendsCargoPhysics';
 import { castleCargoColliders } from './FriendsCastleCargo';
 import { routeHaulingRope } from './FriendsRopePath';
@@ -548,6 +549,8 @@ export class CoopSimulation {
   private friendsCommandResults = new FriendsCommandResults();
   private friendsFrontier?: FriendsFrontier;
   private friendsBuilding?: FriendsBuilding;
+  private friendsMovementIndex = new FriendsBuildSpatialIndex();
+  private indexedFriendsBuilding?: FriendsBuilding;
   private friendsDynamite = new FriendsDynamite();
   private friendsProjects?: FriendsProjects;
   private friendsHostId = '';
@@ -1562,10 +1565,19 @@ export class CoopSimulation {
     if (result.ok && request.action === 'home') this.recoverFriend(player);
     return result;
   }
+  private movementBuildIndex(pieces = this.friendsBuilding?.getPieces() ?? []) {
+    if (this.indexedFriendsBuilding !== this.friendsBuilding) {
+      this.indexedFriendsBuilding = this.friendsBuilding;
+      this.friendsMovementIndex = new FriendsBuildSpatialIndex();
+    }
+    this.friendsMovementIndex.update(pieces, this.friendsBuilding?.getRevision() ?? 0);
+    return this.friendsMovementIndex;
+  }
+
   private friendsOverhead(position: { x: number; y: number; z: number }) {
     const terrain = this.friendsFrontier?.terrain.ceiling(position.x, position.y, position.z);
     const a = friendsVehicleCeiling(this.friends!.vehicles(), position.x, position.y, position.z);
-    const b = this.friendsBuilding && friendsBuildCeiling(this.friendsBuilding.getPieces(), position.x, position.y, position.z);
+    const b = this.friendsBuilding && friendsBuildCeiling(this.movementBuildIndex().near(position.x, position.y, 64), position.x, position.y, position.z);
     return Math.min(a ?? Infinity, b ?? Infinity, terrain ?? Infinity, retreatCeiling(position,this.friends!.retreats.state.active) ?? Infinity);
   }
 
@@ -2744,8 +2756,8 @@ export class CoopSimulation {
     let collided = this.friends ? resolveFriendsVehicleCollisions(this.friends.vehicles(), position, z, radius) : false;
     if (this.friends) collided = collideRetreats(position,z,radius,this.friends.retreats.state.active) || collided;
     if (this.friends) collided = collidePhysicalCargo(this.friends.hauling.getCargo(), position, z, radius) || collided;
-    if (this.friendsFrontier) { collided = this.friendsFrontier.terrain.collide(position, z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.friendsBuilding?.getPieces()??[],position,z,x,y,top)) || collided; collided = this.friendsFrontier.collideTrees(position, z, radius) || collided; }
-    if (this.friendsBuilding) collided = resolveFriendsBuildCollisions(this.friendsBuilding.getPieces(), position, z, radius) || collided;
+    if (this.friendsFrontier) { collided = this.friendsFrontier.terrain.collide(position, z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.movementBuildIndex().near(position.x,position.y,radius+65),position,z,x,y,top)) || collided; collided = this.friendsFrontier.collideTrees(position, z, radius) || collided; }
+    if (this.friendsBuilding) collided = this.movementBuildIndex().collide(this.friendsBuilding.getPieces(), position, z, radius) || collided;
     if (z > 34) return collided;
     for (const structure of this.structures) {
       if (structure.state === 'destroying') continue;
@@ -2783,13 +2795,13 @@ export class CoopSimulation {
       dynamicColliders:region=>applyCraneMotion(pieces,this.friends!.hauling.getCraneStates()).filter(p=>p.assembly||p.shape==='crane').flatMap(craneCollisionPieces).flatMap(p=>friendsPieceBoxes(p).map(b=>orientedBuildBox(p,b))).filter(b=>{const extent=Math.hypot(b.w,b.d)/2;return b.x+extent>=region.minX&&b.x-extent<=region.maxX&&b.y+extent>=region.minY&&b.y-extent<=region.maxY&&b.z+b.h>=region.minZ&&b.z<=region.maxZ;}),
       operatorFloor:(x,y,z)=>this.getPlayerStructureFloor({x,y,z},PLAYER_RADIUS),
       floor: (x,y,z,step) => {
-        const floors = [terrain.floor(x,y,z,step), friendsBuildFloor(pieces,x,y,z,step), friendsWorldFloor(vehicles,x,y,z),retreatFloor({x,y,z},this.friends!.retreats.state.active),retreatPathFloor({x,y,z},this.friends!.retreats.state.active,step)];
+        const floors = [terrain.floor(x,y,z,step), friendsBuildFloor(this.movementBuildIndex(pieces).near(x,y,64),x,y,z,step), friendsWorldFloor(vehicles,x,y,z),retreatFloor({x,y,z},this.friends!.retreats.state.active),retreatPathFloor({x,y,z},this.friends!.retreats.state.active,step)];
         const available = floors.filter((f): f is number => f !== undefined && f <= z + step);
         return available.length ? Math.max(...available) : undefined;
       },
       collide: (point,z,radius,height,step) => {
         const ceiling = friendsVehicleCeiling(vehicles,point.x,point.y,z);
-        return collideRetreats(point,z,radius,this.friends!.retreats.state.active,height) || terrain.collide(point,z,radius,height,step) || resolveFriendsBuildCollisions(pieces,point,z,radius,height,step)
+        return collideRetreats(point,z,radius,this.friends!.retreats.state.active,height) || terrain.collide(point,z,radius,height,step) || this.movementBuildIndex(pieces).collide(pieces,point,z,radius,height,step)
           || this.friendsFrontier!.collideTrees(point,z,radius) || resolveFriendsVehicleCollisions(vehicles,point,z,radius)
           || (ceiling !== undefined && z + height > ceiling);
       },
@@ -2824,7 +2836,7 @@ export class CoopSimulation {
   private getPlayerStructureWallContact(position: { x: number; y: number }, z: number, radius: number) {
     const terrainContact = this.friendsFrontier?.terrain.wallContact(position, z, radius);
     if (terrainContact) return terrainContact;
-    if (this.friendsBuilding) { const test = { ...position }; if (resolveFriendsBuildCollisions(this.friendsBuilding.getPieces(), test, z, radius + 2, 50, 0)) { const d = Math.hypot(test.x - position.x, test.y - position.y); if (d > .001) return { normalX: (test.x - position.x) / d, normalY: (test.y - position.y) / d }; } }
+    if (this.friendsBuilding) { const test = { ...position }; if (this.movementBuildIndex().collide(this.friendsBuilding.getPieces(), test, z, radius + 2, 50, 0)) { const d = Math.hypot(test.x - position.x, test.y - position.y); if (d > .001) return { normalX: (test.x - position.x) / d, normalY: (test.y - position.y) / d }; } }
     if (z > 34) return undefined;
     for (const structure of this.structures) {
       if (structure.state === 'destroying') continue;
@@ -2841,7 +2853,7 @@ export class CoopSimulation {
     if(retreatTop!==undefined)floor=Math.max(floor??-Infinity,retreatTop);
     const terrainFloor = this.friendsFrontier?.terrain.floor(position.x, position.y, position.z ?? 0);
     if (terrainFloor !== undefined) floor = Math.max(floor ?? -Infinity, terrainFloor);
-    const creativeFloor = this.friendsBuilding && friendsWalkFloor(this.friendsBuilding.getPieces(), position.x, position.y, position.z ?? 0, radius, this.friendsFrontier?.terrain);
+    const creativeFloor = this.friendsBuilding && friendsWalkFloor(this.movementBuildIndex().near(position.x,position.y,radius+65), position.x, position.y, position.z ?? 0, radius, this.friendsFrontier?.terrain);
     if (creativeFloor !== undefined) floor = Math.max(floor ?? -Infinity, creativeFloor);
     for (const structure of this.structures) {
       if (structure.state === 'destroying') continue;

@@ -32,6 +32,9 @@ import type { CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation'
 import { configureTerrainCoverage } from './FriendsTerrainCoverage';
 import { FRIENDS_TERRAIN_SURFACES } from '../world/FriendsTerrainAppearance';
 
+const GROVE_CELL_OFFSETS = Array.from({ length: 121 }, (_, i) => [i % 11 - 5, Math.floor(i / 11) - 5] as const)
+  .sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]));
+
 export function frontierMaterial(asset: 'Ground037' | 'Rock030' | 'WoodFloor051', color = '#ffffff', worldProjected = false, alpine = false) {
   const loader = new THREE.TextureLoader(), base = `${import.meta.env.BASE_URL}textures/frontier/${asset}_1K-JPG_`;
   const texture = (name: string, srgb = false) => { const t = loader.load(base + name + '.jpg'); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
@@ -283,9 +286,8 @@ export class FriendsFrontierVisuals {
       if(Math.hypot((a+.5)*512-x,(b+.5)*512-y)>FOREST_DETAIL_END+1100){disposeGroup(grove);this.groves.delete(key);}
     }
     let grovesCreated = 0;
-    const groveCells = Array.from({length:121}, (_,i) => [cx-5+i%11,cy-5+Math.floor(i/11)]);
-    groveCells.sort((a,b)=>Math.hypot(a[0]-cx,a[1]-cy)-Math.hypot(b[0]-cx,b[1]-cy));
-    for (const [a,b] of groveCells) {
+    for (const [dx,dy] of GROVE_CELL_OFFSETS) {
+      const a = cx + dx, b = cy + dy;
       if (Math.hypot((a+.5)*512-x,(b+.5)*512-y)>FOREST_DETAIL_END+250 || a < 0 || b < 0 || a > 93 || b > 93 || grovesCreated >= 3 || this.groves.has(`${a},${b}`)) continue;
       const trees = [...frontierTrees(a, b), ...f.planted.filter(t => Math.floor(t.x / 512) === a && Math.floor(t.y / 512) === b)].filter(t => !lavaRiverTreeClearance(t.x,t.y) && !emberRetreatTreeClearance(t.x,t.y) && !harvested.has(t.id) && this.terrain.supports(t.x,t.y,t.z));
       const grove = new THREE.Group(); grove.userData.treeIds = trees.map(t => t.id); grovesCreated++; this.group.add(grove); this.groves.set(`${a},${b}`, grove);

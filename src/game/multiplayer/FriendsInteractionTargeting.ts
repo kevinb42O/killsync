@@ -1,8 +1,8 @@
 import { retreatWorkReserved } from '../world/FriendsRetreatPaths';
 import { friendsCampfireContains } from '../world/FriendsTerrain';
-import { raycastFriendsBuild, friendsShapeBoxes, worldBox, type FriendsBuildPiece } from './FriendsBuilding';
+import { raycastFriendsBuild, resolveFriendsBuildCollisions, friendsShapeBoxes, worldBox, type FriendsBuildPiece } from './FriendsBuilding';
 import type { FrontierTree, FrontierTool } from './FriendsFrontier';
-import { friendsFixedPlatformProtected, friendsSpawnProtected, type FriendsTerrain, type TerrainRay, type TerrainHit } from '../world/FriendsTerrain';
+import { FRIENDS_STEP_HEIGHT, friendsFixedPlatformProtected, friendsSpawnProtected, type FriendsTerrain, type TerrainRay, type TerrainHit } from '../world/FriendsTerrain';
 import { scenicTransitProtected } from '../world/FriendsRailInfrastructure';
 
 export const FRIENDS_MINING_REACH = 240;
@@ -82,11 +82,20 @@ export class FriendsBuildSpatialIndex {
   private cells = new Map<string, FriendsBuildPiece[]>();
   private dynamic: FriendsBuildPiece[] = [];
   private revision = -1;
+  private dynamicIndices: number[] = [];
+  private order = new Map<number, number>();
+  private source?: readonly FriendsBuildPiece[];
   update(pieces: readonly FriendsBuildPiece[], revision: number) {
-    if (revision === this.revision) { if(this.dynamic.length)this.dynamic = pieces.filter(p => p.attachment||p.assembly||p.shape==='crane'); return; }
-    this.revision = revision; this.cells.clear(); this.dynamic = [];
-    for (const p of pieces) {
-      if (p.attachment||p.assembly||p.shape==='crane') { this.dynamic.push(p); continue; }
+    if (revision === this.revision) {
+      if (pieces !== this.source) this.dynamic = this.dynamicIndices.map(i => pieces[i]);
+      this.source = pieces;
+      return;
+    }
+    this.source = pieces;
+    this.revision = revision; this.cells.clear(); this.dynamic = []; this.dynamicIndices = []; this.order.clear();
+    for (let i = 0; i < pieces.length; i++) {
+      const p = pieces[i]; this.order.set(p.id, i);
+      if (p.attachment||p.assembly||p.shape==='crane') { this.dynamic.push(p); this.dynamicIndices.push(i); continue; }
       for (const b of friendsShapeBoxes(p.shape).map(local => worldBox(p, local))) {
         for (let x = Math.floor((b.x - b.w / 2) / 256); x <= Math.floor((b.x + b.w / 2) / 256); x++)
           for (let y = Math.floor((b.y - b.d / 2) / 256); y <= Math.floor((b.y + b.d / 2) / 256); y++) {
@@ -101,6 +110,16 @@ export class FriendsBuildSpatialIndex {
     for (let a = Math.floor((x - reach) / 256); a <= Math.floor((x + reach) / 256); a++)
       for (let b = Math.floor((y - reach) / 256); b <= Math.floor((y + reach) / 256); b++)
         for (const piece of this.cells.get(`${a},${b}`) || []) result.add(piece);
-    return [...result];
+    return [...result].sort((a,b) => this.order.get(a.id)! - this.order.get(b.id)!);
+  }
+  collide(pieces: readonly FriendsBuildPiece[], position: {x:number;y:number}, z:number, radius:number, bodyHeight=50, step=FRIENDS_STEP_HEIGHT) {
+    const nearby = this.near(position.x, position.y, radius + 64);
+    if (nearby.length === pieces.length) return resolveFriendsBuildCollisions(pieces, position, z, radius, bodyHeight, step);
+    const x = position.x, y = position.y;
+    if (!resolveFriendsBuildCollisions(nearby, position, z, radius, bodyHeight, step)) return false;
+    // Contacts can push the body into pieces outside the original query.
+    // Replay those cases in original order to preserve chained resolution.
+    position.x = x; position.y = y;
+    return resolveFriendsBuildCollisions(pieces, position, z, radius, bodyHeight, step);
   }
 }

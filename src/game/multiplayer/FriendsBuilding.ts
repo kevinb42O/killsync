@@ -440,6 +440,12 @@ export class FriendsBuilding {
   private revision = 0;
   private nextId = 1;
   private pieces: FriendsBuildPiece[] = [];
+  private poseRevision = -1;
+  private hasVehicleAttachments = false;
+  private hasAssemblies = false;
+  private hasTelescopicCranes = false;
+  private resolvedPieces?: readonly FriendsBuildPiece[];
+  private poseInputs: unknown[] = [];
   private guestsCanBuild = true;
   private consumed = new Map<string, number>();
   private undo = new Map<string, Edit[][]>();
@@ -457,7 +463,32 @@ export class FriendsBuilding {
   setGuestAccess(allowed: boolean) { this.guestsCanBuild = allowed; this.revision++; }
   getGuestAccess() { return this.guestsCanBuild; }
   getRevision() { return this.revision; }
-  getPieces(): readonly FriendsBuildPiece[] { const resolved=this.pieces.some(p=>p.attachment||p.assembly)?resolveFriendsBuildPieces(this.pieces,this.vehicleProvider(),this.craneAngleProvider()):this.pieces;return this.pieces.some(p=>p.shape==='crane')?applyCraneMotion(resolved,this.craneMotionProvider()):resolved; }
+  getPieces(): readonly FriendsBuildPiece[] {
+    if (this.poseRevision !== this.revision) {
+      this.poseRevision = this.revision;
+      this.hasVehicleAttachments = this.pieces.some(p => p.attachment);
+      this.hasAssemblies = this.pieces.some(p => p.assembly);
+      this.hasTelescopicCranes = this.pieces.some(p => p.shape === 'crane');
+      this.resolvedPieces = undefined;
+    }
+    if (!this.hasVehicleAttachments && !this.hasAssemblies && !this.hasTelescopicCranes) return this.pieces;
+    const vehicles = this.hasVehicleAttachments ? this.vehicleProvider() : [];
+    const angles = this.hasAssemblies ? this.craneAngleProvider() : new Map<number, number>();
+    const cranes = this.hasTelescopicCranes ? this.craneMotionProvider() : [];
+    // Providers can mutate poses in place, including during a simulation tick.
+    // Compare scalar inputs rather than array identity or a tick number.
+    const inputs: unknown[] = [vehicles.length, angles.size, cranes.length];
+    for (const v of vehicles) inputs.push(v.id, v.x, v.y, v.z, v.angle, v.pitch, v.scenic, v.wagonKind);
+    for (const [id, angle] of angles) inputs.push(id, angle);
+    for (const c of cranes) inputs.push(c.pieceId, c.angle, c.mastExtension, c.boomExtension);
+    if (this.resolvedPieces && inputs.length === this.poseInputs.length
+      && inputs.every((value, i) => Object.is(value, this.poseInputs[i]))) return this.resolvedPieces;
+    const resolved = this.hasVehicleAttachments || this.hasAssemblies
+      ? resolveFriendsBuildPieces(this.pieces, vehicles, angles) : this.pieces;
+    this.resolvedPieces = this.hasTelescopicCranes ? applyCraneMotion(resolved, cranes) : resolved;
+    this.poseInputs = inputs;
+    return this.resolvedPieces;
+  }
   snapshot(): FriendsBuildingSnapshot { return { revision: this.revision, pieces: this.getPieces().map(p => ({ ...p })), guestsCanBuild: this.guestsCanBuild }; }
   private record(actor: string, edits: Edit[]) {
     const history = this.undo.get(actor) || []; history.push(edits); if (history.length > 64) history.shift();

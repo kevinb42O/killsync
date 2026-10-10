@@ -1,10 +1,11 @@
+import { FriendsBuildSpatialIndex } from './FriendsInteractionTargeting';
 import { friendsLiveWaterAt } from '../world/FriendsFloodWater';
 import { retreatPathFloor } from '../world/FriendsRetreatPaths';
 import { retreatFloor, retreatCeiling, collideRetreats } from '../world/FriendsRetreatSites';
-import { frontierTrees } from './FriendsFrontier';
+import { FriendsTreeCollisionCache } from './FriendsTreeCollisionCache';
 import { collidePhysicalCargo } from './FriendsHauling';
 import { FriendsTerrain, FRIENDS_STEP_HEIGHT } from '../world/FriendsTerrain';
-import { friendsBuildFloor, friendsWalkFloor, friendsInclineConnects, friendsBuildCeiling, resolveFriendsBuildCollisions } from './FriendsBuilding';
+import { friendsBuildFloor, friendsWalkFloor, friendsInclineConnects, friendsBuildCeiling } from './FriendsBuilding';
 import { friendsWorldFloor, friendsVehicleFloor, friendsVehicleCeiling, FRIENDS_FLIGHT_CEILING, resolveFriendsVehicleCollisions, type FriendsSnapshot } from './FriendsExpedition';
 import type { CoopPlayerSnapshot, CoopSnapshot } from './CoopSimulation';
 import { getBarricadeWallContact, getStructureWalkableTop, resolveBarricadeCollision, type CoopStructureSnapshot } from './CoopFieldEngineering';
@@ -22,6 +23,8 @@ export class LocalPlayerPrediction {
   private worldId: WorldId = 'neon_bastion';
   private terrain = new FriendsTerrain();
   private terrainRevision = -1;
+  private buildIndex = new FriendsBuildSpatialIndex();
+  private treeCollisions = new FriendsTreeCollisionCache();
   private friends?: FriendsSnapshot;
   private lastRedeployEventId = -1;
 
@@ -35,6 +38,8 @@ export class LocalPlayerPrediction {
     this.lifeState = undefined;
     this.terrainRevision = -1;
     this.friends = undefined;
+    this.buildIndex = new FriendsBuildSpatialIndex();
+    this.treeCollisions = new FriendsTreeCollisionCache();
     this.correction = { x: 0, y: 0, z: 0 };
   }
 
@@ -51,6 +56,11 @@ export class LocalPlayerPrediction {
     this.lifeState = player?.lifeState;
     this.structures = snapshot.structures || [];
     this.friends = snapshot.friends;
+    if (rewound || nextWorldId !== this.worldId) {
+      this.buildIndex = new FriendsBuildSpatialIndex();
+      this.treeCollisions = new FriendsTreeCollisionCache();
+    }
+    this.buildIndex.update(this.friends?.building?.pieces ?? [], this.friends?.building?.revision ?? 0);
     const terrain = snapshot.friends?.frontier?.terrain;
     if (terrain && terrain.revision !== this.terrainRevision) { this.terrain.restore(terrain); this.terrainRevision = terrain.revision; }
     this.worldId = nextWorldId;
@@ -131,12 +141,10 @@ export class LocalPlayerPrediction {
         if (this.friends?.retreats) collided = collideRetreats(position,motion.z,radius,this.friends.retreats.active) || collided;
         if (this.friends?.hauling) collided = collidePhysicalCargo(this.friends.hauling.cargo, position, motion.z, radius) || collided;
         if (this.friends?.frontier) {
-          collided = this.terrain.collide(position, motion.z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.friends?.building?.pieces??[],position,motion.z,x,y,top)) || collided;
-          const cx = Math.floor(position.x / 512), cy = Math.floor(position.y / 512), removed = new Set(this.friends.frontier.harvested);
-          const trees = [...this.friends.frontier.planted]; for (let a = cx-1; a <= cx+1; a++) for (let b = cy-1; b <= cy+1; b++) trees.push(...frontierTrees(a,b));
-          for (const t of trees) { if (removed.has(t.id) || !this.terrain.supports(t.x,t.y,t.z) || motion.z >= t.z + 180*t.scale || motion.z+50 < t.z) continue; const dx=position.x-t.x,dy=position.y-t.y,d=Math.hypot(dx,dy),extent=radius+10*t.scale; if(d<extent){position.x=t.x+(d>.001?dx/d:1)*extent;position.y=t.y+(d>.001?dy/d:0)*extent;collided=true;} }
+          collided = this.terrain.collide(position, motion.z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.buildIndex.near(position.x,position.y,radius+65),position,motion.z,x,y,top)) || collided;
+          collided = this.treeCollisions.collide(position,motion.z,radius,this.friends.frontier,this.terrain) || collided;
         }
-        if (this.friends?.building) collided = resolveFriendsBuildCollisions(this.friends.building.pieces, position, motion.z, radius) || collided;
+        if (this.friends?.building) collided = this.buildIndex.collide(this.friends.building.pieces, position, motion.z, radius) || collided;
         if (motion.z > 34) return collided;
         for (const structure of this.structures) {
           if (structure.state === 'destroying') continue;
@@ -147,7 +155,7 @@ export class LocalPlayerPrediction {
       (position, radius) => {
         const terrainContact = this.friends?.frontier && this.terrain.wallContact(position, motion.z, radius);
         if (terrainContact) return terrainContact;
-        if (this.friends?.building) { const test = { ...position }; if (resolveFriendsBuildCollisions(this.friends.building.pieces, test, motion.z, radius + 2, 50, 0)) { const d = Math.hypot(test.x - position.x, test.y - position.y); if (d > .001) return { normalX: (test.x - position.x) / d, normalY: (test.y - position.y) / d }; } }
+        if (this.friends?.building) { const test = { ...position }; if (this.buildIndex.collide(this.friends.building.pieces, test, motion.z, radius + 2, 50, 0)) { const d = Math.hypot(test.x - position.x, test.y - position.y); if (d > .001) return { normalX: (test.x - position.x) / d, normalY: (test.y - position.y) / d }; } }
         if (motion.z > 34) return undefined;
         for (const structure of this.structures) {
           if (structure.state === 'destroying') continue;
@@ -163,7 +171,7 @@ export class LocalPlayerPrediction {
         if(retreatTop!==undefined)floor=Math.max(floor??-Infinity,retreatTop);
         const ground = this.friends?.frontier && this.terrain.floor(position.x, position.y, position.z??motion.z);
         if (ground !== undefined) floor = Math.max(floor ?? -Infinity, ground);
-        const creative = this.friends?.building && friendsWalkFloor(this.friends.building.pieces, position.x, position.y, motion.z, radius, this.friends?.frontier?this.terrain:undefined);
+        const creative = this.friends?.building && friendsWalkFloor(this.buildIndex.near(position.x,position.y,radius+65), position.x, position.y, motion.z, radius, this.friends?.frontier?this.terrain:undefined);
         if (creative !== undefined) floor = Math.max(floor ?? -Infinity, creative);
         for (const structure of this.structures) {
           if (structure.state === 'destroying') continue;
@@ -173,7 +181,7 @@ export class LocalPlayerPrediction {
         return floor;
       },
       this.worldId,
-      this.friends ? { elevationAware: true, devFlightAllowed: false, devSuperjumpAllowed: false, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), waterAt: (x,y,z)=>friendsLiveWaterAt(this.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.friends!.building?.pieces || [], position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, retreatCeiling(position,this.friends?.retreats?.active??[])??Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
+      this.friends ? { elevationAware: true, devFlightAllowed: false, devSuperjumpAllowed: false, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), waterAt: (x,y,z)=>friendsLiveWaterAt(this.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.buildIndex.near(position.x,position.y,64), position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, retreatCeiling(position,this.friends?.retreats?.active??[])??Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
     );
   }
 }

@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-10T20:45:09.417Z",
+  "model": "MacBookAir10,1",
+  "cpu": "Apple M1",
+  "memoryBytes": 8589934592,
+  "browser": "151.0.7922.34",
+  "gpu": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+    "vendor": "Google Inc. (Apple)"
+  }
+}

@@ -62,5 +62,5 @@ addEventListener('blur',()=>gestureMask=0);
 await loadFriendsCharacterModel();
 setMode(location.hash.slice(1)||'crew');
 function frame(elapsed:number){render(elapsed);requestAnimationFrame(frame);}requestAnimationFrame(frame);
-(window as any).friendsCharacterReview={renderer,scene,camera,handCamera,viewmodel,crew,tools,flashlight,hauling,gestures,demoRig,demoPlayer,demoMasks,setDemoStage(stage:number|undefined){demoLockedStage=stage;},setDemoView(view:'orbit'|'front'|'side'){demoView=view;},setMask(mask:number){gestureMask=mask;},setMode,render,get frames(){return frames;},get time(){return time;}};
+(window as any).friendsCharacterReview={placeFriendsCharacter,updateFriendsCharacter,renderer,scene,camera,handCamera,viewmodel,crew,tools,flashlight,hauling,gestures,demoRig,demoPlayer,demoMasks,setDemoStage(stage:number|undefined){demoLockedStage=stage;},setDemoView(view:'orbit'|'front'|'side'){demoView=view;},setMask(mask:number){gestureMask=mask;},setMode,render,get frames(){return frames;},get time(){return time;}};
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=handCamera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();handCamera.updateProjectionMatrix();});

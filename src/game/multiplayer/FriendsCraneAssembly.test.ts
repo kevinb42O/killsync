@@ -17,6 +17,15 @@ function kit(){const pieces=[{...root}],boom={...craneSocketPose(pieces,pieces[0
 function fixture(){const pieces=kit(),h=new FriendsHauling({version:1,cargo:[{id:'lantern-core',x:1096,y:1000,z:0,angle:0,vx:0,vy:0,vz:0,spin:0}],delivered:false});const env:HaulingEnvironment={revision:'kit',floor:()=>0,collide:()=>false,blocked:()=>false,vehicles:[],builds:pieces};h.syncCranes(env);let elapsed=0;return {pieces,h,env,cargo:h.getCargo()[0],command:(action:Parameters<typeof h.controlCrane>[2],p=actor,id=10)=>h.controlCrane(p,id,action,env,true,elapsed),run:(ms:number,players=[actor],heartbeat=true)=>{for(let t=0;t<ms;t+=50){elapsed+=50;if(heartbeat&&elapsed%1000===0)h.controlCrane(actor,10,'crane_heartbeat',env,true,elapsed);h.update(50,elapsed,players,new Map(),env);}}};}
 
 describe('modular crane sockets and durable topology',()=>{
+ it('reuses assembly poses until live angles or durable pieces change',()=>{
+  const b=new FriendsBuilding({pieces:kit()}),angles=new Map([[10,0]]);
+  b.craneAngleProvider=()=>angles;
+  const first=b.getPieces();expect(first).toHaveLength(3);expect(b.getPieces()).toBe(first);
+  angles.set(10,Math.PI/4);
+  const moved=b.getPieces();expect(moved).not.toBe(first);expect(moved[2].x).toBeCloseTo(1000+96/Math.sqrt(2));expect(b.getPieces()).toBe(moved);
+  angles.clear();expect(b.getPieces()[2].x).toBeCloseTo(first[2].x);
+  const before=b.getPieces();b.parkCrane(10,.7);expect(b.getPieces()).not.toBe(before);expect(b.getPieces()[2].assemblyFrame?.angle).toBeCloseTo(.7);
+ });
  it('builds an explicit joint / boom / winch chain and resolves arbitrary live yaw',()=>{
   const pieces=kit(),live=resolveFriendsBuildPieces(pieces,[],new Map([[10,Math.PI/4]]));expect(craneTopologyError(pieces)).toBeUndefined();expect(live[2].x).toBeCloseTo(1000+96/Math.sqrt(2));expect(live[2].assemblyFrame?.angle).toBeCloseTo(Math.PI/4);
   const ray={x:live[1].x,y:live[1].y,z:600,dx:0,dy:0,dz:-1};expect(raycastFriendsBuild(live,ray)?.piece.id).toBe(11);
