@@ -24,7 +24,7 @@ const ROOT = `${import.meta.env.BASE_URL}audio/friends/`;
 const variants = (stem: string, count = 3) => Array.from({ length: count }, (_, i) => `${ROOT}${stem}_${String(i).padStart(3, '0')}.ogg`);
 export const FRIENDS_CUE_ASSETS: Readonly<Record<Cue, readonly string[]>> = {
   fishingCast:[ROOT+'fishing_cast.ogg'], fishingSplash:[ROOT+'fishing_plop.ogg'], fishingBite:[ROOT+'fishing_plop.ogg'], fishingReel:[ROOT+'fishing_reel.ogg'],
-  dynamiteExplosion: [ROOT + 'dynamite_explosion.mp3'], dynamiteFuse: [ROOT + 'dynamite_fuse.ogg'],
+  dynamiteExplosion: [ROOT + 'dynamite_explosion_last.mp3'], dynamiteFuse: [ROOT + 'dynamite_fuse.ogg'],
   grass: variants('footstep_grass'), woodStep: variants('footstep_wood'), stoneStep: variants('footstep_concrete'), snow: variants('footstep_snow'),
   waterStep: variants('step_water', 4), mudStep: variants('step_mud', 4),
   waterEntry: [ROOT + 'water_splash_effect.mp3', ROOT + 'splashing_water.mp3'],
