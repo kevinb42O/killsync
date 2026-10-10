@@ -16,6 +16,7 @@ export class FriendsUnderwaterVisuals{
   private originalBackground:THREE.Scene['background']=null;
   private hiddenAtmosphere:{object:THREE.Object3D;visible:boolean}[]=[];
   private active=false;private wasSubmerged=false;private enteredAt=0;private lastScan=-Infinity;
+  private materialScan:THREE.Object3D[]=[];
   private lastCover=-Infinity;private coverKey='';private skyExposure=1;
   private lighting=createUnderwaterLightUniforms();
   private bindings=new Map<THREE.MeshStandardMaterial,{release:()=>void;disposed:()=>void}>();
@@ -67,16 +68,40 @@ export class FriendsUnderwaterVisuals{
     this.shafts=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),shaftsMaterial,9);this.shafts.name='underwater-soft-sun-shafts';this.shafts.frustumCulled=false;this.shafts.renderOrder=5;this.shafts.visible=false;scene.add(this.shafts);
     this.bindSceneMaterials();
   }
-  private bindSceneMaterials(){
-    this.scene.traverse(o=>{if(!(o instanceof THREE.Mesh))return;for(const material of Array.isArray(o.material)?o.material:[o.material]){
+  private bindMaterials(o:THREE.Object3D){
+    if(!(o instanceof THREE.Mesh))return;for(const material of Array.isArray(o.material)?o.material:[o.material]){
       if(!(material instanceof THREE.MeshStandardMaterial)||this.bindings.has(material))continue;
       const release=bindUnderwaterMaterial(material,this.lighting);
       const disposed=()=>{release();this.bindings.delete(material);material.removeEventListener('dispose',disposed);};
       this.bindings.set(material,{release,disposed});material.addEventListener('dispose',disposed);
-    }});
+    }
+  }
+  private bindSceneMaterials(){this.scene.traverse(o=>this.bindMaterials(o));}
+  /** Run after world construction, before arrival's shader preparation. Hidden
+   * scenery can then be compiled by the existing background warmup on land. */
+  prepare(){
+    this.dressing??=new FriendsSubmergedDressing(this.scene);
+    this.bindSceneMaterials();
+  }
+  private prepareStreamedMaterials(){
+    const now=performance.now();
+    if(!this.materialScan.length){
+      if(now-this.lastScan<750)return;
+      this.lastScan=now;this.materialScan.push(this.scene);
+    }
+    // Discovery happens on land too, with bounded work rather than a full
+    // scene traversal and mass shader invalidation on the first dive.
+    let visited=0;
+    do{
+      const object=this.materialScan.pop()!;
+      this.bindMaterials(object);
+      for(const child of object.children)this.materialScan.push(child);
+      visited++;
+    }while(this.materialScan.length&&visited<128&&performance.now()-now<1);
   }
   /** Restore before daylight updates, then apply after the final camera pose. */
   beginFrame(){
+    this.prepareStreamedMaterials();
     this.dressing?.hide();this.lighting.enabled.value=0;this.motes.visible=this.shafts.visible=this.overlay.visible=false;
     if(!this.active)return;
     this.scene.fog=this.originalFog;this.scene.background=this.originalBackground;
@@ -98,12 +123,11 @@ export class FriendsUnderwaterVisuals{
     const depth=water?water.level-camera.position.y:0;
     const surface=water??(enabled&&swimming&&terrain?friendsLiveWaterSurface(terrain,camera.position.x,camera.position.z):undefined);
     if(enabled&&terrain&&surface&&(swimming||depth>=.5)){
-      if(!this.dressing){this.dressing=new FriendsSubmergedDressing(this.scene);this.bindSceneMaterials();}
+      if(!this.dressing){this.dressing=new FriendsSubmergedDressing(this.scene);this.dressing.root.traverse(o=>this.bindMaterials(o));}
       this.dressing.update(camera,elapsed,terrain,surface.bodyId);
     }else this.dressing?.hide();
     if(depth<.5){this.wasSubmerged=false;return;}
     if(!this.wasSubmerged){this.enteredAt=elapsed;this.wasSubmerged=true;}
-    if(elapsed-this.lastScan>750){this.bindSceneMaterials();this.lastScan=elapsed;}
     this.originalFog=this.scene.fog;this.originalBackground=this.scene.background;
     const immersion=THREE.MathUtils.smoothstep(depth,0,18),sea=water!.bodyId==='sea',clarity=sea?.85:1.1;
     const dark=1-Math.exp(-depth*.0016*clarity),depthLight=Math.exp(-depth*.0013*clarity);
@@ -130,7 +154,7 @@ export class FriendsUnderwaterVisuals{
     }this.shafts.instanceMatrix.needsUpdate=true;}
   }
   dispose(){
-    this.beginFrame();for(const [material,binding]of this.bindings){material.removeEventListener('dispose',binding.disposed);binding.release();}this.bindings.clear();
+    this.beginFrame();this.materialScan.length=0;for(const [material,binding]of this.bindings){material.removeEventListener('dispose',binding.disposed);binding.release();}this.bindings.clear();
     for(const object of [this.overlay,this.motes,this.shafts]){object.removeFromParent();object.geometry.dispose();object.material.dispose();}
     this.shafts.dispose();this.dressing?.dispose();
   }

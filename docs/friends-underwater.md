@@ -17,7 +17,7 @@ Cover is estimated with five cached vertical terrain probes up to just above the
 
 `FriendsUnderwaterVisuals.ts` owns per-scene lighting uniforms, material bindings, fog/sky restoration, the overlay, motes and light planes. Material decoration is implemented in `FriendsUnderwaterLighting.ts`; it preserves existing terrain masks, cloud shading, cave lighting, shadows and shader callbacks.
 
-Existing materials bind during construction. Newly streamed materials are discovered by an amortized scan while underwater. Material disposal releases the binding, and effect disposal restores shader hooks and disposes owned geometry/materials. `beginFrame()` restores outdoor fog/background and prior sky/cloud visibility before the daylight update.
+Existing materials bind during construction. After the Frontier world is built, `prepare()` binds its materials before arrival shader preparation and creates hidden, fixed-size bed scenery for background shader warmup. Newly streamed materials are discovered on land and in water by `beginFrame()`, scanning at most 128 objects or one millisecond per frame. Entering water no longer triggers a full-scene material scan or mass shader invalidation. Placement terrain queries remain gated by swimming/diving. Material disposal releases the binding, and effect disposal restores shader hooks and disposes owned geometry/materials. `beginFrame()` restores outdoor fog/background and prior sky/cloud visibility before the daylight update.
 
 The production renderer continues passing `FriendsFrontierVisuals.terrain` to `update()`. Water occupancy uses `friendsLiveWaterAt`, including connected excavation water. The real-world river review now passes its terrain instance too.
 
@@ -38,9 +38,14 @@ npx vitest run src/game/rendering/FriendsUnderwaterVisuals.test.ts src/game/worl
 npx vitest run src/game/rendering/FriendsIslandWater.test.ts -t 'excludes|keeps|moves'
 FRIENDS_TEST_ORIGIN=http://localhost:3014 node tools/test-underwater-polish.mjs
 FRIENDS_TEST_ORIGIN=http://localhost:3014 node tools/test-underwater-integration.mjs
+FRIENDS_TEST_ORIGIN=http://localhost:3014 node tools/test-water-entry.mjs
 ```
 
 Unit tests cover restoration when surfacing, roof/night shaft suppression, bounded reusable geometry, shader-hook cleanup and independent scene state. Browser checks compile actual terrain/prop/water shaders and capture controlled and real island views; compare GPU timing; and repeat 120 surface/dive transitions to check GPU memory stability. The integration check verifies that a point lamp lights roofed water and that a flooded excavation enables the effect, sealing it disables the effect, and reopening restores it.
+
+The water-entry regression prepares 24 distinct world shader variants, including production cloud lighting, cave lighting and terrain coverage, plus the hidden underwater effects using the production background warmup, then crosses into a river and the sea. It asserts that entry creates zero additional shader programs, changes no world material versions, and produces no shader or WebGL errors. After each dive it returns above water and checks that fog is restored and the visible land image matches the pre-dive image pixel for pixel. This controlled fixture checks shader reuse and restoration, not full-game FPS or a particular GPU's stall duration.
+
+Underwater depth transmission is declared at the start of the fragment shader's `main`, before lighting uses it. Cloud and cave hooks expand the standard lighting include before the underwater hook runs, so declarations cannot depend on that include still being present. The shader cache key is versioned to prevent reuse of the old invalid composition.
 
 In the final local controlled 1440×900 run, median GPU time changed from 6.28 to 6.62 ms for the bottom view, 7.61 to 7.47 ms for the overhead view (within timing variability), and 6.53 to 7.03 ms for the covered view. Bottom p95 changed from 8.46 to 10.05 ms. Each version had 64 valid GPU samples per view. These are fixture measurements, not a full-game FPS guarantee. Geometry and texture counts remained at 10 and 2 across the transition stress test.
 

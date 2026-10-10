@@ -1,10 +1,41 @@
-import { describe,expect,it } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import * as THREE from 'three';
 import { FriendsUnderwaterVisuals } from './FriendsUnderwaterVisuals';
 import { FriendsTerrain } from '../world/FriendsTerrain';
 
 const camera=()=>{const c=new THREE.PerspectiveCamera();c.position.set(12128,90,23600);return c;};
 describe('underwater scene lifecycle and bounded effects',()=>{
+ it('prepares world shaders and hidden bed scenery before the first dive',()=>{
+  const scene=new THREE.Scene(),effect=new FriendsUnderwaterVisuals(scene);
+  // The production world is built after the effect's constructor.
+  const material=new THREE.MeshStandardMaterial(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),material);scene.add(mesh);
+  const original=material.onBeforeCompile;
+  effect.prepare();const hook=material.onBeforeCompile,version=material.version,key=material.customProgramCacheKey();
+  expect(hook).not.toBe(original);
+  const dressing=scene.getObjectByName('submerged-bed-dressing')!;
+  expect(dressing.visible).toBe(false);
+  const floor=vi.spyOn(FriendsTerrain.prototype,'floor');
+  try{
+   const terrain=new FriendsTerrain(),c=camera();c.position.y=220;effect.beginFrame();effect.update(c,0,true,1,terrain);
+   expect(floor).not.toHaveBeenCalled();
+   c.position.y=90;effect.beginFrame();effect.update(c,1000,true,1,terrain);
+   expect(material.onBeforeCompile).toBe(hook);expect(material.version).toBe(version);expect(material.customProgramCacheKey()).toBe(key);
+   expect(scene.getObjectByName('submerged-bed-dressing')).toBe(dressing);
+  }finally{floor.mockRestore();effect.dispose();mesh.geometry.dispose();material.dispose();}
+ });
+ it('discovers streamed materials on land in bounded batches without scanning at dive entry',()=>{
+  const scene=new THREE.Scene(),effect=new FriendsUnderwaterVisuals(scene),geometry=new THREE.BoxGeometry();
+  const materials=Array.from({length:400},()=>new THREE.MeshStandardMaterial());
+  for(const material of materials)scene.add(new THREE.Mesh(geometry,material));
+  const originals=materials.map(m=>m.onBeforeCompile),bound=()=>materials.filter((m,i)=>m.onBeforeCompile!==originals[i]).length;
+  const clock=vi.spyOn(performance,'now').mockReturnValue(0);
+  try{
+   effect.beginFrame();expect(bound()).toBeGreaterThan(0);expect(bound()).toBeLessThanOrEqual(128);
+   const before=bound();effect.update(camera(),1000);expect(bound()).toBe(before);
+   for(let frame=0;frame<10;frame++)effect.beginFrame();
+   expect(bound()).toBe(400);
+  }finally{clock.mockRestore();effect.dispose();geometry.dispose();materials.forEach(m=>m.dispose());}
+ });
  it('restores fog, background and atmospheric visibility when surfacing',()=>{
   const scene=new THREE.Scene(),fog=new THREE.FogExp2('#b5cccf',.000015),background=new THREE.Color('#b5cccf');scene.fog=fog;scene.background=background;
   const sky=new THREE.Group();sky.name='frontier-day-night-sky';scene.add(sky);const clouds=new THREE.Group();clouds.name='frontier-volumetric-cumulus';clouds.visible=false;scene.add(clouds);

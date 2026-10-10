@@ -6,7 +6,8 @@ import { ISLAND_LAKES } from '../world/FriendsIsland';
 const CELL=112,RADIUS=5,SLOTS=121;
 const hash=(x:number,z:number,s:number)=>{const n=Math.sin(x*127.1+z*311.7+s*74.7)*43758.5453;return n-Math.floor(n);};
 /** Cosmetic only: fixed instance buffers, deterministic rolling tiles and bounded
- * placement work. Constructed lazily by the swimming/diving presentation gate. */
+ * placement work. Prepared hidden during world setup; placement is gated by
+ * swimming/diving so land frames never sample the bed. */
 export class FriendsSubmergedDressing {
  readonly root=new THREE.Group();
  readonly rocks:THREE.InstancedMesh;readonly plants:THREE.InstancedMesh;readonly timber:THREE.InstancedMesh;

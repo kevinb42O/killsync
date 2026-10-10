@@ -308,6 +308,7 @@ export class MultiplayerRendererBridge {
     if (worldId !== 'friends_frontier') void this.localFirearm;
     this.renderer.scene.add(this.arcanaVisuals.group);
     if (worldId !== 'friends_frontier') this.trailSystem = new OperatorTrailSystem(this.renderer.scene);
+    if (worldId === 'friends_frontier') this.underwater.prepare();
   }
 
   mount(container: HTMLElement) {

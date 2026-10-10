@@ -38,9 +38,12 @@ export function bindUnderwaterMaterial(material:THREE.MeshStandardMaterial,unifo
         float cells=pow(max(0.,1.-abs(a-b)*.9),10.);
         return min(1.,lines*.65+cells*.45);
       }
-      `+shader.fragmentShader.replace('#include <lights_fragment_begin>',`vec3 fuwDepthTransmission=vec3(1.);
- if(fuwEnabled>.001&&fuwWorld.y<fuwLevel)fuwDepthTransmission=max(vec3(.008),exp(-max(0.,fuwLevel-fuwWorld.y)*vec3(.0028,.0017,.0011)*fuwClarity));
-`+THREE.ShaderChunk.lights_fragment_begin).replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= mix(vec3(1.),fuwDepthTransmission*fuwExposure,fuwEnabled*step(fuwWorld.y,fuwLevel));').replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n reflectedLight.indirectDiffuse *= mix(vec3(1.),fuwDepthTransmission*(.20+.80*fuwExposure),fuwEnabled*step(fuwWorld.y,fuwLevel));').replace('#include <opaque_fragment>',`
+      `+shader.fragmentShader.replace(/void\s+main\s*\(\s*\)\s*\{/,`$&
+      // Earlier cloud/cave hooks may already have expanded the lighting chunk.
+      // Declare in main so both expanded and unexpanded lighting can use it.
+      vec3 fuwDepthTransmission=vec3(1.);
+      if(fuwEnabled>.001&&fuwWorld.y<fuwLevel)fuwDepthTransmission=max(vec3(.008),exp(-max(0.,fuwLevel-fuwWorld.y)*vec3(.0028,.0017,.0011)*fuwClarity));
+      `).replace('#include <lights_fragment_begin>',THREE.ShaderChunk.lights_fragment_begin).replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= mix(vec3(1.),fuwDepthTransmission*fuwExposure,fuwEnabled*step(fuwWorld.y,fuwLevel));').replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n reflectedLight.indirectDiffuse *= mix(vec3(1.),fuwDepthTransmission*(.20+.80*fuwExposure),fuwEnabled*step(fuwWorld.y,fuwLevel));').replace('#include <opaque_fragment>',`
       if(fuwEnabled>.001){
         float submerged=smoothstep(0.,6.,fuwLevel-fuwWorld.y)*fuwEnabled;
         float travel=length(cameraPosition-fuwWorld);
@@ -60,6 +63,6 @@ export function bindUnderwaterMaterial(material:THREE.MeshStandardMaterial,unifo
       }
       #include <opaque_fragment>`);
   };
-  material.onBeforeCompile=decorate;material.customProgramCacheKey=()=>`${key}:underwater-light-v2:${allowSun}`;material.needsUpdate=true;
+  material.onBeforeCompile=decorate;material.customProgramCacheKey=()=>`${key}:underwater-light-v3:${allowSun}`;material.needsUpdate=true;
   return ()=>{if(material.onBeforeCompile===decorate){material.onBeforeCompile=previous;material.customProgramCacheKey=previousKey;material.needsUpdate=true;}};
 }
