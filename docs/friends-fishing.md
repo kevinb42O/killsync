@@ -131,3 +131,26 @@ Regression coverage includes capped holds, release-time aiming, distance and
 pitch control, dry ground, bridges over water, walls, water disappearing during a
 bite, preparation cancellation, and the real host catch loop. Browser checks
 exercise casting controls and the full host-to-guest catch/release loop.
+
+## October 11 casting motion and retrieval
+
+Charging raises and draws the rod back. Release preserves that pose, accelerates
+into a forward stroke over 180 ms, then eases into the ready position with a
+brief damped tip recovery. The bobber starts its flight 150 ms after release,
+as the forward stroke unloads. A separate cast timestamp prevents a nearby wall
+or early landing from restarting the animation. Third-person rods use the same
+stroke in the player's facing direction, with yaw applied after local pitch.
+
+Empty retrieval scales with the current player-to-bobber distance at a nominal
+85 world units per second, bounded to 1.4–6.5 seconds. Retrieval eases into and
+out of movement, keeps the bobber above sampled ground, and uses a small lift
+instead of the caught-fish arc. The crank turns about 1.6 times per second;
+empty line has less rod load than a hooked fish. Reel audio loops for the
+authoritative retrieval duration and stops when retrieval ends or is cancelled.
+
+The stroke reuses a single pose object and the existing rod morph, attached
+filament and line ribbon. It adds no meshes, draw calls or rope simulation.
+Verification includes 68 focused tests, rendered backswing/forward/recovery
+captures, four third-person headings, reel audio lifetime, actual mouse/touch
+game controls, and the host-to-guest catch loop. See
+`tools/test-friends-fishing-casting.mjs` for the casting visual regression check.

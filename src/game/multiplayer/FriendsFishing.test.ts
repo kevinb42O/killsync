@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FriendsFishing, FISHING_BITE_MS, FISHING_CHARGE_MS, FISHING_REEL_MS, FISHING_WAIT_MIN_MS, FISHING_WAIT_MAX_MS, LOOSE_FISH_LIMIT, fishLengthCm, fishingCatchSize, type FishingActor, type FishingEnvironment } from './FriendsFishing';
+import { FriendsFishing, FISHING_BITE_MS, FISHING_CHARGE_MS, FISHING_CAST_RELEASE_MS, fishingEmptyReelMs, FISHING_REEL_MS, FISHING_WAIT_MIN_MS, FISHING_WAIT_MAX_MS, LOOSE_FISH_LIMIT, fishLengthCm, fishingCatchSize, type FishingActor, type FishingEnvironment } from './FriendsFishing';
 import { SnapshotDecoder, compactSnapshotWirePayload } from './snapshotReplication';
 import { FriendsSimulation } from './FriendsSimulation';
 import { friendsToolInput } from './FriendsToolControls';
@@ -11,7 +11,7 @@ import { ISLAND_LAKES } from '../world/FriendsIsland';
 const input=(extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:0,aimAngle:0,aimPitch:Math.round((-.3+Math.PI*.44)/(Math.PI*.88)*65535),friendsTool:7,selectedSlot:0,firing:false,fireActionId:0,altFireActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
 const player=():FishingActor=>({id:'host',x:0,y:0,z:0,angle:0,lifeState:'alive'});
 const environment:FishingEnvironment={water:(x)=>x>=80?{level:0,depth:40,bodyId:'test'}:undefined,floor:(x)=>x>=80?-40:0,blocked:()=>false};
-const fixtureFlightMs=700;
+const fixtureFlightMs=900;
 const fixtureBiteDelay=fixtureFlightMs+(FISHING_WAIT_MIN_MS+FISHING_WAIT_MAX_MS)/2+50;
 function fixture(sizeRandom=.5,env:FishingEnvironment=environment){
   let samples=0;
@@ -43,6 +43,28 @@ describe('casual Friends fishing',()=>{
     expect(short.x).toBeLessThan(medium.x);expect(medium.x).toBeLessThan(long.x);expect(long.x).toBeCloseTo(capped.x);
     expect(cast(1200,.45).x).toBeGreaterThan(cast(1200,-.8).x);
   });
+  it('pays out the line at the forward stroke and preserves its launch timestamp through landing',()=>{
+    const f=fixture();f.command={...f.command,fireActionId:1,firing:true};f.step(1300);
+    f.command={...f.command,firing:false};f.step();const start=f.fishing.snapshot().casts[0];
+    expect(start.castPower).toBe(1);expect(start.flightAt).toBe(start.castAt!+FISHING_CAST_RELEASE_MS);
+    f.step(100);expect(f.fishing.snapshot().casts[0].x).toBe(start.x);
+    f.step(100);expect(f.fishing.snapshot().casts[0].x).toBeGreaterThan(start.x);
+    f.step(3000);expect(f.fishing.snapshot().casts[0].castAt).toBe(start.castAt);
+  });
+  it('retrieves dry casts over distance with gradual acceleration and no instant disappearance or catch',()=>{
+    const retrieve=(hold:number)=>{
+      const f=fixture(.5,{...environment,water:()=>undefined,floor:()=>0});
+      f.command={...f.command,fireActionId:1,firing:true};f.step();f.step(hold);
+      f.command={...f.command,firing:false};f.step(4000);const landed=f.fishing.snapshot().casts[0];
+      f.click();const started=f.fishing.snapshot().casts[0];
+      expect(started.reelDurationMs).toBeCloseTo(fishingEmptyReelMs(Math.hypot(landed.x-f.p.x,landed.y-f.p.y,landed.z-f.p.z-25)));
+      f.step(500);const moving=f.fishing.snapshot().casts[0];
+      expect(moving.phase).toBe('reeling');expect(moving.x).toBeLessThan(landed.x);expect(moving.x).toBeGreaterThan(16);expect(moving.z).toBeGreaterThanOrEqual(2);
+      f.step(started.reelDurationMs!);expect(f.fishing.snapshot().casts).toHaveLength(0);expect(f.fishing.snapshot().fish).toHaveLength(0);
+      return started.reelDurationMs!;
+    };
+    expect(retrieve(1200)).toBeGreaterThan(retrieve(0));
+  });
   it('cancels preparation on secondary action, tool change, menus, invalid actors and disconnect without throwing',()=>{
     for(const cancel of ['secondary','tool','menu','swim','dead','pilot','disconnect']){
       const f=fixture();f.command={...f.command,fireActionId:1,firing:true};f.step(500);
@@ -58,7 +80,7 @@ describe('casual Friends fishing',()=>{
   it('lands dry on a bridge above water and retrieves without a fish',()=>{
     const f=fixture(.5,{water:()=>({level:0,depth:40,bodyId:'test'}),floor:()=>20,blocked:()=>false});
     f.click();f.step(1000);expect(f.fishing.snapshot().casts[0]).toMatchObject({phase:'dry',z:22,biteAt:0});
-    f.step(60000);expect(f.fishing.snapshot().casts[0].phase).toBe('dry');f.click();f.step(500);
+    f.step(60000);expect(f.fishing.snapshot().casts[0].phase).toBe('dry');f.click();f.step(7000);
     expect(f.fishing.snapshot().casts).toHaveLength(0);expect(f.fishing.snapshot().fish).toHaveLength(0);
   });
   it('intercepts walls and falls on the near side rather than snapping to distant water',()=>{
@@ -95,13 +117,13 @@ describe('casual Friends fishing',()=>{
     expect(fishingCatchSize(1)).toBeCloseTo(4.2);
   });
   it('pulls a taut bobber when walking away while preserving its paid-out length and bite timing',()=>{
-    const f=fixture(.5,{...environment,water:()=>({level:0,depth:40,bodyId:'test'}),floor:()=>-40});f.click();f.step(700);const before=f.fishing.snapshot().casts[0];
+    const f=fixture(.5,{...environment,water:()=>({level:0,depth:40,bodyId:'test'}),floor:()=>-40});f.click();f.step(900);const before=f.fishing.snapshot().casts[0];
     f.p.x=-90;f.step(1600);const after=f.fishing.snapshot().casts[0];
     expect(after.x).toBeLessThan(before.x-30);expect(after.lineLength).toBe(before.lineLength);expect(after.biteAt).toBe(before.biteAt);
     const x=after.x;f.p.x+=40;f.step(500);expect(f.fishing.snapshot().casts[0].x).toBeCloseTo(x);
   });
   it('retrieves safely when a dragged bobber reaches the dry bank',()=>{
-    const f=fixture();f.click();f.step(700);f.p.x=-170;f.step(3500);
+    const f=fixture();f.click();f.step(900);f.p.x=-170;f.step(7000);
     expect(f.fishing.snapshot().casts).toHaveLength(0);expect(f.fishing.snapshot().fish).toHaveLength(0);
   });
   it('preserves the original catcher when another player picks up the fish',()=>{
@@ -134,22 +156,22 @@ describe('casual Friends fishing',()=>{
   it('gives another bite after a miss and cancels early retrieval without manufacturing a fish',()=>{
     const f=fixture();f.click();f.step(fixtureBiteDelay);expect(f.fishing.snapshot().casts[0].phase).toBe('bite');f.step(FISHING_BITE_MS);expect(f.fishing.snapshot().casts[0].phase).toBe('waiting');
     f.step(9500);expect(f.fishing.snapshot().casts[0].phase).toBe('bite');expect(f.fishing.snapshot().fish).toHaveLength(0);
-    f.command={...f.command,aiming:true};f.step(500);expect(f.fishing.snapshot().casts).toHaveLength(0);
-    f.command={...f.command,aiming:false};f.click();f.step(700);f.click();f.step(500);expect(f.fishing.snapshot().casts).toHaveLength(0);
+    f.command={...f.command,aiming:true};f.step(7000);expect(f.fishing.snapshot().casts).toHaveLength(0);
+    f.command={...f.command,aiming:false};f.click();f.step(900);f.click();f.step(7000);expect(f.fishing.snapshot().casts).toHaveLength(0);
   });
   it('randomizes bites over a wide window and draws a fresh delay after a miss',()=>{
     const delays=[0,.25,.5,.999].map(random=>{
       const fishing=new FriendsFishing(()=>random),p=player(),command=input({fireActionId:1});
       fishing.update(50,50,[p],new Map([[p.id,command]]),environment);
-      fishing.update(50,750,[p],new Map([[p.id,command]]),environment);
-      const cast=fishing.snapshot().casts[0],delay=cast.biteAt-750;
+      fishing.update(50,950,[p],new Map([[p.id,command]]),environment);
+      const cast=fishing.snapshot().casts[0],delay=cast.biteAt-950;
       expect(delay).toBeGreaterThanOrEqual(FISHING_WAIT_MIN_MS);expect(delay).toBeLessThan(FISHING_WAIT_MAX_MS);
       return delay;
     });
     expect(delays[3]-delays[0]).toBeGreaterThan(20000);
     const samples=[.1,.5,.9],fishing=new FriendsFishing(()=>samples.shift()??.5),p=player(),command=input({fireActionId:1}),commands=new Map([[p.id,command]]);
     fishing.update(50,50,[p],commands,environment);
-    fishing.update(50,750,[p],commands,environment);
+    fishing.update(50,950,[p],commands,environment);
     const biteAt=fishing.snapshot().casts[0].biteAt;
     fishing.update(50,biteAt,[p],commands,environment);
     fishing.update(50,biteAt+FISHING_BITE_MS,[p],commands,environment);
@@ -159,7 +181,7 @@ describe('casual Friends fishing',()=>{
     for(const env of [{...environment,water:()=>undefined},{...environment,blocked:()=>true}]){
       const fishing=new FriendsFishing();const commands=new Map([['host',input({fireActionId:1})]]);
       fishing.update(50,50,[player()],commands,env);expect(fishing.snapshot().casts).toHaveLength(1);
-      fishing.update(50,1000,[player()],commands,env);expect(fishing.snapshot().casts[0].phase).toBe('dry');
+      fishing.update(50,2000,[player()],commands,env);expect(fishing.snapshot().casts[0].phase).toBe('dry');
       fishing.update(50,60000,[player()],commands,env);expect(fishing.snapshot().casts[0].phase).toBe('dry');expect(fishing.snapshot().fish).toHaveLength(0);
     }
     for(const p of [{...player(),swimming:true},{...player(),friendsSeat:{vehicleId:'boat',index:0}}]){
@@ -188,7 +210,7 @@ describe('casual Friends fishing',()=>{
     const fishing=new FriendsFishing(()=>.5),players=Array.from({length:LOOSE_FISH_LIMIT+4},(_,i)=>({...player(),id:`angler-${i}`}));
     const commands=(fireActionId:number,release=false)=>new Map(players.map((p,i)=>[p.id,input({fireActionId,altFireActionId:release&&i>0?1:0})]));
     fishing.update(50,50,players,commands(1),environment);
-    fishing.update(50,750,players,commands(1),environment);
+    fishing.update(50,950,players,commands(1),environment);
     fishing.update(50,20000,players,commands(1),environment);
     fishing.update(50,20050,players,commands(2),environment);
     const caughtAt=20050+FISHING_REEL_MS;

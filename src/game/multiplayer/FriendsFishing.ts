@@ -8,6 +8,9 @@ export const FISHING_CHARGE_MS = 1200;
 const FISHING_GRAVITY = 230;
 export const fishingCastPower = (heldMs:number) => Math.max(0,Math.min(1,heldMs/FISHING_CHARGE_MS));
 export const FISHING_REEL_MS = 2800;
+// The line leaves the guides near the end of the forward stroke.
+export const FISHING_CAST_RELEASE_MS = 150;
+export const fishingEmptyReelMs = (distance:number) => Math.max(1400,Math.min(6500,distance/85*1000));
 export const FISHING_BITE_MS = 4000;
 export const FISHING_WAIT_MIN_MS = 7000;
 export const FISHING_WAIT_MAX_MS = 28000;
@@ -28,7 +31,7 @@ export function fishingSeatAllowed(seat:FishingActor['friendsSeat']) {
 }
 export type FishingPoint = { x:number; y:number; z:number };
 export type FishingActor = FishingPoint & { id:string; angle:number; lifeState:string; swimming?:boolean; friendsDevFlight?:boolean; friendsSeat?:{vehicleId:string;index:number} };
-export type FishingCast = FishingPoint & { id:number; playerId:string; phase:'casting'|'dry'|'waiting'|'bite'|'reeling'; empty?:boolean; atMs:number; biteAt:number; from:FishingPoint; target:FishingPoint; size:number; lineLength?:number; velocity?:FishingPoint; flightAt?:number };
+export type FishingCast = FishingPoint & { id:number; playerId:string; phase:'casting'|'dry'|'waiting'|'bite'|'reeling'; empty?:boolean; atMs:number; biteAt:number; from:FishingPoint; target:FishingPoint; size:number; lineLength?:number; velocity?:FishingPoint; flightAt?:number; castAt?:number; castPower?:number; reelDurationMs?:number };
 export type CaughtFish = FishingPoint & { id:number; size:number; phase:'held'|'air'|'dry'|'swimming'|'fading'; ownerId?:string; caughtBy?:string; atMs:number; angle:number; vx:number; vy:number; vz:number; heldTool?:number; unattendedAt?:number };
 export type FishingCharge = { playerId:string; chargeAt:number };
 export type FishingSnapshot = { charges?:FishingCharge[]; equipped:string[]; casts:FishingCast[]; fish:CaughtFish[] };
@@ -59,8 +62,8 @@ export class FriendsFishing {
     const power=fishingCastPower(now-chargeAt),speed=140+power*210;
     // Launch at the hand so a nearby wall cannot be skipped by an offset origin.
     const from={x:p.x,y:p.y,z:p.z+26};
-    this.casts.set(p.id,{id:++this.serial,playerId:p.id,...from,from,target:{...from},phase:'casting',atMs:now,biteAt:0,size:0,
-      velocity:{x:Math.cos(angle)*Math.cos(pitch)*speed,y:Math.sin(angle)*Math.cos(pitch)*speed,z:Math.sin(pitch)*speed+75+power*100},flightAt:now});
+    this.casts.set(p.id,{id:++this.serial,playerId:p.id,...from,from,target:{...from},phase:'casting',atMs:now,castAt:now,castPower:power,biteAt:0,size:0,
+      velocity:{x:Math.cos(angle)*Math.cos(pitch)*speed,y:Math.sin(angle)*Math.cos(pitch)*speed,z:Math.sin(pitch)*speed+75+power*100},flightAt:now+FISHING_CAST_RELEASE_MS});
   }
   private wet(c:FishingCast,env:FishingEnvironment){
     const w=this.water(env,c.x,c.y),floor=env.floor(c.x,c.y,c.z+3,0);
@@ -74,8 +77,8 @@ export class FriendsFishing {
   private wait(c:FishingCast,now:number){
     c.phase='waiting';c.atMs=now;c.biteAt=now+FISHING_WAIT_MIN_MS+this.random()*(FISHING_WAIT_MAX_MS-FISHING_WAIT_MIN_MS);
   }
-  private fly(c:FishingCast,env:FishingEnvironment,now:number){
-    if(!c.velocity)return;
+  private fly(c:FishingCast,env:FishingEnvironment,now:number,p:FishingActor){
+    if(!c.velocity||now<(c.flightAt??c.atMs))return;
     let remaining=Math.max(0,Math.min(8000,now-(c.flightAt??c.atMs)))/1000;
     // Sweep small segments against both floors and obstacles, including bridges.
     while(remaining>1e-7&&c.phase==='casting'){
@@ -110,8 +113,15 @@ export class FriendsFishing {
     }
     if(c.phase==='casting'){
       c.flightAt=now;
-      if(now-c.atMs>=8000){c.empty=true;c.phase='reeling';c.atMs=now;c.from={x:c.x,y:c.y,z:c.z};}
+      if(now-c.atMs>=8000){this.reel(c,now,true,p);}
     }
+  }
+  private reel(c:FishingCast,now:number,empty:boolean,actor:FishingActor){
+    const reach=distance(c,{...actor,z:actor.z+25});
+    c.empty=empty;c.phase='reeling';c.atMs=now;c.from={x:c.x,y:c.y,z:c.z};
+    c.velocity=undefined;c.flightAt=undefined;
+    // Measure from the current player position, including movement since launch.
+    c.reelDurationMs=empty?fishingEmptyReelMs(reach):FISHING_REEL_MS;
   }
   private release(f:CaughtFish,p:FishingActor|undefined,input:MultiplayerInputFrame|undefined,now:number,throwing:boolean,env:FishingEnvironment){
     this.makeRoom(now);
@@ -165,28 +175,29 @@ export class FriendsFishing {
         if(horizontal>available){
           const pull=Math.min(horizontal-available,85*seconds),next={x:c.x+(anchor.x-c.x)/horizontal*pull,y:c.y+(anchor.y-c.y)/horizontal*pull,z:c.z},water=this.water(env,next.x,next.y);
           const floor=env.floor(next.x,next.y,c.z+6,0);
-          if(!water||floor!==undefined&&floor>=water.level-1||env.blocked(c,next)){c.empty=true;c.phase='reeling';c.atMs=now;c.from={x:c.x,y:c.y,z:c.z};}
+          if(!water||floor!==undefined&&floor>=water.level-1||env.blocked(c,next)){this.reel(c,now,true,p);}
           else {next.z=water.level+2;Object.assign(c,next);c.target={...next};}
         }
       }
       if(secondary)this.charges.delete(p.id);
-      if(secondary&&c&&c.phase!=='reeling'){c.empty=true;c.phase='reeling';c.atMs=now;c.from={x:c.x,y:c.y,z:c.z};}
+      if(secondary&&c&&c.phase!=='reeling'){this.reel(c,now,true,p);}
       if(secondary)continue;
       if(primary){
         if(!c&&!this.charges.has(p.id))this.charges.set(p.id,now);
-        else if(c?.phase==='bite'&&this.wet(c,env)){c.size=fishingCatchSize(this.random());c.phase='reeling';c.atMs=now;c.from={x:c.x,y:c.y,z:c.z};}
-        else if(c&&(c.phase==='waiting'||c.phase==='dry'||c.phase==='casting')){c.empty=true;c.phase='reeling';c.atMs=now;c.from={x:c.x,y:c.y,z:c.z};}
+        else if(c?.phase==='bite'&&this.wet(c,env)){c.size=fishingCatchSize(this.random());this.reel(c,now,false,p);}
+        else if(c&&(c.phase==='waiting'||c.phase==='dry'||c.phase==='casting')){this.reel(c,now,true,p);}
       }
       const chargeAt=this.charges.get(p.id);
       if(chargeAt!==undefined&&!input!.firing){this.charges.delete(p.id);this.start(p,input!,now,chargeAt);}
       c=this.casts.get(p.id);if(!c)continue;
       if(c.phase==='casting'){
-        this.fly(c,env,now);
+        this.fly(c,env,now,p);
       }else if(c.phase==='waiting'&&now>=c.biteAt){c.phase='bite';c.atMs=now;}
       else if(c.phase==='bite'&&now-c.atMs>=FISHING_BITE_MS){c.phase='waiting';c.atMs=now;c.biteAt=now+4000+this.random()*10000;}
       else if(c.phase==='reeling'){
-        const t=Math.min(1,(now-c.atMs)/(c.empty?400:FISHING_REEL_MS)),end={x:p.x+Math.cos(p.angle)*16,y:p.y+Math.sin(p.angle)*16,z:p.z+25};
-        c.x=mix(c.from.x,end.x,t);c.y=mix(c.from.y,end.y,t);c.z=mix(c.from.z,end.z,t)+Math.sin(Math.PI*t)*30;
+        const progress=Math.max(0,Math.min(1,(now-c.atMs)/(c.reelDurationMs??FISHING_REEL_MS))),t=progress*progress*(3-2*progress),end={x:p.x+Math.cos(p.angle)*16,y:p.y+Math.sin(p.angle)*16,z:p.z+25};
+        c.x=mix(c.from.x,end.x,t);c.y=mix(c.from.y,end.y,t);c.z=mix(c.from.z,end.z,t)+Math.sin(Math.PI*t)*(c.empty?2:30);
+        if(c.empty){const floor=env.floor(c.x,c.y,c.z+3,0);if(floor!==undefined)c.z=Math.max(c.z,floor+2);}
         if(t>=1){if(!c.empty){this.fish.push({id:c.id,size:c.size,phase:'held',ownerId:p.id,caughtBy:p.id,heldTool:FISHING_TOOL,atMs:now,...end,angle:p.angle,vx:0,vy:0,vz:0});}this.casts.delete(p.id);}
       }
     }

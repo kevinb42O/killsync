@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import type { FishingSnapshot, CaughtFish } from '../multiplayer/FriendsFishing';
-import { FISH_GROUND_RADIUS, fishingCastPower } from '../multiplayer/FriendsFishing';
+import { FISH_GROUND_RADIUS, FISHING_REEL_MS } from '../multiplayer/FriendsFishing';
 import { friendsAudio } from '../FriendsAudio';
 import { acquireEquipmentLighting, frameHeldEquipment, loadFriendsGrip } from './FriendsHeldEquipment';
 import { createFishingFish, loadFishingFish, loadFishingRod } from './FriendsFishingAssets';
@@ -10,6 +10,7 @@ import { friendsWaterAt } from '../world/FriendsWaterSurface';
 import { groundFishMotion } from './FriendsFishGroundAnimation';
 import { heldFishFraming } from './FriendsFishingPresentation';
 import { FriendsFishingReelArm } from './FriendsFishingReelArm';
+import { fishingRodPose, type FishingRodPose } from './FriendsFishingRodPose';
 
 type Rod={root:THREE.Group;tip?:THREE.Object3D;mesh?:THREE.Mesh;arm?:THREE.Mesh;reelHand?:THREE.Mesh;reelArm?:FriendsFishingReelArm;armRequested?:boolean;line:FriendsFishingLine;float:THREE.Group;ring:THREE.Mesh;phase:string;serial:number;local:boolean;lineOffset:number;previousFloat:THREE.Vector3;nextSplash:number;reelVoice?:AudioBufferSourceNode};
 type Fish={root:THREE.Group;model?:ReturnType<typeof createFishingFish>;action?:THREE.AnimationAction;clip?:string;id:number;phase:string;animationAt:number};
@@ -40,6 +41,7 @@ export class FriendsFishingVisuals {
   private dropRotation=new THREE.Quaternion();
   private shadowTexture=softShadowTexture();
   private shadows=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:'#15291e',alphaMap:this.shadowTexture,transparent:true,opacity:.25,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}),40);
+  private rodPose:FishingRodPose={pitch:0,lift:0,draw:0,flex:0};
   private start=new THREE.Vector3();
   private end=new THREE.Vector3();
   private cameraPoint=new THREE.Vector3();
@@ -108,13 +110,13 @@ export class FriendsFishingVisuals {
     for(const id of state?.equipped??[]){
       const player=players.find(p=>p.id===id);if(!player)continue;const local=id===localId&&firstPerson;if(local&&tool!==7)continue;
       if(!local&&Math.hypot(player.x-this.cameraPoint.x,player.y-this.cameraPoint.z)>1800)continue;
-      active.add(id);const r=this.rod(id,local),cast=state?.casts.find(c=>c.playerId===id),t=cast?(now-cast.atMs)/1000:0,charge=state?.charges?.find(c=>c.playerId===id),power=charge?fishingCastPower(now-charge.chargeAt):0;
-      if(local){frameHeldEquipment(r.root,this.camera);r.root.rotation.set(-.48-power*.32+(cast?.phase==='casting'?.65*Math.sin(Math.min(1,t/.65)*Math.PI):0)-(cast?.phase==='bite'?.12*Math.sin(now*.023):0)-(cast?.phase==='reeling'?.10+.035*Math.sin(now*.017):0),0,-.12);this.lighting.setVisible(true);}
-      else{if(!handPoint(id,this.start))this.start.set(player.x,player.z+25,player.y);r.root.position.copy(this.start);r.root.scale.setScalar(32);r.root.rotation.set(-.45-power*.32,Math.PI/2-player.angle,-.12);}
-      r.root.visible=true;r.line.visible=r.float.visible=r.ring.visible=Boolean(cast);
+      active.add(id);const r=this.rod(id,local),cast=state?.casts.find(c=>c.playerId===id),t=cast?(now-cast.atMs)/1000:0,charge=state?.charges?.find(c=>c.playerId===id);
       const tension=cast?.lineLength?THREE.MathUtils.clamp((Math.hypot(player.x-cast.x,player.y-cast.y,player.z+26-cast.z)/cast.lineLength-.94)/.06,0,1):0;
-      const flex=charge?.15+power*.4:cast?.phase==='bite'?.75+Math.sin(now*.018)*.15:cast?.phase==='reeling'?.5+.12*Math.sin(now*.018):cast?.phase==='casting'?.35*Math.sin(Math.min(1,t/.65)*Math.PI):.04+tension*.26;
-      if(r.mesh?.morphTargetInfluences)r.mesh.morphTargetInfluences[0]=flex;if(r.tip)r.tip.position.z=r.tip.userData.restZ+r.tip.userData.bendZ*flex;
+      const pose=fishingRodPose(this.rodPose,charge?now-charge.chargeAt:undefined,cast,now,tension);
+      if(local){frameHeldEquipment(r.root,this.camera);r.root.position.y+=pose.lift;r.root.position.z+=pose.draw;r.root.rotation.set(pose.pitch,0,-.12,'YXZ');this.lighting.setVisible(true);}
+      else{if(!handPoint(id,this.start))this.start.set(player.x,player.z+25,player.y);r.root.position.copy(this.start);r.root.position.y+=pose.lift*32;r.root.scale.setScalar(32);r.root.rotation.set(pose.pitch,-Math.PI/2-player.angle,-.12,'YXZ');}
+      r.root.visible=true;r.line.visible=r.float.visible=r.ring.visible=Boolean(cast);
+      if(r.mesh?.morphTargetInfluences)r.mesh.morphTargetInfluences[0]=pose.flex;if(r.tip)r.tip.position.z=r.tip.userData.restZ+r.tip.userData.bendZ*pose.flex;
       if(r.reelArm&&local&&cast?.phase==='reeling')r.reelArm.update(r.root,this.camera,now);
       if(!cast){this.stopReel(r);r.phase='';continue;}
       if(!local||cast.phase!=='reeling')this.stopReel(r);
@@ -136,7 +138,7 @@ export class FriendsFishingVisuals {
       if(bite&&now>=r.nextSplash){this.splash(cast.x,cast.target.z-2,cast.y,now);r.nextSplash=now+650;}
       if(r.serial!==cast.id||r.phase!==cast.phase){
         if(waiting)this.splash(cast.x,cast.target.z-2,cast.y,now);
-        if(local){if(cast.phase==='casting')friendsAudio.play('fishingCast',.16,100);else if(waiting)friendsAudio.play('fishingSplash',.18,100);else if(bite)friendsAudio.play('fishingBite',.10,100,1,.45,{fadeOutSeconds:.08});else if(cast.phase==='reeling'){this.stopReel(r);r.reelVoice=friendsAudio.play('fishingReel',.18,100,1,Math.max(.05,(cast.empty?.4:2.8)-t),{fadeOutSeconds:.08});}}
+        if(local){if(cast.phase==='casting')friendsAudio.play('fishingCast',.16,100);else if(waiting)friendsAudio.play('fishingSplash',.18,100);else if(bite)friendsAudio.play('fishingBite',.10,100,1,.45,{fadeOutSeconds:.08});else if(cast.phase==='reeling'){this.stopReel(r);r.reelVoice=friendsAudio.play('fishingReel',.18,100,1,Math.max(.05,(cast.reelDurationMs??FISHING_REEL_MS)/1000-t),{fadeOutSeconds:.08,loop:true});}}
         r.serial=cast.id;r.phase=cast.phase;
       }
       if(cast.phase==='reeling'&&!cast.empty){

@@ -29,7 +29,7 @@ export class FriendsFishingReelArm {
     for(let i=0;i<positions.count;i++)this.weights[i]=THREE.MathUtils.clamp((this.point.fromBufferAttribute(positions,i).dot(axis)-wrist)/(shoulderStart-wrist),0,1);
   }
   update(rod:THREE.Group,camera:THREE.PerspectiveCamera|undefined,now:number){
-    const mesh=this.mesh,phase=now*.024;
+    const mesh=this.mesh,phase=now*.010;
     mesh.position.set(-.16+Math.sin(phase)*.045,.20+Math.cos(phase)*.045,.10);
     mesh.rotation.set(.35,1.0,-.35+Math.sin(phase)*.12);
     const tangent=Math.tan(THREE.MathUtils.degToRad((camera?.fov??98)/2)),aspect=camera?.aspect??16/9;
