@@ -3,87 +3,93 @@
   "views": [
     {
       "gl": 0,
-      "floodDrawCalls": 1,
-      "floodGeometryBytes": 1728,
-      "floodMaskBytes": 4500000,
+      "floodDrawCalls": 0,
+      "floodGeometryBytes": 0,
+      "floodMaskBytes": 9000000,
       "wet": 54,
-      "calls": 363
+      "calls": 362
     },
     {
       "gl": 0,
-      "floodDrawCalls": 1,
-      "floodGeometryBytes": 1728,
-      "floodMaskBytes": 4500000,
+      "floodDrawCalls": 0,
+      "floodGeometryBytes": 0,
+      "floodMaskBytes": 9000000,
       "wet": 54,
-      "calls": 169
+      "calls": 168
     },
     {
       "gl": 0,
-      "floodDrawCalls": 1,
-      "floodGeometryBytes": 1728,
-      "floodMaskBytes": 4500000,
+      "floodDrawCalls": 0,
+      "floodGeometryBytes": 0,
+      "floodMaskBytes": 9000000,
       "wet": 54,
-      "calls": 363
+      "calls": 362
     }
   ],
   "cycles": [
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     },
     {
       "wet": 54,
-      "geometry": 3,
-      "textures": 4
+      "geometry": 2,
+      "textures": 3
     }
   ],
+  "surfaceVisibility": {
+    "bodyId": "skyfalls",
+    "wet": 54,
+    "visiblePixels": 8192,
+    "centreAlpha": 104
+  },
   "performance": {
-    "sceneCpuSubmitMs": 0.45500000001241764,
-    "sceneGpuMs": 6.537625,
+    "sceneCpuSubmitMs": 0.5333333333333333,
+    "sceneGpuMs": 8.997875,
     "gpuTimerSupported": true,
-    "floodDrawCalls": 1,
-    "floodGeometryBytes": 1728,
-    "floodMaskBytes": 4500000
+    "floodDrawCalls": 0,
+    "floodGeometryBytes": 0,
+    "floodMaskBytes": 9000000
   }
 }

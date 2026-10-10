@@ -8,13 +8,12 @@ import { FRONTIER_SITES } from '../game/world/FriendsTerrain';
 const icons = { 0: Crosshair, 1: Axe, 2: Pickaxe, 3: Shovel, 5: Cable, 6: Hand, 7: Fish, 8: Hand, 9: Sprout, 10: Sprout };
 const formatCost = (cost: Partial<Record<Resource, number>>) => Object.entries(cost).map(([r, n]) => `${n} ${MATERIAL_NAMES[r as Resource].toLowerCase()}`).join(' · ');
 export function FriendsToolbelt({ frontier, player, tool, onTool, onPack, elapsed, workLocked=false, onWorkPlane, showProgress=false, visible=true, onFun }: { frontier: FrontierSnapshot; player: CoopPlayerSnapshot; tool: FrontierTool; onTool: (tool: FrontierTool) => void; onPack: () => void; elapsed: number; visible?:boolean; onFun?:()=>void; showProgress?:boolean;workLocked?:boolean;onWorkPlane?:()=>void }) {
-  const pack = frontier.packs[packKey(player)] || emptyMaterials(), feedback = frontier.feedback[player.id];
+  const pack = frontier.packs[packKey(player)] || emptyMaterials();
   const action=frontier.interaction?.actions[player.id];
   const damage=frontier.interaction?.damage.find(d=>d.id===action?.targetId&&d.until>elapsed);
   const gains=new Map<string,number>();
   for(const c of frontier.interaction?.contacts||[])if(c.by===player.id&&c.broken&&c.resource&&elapsed-c.at<1400)gains.set(c.resource,(gains.get(c.resource)||0)+(c.amount||0));
   return <>
-    {feedback && feedback.until > elapsed && <div className="frontier-feedback" role="status">{feedback.message}</div>}
     {showProgress&&damage&&<div className="frontier-harvest-progress frontier-harvest-progress--compact"><span>{tool===1?'Cutting':'Mining'}</span><progress aria-label="Mining progress" value={damage.value} max={damage.total}/></div>}
     {gains.size>0&&<div className="frontier-resource-gains" role="status" aria-live="polite">{[...gains].slice(0,3).map(([name,amount])=><span key={name}>+{amount} {name}</span>)}</div>}
     <section className="frontier-toolbelt" data-visible={visible} aria-hidden={!visible} inert={!visible} aria-label="Frontier tools" onMouseDown={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>

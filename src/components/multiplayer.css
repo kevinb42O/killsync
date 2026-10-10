@@ -2905,23 +2905,15 @@
 .friends-hud>small { display:block;margin-top:9px;font-size:8px;color:#b6d4c5; }
 .friends-notice { position:absolute;top:135px;left:24px;z-index:50;display:flex;gap:11px;align-items:flex-start;width:min(400px,calc(100vw - 48px));padding:11px 15px;background:#153b32cb;border:1px solid #8de6ce33;color:#e6f2dc;font:11px/1.6 monospace;backdrop-filter:blur(8px);animation:friends-appear .35s ease both; }
 .friends-notice svg { flex-shrink:0;color:#ffd494;margin-top:3px; }
-.friends-ride { position:absolute;bottom:157px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:11px 17px;z-index:53;background:#163b33df;border:1px solid #8de6ce55; color:#dff4df; font-family:monospace; max-width:calc(100vw - 32px); }
-.friends-ride strong { display:block;font-size:10px;letter-spacing:.1em; }
-.friends-ride small { display:block;margin-top:5px;font-size:9px;color:#bfd7c8; }
-.friends-context { display:contents; }
-.friends-interact { position:absolute;bottom:217px;left:50%;transform:translateX(-50%);z-index:55;display:flex;align-items:center;gap:8px;max-width:calc(100% - 32px);width:max-content;background:#143e33d9;border:1px solid #ffd49455;border-radius:6px;padding:6px 10px;font:600 10px/1.4 monospace;color:#ffdfac; }
-.friends-interact kbd { flex-shrink:0;border:1px solid #e4deb666;border-radius:3px;padding:2px 5px;font:inherit; }
-/* One compact dock lets journey details and the current action wrap together. */
-.friends-train-dock { position:absolute;bottom:max(18px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:55;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 14px;width:max-content;max-width:calc(100% - 32px);padding:9px 12px;border:1px solid #8de6ce44;border-radius:7px;background:#163b33d9;color:#dff4df; }
-.friends-train-dock[data-resume-visible=true] { bottom:max(92px,env(safe-area-inset-bottom)); }
-.friends-train-dock[data-toolbelt-visible=true] { bottom:max(166px,env(safe-area-inset-bottom)); }
-.friends-train-dock .friends-ride { position:static;transform:none;flex:1 1 260px;min-width:0;max-width:100%;gap:9px;padding:0;border:0;background:none; }
-.friends-train-dock .friends-ride>svg { flex-shrink:0; }
-.friends-train-dock .friends-ride>div { min-width:0;overflow-wrap:anywhere; }
-.friends-train-dock .friends-ride small { margin-top:4px;line-height:1.5; }
-.friends-train-dock .friends-interact { position:static;transform:none;min-width:0;max-width:100%;flex:0 1 auto;padding:4px 7px;background:#0c241e66; }
-@media(max-width:850px) { .friends-train-dock { bottom:max(64px,env(safe-area-inset-bottom)); } }
-@media(max-width:700px) { .friends-train-dock[data-resume-visible=true][data-toolbelt-visible=false] { bottom:max(116px,env(safe-area-inset-bottom)); } }
+.friends-context,.friends-train-dock { position:absolute;bottom:max(18px,env(safe-area-inset-bottom));left:18px;z-index:55;display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:max-content;max-width:min(520px,calc(100% - 36px));font:400 10px/1.4 Inter,system-ui,sans-serif;color:#e6decc99;text-shadow:0 1px 3px #000;pointer-events:none; }
+.friends-ride,.friends-rowboat-hint,.friends-interact { font:inherit;color:inherit; }
+.friends-interact { display:flex;align-items:baseline;gap:6px;max-width:100%; }
+.friends-interact kbd { flex-shrink:0;font:inherit;color:#e6deccbb; }
+.friends-interact small { font:inherit; }
+/* The whole group clears revealed controls together, without overlapping hints. */
+.friends-context[data-resume-visible=true],.friends-train-dock[data-resume-visible=true] { bottom:max(92px,env(safe-area-inset-bottom)); }
+.friends-context[data-toolbelt-visible=true],.friends-train-dock[data-toolbelt-visible=true] { bottom:max(124px,env(safe-area-inset-bottom)); }
+@media(max-width:700px) { .friends-context,.friends-train-dock { left:12px;max-width:calc(100% - 24px);font-size:9px; } }
 .coop-arena--friends .coop-vitals { background:#153b32bb; border-color:#8de6ce33; box-shadow:none; }
 .coop-arena--friends .coop-xp,.coop-arena--friends .coop-vitals__shield { display:none; }
 .coop-arena--friends .coop-minimap__disc { background:#153b32a8; border-color:#8de6ce66; box-shadow:none; }
@@ -2944,7 +2936,7 @@
 .friends-map__legend { display:flex;flex-direction:column;gap:9px;padding:14px 0;border-block:1px solid #8de6ce22; }
 .friends-map__legend span { display:flex;gap:10px;align-items:center;font-size:10px;color:#d8dfbf; }
 @keyframes friends-appear { from {opacity:0;transform:translateY(6px)} to {opacity:1;transform:translateY(0)} }
-@media(max-width:700px) { .coop-mode-picker{padding:9px;gap:7px}.coop-mode-picker button{padding:9px}.coop-mode-picker small{font-size:9px}.friends-hud{left:12px;top:12px;padding:10px;max-width:calc(100vw - 100px)}.friends-hud__eyebrow>span{display:none}.friends-hud>strong{font-size:13px}.friends-notice{left:12px;top:116px;max-width:290px;font-size:9px}.friends-ride{bottom:177px;min-width:260px}.friends-interact{bottom:243px;font-size:9px;min-width:220px}.friends-map{padding:12px}.friends-map__body{grid-template-columns:1fr;grid-template-rows:minmax(200px,1fr) 210px;gap:12px}.friends-map__body>aside{display:grid;grid-template-columns:1fr 1fr;gap:8px}.friends-map__body>aside>p,.friends-map__legend,.friends-map__body>aside>small{grid-column:1/-1}.friends-map__body>aside>button{padding:9px}.friends-map__help{display:none} }
+@media(max-width:700px) { .coop-mode-picker{padding:9px;gap:7px}.coop-mode-picker button{padding:9px}.coop-mode-picker small{font-size:9px}.friends-hud{left:12px;top:12px;padding:10px;max-width:calc(100vw - 100px)}.friends-hud__eyebrow>span{display:none}.friends-hud>strong{font-size:13px}.friends-notice{left:12px;top:116px;max-width:290px;font-size:9px}.friends-map{padding:12px}.friends-map__body{grid-template-columns:1fr;grid-template-rows:minmax(200px,1fr) 210px;gap:12px}.friends-map__body>aside{display:grid;grid-template-columns:1fr 1fr;gap:8px}.friends-map__body>aside>p,.friends-map__legend,.friends-map__body>aside>small{grid-column:1/-1}.friends-map__body>aside>button{padding:9px}.friends-map__help{display:none} }
 .coop-arena--friends .coop-vitals { left:auto;right:183px;top:20px;width:175px;padding:9px 12px;filter:none; }
 .coop-arena--friends .coop-vitals__topline>span:nth-child(2),.coop-arena--friends .coop-vitals__lower>span:first-child { display:none; }
 .coop-arena--friends .coop-weapons { background:linear-gradient(90deg,#13372de3,#13372d30);border-color:#8de6ce77;filter:none; }

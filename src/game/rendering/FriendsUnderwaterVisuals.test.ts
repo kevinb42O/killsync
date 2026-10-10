@@ -25,6 +25,16 @@ describe('underwater scene lifecycle and bounded effects',()=>{
   expect(effect.motes.geometry).toBe(points);expect(effect.shafts.geometry).toBe(shafts);expect(scene.children.filter(o=>o.name.startsWith('underwater-'))).toHaveLength(3);
   effect.dispose();expect(material.onBeforeCompile).toBe(hook);expect(material.customProgramCacheKey).toBe(key);expect(scene.children.filter(o=>o.name.startsWith('underwater-'))).toHaveLength(0);mesh.geometry.dispose();material.dispose();
  });
+ it('continues darkening the water and motes beyond the old 900-unit plateau',()=>{
+  const scene=new THREE.Scene(),terrain=new FriendsTerrain(),effect=new FriendsUnderwaterVisuals(scene),c=camera(),brightness:number[]=[],motes:number[]=[];
+  c.position.x=44000;c.position.z=23852;
+  for(const depth of [40,300,900,1800,3200]){
+   effect.beginFrame();c.position.y=-168.5-depth;effect.update(c,1000+depth,true,1,terrain);
+   const color=(scene.fog as THREE.FogExp2).color;brightness.push(color.r*.2126+color.g*.7152+color.b*.0722);motes.push(effect.motes.material.uniforms.light.value);
+  }
+  for(let i=1;i<brightness.length;i++){expect(brightness[i]).toBeLessThan(brightness[i-1]);expect(motes[i]).toBeLessThan(motes[i-1]);}
+  expect(brightness[4]).toBeLessThan(brightness[3]*.4);effect.dispose();
+ });
  it('keeps lighting uniform ownership separate between scenes',()=>{
   const a=new THREE.Scene(),b=new THREE.Scene(),m=new THREE.MeshStandardMaterial();a.add(new THREE.Mesh(new THREE.BoxGeometry(),m));const n=m.clone();b.add(new THREE.Mesh(new THREE.BoxGeometry(),n));
   const ea=new FriendsUnderwaterVisuals(a),eb=new FriendsUnderwaterVisuals(b),c=camera();ea.update(c,1000);expect(a.fog).not.toBeNull();expect(b.fog).toBeNull();ea.beginFrame();eb.update(c,2000,true,0);expect(a.fog).toBeNull();expect(b.fog).not.toBeNull();ea.dispose();eb.dispose();a.children.forEach(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});b.children.forEach(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});m.dispose();n.dispose();

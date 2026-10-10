@@ -1,0 +1,717 @@
+{
+  "method": "Actual production arena, fixed Ember Lookout camera, 1600x900 viewport. Warmed repeated renders with GPU completion (gl.finish); diagnostic variants only in isolated browser, restored afterwards. World arrival completed before sampling; camera and all related selectors moved to Ember. No appearance or quality settings changed in game code.",
+  "hardware": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+  "buffer": [
+    1600,
+    900
+  ],
+  "phases": [
+    {
+      "name": "baseline",
+      "completedMs": 56.29999999888241,
+      "submissionMs": 56.29999999888241,
+      "draws": 966,
+      "triangles": 4793775,
+      "programs": 125
+    },
+    {
+      "name": "without-campfire-geometry",
+      "completedMs": 49.20000000111759,
+      "submissionMs": 49.09999999962747,
+      "draws": 959,
+      "triangles": 4792497,
+      "programs": 125
+    },
+    {
+      "name": "without-ember-fire-light",
+      "completedMs": 52,
+      "submissionMs": 51.90000000037253,
+      "draws": 966,
+      "triangles": 4793775,
+      "programs": 125
+    },
+    {
+      "name": "without-vehicle-meshes",
+      "completedMs": 29.800000000745058,
+      "submissionMs": 29.800000000745058,
+      "draws": 612,
+      "triangles": 4747041,
+      "programs": 125
+    },
+    {
+      "name": "without-railway-meshes",
+      "completedMs": 75.29999999888241,
+      "submissionMs": 75.29999999888241,
+      "draws": 772,
+      "triangles": 4610899,
+      "programs": 125
+    },
+    {
+      "name": "without-forest",
+      "completedMs": 82.39999999850988,
+      "submissionMs": 82.39999999850988,
+      "draws": 949,
+      "triangles": 972839,
+      "programs": 125
+    },
+    {
+      "name": "baseline-repeat",
+      "completedMs": 63,
+      "submissionMs": 63,
+      "draws": 966,
+      "triangles": 4793775,
+      "programs": 125
+    }
+  ],
+  "lights": [
+    {
+      "name": "",
+      "type": "DirectionalLight",
+      "intensity": 0.018202942578718385,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "AmbientLight",
+      "intensity": 0.0564725711504566,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "DirectionalLight",
+      "intensity": 0.06990251702958662,
+      "visible": true,
+      "shadow": true
+    },
+    {
+      "name": "world-counter-rim",
+      "type": "DirectionalLight",
+      "intensity": 0.025433109161899,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 5,
+      "distance": 500,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "frontier-sky-fill",
+      "type": "HemisphereLight",
+      "intensity": 0.14113845836842023,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "night-vision-infrared",
+      "type": "SpotLight",
+      "intensity": 0,
+      "distance": 4800,
+      "visible": true,
+      "shadow": true
+    },
+    {
+      "name": "shared-flashlight-0",
+      "type": "SpotLight",
+      "intensity": 0,
+      "distance": 3600,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "shared-flashlight-1",
+      "type": "SpotLight",
+      "intensity": 0,
+      "distance": 3600,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "shared-flashlight-2",
+      "type": "SpotLight",
+      "intensity": 0,
+      "distance": 3600,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "shared-flashlight-3",
+      "type": "SpotLight",
+      "intensity": 0,
+      "distance": 3600,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "scenic-headlight",
+      "type": "SpotLight",
+      "intensity": 80000,
+      "distance": 1800,
+      "visible": true,
+      "shadow": true
+    },
+    {
+      "name": "frontier-moonlight",
+      "type": "DirectionalLight",
+      "intensity": 0,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "commons-campfire-light",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 440,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "stillwater-hanging-bulb-light",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 220,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 91.25,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 70,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "saltwind-camp-light",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 118.80000000000001,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "ember-camp-light",
+      "type": "PointLight",
+      "intensity": 7699.057735811919,
+      "distance": 118.80000000000001,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 260,
+      "visible": true,
+      "shadow": true
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 260,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 260,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 13629342.976990074,
+      "distance": 5400,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 1362180.6271363015,
+      "distance": 1800,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 1444214.206353034,
+      "distance": 1800,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 520,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 520,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 520,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 520,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 520,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 520,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 520,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 520,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "held-flashlight-beam",
+      "type": "SpotLight",
+      "intensity": 0,
+      "distance": 3600,
+      "visible": true,
+      "shadow": true
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 768,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 768,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 768,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 768,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 768,
+      "visible": true,
+      "shadow": false
+    },
+    {
+      "name": "",
+      "type": "PointLight",
+      "intensity": 0,
+      "distance": 768,
+      "visible": true,
+      "shadow": false
+    }
+  ],
+  "groups": {
+    "frontier-day-night-sky": {
+      "draws": 1,
+      "triangles": 2208
+    },
+    "friends-frontier-environment": {
+      "draws": 29,
+      "triangles": 432
+    },
+    "friends-hauling": {
+      "draws": 60,
+      "triangles": 732
+    },
+    "frontier-streamed-world": {
+      "draws": 275,
+      "triangles": 711175
+    },
+    "friends-quiet-places": {
+      "draws": 29,
+      "triangles": 26208
+    },
+    "commons-campfire-gathering": {
+      "draws": 8,
+      "triangles": 1286
+    },
+    "sunline-grand-traverse": {
+      "draws": 194,
+      "triangles": 182876
+    },
+    "friends-interaction-feedback": {
+      "draws": 2,
+      "triangles": 0
+    },
+    "friends-vehicles": {
+      "draws": 353,
+      "triangles": 46732
+    },
+    "frontier-instanced-3d-forests": {
+      "draws": 17,
+      "triangles": 3820936
+    },
+    "Points": {
+      "draws": 1,
+      "triangles": 240
+    },
+    "projectile-impact-marks": {
+      "draws": 1,
+      "triangles": 96
+    }
+  },
+  "glCalls": {
+    "useProgram": {
+      "calls": 275,
+      "ms": 0.30000000074505806
+    },
+    "bindVertexArray": {
+      "calls": 951,
+      "ms": 3.200000001117587
+    },
+    "drawElements": {
+      "calls": 497,
+      "ms": 1.5999999977648258
+    },
+    "uniformMatrix4fv": {
+      "calls": 2674,
+      "ms": 8.199999993667006
+    },
+    "drawArrays": {
+      "calls": 95,
+      "ms": 0.09999999962747097
+    },
+    "bindTexture": {
+      "calls": 379,
+      "ms": 1.0999999977648258
+    },
+    "uniform3fv": {
+      "calls": 2,
+      "ms": 0
+    },
+    "uniform1f": {
+      "calls": 143,
+      "ms": 0.40000000037252903
+    },
+    "uniform1i": {
+      "calls": 36,
+      "ms": 0
+    },
+    "drawArraysInstanced": {
+      "calls": 12,
+      "ms": 0
+    },
+    "drawElementsInstanced": {
+      "calls": 362,
+      "ms": 0.40000000037252903
+    },
+    "getError": {
+      "calls": 1,
+      "ms": 0.599999999627471
+    }
+  },
+  "matrixUploads": {
+    "modelViewMatrix": {
+      "calls": 505,
+      "ms": 2.299999998882413
+    },
+    "modelMatrix": {
+      "calls": 530,
+      "ms": 2.400000000372529
+    },
+    "spotLightMatrix": {
+      "calls": 396,
+      "ms": 1.5999999977648258
+    },
+    "directionalShadowMatrix": {
+      "calls": 396,
+      "ms": 1.6999999955296516
+    },
+    "pointShadowMatrix": {
+      "calls": 396,
+      "ms": 0.7999999988824129
+    },
+    "friendsFlashlightShadowView": {
+      "calls": 396,
+      "ms": 1.8999999966472387
+    },
+    "railFinishFrame": {
+      "calls": 55,
+      "ms": 0.599999999627471
+    }
+  },
+  "terrain": {
+    "floodDrawCalls": 0,
+    "floodGeometryBytes": 0,
+    "floodMaskBytes": 0,
+    "surfaceTiles": 49,
+    "surfaceBytes": 16929536,
+    "surfaceJobs": 2,
+    "pendingVoxels": 0,
+    "patchDraws": 0,
+    "volumeChunks": 0,
+    "volumeActive": 0,
+    "volumeJobs": 0,
+    "editMeshLatencyP95": 0,
+    "editMeshSamples": 0
+  },
+  "forest": {
+    "trees": 3543,
+    "fallingTrees": 0,
+    "draws": 17,
+    "triangles": 3820936
+  },
+  "glError": 0,
+  "cpuHotspots": [
+    {
+      "name": "getProgramInfoLog",
+      "url": "",
+      "line": 0,
+      "ms": 10512.314
+    },
+    {
+      "name": "(idle)",
+      "url": "",
+      "line": 0,
+      "ms": 8405.154
+    },
+    {
+      "name": "addObjectDiffToProperties",
+      "url": "http://localhost:3000/node_modules/.vite/deps/react-dom_client.js?v=48c96959",
+      "line": 3081,
+      "ms": 3030.612
+    },
+    {
+      "name": "(program)",
+      "url": "",
+      "line": 0,
+      "ms": 2239.544
+    },
+    {
+      "name": "hydrologyTerrainHeight",
+      "url": "http://localhost:3000/src/game/world/FriendsHydrology.ts",
+      "line": 148,
+      "ms": 1610.729
+    },
+    {
+      "name": "(garbage collector)",
+      "url": "",
+      "line": 0,
+      "ms": 1327.575
+    },
+    {
+      "name": "uniformMatrix4fv",
+      "url": "",
+      "line": 0,
+      "ms": 1082.073
+    },
+    {
+      "name": "texSubImage2D",
+      "url": "",
+      "line": 0,
+      "ms": 945.453
+    },
+    {
+      "name": "WebGLRenderer.renderBufferDirect",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 41862,
+      "ms": 710.849
+    },
+    {
+      "name": "setValue",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 35394,
+      "ms": 501.086
+    },
+    {
+      "name": "exports.jsxDEV",
+      "url": "http://localhost:3000/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=48c96959",
+      "line": 239,
+      "ms": 465.879
+    },
+    {
+      "name": "exports.jsxDEV",
+      "url": "http://localhost:3000/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=48c96959",
+      "line": 239,
+      "ms": 410.663
+    },
+    {
+      "name": "exports.createElement",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-NKU67ILE.js?v=48c96959",
+      "line": 761,
+      "ms": 364.13
+    },
+    {
+      "name": "updateMatrixWorld",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 7265,
+      "ms": 334.922
+    },
+    {
+      "name": "update",
+      "url": "http://localhost:3000/src/game/multiplayer/FriendsHauling.ts",
+      "line": 380,
+      "ms": 332.305
+    },
+    {
+      "name": "exports.jsxDEV",
+      "url": "http://localhost:3000/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=48c96959",
+      "line": 239,
+      "ms": 281.324
+    },
+    {
+      "name": "flatten",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 34808,
+      "ms": 252.901
+    },
+    {
+      "name": "exports.jsxDEV",
+      "url": "http://localhost:3000/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=48c96959",
+      "line": 239,
+      "ms": 247.506
+    },
+    {
+      "name": "setValue",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 35394,
+      "ms": 246.896
+    },
+    {
+      "name": "bindVertexArray",
+      "url": "",
+      "line": 0,
+      "ms": 240.133
+    },
+    {
+      "name": "updateMatrixWorld",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 7265,
+      "ms": 231.572
+    },
+    {
+      "name": "getUniformLocation",
+      "url": "",
+      "line": 0,
+      "ms": 231.533
+    },
+    {
+      "name": "upload",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 35459,
+      "ms": 228.508
+    },
+    {
+      "name": "multiplyMatrices",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 5551,
+      "ms": 205.22
+    },
+    {
+      "name": "exports.jsxDEV",
+      "url": "http://localhost:3000/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=48c96959",
+      "line": 239,
+      "ms": 199.095
+    },
+    {
+      "name": "setProgram",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 42425,
+      "ms": 190.348
+    },
+    {
+      "name": "setValueV3f",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 34869,
+      "ms": 167.744
+    },
+    {
+      "name": "getParameters",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 36175,
+      "ms": 162.193
+    },
+    {
+      "name": "updateMatrixWorld",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 7265,
+      "ms": 149.972
+    },
+    {
+      "name": "getBindingState",
+      "url": "http://localhost:3000/node_modules/.vite/deps/chunk-LILSE42S.js?v=48c96959",
+      "line": 32677,
+      "ms": 144.881
+    }
+  ],
+  "errors": []
+}

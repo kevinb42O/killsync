@@ -38,5 +38,31 @@
       "Clip side faces against lower partial neighbour water",
       "Canonical side-face order preserves equivalent geometry cache entries"
     ]
+  },
+  "seaSurfaceFix": {
+    "reproducedBeforeFix": "Flood field is wet but isolated sea-sheet pixel visibility assertion fails",
+    "focusedTests": {
+      "files": 7,
+      "passed": 56,
+      "failed": 0
+    },
+    "typescript": "passed",
+    "productionBuild": "passed",
+    "seaBrowser": "passed; 54 wet cells, 4096 visible pixels, centre alpha 114; ten stable seal/reopen cycles",
+    "lakeBrowser": "passed; pixel visibility and ten stable seal/reopen cycles"
+  },
+  "matchingExistingWater": {
+    "focusedTests": {
+      "files": 5,
+      "passed": 41,
+      "failed": 0
+    },
+    "typescript": "passed",
+    "productionBuild": "passed",
+    "browser": "Sea and lake pixel visibility, day/night/inside views and ten stable seal/reopen cycles pass",
+    "seaRenderer": "Actual FriendsIslandOcean surface extended into flooded cells; no separate top mesh",
+    "coveredTrenchAddedDrawCalls": 0,
+    "coveredTrenchAddedGeometryBytes": 0,
+    "headAndDepthOverlayBytes": 9000000
   }
 }

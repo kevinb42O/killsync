@@ -1,0 +1,95 @@
+{
+  "errors": [],
+  "views": [
+    {
+      "gl": 0,
+      "floodDrawCalls": 0,
+      "floodGeometryBytes": 0,
+      "floodMaskBytes": 9000000,
+      "wet": 54,
+      "calls": 490
+    },
+    {
+      "gl": 0,
+      "floodDrawCalls": 0,
+      "floodGeometryBytes": 0,
+      "floodMaskBytes": 9000000,
+      "wet": 54,
+      "calls": 226
+    },
+    {
+      "gl": 0,
+      "floodDrawCalls": 0,
+      "floodGeometryBytes": 0,
+      "floodMaskBytes": 9000000,
+      "wet": 54,
+      "calls": 490
+    }
+  ],
+  "cycles": [
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    },
+    {
+      "wet": 54,
+      "geometry": 3,
+      "textures": 3
+    }
+  ],
+  "surfaceVisibility": {
+    "bodyId": "sea",
+    "wet": 54,
+    "visiblePixels": 9216,
+    "centreAlpha": 129
+  },
+  "performance": {
+    "sceneCpuSubmitMs": 0.475,
+    "sceneGpuMs": 8.433625,
+    "gpuTimerSupported": true,
+    "floodDrawCalls": 0,
+    "floodGeometryBytes": 0,
+    "floodMaskBytes": 9000000
+  }
+}

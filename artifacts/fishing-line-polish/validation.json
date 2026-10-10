@@ -1,0 +1,254 @@
+{
+  "errors": [],
+  "captures": [
+    {
+      "stage": "rod",
+      "gl": 0,
+      "calls": 100
+    },
+    {
+      "stage": "waiting",
+      "gl": 0,
+      "calls": 117
+    },
+    {
+      "stage": "bite",
+      "gl": 0,
+      "calls": 122
+    },
+    {
+      "stage": "reeling",
+      "gl": 0,
+      "calls": 118
+    },
+    {
+      "stage": "held",
+      "gl": 0,
+      "calls": 118
+    },
+    {
+      "stage": "dry",
+      "gl": 0,
+      "calls": 32
+    },
+    {
+      "stage": "swimming",
+      "gl": 0,
+      "calls": 59
+    }
+  ],
+  "framing": [
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 70,
+      "gap": 1.8740419957800394e-13,
+      "finite": true
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 98,
+      "gap": 1.4048116570493477e-13,
+      "finite": true
+    },
+    {
+      "aspect": 1.7777777777777777,
+      "fov": 120,
+      "gap": 1.0634676201085437e-13,
+      "finite": true
+    },
+    {
+      "aspect": 2.4,
+      "fov": 70,
+      "gap": 1.0892923092619347e-13,
+      "finite": true
+    },
+    {
+      "aspect": 2.4,
+      "fov": 98,
+      "gap": 1.0927868891059259e-13,
+      "finite": true
+    },
+    {
+      "aspect": 2.4,
+      "fov": 120,
+      "gap": 2.0344584170978932e-13,
+      "finite": true
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 70,
+      "gap": 1.388520033123338e-13,
+      "finite": true
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 98,
+      "gap": 9.64739214095857e-14,
+      "finite": true
+    },
+    {
+      "aspect": 0.5625,
+      "fov": 120,
+      "gap": 2.3231960620762056e-13,
+      "finite": true
+    }
+  ],
+  "performance": {
+    "one_cast": {
+      "baseline": {
+        "cpuP50": 0,
+        "cpuP95": 0,
+        "gpuP50": 19.784125,
+        "gpuP95": 23.191999,
+        "calls": 125
+      },
+      "active": {
+        "cpuP50": 0.19999999925494194,
+        "cpuP95": 0.30000000074505806,
+        "gpuP50": 19.707916,
+        "gpuP95": 21.975291,
+        "calls": 133
+      },
+      "fishPool": 1,
+      "activeFish": 0
+    },
+    "five_casts": {
+      "baseline": {
+        "cpuP50": 0,
+        "cpuP95": 0,
+        "gpuP50": 25.827333,
+        "gpuP95": 28.608916,
+        "calls": 125
+      },
+      "active": {
+        "cpuP50": 0.30000000074505806,
+        "cpuP95": 0.900000000372529,
+        "gpuP50": 27.405708,
+        "gpuP95": 30.626625,
+        "calls": 161
+      },
+      "fishPool": 1,
+      "activeFish": 0
+    },
+    "loose_fish_cap": {
+      "baseline": {
+        "cpuP50": 0,
+        "cpuP95": 0,
+        "gpuP50": 24.448166,
+        "gpuP95": 27.335541,
+        "calls": 125
+      },
+      "active": {
+        "cpuP50": 0.5,
+        "cpuP95": 1.099999999627471,
+        "gpuP50": 30.457041,
+        "gpuP95": 34.081041,
+        "calls": 159
+      },
+      "fishPool": 0,
+      "activeFish": 32
+    },
+    "memory": {
+      "before": {
+        "geometries": 146,
+        "textures": 108
+      },
+      "after": {
+        "geometries": 146,
+        "textures": 108
+      },
+      "presentations": 32
+    }
+  },
+  "assets": {
+    "fishMeshes": 1,
+    "bones": 6,
+    "finSides": 2,
+    "clips": [
+      "Fish_Armature|Attack",
+      "Fish_Armature|Death",
+      "Fish_Armature|Out_Of_Water",
+      "Fish_Armature|Swimming_Fast",
+      "Fish_Armature|Swimming_Impulse",
+      "Fish_Armature|Swimming_Normal",
+      "Fish_Armature|Held"
+    ]
+  },
+  "audio": {
+    "assets": [
+      {
+        "cue": "fishingCast",
+        "duration": 0.5859863945578231,
+        "channels": 1
+      },
+      {
+        "cue": "fishingSplash",
+        "duration": 0.8459863945578231,
+        "channels": 1
+      },
+      {
+        "cue": "fishingReel",
+        "duration": 3.1,
+        "channels": 1
+      }
+    ],
+    "events": [
+      {
+        "cue": "fishingCast",
+        "args": [
+          0.16,
+          100
+        ]
+      },
+      {
+        "cue": "fishingSplash",
+        "args": [
+          0.18,
+          100
+        ]
+      },
+      {
+        "cue": "fishingBite",
+        "args": [
+          0.1,
+          100,
+          1,
+          0.45,
+          {
+            "fadeOutSeconds": 0.08
+          }
+        ]
+      },
+      {
+        "cue": "fishingReel",
+        "args": [
+          0.18,
+          100,
+          1,
+          2.8,
+          {
+            "fadeOutSeconds": 0.08
+          }
+        ]
+      }
+    ],
+    "stops": 1
+  },
+  "toolbar": {
+    "width": 475,
+    "height": 56,
+    "slots": 8
+  },
+  "mobile": {
+    "width": 332,
+    "scroll": 403,
+    "minTarget": 44
+  },
+  "network": {
+    "catch": true,
+    "drop": true,
+    "pickup": true,
+    "swimAway": true,
+    "errors": []
+  }
+}

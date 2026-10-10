@@ -1,3 +1,4 @@
+import { FriendsMatrixUploadCache } from './rendering/FriendsMatrixUploadCache';
 import { DEFAULT_GAME_PREFERENCES, FRIENDS_FOV_MAX } from './LocalGamePreferences';
 import { createFriendsEnvironment } from './rendering/FriendsWorldVisuals';
 import { FriendsVehicleCamera } from './rendering/FriendsVehicleCamera';
@@ -431,6 +432,8 @@ export class Renderer3D {
     }
   }
 
+  readonly friendsMatrixUploadCache?: FriendsMatrixUploadCache;
+
   constructor(options: Renderer3DOptions = {}) {
     this.floatingPlatform = options.floatingPlatform ?? false;
     this.worldId = options.worldId || 'neon_bastion';
@@ -465,6 +468,11 @@ export class Renderer3D {
     // renderer statistics across all of them and reset exactly once below.
     this.renderer.info.autoReset = false;
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    if (this.worldId === 'friends_frontier') {
+      this.friendsMatrixUploadCache = new FriendsMatrixUploadCache(
+        this.renderer.getContext() as WebGL2RenderingContext, this.renderer.domElement,
+      );
+    }
     // A 3× phone screen otherwise becomes a 4×-pixel desktop render target.
     // 1.15 keeps the image crisp at normal playing distance while markedly
     // reducing fragment work, bandwidth, and heat on mobile GPUs.
@@ -5703,6 +5711,7 @@ export class Renderer3D {
     this.speedLineMaterial?.dispose();
     this.unmount();
     this.dirLight.shadow.map?.dispose();
+    this.friendsMatrixUploadCache?.dispose();
     this.renderer.dispose();
   }
 }

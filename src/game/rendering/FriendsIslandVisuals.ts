@@ -146,10 +146,12 @@ export function islandWater(cx:number,cy:number,width:number,length:number,level
   }
   const bathymetry=new THREE.DataTexture(pixels,nx,ny,ocean?THREE.RGBAFormat:THREE.RedFormat,THREE.FloatType);
   bathymetry.minFilter=bathymetry.magFilter=THREE.NearestFilter;bathymetry.needsUpdate=true;
-  const material=new THREE.ShaderMaterial({side:THREE.DoubleSide,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2,uniforms:{rowboatCutout:rowboatWaterCutout,time:{value:0},bathymetry:{value:bathymetry},
+  const material=new THREE.ShaderMaterial({side:THREE.DoubleSide,transparent:true,depthWrite:false,fog:true,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),rowboatCutout:rowboatWaterCutout,time:{value:0},bathymetry:{value:bathymetry},
     waterLightDirection:{value:new THREE.Vector3(.55,.36,-.45).normalize()},waterLightColor:{value:new THREE.Color(1,.85,.62)},waterDirectStrength:{value:1},waterTint:{value:new THREE.Color(1,1,1)},waterHorizon:{value:new THREE.Color(.64,.79,.82)},waterZenith:{value:new THREE.Color(.28,.52,.69)},
-    patchCentre:{value:new THREE.Vector2()},patchHalfExtent:{value:4096},wavePatch:{value:ocean?0:1},waveAmplitude:{value:ocean?5:1.4},shorebreakStrength:{value:1},waterOrigin:{value:origin},waterExtent:{value:new THREE.Vector2(sampleWidth,sampleLength)},ocean:{value:ocean?1:0}},
-    vertexShader:`varying vec3 seaWorld;uniform float time,wavePatch,waveAmplitude,ocean,patchHalfExtent,shorebreakStrength;
+    patchCentre:{value:new THREE.Vector2()},patchHalfExtent:{value:4096},wavePatch:{value:ocean?0:1},waveAmplitude:{value:ocean?5:1.4},shorebreakStrength:{value:1},oceanPatchBlend:{value:1},waterOrigin:{value:origin},waterExtent:{value:new THREE.Vector2(sampleWidth,sampleLength)},ocean:{value:ocean?1:0}},
+    vertexShader:`
+      #include <fog_pars_vertex>
+      varying vec3 seaWorld;uniform float time,wavePatch,waveAmplitude,ocean,patchHalfExtent,shorebreakStrength;
       uniform sampler2D bathymetry;uniform vec2 waterOrigin,waterExtent,patchCentre;
       vec4 coastAt(vec2 uv){
         vec2 size=vec2(textureSize(bathymetry,0));
@@ -176,8 +178,12 @@ export function islandWater(cx:number,cy:number,width:number,length:number,level
           displacement=mix(displacement,crest,coastWeight(depth,coast));
         }
         w.y+=displacement*waveAmplitude*wavePatch*shallow*edge;
-        seaWorld=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
-    fragmentShader:`uniform vec4 rowboatCutout;varying vec3 seaWorld;uniform float time;uniform sampler2D bathymetry;uniform vec2 waterOrigin,waterExtent;uniform float ocean,wavePatch,patchHalfExtent,waveAmplitude,shorebreakStrength;uniform vec2 patchCentre;
+        seaWorld=w.xyz;vec4 mvPosition=viewMatrix*w;gl_Position=projectionMatrix*mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader:`
+      #include <fog_pars_fragment>
+      uniform vec4 rowboatCutout;varying vec3 seaWorld;uniform float time;uniform sampler2D bathymetry;uniform vec2 waterOrigin,waterExtent;uniform float ocean,wavePatch,patchHalfExtent,waveAmplitude,shorebreakStrength,oceanPatchBlend;uniform vec2 patchCentre;
       uniform vec3 waterLightDirection,waterLightColor,waterTint,waterHorizon,waterZenith;uniform float waterDirectStrength;
 
       vec4 coastAt(vec2 uv){
@@ -275,7 +281,8 @@ export function islandWater(cx:number,cy:number,width:number,length:number,level
         float absorption=1.-exp(-opticalDepth*mix(.0055,.0065,ocean));
         float surfaceOpacity=clamp(absorption+(1.-absorption)*fresnel+foam*.55,.08,.995);
         float opacity=smoothstep(1.,8.,depth)*surfaceOpacity;
-        if(!gl_FrontFacing){
+        bool underwaterView=cameraPosition.y<seaWorld.y;
+        if(underwaterView){
           // Snell's window: overhead daylight transmits inside the critical
           // angle; the surrounding underside reflects the teal water volume.
           float cosine=clamp(-dot(view,normal),0.,1.);
@@ -293,18 +300,40 @@ export function islandWater(cx:number,cy:number,width:number,length:number,level
           underside+=waterLightColor*underRidges*(.025+windowRim*.045)*waterDirectStrength;
           water=mix(underside,sky+waterLightColor*sun*.7,window);
           water+=vec3(.03,.08,.075)*caustic*window*waterDirectStrength;
+          // Daylight travels through the entire water column to the camera.
+          // A longer/slanted path loses red first, then green and blue, rather
+          // than leaving a bright sky window visible from the abyss.
+          float underPath=length(cameraPosition-seaWorld);
+          float underClarity=mix(1.1,.85,ocean);
+          vec3 underTransmission=exp(-underPath*vec3(.0038,.0022,.0015)*underClarity);
+          water=water*underTransmission+vec3(.001,.004,.007)*(1.-underTransmission)*waterTint;
           // Above-water hulls, bridge supports and banks show through the
           // window as silhouettes, without another scene render or texture.
           // Underwater visibility is independent of above-water absorption.
-          opacity=smoothstep(1.,14.,depth)*mix(.98,.52,window);
+          opacity=smoothstep(1.,14.,depth)*mix(mix(.98,.52,window),1.,1.-exp(-underPath*.002*underClarity));
         }
         // Complementary alpha prevents the translucent near/far ocean
         // overlap from darkening into a square around the camera.
-        if(ocean>.5)opacity=wavePatch>.5?opacity*patchFade:
+        if(ocean>.5&&oceanPatchBlend>.5)opacity=wavePatch>.5?opacity*patchFade:
           opacity*(1.-patchFade)/max(.005,1.-opacity*patchFade);
         gl_FragColor=vec4(water*.94,opacity);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
+        #ifdef USE_FOG
+          if(underwaterView){
+            // Blend in output color space, matching Three's fog/background.
+            // Fading alpha would reveal the bright sky behind the water.
+            float path=length(cameraPosition-seaWorld);
+            float clarity=mix(1.1,.85,ocean);
+            float visibility=exp(-path*.0035*clarity)*(1.-smoothstep(600.,1500.,path));
+            #ifdef FOG_EXP2
+              visibility*=exp(-fogDensity*fogDensity*path*path);
+            #else
+              visibility*=1.-smoothstep(fogNear,fogFar,path);
+            #endif
+            gl_FragColor.rgb=mix(fogColor,gl_FragColor.rgb,visibility);
+          }
+        #endif
       }`});
   material.userData.frontierWater=true;
   const mesh=new THREE.Mesh(geometry??new THREE.PlaneGeometry(width,length,ocean?1:72,ocean?1:72),material);
@@ -390,7 +419,9 @@ export class FriendsIslandVisuals extends THREE.Group {
     const lava=islandWater(v.x,v.y,3000,3000,v.lavaLevel,(x,y)=>islandVolcanoRadius(x,y)<1100?v.lavaLevel-baseTerrainHeight(x,y):-32);
     const lavaMaterial=new THREE.ShaderMaterial({uniforms:(lava.material as THREE.ShaderMaterial).uniforms,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2,
       vertexShader:(lava.material as THREE.ShaderMaterial).vertexShader,
-      fragmentShader:`uniform vec4 rowboatCutout;varying vec3 seaWorld;uniform sampler2D bathymetry;uniform vec2 waterOrigin,waterExtent;uniform float time;
+      fragmentShader:`
+      #include <fog_pars_fragment>
+      uniform vec4 rowboatCutout;varying vec3 seaWorld;uniform sampler2D bathymetry;uniform vec2 waterOrigin,waterExtent;uniform float time;
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
         void main(){vec2 uv=(seaWorld.xz-waterOrigin)/waterExtent;float d=texture2D(bathymetry,uv).r;if(d<=0.)discard;

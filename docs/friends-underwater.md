@@ -45,3 +45,32 @@ Unit tests cover restoration when surfacing, roof/night shaft suppression, bound
 In the final local controlled 1440×900 run, median GPU time changed from 6.28 to 6.62 ms for the bottom view, 7.61 to 7.47 ms for the overhead view (within timing variability), and 6.53 to 7.03 ms for the covered view. Bottom p95 changed from 8.46 to 10.05 ms. Each version had 64 valid GPU samples per view. These are fixture measurements, not a full-game FPS guarantee. Geometry and texture counts remained at 10 and 2 across the transition stress test.
 
 Screenshots and detailed timings are saved in `artifacts/underwater-polish/checks.json`; lamp and live-flood checks are in `integration-checks.json`.
+
+## Continuous depth attenuation
+
+Daylight now attenuates through the full water column. Existing material passes
+apply channel-dependent transmission to directional and ambient diffuse light,
+while point and spot lights remain local illumination. Red decays fastest,
+followed by green and blue. The disabled branch avoids the new exponential work
+above water. The underside of the surface attenuates transmitted sky, sun and
+reflected volume color by the actual camera-to-surface path, including longer
+oblique paths; opacity increases with that path so above-water objects cannot
+remain bright through the deep window. The surface also blends into the current
+underwater fog color in output color space, hiding both the light and the finite
+mesh outline. Path-dependent attenuation works at oblique angles; a smooth final
+fade reaches the surrounding water color by a 1,500-unit (125 m) optical path.
+Opacity is retained so fading does not reveal bright sky or objects above water.
+The underside branch uses camera height, consistently across both ocean passes.
+
+Fog and particle brightness continue decreasing exponentially instead of reaching
+a fixed brightness at 900 world units. Lake clarity and sea clarity keep separate
+attenuation rates. No extra draw calls, render targets or light passes are added.
+
+`tools/test-underwater-depth.mjs` checks progressively darker upward views at
+3.3, 25, 75, 150 and 266.7 metres. The fixed central pixel sample decreases from
+153 to 102, 46, 17 and 5 on a 0–255 display scale. Screenshots and measurements
+live in `artifacts/underwater-depth`. An additional whole-frame comparison checks
+oblique views against the same scene with the surface hidden: the finite sheet
+is indistinguishable at 75 m and deeper, and the real ocean's overlapping near
+and far surfaces match the surrounding water at 150 m. Point-light visibility and dynamic flooded
+cavity transitions still pass the existing browser integration check.

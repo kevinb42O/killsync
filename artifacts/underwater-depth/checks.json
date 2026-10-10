@@ -1,0 +1,125 @@
+{
+  "errors": [],
+  "levels": [
+    {
+      "depth": 40,
+      "metres": 3.3333333333333335,
+      "luminance": 153.2950205512235,
+      "fog": [
+        0.03723849902071502,
+        0.24660147943625543,
+        0.2792628876505064
+      ],
+      "gl": 0,
+      "calls": 7,
+      "moteLight": 0.9582758953156779
+    },
+    {
+      "depth": 300,
+      "metres": 25,
+      "luminance": 101.57083871526173,
+      "fog": [
+        0.02031260082939607,
+        0.13625846386683033,
+        0.1594681952083412
+      ],
+      "gl": 0,
+      "calls": 7,
+      "moteLight": 0.7277215407491497
+    },
+    {
+      "depth": 900,
+      "metres": 75,
+      "luminance": 46.49896304253588,
+      "fog": [
+        0.005301049942751159,
+        0.03725263974876672,
+        0.04854526531966737
+      ],
+      "gl": 0,
+      "calls": 7,
+      "moteLight": 0.39196156015233385
+    },
+    {
+      "depth": 1800,
+      "metres": 150,
+      "luminance": 16.966722048609746,
+      "fog": [
+        0.0009118229787214787,
+        0.007201027636054819,
+        0.011596903706147299
+      ],
+      "gl": 0,
+      "calls": 8,
+      "moteLight": 0.16704306261801893
+    },
+    {
+      "depth": 3200,
+      "metres": 266.6666666666667,
+      "luminance": 4.58279999999931,
+      "fog": [
+        0.00015614388420347031,
+        0.0014594993540707492,
+        0.0029123829242289788
+      ],
+      "gl": 0,
+      "calls": 7,
+      "moteLight": 0.06311007635868524
+    }
+  ],
+  "oblique": [
+    {
+      "depth": 300,
+      "metres": 25,
+      "maxDifference": 11,
+      "meanDifference": 1.93120987654321,
+      "visibleSurfacePixels": 422816,
+      "calls": 7,
+      "gl": 0
+    },
+    {
+      "depth": 600,
+      "metres": 50,
+      "maxDifference": 2,
+      "meanDifference": 0.12342361111111111,
+      "visibleSurfacePixels": 0,
+      "calls": 7,
+      "gl": 0
+    },
+    {
+      "depth": 900,
+      "metres": 75,
+      "maxDifference": 0,
+      "meanDifference": 0,
+      "visibleSurfacePixels": 0,
+      "calls": 7,
+      "gl": 0
+    },
+    {
+      "depth": 1500,
+      "metres": 125,
+      "maxDifference": 0,
+      "meanDifference": 0,
+      "visibleSurfacePixels": 0,
+      "calls": 8,
+      "gl": 0
+    },
+    {
+      "depth": 2800,
+      "metres": 233.33333333333334,
+      "maxDifference": 0,
+      "meanDifference": 0,
+      "visibleSurfacePixels": 0,
+      "calls": 7,
+      "gl": 0
+    }
+  ],
+  "oceanOverlap": {
+    "maxDifference": 0,
+    "gl": 0
+  },
+  "aboveSurface": {
+    "maxDifference": 0,
+    "gl": 0
+  }
+}

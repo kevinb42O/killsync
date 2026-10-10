@@ -7,10 +7,10 @@ import { haulingBearing } from './FriendsHaulingCompass';
 import { FriendsMap } from './FriendsMap';
 
 describe('hauling goal guidance',()=>{
-  it('shows only the pickup compass while the atlas carries the hauling goals and routes',()=>{
+  it('hides the compass when not hauling while the atlas carries the hauling goals and routes',()=>{
     const snapshot=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]).createSnapshot(),player=snapshot.players[0];
     const hud=renderToStaticMarkup(<FriendsHUD snapshot={snapshot} player={player} interactionLabel="F"/>);
-    expect(hud).not.toContain('friends-hud');expect(hud).not.toContain('OPEN FRONTIER');expect(hud).not.toContain('survey sites');expect(hud).not.toContain('GOAL · HAUL');expect(hud).toContain('Pickup compass for Lantern core');expect(hud).toContain('hauling-compass__dial');expect(hud).not.toContain('NEXT PICKUP');expect(hud).not.toContain('equip rope');expect(hud).not.toContain('hauling-compass__heading');expect(hud).not.toContain('hauling-compass__body');expect(hud).not.toContain('hauling-compass__hint');expect(hud).not.toContain('Mission details');
+    expect(hud).not.toContain('friends-hud');expect(hud).not.toContain('OPEN FRONTIER');expect(hud).not.toContain('survey sites');expect(hud).not.toContain('GOAL · HAUL');expect(hud).not.toContain('Pickup compass');expect(hud).not.toContain('hauling-compass');expect(hud).not.toContain('NEXT PICKUP');expect(hud).not.toContain('equip rope');expect(hud).not.toContain('Mission details');
     const map=renderToStaticMarkup(<FriendsMap snapshot={snapshot} localPlayer={player} onClose={()=>{}}/>);
     expect(map).toContain('Your hauling goal');expect(map).toContain('Core to delivery route');
     expect(map).toContain('750m');expect(map).toContain('amber light column');expect(map).toContain('green square on the west side');expect(map).toContain('Full frontier');
@@ -32,11 +32,11 @@ describe('tethered cargo compass',()=>{
     haul.completedCargoIds=['lantern-core'];
     haul.ropes=[{id:player.id,cargoId:'sanctum-core',anchorX:36,anchorY:0,anchorZ:26,length:120,tension:.6,blocked:false}];
     const hud=renderToStaticMarkup(<FriendsHUD snapshot={snapshot} player={player} interactionLabel="F"/>);
-    expect(hud).toContain('Delivery compass for Sanctum core');expect(hud).not.toContain('TIDAL SANCTUM BAY');expect(hud).not.toContain('TETHERED');expect(hud).not.toContain('1/3');expect(hud).toContain('AHEAD');
+    expect(hud).toContain('Delivery compass for Sanctum core');expect(hud).toContain('hauling-compass__dial');expect(hud).not.toContain('TIDAL SANCTUM BAY');expect(hud).not.toContain('TETHERED');expect(hud).not.toContain('1/3');expect(hud).toContain('AHEAD');
     const map=renderToStaticMarkup(<FriendsMap snapshot={snapshot} localPlayer={player} onClose={()=>{}}/>);
     expect(map).toContain('CASTLE COURTYARD');expect(map).toContain('TIDAL SANCTUM BAY');expect(map).toContain('LOAD 3');
     haul.ropes=[];
-    expect(renderToStaticMarkup(<FriendsHUD snapshot={snapshot} player={player} interactionLabel="F"/>)).toContain('Pickup compass for Watchfire core');
+    expect(renderToStaticMarkup(<FriendsHUD snapshot={snapshot} player={player} interactionLabel="F"/>)).not.toContain('hauling-compass');
     haul.ropes=[{id:player.id,cargoId:'ridge-core',anchorX:36,anchorY:0,anchorZ:26,length:120,tension:0,blocked:false}];
     const castleMap=renderToStaticMarkup(<FriendsMap snapshot={snapshot} localPlayer={player} onClose={()=>{}}/>);
     expect(castleMap).toContain('Castle stairway to courtyard');expect(castleMap).toContain('STAIRWAY START');

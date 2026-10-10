@@ -250,7 +250,9 @@ export function naturalCave(x: number, y: number, z: number, roofLimit=Infinity)
   if (x > 5990 && x < 6820 && Math.abs(y - 6192) < 66 && z >= FRIENDS_CAVE_HEIGHT && z < FRIENDS_CAVE_HEIGHT+96) return true;
   if (((x - 6790) / 185) ** 2 + ((y - 6210) / 150) ** 2 < 1 && z > FRIENDS_CAVE_HEIGHT-64 && z < FRIENDS_CAVE_HEIGHT+128) return true;
   // Deep horizontal seams invite player-made access tunnels throughout the frontier.
-  return x > 10000 && z > -224 && z < -96 && terrainNoise(x / 280, y / 280) > .78;
+  // Low beaches cross this elevation band too: retain their surface layer,
+  // just as the exploration caves respect the column's terrain roof.
+  return z < roofLimit && x > 10000 && z > -224 && z < -96 && terrainNoise(x / 280, y / 280) > .78;
 }
 export class FriendsTerrain {
   private grades: TerrainGrade[] = [];

@@ -1,6 +1,6 @@
 import type { CoopPlayerSnapshot } from '../game/multiplayer/CoopSimulation';
 import type { HaulingSnapshot } from '../game/multiplayer/FriendsHauling';
-import { cargoDelivered, haulingGoal, haulingJob } from '../game/world/FriendsHaulingGoal';
+import { haulingGoal, haulingJob } from '../game/world/FriendsHaulingGoal';
 
 export function haulingBearing(player:{x:number;y:number;angle:number},target:{x:number;y:number}){
   const angle=Math.atan2(target.y-player.y,target.x-player.x)-player.angle;
@@ -28,15 +28,15 @@ function CompassArrow({bearing,elevation,color}:{bearing:number;elevation:number
   </svg>;
 }
 export function FriendsHaulingCompass({hauling,player}:{hauling:HaulingSnapshot;player:CoopPlayerSnapshot}){
-  const rope=hauling.ropes.find(r=>r.id===player.id),tethered=hauling.cargo.find(c=>c.id===rope?.cargoId);
-  const cargo=tethered??hauling.cargo.find(c=>!cargoDelivered(hauling,c));
+  const rope=hauling.ropes.find(r=>r.id===player.id);
+  const cargo=rope&&hauling.cargo.find(c=>c.id===rope.cargoId);
   if(!cargo)return null;
   const job=haulingJob(cargo),goal=haulingGoal(cargo);
-  const target=tethered?goal:cargo,bearing=haulingBearing(player,target);
+  const target=goal,bearing=haulingBearing(player,target);
   const horizontal=Math.hypot(target.x-player.x,target.y-player.y);
   const elevation=Math.atan2(target.z-player.z,Math.max(1,horizontal));
-  const color=tethered?goal.color:'#ffc36e';
-  return <div className="hauling-compass" aria-label={tethered?`Delivery compass for ${job.name}`:`Pickup compass for ${job.name}`}>
+  const color=goal.color;
+  return <div className="hauling-compass" aria-label={`Delivery compass for ${job.name}`}>
     <CompassArrow bearing={bearing} elevation={elevation} color={color}/>
     <small className="hauling-compass__distance">{Math.round(horizontal/12)} m</small>
   </div>;

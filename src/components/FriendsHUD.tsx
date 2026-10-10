@@ -4,13 +4,12 @@ import { scenicSeatPrompt, scenicControlNearby } from '../game/multiplayer/Frien
 import { campfireSeatPrompt, isCampfireSeat } from '../game/multiplayer/FriendsCampfireSeats';
 import { campfireNearby } from '../game/multiplayer/FriendsCampfireSimulation';
 import { nearbyCaveTreasure } from '../game/world/FriendsCave';
-import { TrainFront, Plane } from 'lucide-react';
 import type { CoopPlayerSnapshot, CoopSnapshot } from '../game/multiplayer/CoopSimulation';
 import { friendsVehicleFloor, vehicleLocal } from '../game/multiplayer/FriendsExpedition';
 import { FriendsHaulingCompass } from './FriendsHaulingCompass';
 import { haulingInteraction } from '../game/multiplayer/FriendsHauling';
 
-export function FriendsHUD({ snapshot, player, interactionLabel, tool = 6, toolbeltVisible = false, resumeControlVisible = false }: { snapshot: CoopSnapshot; player?: CoopPlayerSnapshot; interactionLabel: string; tool?:number; toolbeltVisible?: boolean; resumeControlVisible?: boolean }) {
+export function FriendsHUD({ snapshot, player, interactionLabel, tool = 6, toolbeltVisible = false, resumeControlVisible = false, rowboatHint }: { snapshot: CoopSnapshot; player?: CoopPlayerSnapshot; interactionLabel: string; tool?:number; toolbeltVisible?: boolean; resumeControlVisible?: boolean; rowboatHint?: string }) {
   const expedition = snapshot.friends;
   if (!expedition || !player || isCampfireSeat(player.friendsSeat)) return null;
   const service=expedition.scenicRailway;
@@ -22,6 +21,7 @@ export function FriendsHUD({ snapshot, player, interactionLabel, tool = 6, toolb
   const canPilot = !aircraft.pilotId && Math.abs(player.z - aircraft.z) < 22 && cockpit.x > 55 && cockpit.x < 165 && Math.abs(cockpit.y) < 55;
   const treasure=nearbyCaveTreasure(player,expedition.progress.openedTreasures);
   const hauling=expedition.hauling, haulingFeedback=hauling?.feedback[player.id];
+  const miningFeedback=expedition.frontier?.feedback[player.id];
   const cargoTarget=hauling && haulingInteraction(hauling.cargo,player,expedition.vehicles,hauling.delivered,hauling.completedCargoIds);
   const crane=nearbyCrane(expedition.building?.pieces??[],player);
   const hook=hauling&&craneHookInteraction(hauling.cranes??[],hauling.cargo,player);
@@ -34,10 +34,16 @@ export function FriendsHUD({ snapshot, player, interactionLabel, tool = 6, toolb
   const trainDock = !player.friendsDevFlight && vehicle?.scenic;
   return <>
     {hauling && <FriendsHaulingCompass hauling={hauling} player={player}/>}
-    {haulingFeedback && snapshot.elapsedMs < haulingFeedback.until && <div className="friends-hauling-feedback" role="status">{haulingFeedback.message}</div>}
     <div className={trainDock ? 'friends-train-dock pointer-events-none' : 'friends-context'} data-toolbelt-visible={toolbeltVisible} data-resume-visible={resumeControlVisible}>
-    {player.friendsDevFlight && <div className="friends-ride pointer-events-none"><Plane size={16} /><div><strong>DEV FREE FLIGHT · C SETTINGS</strong><small>Move toward your view · Space rise · Ctrl descend · Shift boost</small></div></div>}
-    {!player.friendsDevFlight && vehicle && <div className="friends-ride pointer-events-none">{vehicle.kind === 'train' ? <TrainFront size={16} /> : <Plane size={16} />}<div><strong>{piloting ? 'SUNSKIFF · PILOT' : vehicle.scenic ? 'GRAND TRAVERSE · '+(player.friendsSeat?'SEATED':'ON BOARD') : vehicle.kind === 'train' ? 'SUNLINE · ON BOARD' : 'SUNSKIFF · CREW'}</strong><small>{piloting ? 'Move: fly · jump: ascend · crouch: descend · sprint: boost' : vehicle.scenic && service ? `${service.chapter} · ${service.blocked?'Track obstructed':service.held?'Held':service.dwell>0?'Boarding':Math.round(service.speed/12*3.6)+' km/h'} · Next: ${service.nextStation}` : vehicle.kind === 'train' ? expedition.transport?.held ? 'Held · G opens train controls' : 'Your railway · walk freely · jump off anywhere' : 'Walk freely · shoot from the cabin · jump out anytime'}</small></div></div>}
+    {haulingFeedback && snapshot.elapsedMs < haulingFeedback.until && <div className="friends-hauling-feedback" role="status">{haulingFeedback.message}</div>}
+    {miningFeedback && snapshot.elapsedMs < miningFeedback.until && <div className="frontier-feedback" role="status">{miningFeedback.message}</div>}
+    {rowboatHint && <div className="friends-rowboat-hint">{rowboatHint}</div>}
+    {player.friendsDevFlight && <div className="friends-ride pointer-events-none">Free flight · C settings</div>}
+    {!player.friendsDevFlight && vehicle && vehicle.kind!=='rowboat' && <div className="friends-ride pointer-events-none">
+      {piloting ? 'Sunskiff · pilot' : vehicle.scenic ? 'Grand Traverse' : vehicle.kind === 'train' ? 'Sunline' : 'Sunskiff'}
+      {vehicle.scenic && service && <span> · {service.blocked?'Track obstructed':service.held?'Held':service.dwell>0?'Boarding':Math.round(service.speed/12*3.6)+' km/h'} · Next: {service.nextStation}</span>}
+      {!vehicle.scenic && vehicle.kind === 'train' && expedition.transport?.held && <span> · Held</span>}
+    </div>}
     {prompt && <div className="friends-interact pointer-events-none"><kbd>{interactionLabel}</kbd><span>{prompt}{campfireNearby(player)&&<small> · K add wood</small>}</span></div>}
     </div>
   </>;

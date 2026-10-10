@@ -1,0 +1,9 @@
+{
+  "firstStep": 8.575818723023986,
+  "snapshotStep": 20,
+  "floatLineGap": 0,
+  "finite": true,
+  "opaque": true,
+  "depthWrite": true,
+  "gl": 0
+}

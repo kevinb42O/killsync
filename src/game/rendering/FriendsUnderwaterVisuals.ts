@@ -105,7 +105,8 @@ export class FriendsUnderwaterVisuals{
     if(!this.wasSubmerged){this.enteredAt=elapsed;this.wasSubmerged=true;}
     if(elapsed-this.lastScan>750){this.bindSceneMaterials();this.lastScan=elapsed;}
     this.originalFog=this.scene.fog;this.originalBackground=this.scene.background;
-    const immersion=THREE.MathUtils.smoothstep(depth,0,18),dark=THREE.MathUtils.smoothstep(depth,60,900),sea=water!.bodyId==='sea';
+    const immersion=THREE.MathUtils.smoothstep(depth,0,18),sea=water!.bodyId==='sea',clarity=sea?.85:1.1;
+    const dark=1-Math.exp(-depth*.0016*clarity),depthLight=Math.exp(-depth*.0013*clarity);
     const exposure=this.exposure(camera,water!.level,elapsed,terrain);
     const sun=this.scene.children.find(o=>o instanceof THREE.DirectionalLight) as THREE.DirectionalLight|undefined;
     if(sun){this.lightDirection.subVectors(sun.position,sun.target.position).normalize();this.lighting.sunDirection.value.copy(this.lightDirection);}
@@ -114,7 +115,7 @@ export class FriendsUnderwaterVisuals{
     if(depth>18)for(const name of ['frontier-day-night-sky','frontier-volumetric-cumulus']){
       const object=this.scene.getObjectByName(name);if(object){this.hiddenAtmosphere.push({object,visible:object.visible});object.visible=false;}
     }
-    this.fog.color.set(sea?'#398e96':'#397d72').lerp(this.deepColor,dark).multiplyScalar(.12+.88*daylight);
+    this.fog.color.set(sea?'#398e96':'#397d72').lerp(this.deepColor,dark).multiplyScalar((.12+.88*daylight)*(.025+.975*depthLight));
     if(this.originalFog)this.fog.color.lerp(this.originalFog.color,1-immersion);
     const originalDensity=this.originalFog instanceof THREE.FogExp2?this.originalFog.density:0;
     this.fog.density=THREE.MathUtils.lerp(originalDensity,(sea?.00072:.00095)+dark*.0016,immersion);
@@ -122,7 +123,7 @@ export class FriendsUnderwaterVisuals{
     this.scene.fog=this.fog;this.scene.background=this.background;this.active=true;
     this.lighting.enabled.value=immersion;this.lighting.time.value=elapsed/1000;this.lighting.level.value=water!.level;this.lighting.sunlight.value=sunlight;this.lighting.exposure.value=exposure;this.lighting.clarity.value=sea?.85:1.1;
     const u=this.overlay.material.uniforms;u.immersion.value=immersion;u.light.value=daylight;u.depth.value=depth;u.time.value=elapsed/1000;u.entry.value=Math.max(0,1-(elapsed-this.enteredAt)/850);this.overlay.visible=true;
-    const m=this.motes.material.uniforms;m.time.value=elapsed/1000;m.level.value=water!.level;m.light.value=daylight;m.immersion.value=immersion;this.motes.visible=true;
+    const m=this.motes.material.uniforms;m.time.value=elapsed/1000;m.level.value=water!.level;m.light.value=daylight*(.035+.965*depthLight);m.immersion.value=immersion;this.motes.visible=true;
     this.shafts.material.uniforms.strength.value=sunlight*immersion*(1-dark);this.shafts.visible=sunlight>.02&&dark<.95;
     if(this.shafts.visible){const x=Math.round(camera.position.x/160)*160,z=Math.round(camera.position.z/160)*160;for(let i=0;i<9;i++){
       this.matrix.makeTranslation(x+(i%3-1)*250+Math.sin(i*13)*90,0,z+(Math.floor(i/3)-1)*250+Math.cos(i*17)*90);this.shafts.setMatrixAt(i,this.matrix);
