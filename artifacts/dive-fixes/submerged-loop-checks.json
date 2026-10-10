@@ -1,0 +1,24 @@
+{
+  "errors": [],
+  "wet": {
+    "duration": 59,
+    "channels": 2,
+    "loop": true,
+    "loopStart": 0,
+    "loopEnd": 59,
+    "sameSource": true,
+    "splashOnce": true,
+    "firstMinuteOnly": true,
+    "rmsMiddle": 0.02907379415785254,
+    "rmsBeforeJoin": 0.030372326371330104,
+    "rmsAfterJoin": 0.044162431297260024,
+    "seamJump": 0.0001622983254492283,
+    "peak": 0.39194777607917786,
+    "effectsCutoff": 850,
+    "ambienceCutoff": 650
+  },
+  "dry": {
+    "underwaterVoice": false,
+    "breathPlayed": true
+  }
+}

@@ -180,16 +180,20 @@ describe('downloaded Friends audio', () => {
     expect(fadeLevel).toBe(0);
     expect(fadeEnd).toBeCloseTo(context.currentTime + .62);
   });
-  it('plays the dive splash once and loops only its final second until resurfacing', async () => {
+  it('plays the entry splash once and loops the entire submerged recording until resurfacing', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
     const before = sources.length;
     audio.setUnderwaterDive(true);
-    expect(sources).toHaveLength(before + 1);
+    expect(sources).toHaveLength(before + 2);
+    const splash = sources.at(-2);
+    expect(splash.loop).toBe(false);
     const dive = sources.at(-1);
     expect(dive.loop).toBe(true);
-    expect(dive.loopStart).toBe(decoded.duration - 1);
+    expect(dive.loopStart).toBe(0);
     expect(dive.loopEnd).toBe(decoded.duration);
     expect(dive.start).toHaveBeenCalledWith(context.currentTime, 0);
+    audio.setUnderwaterDive(true);
+    expect(sources).toHaveLength(before + 2);
     audio.setUnderwaterDive(false);
     expect(dive.stop).toHaveBeenCalledWith(context.currentTime + .2);
   });
@@ -203,6 +207,8 @@ describe('downloaded Friends audio', () => {
     audio.play('swimStroke',.25,0);audio.play('waterStep',.25,0);expect(sources).toHaveLength(n);
     audio.setSettings({effects:.6,ambience:.5});expect(state.effectsGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.48,context.currentTime,.05);expect(state.ambienceGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.125,context.currentTime,.25);
     expect(state.underwaterDiveVoice.source).toBe(voice);
+    expect(state.underwaterDiveVoice.gain.connect).toHaveBeenCalledWith(context.destination);
+    expect(state.underwaterDiveVoice.gain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.33,context.currentTime,.05);
     audio.setUnderwaterDive(false);expect(state.effectsWaterFilter.frequency.setTargetAtTime).toHaveBeenLastCalledWith(22000,context.currentTime,.09);
     expect(state.ambienceGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.5,context.currentTime,.25);
     audio.play('swimStroke',.25,0);expect(sources).toHaveLength(n+1);
@@ -212,9 +218,28 @@ describe('downloaded Friends audio', () => {
     expect((audio as any).effectsWaterFilter.frequency.setTargetAtTime).toHaveBeenLastCalledWith(22000,context.currentTime,.09);
     releases.push(audio.acquire());audio.activate();expect((audio as any).underwaterDiveRequested).toBe(false);
   });
+  it('stops and restores the submerged loop with mute and Effects volume', async () => {
+    releases.push(audio.acquire()); audio.activate(); await load();
+    audio.setUnderwaterDive(true);
+    const first = (audio as any).underwaterDiveVoice.source;
+    audio.setSettings({ muted: true });
+    expect(first.stop).toHaveBeenCalled();
+    expect((audio as any).underwaterDiveVoice).toBeUndefined();
+    audio.setSettings({ muted: false });
+    const resumed = (audio as any).underwaterDiveVoice.source;
+    expect(resumed).not.toBe(first);
+    expect(resumed.loopStart).toBe(0);
+    audio.setSettings({ effects: 0 });
+    expect(resumed.stop).toHaveBeenCalled();
+    expect((audio as any).underwaterDiveVoice).toBeUndefined();
+    audio.setSettings({ effects: .7 });
+    expect((audio as any).underwaterDiveVoice).toBeDefined();
+    audio.setUnderwaterDive(false);
+    expect((audio as any).underwaterDiveVoice).toBeUndefined();
+  });
   it('does not endlessly reload a failed dive asset and can retry on the next dive', async () => {
     releases.push(audio.acquire()); audio.activate(); await load();
-    const url = FRIENDS_CUE_ASSETS.waterDive[0];
+    const url = FRIENDS_CUE_ASSETS.waterSubmerged[0];
     (audio as any).buffers.delete(url);
     const failed = vi.fn(async () => ({ ok: false }));
     vi.stubGlobal('fetch', failed);

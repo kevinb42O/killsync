@@ -11,7 +11,7 @@ export type FriendsCue = SurfaceCue | 'wood' | 'stone' | 'soil' | 'ore' | 'dig' 
   | 'fishingCast' | 'fishingSplash' | 'fishingBite' | 'fishingReel'
   | 'dynamiteExplosion' | 'dynamiteFuse'
   | 'stoneThrow' | 'stoneImpact' | 'stoneHurt'
-  | 'waterEntry' | 'swimStroke' | 'waterDive' | 'waterBreathIn'
+  | 'waterEntry' | 'swimStroke' | 'waterDive' | 'waterSubmerged' | 'waterBreathIn'
   | 'birdRobin' | 'birdBlueTit' | 'birdSparrow' | 'birdWings' | 'birdStartled'
   | 'trainDepart' | 'trainBrake' | 'trainStop' | 'trainHorn' | 'flightFoliage'
   | 'click' | 'hover' | 'success' | 'error' | 'collect' | 'pack' | 'jump' | 'swing' | 'chest' | 'chime'
@@ -30,6 +30,7 @@ export const FRIENDS_CUE_ASSETS: Readonly<Record<Cue, readonly string[]>> = {
   waterEntry: [ROOT + 'water_splash_effect.mp3', ROOT + 'splashing_water.mp3'],
   swimStroke: [ROOT + 'splashing_water.mp3', ROOT + 'water_splash_effect.mp3'],
   waterDive: [ROOT + 'cinematic_dive_underwater.mp3'],
+  waterSubmerged: [ROOT + 'underwater_bubbles_loop.ogg'],
   waterBreathIn: [ROOT + 'water_breath_in.mp3'],
   stoneThrow: [ROOT + 'knifeSlice.ogg'], stoneImpact: variants('impactMining', 5), stoneHurt: [ROOT + 'stone_oof.mp3'],
   wood: variants('impactWood_medium'), stone: variants('impactMining', 5), soil: variants('impactSoft_medium'), ore: variants('impactMetal_light'),
@@ -320,8 +321,9 @@ export class FriendsAudio {
     source.start(start, offset, length);
     return source;
   }
-  /** Play the dive recording from its splash, then loop only its final second underwater. */
+  /** Play the entry splash once; keep the separate submerged recording looping. */
   setUnderwaterDive(enabled: boolean) {
+    if (enabled && !this.underwaterDiveRequested) this.play('waterDive', .3, 0);
     this.cancelResurfaceBreath();
     this.underwaterDiveRequested = enabled;
     this.applyVolumes();
@@ -356,7 +358,7 @@ export class FriendsAudio {
       this.stopUnderwaterDive(); return;
     }
     if (document.hidden || context.state !== 'running' || this.underwaterDiveVoice) return;
-    const url = CUES.waterDive[0], buffer = this.buffers.get(url);
+    const url = CUES.waterSubmerged[0], buffer = this.buffers.get(url);
     if (!buffer) {
       if (!this.underwaterDiveLoading) {
         this.underwaterDiveLoading = true;
@@ -372,17 +374,18 @@ export class FriendsAudio {
     const source = context.createBufferSource(), gain = context.createGain();
     source.buffer = buffer;
     source.loop = true;
-    source.loopStart = Math.max(0, buffer.duration - 1);
+    source.loopStart = 0;
     source.loopEnd = buffer.duration;
     gain.gain.value = 0;
-    source.connect(gain); gain.connect(this.effectsGain!);
+    // This recording is already submerged; bypass the surface-water filter.
+    source.connect(gain); gain.connect(this.outputGuard ?? context.destination);
     source.onended = () => {
       if (this.underwaterDiveVoice?.source === source) this.underwaterDiveVoice = undefined;
       source.disconnect(); gain.disconnect();
     };
     this.underwaterDiveVoice = { source, gain };
     source.start(context.currentTime, 0);
-    gain.gain.setTargetAtTime(.22 * (this.bufferTrims.get(url) ?? 1), context.currentTime, .08);
+    gain.gain.setTargetAtTime(.55 * this.settings.effects, context.currentTime, .08);
   }
   private stopUnderwaterDive(fade = true) {
     const voice = this.underwaterDiveVoice, context = this.context;
@@ -629,6 +632,7 @@ export class FriendsAudio {
   private applyVolumes() {
     if (!this.context) return;
     const now = this.context.currentTime;
+    this.underwaterDiveVoice?.gain.gain.setTargetAtTime(this.settings.muted ? 0 : .55 * this.settings.effects, now, .05);
     this.effectsGain?.gain.setTargetAtTime(this.settings.muted ? 0 : this.settings.effects*(this.underwaterDiveRequested?.8:1), now, .05);
     this.effectsWaterFilter?.frequency.setTargetAtTime(this.underwaterDiveRequested?850:22000,now,.09);
     this.ambienceWaterFilter?.frequency.setTargetAtTime(this.underwaterDiveRequested?650:22000,now,.12);
