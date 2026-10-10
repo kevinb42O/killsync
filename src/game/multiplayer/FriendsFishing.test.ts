@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { FriendsFishing, FISHING_BITE_MS, FISHING_CHARGE_MS, FISHING_CAST_RELEASE_MS, fishingEmptyReelMs, FISHING_REEL_MS, FISHING_WAIT_MIN_MS, FISHING_WAIT_MAX_MS, LOOSE_FISH_LIMIT, fishLengthCm, fishingCatchSize, type FishingActor, type FishingEnvironment } from './FriendsFishing';
 import { SnapshotDecoder, compactSnapshotWirePayload } from './snapshotReplication';
 import { FriendsSimulation } from './FriendsSimulation';
+import { quantizePitch, quantizeAngle } from './CoopSimulation';
+import { firstPersonEyeZ } from './FirstPersonEye';
 import { friendsToolInput } from './FriendsToolControls';
 import { clampInputFrame, MULTIPLAYER_PROTOCOL_VERSION, type MultiplayerInputFrame } from './protocol';
 import { friendsWaterAt } from '../world/FriendsWaterSurface';
 import { FRIENDS_RIVERS } from '../world/FriendsHydrology';
 import { ISLAND_LAKES } from '../world/FriendsIsland';
 
-const input=(extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:0,aimAngle:0,aimPitch:Math.round((-.3+Math.PI*.44)/(Math.PI*.88)*65535),friendsTool:7,selectedSlot:0,firing:false,fireActionId:0,altFireActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
+const input=(extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:0,aimAngle:0,aimPitch:quantizePitch(0),friendsTool:7,selectedSlot:0,firing:false,fireActionId:0,altFireActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
 const player=():FishingActor=>({id:'host',x:0,y:0,z:0,angle:0,lifeState:'alive'});
 const environment:FishingEnvironment={water:(x)=>x>=80?{level:0,depth:40,bodyId:'test'}:undefined,floor:(x)=>x>=80?-40:0,blocked:()=>false};
 const fixtureFlightMs=900;
@@ -64,6 +66,24 @@ describe('casual Friends fishing',()=>{
       return started.reelDurationMs!;
     };
     expect(retrieve(1200)).toBeGreaterThan(retrieve(0));
+  });
+  it('launches directly along released camera aim, in front of the eye, for skyward and downward casts',()=>{
+    for(const pitch of [-1,-.3,0,.8,1.35])for(const angle of [0,Math.PI/2,Math.PI]){
+      const f=fixture(.5,{...environment,water:()=>undefined,floor:()=>0});
+      f.command={...f.command,fireActionId:1,firing:true};f.step(1300);
+      f.command={...f.command,firing:false,aimPitch:quantizePitch(pitch),aimAngle:quantizeAngle(angle)};f.step();
+      const c=f.fishing.snapshot().casts[0],v=c.velocity!,speed=Math.hypot(v.x,v.y,v.z);
+      expect(v.z/speed).toBeCloseTo(Math.sin(pitch),4);
+      expect(v.x/speed).toBeCloseTo(Math.cos(angle)*Math.cos(pitch),4);
+      expect(v.y/speed).toBeCloseTo(Math.sin(angle)*Math.cos(pitch),4);
+      expect((c.x-f.p.x)*v.x+(c.y-f.p.y)*v.y+(c.z-firstPersonEyeZ(f.p))*v.z).toBeGreaterThan(0);
+      f.step(FISHING_CAST_RELEASE_MS+100);const moving=f.fishing.snapshot().casts[0];
+      if(pitch>.5)expect(moving.z).toBeGreaterThan(c.z);if(pitch<-.5)expect(moving.z).toBeLessThan(c.z);
+    }
+  });
+  it('does not offset the launch through a nearby wall or above a low ceiling',()=>{
+    const f=fixture(.5,{...environment,blocked:(a,b)=>a.x<3&&b.x>=3,eyeCeiling:()=>45});
+    f.click();const c=f.fishing.snapshot().casts[0];expect(c.x).toBe(0);expect(c.z).toBe(42);
   });
   it('cancels preparation on secondary action, tool change, menus, invalid actors and disconnect without throwing',()=>{
     for(const cancel of ['secondary','tool','menu','swim','dead','pilot','disconnect']){
@@ -226,7 +246,7 @@ describe('casual Friends fishing',()=>{
   it('keeps a short cast outside the real stepped bank rather than falling inside solid terrain',()=>{
     const sim=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]),internal=sim as any,p=internal.players.get('host');
     Object.assign(p,{x:14540,y:23600,z:192,verticalVelocity:0,friendsDevFlight:false});
-    for(let i=1;i<=60;i++){sim.setInput('host',input({sequence:i,fireActionId:1}));sim.tick(50);}
+    for(let i=1;i<=60;i++){sim.setInput('host',input({sequence:i,fireActionId:1,aimPitch:quantizePitch(-1)}));sim.tick(50);}
     const cast=sim.createSnapshot().friends!.fishing!.casts[0];expect(cast.phase).toBe('dry');expect(cast.x).toBeLessThan(14560);expect(cast.z).toBeGreaterThanOrEqual(192);
   });
   it('uses the shared water field across lakes, rivers and sea rather than fishing zones',()=>{

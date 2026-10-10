@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import type { FishingSnapshot, CaughtFish } from '../multiplayer/FriendsFishing';
-import { FISH_GROUND_RADIUS, FISHING_REEL_MS } from '../multiplayer/FriendsFishing';
+import { FISH_GROUND_RADIUS, FISHING_REEL_MS, FISHING_CAST_RELEASE_MS } from '../multiplayer/FriendsFishing';
 import { friendsAudio } from '../FriendsAudio';
 import { acquireEquipmentLighting, frameHeldEquipment, loadFriendsGrip } from './FriendsHeldEquipment';
 import { createFishingFish, loadFishingFish, loadFishingRod } from './FriendsFishingAssets';
@@ -128,13 +128,15 @@ export class FriendsFishingVisuals {
       // Host snapshots arrive more slowly than rendering. Interpolate the
       // shared float/fish/line endpoint so retrieval does not jump each tick.
       if(r.serial===cast.id&&r.previousFloat.distanceTo(this.end)<140)this.end.lerpVectors(r.previousFloat,this.end,1-Math.exp(-Math.max(0,dt)*.035));
-      r.float.position.copy(this.end);r.float.rotation.set(moving*.28,bite?now*.001:0,(bite?.38:waiting?Math.sin(now*.002)*.07:0)+moving*.22);r.float.visible=cast.phase!=='reeling'||Boolean(cast.empty);r.previousFloat.copy(this.end);
+      const paidOut=cast.phase!=='casting'||now-(cast.castAt??cast.atMs)>=FISHING_CAST_RELEASE_MS;
+      r.float.position.copy(this.end);r.float.rotation.set(moving*.28,bite?now*.001:0,(bite?.38:waiting?Math.sin(now*.002)*.07:0)+moving*.22);r.float.visible=paidOut&&(cast.phase!=='reeling'||Boolean(cast.empty));r.previousFloat.copy(this.end);
       r.ring.position.set(cast.x,cast.target.z-1.8,cast.y);const ripple=((now-cast.atMs)%1100)/1100;r.ring.scale.setScalar(4+ripple*(bite?23:10+moving*12));r.ring.visible=waiting||bite;
       if(r.tip){r.root.updateWorldMatrix(true,true);if(local){const p=project(r.tip);this.start.set(p.x,p.y,p.z);}else r.tip.getWorldPosition(this.start);}
       else this.start.copy(r.root.position);
       if(r.serial!==cast.id||r.phase==='casting'&&cast.phase!=='casting'){this.dropPosition.set(cast.target.x,cast.target.z,cast.target.y);r.lineOffset=this.start.distanceTo(this.dropPosition)-Math.hypot(player.x-cast.target.x,player.y-cast.target.y,player.z+26-cast.target.z);}
       const slack=Math.max(1,(cast.lineLength??this.start.distanceTo(this.end)+12)+r.lineOffset-this.start.distanceTo(this.end));
       r.line.update(this.start,this.end,cast.phase==='casting'?24:cast.phase==='reeling'?2:bite?Math.min(3,slack):slack,dt,this.cameraPoint,waiting||bite||cast.phase==='dry'?cast.target.z-2:undefined,camera instanceof THREE.PerspectiveCamera?camera:undefined,typeof window==='undefined'?900:window.innerHeight);
+      r.line.visible=paidOut;
       if(bite&&now>=r.nextSplash){this.splash(cast.x,cast.target.z-2,cast.y,now);r.nextSplash=now+650;}
       if(r.serial!==cast.id||r.phase!==cast.phase){
         if(waiting)this.splash(cast.x,cast.target.z-2,cast.y,now);

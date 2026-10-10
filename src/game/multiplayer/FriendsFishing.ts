@@ -2,6 +2,7 @@ import { friendsWaterAt, type FriendsWaterSample } from '../world/FriendsWaterSu
 import type { MultiplayerInputFrame } from './protocol';
 import { isRetreatSeat } from '../world/FriendsRetreatSites';
 import { isRowboatSeat } from '../world/FriendsFishingDock';
+import { firstPersonEyeZ } from './FirstPersonEye';
 
 export const FISHING_TOOL = 7 as const;
 export const FISHING_CHARGE_MS = 1200;
@@ -30,7 +31,7 @@ export function fishingSeatAllowed(seat:FishingActor['friendsSeat']) {
   return !seat || isRetreatSeat(seat) || isRowboatSeat(seat);
 }
 export type FishingPoint = { x:number; y:number; z:number };
-export type FishingActor = FishingPoint & { id:string; angle:number; lifeState:string; swimming?:boolean; friendsDevFlight?:boolean; friendsSeat?:{vehicleId:string;index:number} };
+export type FishingActor = FishingPoint & { id:string; angle:number; lifeState:string; sliding?:boolean; swimming?:boolean; friendsDevFlight?:boolean; friendsSeat?:{vehicleId:string;index:number} };
 export type FishingCast = FishingPoint & { id:number; playerId:string; phase:'casting'|'dry'|'waiting'|'bite'|'reeling'; empty?:boolean; atMs:number; biteAt:number; from:FishingPoint; target:FishingPoint; size:number; lineLength?:number; velocity?:FishingPoint; flightAt?:number; castAt?:number; castPower?:number; reelDurationMs?:number };
 export type CaughtFish = FishingPoint & { id:number; size:number; phase:'held'|'air'|'dry'|'swimming'|'fading'; ownerId?:string; caughtBy?:string; atMs:number; angle:number; vx:number; vy:number; vz:number; heldTool?:number; unattendedAt?:number };
 export type FishingCharge = { playerId:string; chargeAt:number };
@@ -40,6 +41,7 @@ export type FishingEnvironment = {
   floor:(x:number,y:number,z:number,step:number)=>number|undefined;
   blocked:(from:FishingPoint,to:FishingPoint)=>boolean;
   piloting?:(id:string)=>boolean;
+  eyeCeiling?:(actor:FishingActor)=>number|undefined;
 };
 const distance=(a:FishingPoint,b:FishingPoint)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const mix=(a:number,b:number,t:number)=>a+(b-a)*t;
@@ -57,13 +59,18 @@ export class FriendsFishing {
   held(id:string){return this.fish.find(f=>f.phase==='held'&&f.ownerId===id);}
   private water(env:FishingEnvironment,x:number,y:number){return (env.water??friendsWaterAt)(x,y);}
   private allowed(p:FishingActor,env:FishingEnvironment){return p.lifeState==='alive'&&!p.swimming&&!p.friendsDevFlight&&fishingSeatAllowed(p.friendsSeat)&&!env.piloting?.(p.id);}
-  private start(p:FishingActor,input:MultiplayerInputFrame,now:number,chargeAt:number){
+  private start(p:FishingActor,input:MultiplayerInputFrame,now:number,chargeAt:number,env:FishingEnvironment){
     const angle=input.aimAngle/65535*Math.PI*2,pitch=input.aimPitch/65535*Math.PI*.88-Math.PI*.44;
     const power=fishingCastPower(now-chargeAt),speed=140+power*210;
-    // Launch at the hand so a nearby wall cannot be skipped by an offset origin.
-    const from={x:p.x,y:p.y,z:p.z+26};
+    // Begin in front of the viewpoint, along the released aim. A waist-height
+    // origin lies behind the camera when looking up and visibly drops the
+    // bobber off the rod. Sweep this short offset so walls cannot be skipped.
+    const eye={x:p.x,y:p.y,z:firstPersonEyeZ(p,env.eyeCeiling?.(p))};
+    const direction={x:Math.cos(angle)*Math.cos(pitch),y:Math.sin(angle)*Math.cos(pitch),z:Math.sin(pitch)};
+    const offset={x:eye.x+direction.x*6,y:eye.y+direction.y*6,z:eye.z+direction.z*6};
+    const from=env.blocked(eye,offset)?eye:offset;
     this.casts.set(p.id,{id:++this.serial,playerId:p.id,...from,from,target:{...from},phase:'casting',atMs:now,castAt:now,castPower:power,biteAt:0,size:0,
-      velocity:{x:Math.cos(angle)*Math.cos(pitch)*speed,y:Math.sin(angle)*Math.cos(pitch)*speed,z:Math.sin(pitch)*speed+75+power*100},flightAt:now+FISHING_CAST_RELEASE_MS});
+      velocity:{x:direction.x*speed,y:direction.y*speed,z:direction.z*speed},flightAt:now+FISHING_CAST_RELEASE_MS});
   }
   private wet(c:FishingCast,env:FishingEnvironment){
     const w=this.water(env,c.x,c.y),floor=env.floor(c.x,c.y,c.z+3,0);
@@ -188,7 +195,7 @@ export class FriendsFishing {
         else if(c&&(c.phase==='waiting'||c.phase==='dry'||c.phase==='casting')){this.reel(c,now,true,p);}
       }
       const chargeAt=this.charges.get(p.id);
-      if(chargeAt!==undefined&&!input!.firing){this.charges.delete(p.id);this.start(p,input!,now,chargeAt);}
+      if(chargeAt!==undefined&&!input!.firing){this.charges.delete(p.id);this.start(p,input!,now,chargeAt,env);}
       c=this.casts.get(p.id);if(!c)continue;
       if(c.phase==='casting'){
         this.fly(c,env,now,p);

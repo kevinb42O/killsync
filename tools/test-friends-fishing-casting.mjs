@@ -18,7 +18,7 @@ try{
       r.fishing.update(state,[r.player],'review',7,r.camera,now,16,true,r.project,()=>false);
       r.renderer.info.reset();r.renderer.autoClear=true;r.renderer.render(r.scene,r.camera);r.renderer.autoClear=false;r.renderer.clearDepth();r.renderer.render(r.viewmodel,r.handCamera);
       const rod=r.fishing.rods.get('review'),tip=rod.tip.getWorldPosition(new r.THREE.Vector3()),cameraTip=r.handCamera.worldToLocal(tip.clone());
-      return {name,pitch:rod.root.rotation.x,tipCamera:cameraTip.toArray(),calls:r.renderer.info.render.calls,flex:rod.mesh.morphTargetInfluences[0],gl:r.renderer.getContext().getError()};
+      return {name,pitch:rod.root.rotation.x,tipCamera:cameraTip.toArray(),calls:r.renderer.info.render.calls,flex:rod.mesh.morphTargetInfluences[0],floatVisible:rod.float.visible,lineVisible:rod.line.visible,gl:r.renderer.getContext().getError()};
     },{name,held,age}));
     await page.screenshot({path:`${directory}/${name}.png`});
   }
@@ -26,6 +26,8 @@ try{
   assert(report.frames[4].tipCamera[2]<report.frames[0].tipCamera[2]);
   assert.equal(report.frames[2].pitch,report.frames[3].pitch);
   assert.equal(report.frames[0].calls,report.frames[2].calls);
+  assert.equal(report.frames[3].floatVisible,false);assert.equal(report.frames[3].lineVisible,false);
+  assert.equal(report.frames[4].floatVisible,true);assert.equal(report.frames[4].lineVisible,true);
   assert(report.frames.every(f=>f.gl===0));assert.deepEqual(report.errors,[]);
   report.remote=await page.evaluate(()=>{
     const r=fishingReview,checks=[];

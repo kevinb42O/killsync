@@ -154,3 +154,12 @@ Verification includes 68 focused tests, rendered backswing/forward/recovery
 captures, four third-person headings, reel audio lifetime, actual mouse/touch
 game controls, and the host-to-guest catch loop. See
 `tools/test-friends-fishing-casting.mjs` for the casting visual regression check.
+
+The subsequent aim fix starts the bobber just in front of the shared viewpoint,
+instead of 24 units below it. The short launch offset is checked for obstruction
+and the viewpoint respects crouching and low ceilings. Initial velocity follows
+the release-time aim ray exactly; charge controls speed and gravity supplies the
+arc, without a forced upward velocity bonus. The bobber and outgoing line appear
+when the forward stroke pays out, avoiding a visible drop during the wind-up.
+`tools/test-friends-fishing-aim.mjs` checks normal skyward, steep skyward and
+downward casts through the actual game input and camera path.

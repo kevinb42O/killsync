@@ -1,0 +1,139 @@
+{
+  "errors": [],
+  "frames": [
+    {
+      "name": "ready",
+      "pitch": -0.48,
+      "tipCamera": [
+        1.0312054628520855,
+        1.0279959806275656,
+        -2.0631042554850865
+      ],
+      "calls": 80,
+      "flex": 0.04,
+      "floatVisible": false,
+      "lineVisible": false,
+      "gl": 0
+    },
+    {
+      "name": "charging",
+      "pitch": 0.13111111111111118,
+      "tipCamera": [
+        1.0312054628520855,
+        1.3206744855351644,
+        -0.8952747668408847
+      ],
+      "calls": 80,
+      "flex": 0.27275956530337564,
+      "floatVisible": false,
+      "lineVisible": false,
+      "gl": 0
+    },
+    {
+      "name": "charged",
+      "pitch": 0.48,
+      "tipCamera": [
+        1.0312054628520855,
+        1.1435484112598715,
+        -0.18835276194477046
+      ],
+      "calls": 80,
+      "flex": 0.04000000000000004,
+      "floatVisible": false,
+      "lineVisible": false,
+      "gl": 0
+    },
+    {
+      "name": "release",
+      "pitch": 0.48,
+      "tipCamera": [
+        1.0312054628520855,
+        1.1435484112598715,
+        -0.18835276194477046
+      ],
+      "calls": 80,
+      "flex": 0.04000000000000004,
+      "floatVisible": false,
+      "lineVisible": false,
+      "gl": 0
+    },
+    {
+      "name": "forward",
+      "pitch": -1,
+      "tipCamera": [
+        1.0312054628520855,
+        0.4052191301725543,
+        -2.790159402989957
+      ],
+      "calls": 84,
+      "flex": -4.6536578367599424e-17,
+      "floatVisible": true,
+      "lineVisible": true,
+      "gl": 0
+    },
+    {
+      "name": "recovery",
+      "pitch": -0.9333396203206363,
+      "tipCamera": [
+        1.0312054628520855,
+        0.496092906200829,
+        -2.723795740352216
+      ],
+      "calls": 84,
+      "flex": 0.06055883735524762,
+      "floatVisible": true,
+      "lineVisible": true,
+      "gl": 0
+    },
+    {
+      "name": "settled",
+      "pitch": -0.48,
+      "tipCamera": [
+        1.0312054628520855,
+        1.0279959806275656,
+        -2.0631042554850865
+      ],
+      "calls": 84,
+      "flex": 0.04,
+      "floatVisible": true,
+      "lineVisible": true,
+      "gl": 0
+    }
+  ],
+  "remote": [
+    {
+      "angle": 0,
+      "forward": 28.259336175533463
+    },
+    {
+      "angle": 1.5707963267948966,
+      "forward": 28.25933617553528
+    },
+    {
+      "angle": 3.141592653589793,
+      "forward": 28.259336175533463
+    },
+    {
+      "angle": 4.71238898038469,
+      "forward": 28.25933617553528
+    }
+  ],
+  "emptyReelAudio": {
+    "events": [
+      {
+        "cue": "fishingReel",
+        "args": [
+          0.18,
+          100,
+          1,
+          6,
+          {
+            "fadeOutSeconds": 0.08,
+            "loop": true
+          }
+        ]
+      }
+    ],
+    "stops": 1
+  }
+}
