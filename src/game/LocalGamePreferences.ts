@@ -25,6 +25,6 @@ export function saveGamePreferences(preferences: LocalGamePreferences) {
   try { localStorage.setItem(KEY, JSON.stringify(normalizeGamePreferences(preferences))); } catch { /* Optional browser storage. */ }
 }
 export function neutralizeMenuInput(input: MultiplayerInputFrame): MultiplayerInputFrame {
-  return { ...input, friendsArms: 0, movement: 0, firing: false, aiming: false, sprinting: false, sliding: false, reviving: false,
+  return { ...input, friendsAircraftWinch:0,friendsAircraftHookHeld:false,friendsArms: 0, movement: 0, firing: false, aiming: false, sprinting: false, sliding: false, reviving: false,
     jumpPressed: false, jetHeld: false, reloadPressed: false, dashPressed: false, friendsDevFlightDown: false };
 }

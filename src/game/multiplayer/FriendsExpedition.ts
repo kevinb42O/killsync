@@ -1,3 +1,4 @@
+import { FriendsAircraftLanding, aircraftDescentSpeed } from './FriendsAircraftLanding';
 import { FriendsBirds, type BirdsSnapshot } from './FriendsBirds';
 import { FriendsStones, type StonesSnapshot } from './FriendsStones';
 import { FriendsConfetti, type FriendsConfettiSnapshot } from './FriendsConfetti';
@@ -25,7 +26,7 @@ import type { MultiplayerInputFrame } from './protocol';
 import { FriendsHauling, type HaulingSave, type HaulingSnapshot } from './FriendsHauling';
 import { FRIENDS_OPPOSITE_BOAT } from '../world/FriendsFishingDock';
 
-export type FriendsVehicle = { id: string; kind: 'train' | 'aircraft' | 'rowboat'; rowing?:RowingSnapshot; x: number; y: number; z: number; angle: number; length: number; width: number; pilotId?: string; closed?: boolean; pitch?: number; scenic?:boolean; wagonKind?:ScenicWagonKind; routeDistance?:number };
+export type FriendsVehicle = { id: string; kind: 'train' | 'aircraft' | 'rowboat'; rowing?:RowingSnapshot; x: number; y: number; z: number; angle: number; length: number; width: number; pilotId?: string; closed?: boolean; pitch?: number; groundZ?: number; scenic?:boolean; wagonKind?:ScenicWagonKind; routeDistance?:number };
 export type FriendsProgress = { version: 1; discovered: string[]; signals: string[]; salvageCleared: boolean; restored: boolean; openedTreasures?: string[]; caveGold?: number };
 export type FriendsTransportSave = { rowboat?:RowboatSave; retreats?:RetreatSave; campfireFuelSeconds?:number; campfireSiteFuelSeconds?:Record<string,number>; scenicRailway?:ScenicServiceSave | boolean; hauling?: HaulingSave; trainDistance: number; trainStoppedMs: number; lastStop: number; held: boolean; aircraft: FriendsVehicle; railTrain?: { anchor: number; distance: number; direction: 1 | -1; held: boolean } };
 export type FriendsSnapshot = { dynamite?: import('./FriendsDynamite').DynamiteSnapshot; birds?:BirdsSnapshot; stones?:StonesSnapshot; confetti?:FriendsConfettiSnapshot; fishing?:FishingSnapshot; environment?:FriendsEnvironmentSnapshot; retreats?:RetreatState; campfire?:CampfireSnapshot; trainHorn?: { serial: number; atMs: number; vehicleId: string }; scenicRailway?:ScenicServiceSnapshot; hauling?: HaulingSnapshot; transport?: FriendsTransportSave; frontier?: FrontierSnapshot; building?: FriendsBuildingSnapshot; projects?: FriendsProjectSnapshot; vehicles: FriendsVehicle[]; trainDistance: number; trainStoppedMs: number; progress: FriendsProgress; salvageState: 'idle' | 'active' | 'cleared'; notice: string; noticeUntilMs: number };
@@ -219,6 +220,7 @@ export class FriendsExpedition {
   private trainStoppedMs = 0;
   private lastStop = 0;
   private held = true;
+  private readonly aircraftLanding = new FriendsAircraftLanding();
   private aircraft: FriendsVehicle = { id: 'sunskiff', kind: 'aircraft', ...FRIENDS_AIRPAD, z: 14, angle: 0, length: 280, width: 160 };
   private salvageState: FriendsSnapshot['salvageState'];
   private notice = 'Sunline Grand Traverse: walk south from arrival to the level Sunline Commons platform. Board the sightseeing train and F to sit. B builds your own railway; M opens the atlas.';
@@ -238,6 +240,7 @@ export class FriendsExpedition {
     this.resetAircraft(terrain);
   }
   resetAircraft(terrain?: FriendsTerrain, players: readonly Actor[] = []) {
+    this.hauling.resetAircraftWinch();
     const before={...this.aircraft};
     this.aircraft={id:'sunskiff',kind:'aircraft',...FRIENDS_AIRPAD,z:(terrain?.floor(FRIENDS_AIRPAD.x,FRIENDS_AIRPAD.y,6000,0)??FRIENDS_AIRFIELD_HEIGHT)+14,angle:0,length:280,width:160};
     for(const p of players) if(carryOnVehicle(p,before,this.aircraft) || before.pilotId===p.id) {
@@ -289,7 +292,7 @@ export class FriendsExpedition {
     const train=(id:string,distance:number,closed=false):FriendsVehicle=>{const p=samplePlayerRail(this.route!,distance);return {id,kind:'train',...p,z:p.z+14,length:180,width:112,closed};};
     return [...Array.from({length:this.carCount()},(_,i)=>train(`sunline-${i}`,this.trainDistance-(i+1)*195)),{...this.aircraft},train('sunline-engine',this.trainDistance,true),...(this.scenic?.vehicles()||[]),this.rowboat.vehicle(),this.oppositeRowboat.vehicle()];
   }
-  update(dt: number, elapsed: number, players: readonly Actor[], inputs: ReadonlyMap<string, MultiplayerInputFrame>, pieces: readonly FriendsBuildPiece[] = [], terrain?: FriendsTerrain) {
+  update(dt: number, elapsed: number, players: readonly Actor[], inputs: ReadonlyMap<string, MultiplayerInputFrame>, pieces: readonly FriendsBuildPiece[] = [], terrain?: FriendsTerrain, allowFlight?:(before:FriendsVehicle,after:FriendsVehicle)=>boolean) {
     this.hornWorldTimeMs = elapsed;
     this.confetti.update(elapsed, players, inputs);
     const before=this.vehicles();
@@ -312,6 +315,7 @@ export class FriendsExpedition {
     if (!pilot) this.aircraft.pilotId = undefined;
     const input = pilot && inputs.get(pilot.id);
     if (input) {
+      const previousAircraft={...this.aircraft};
       const angle = input.aimAngle / 65535 * Math.PI * 2;
       const turn = Math.atan2(Math.sin(angle - this.aircraft.angle), Math.cos(angle - this.aircraft.angle));
       this.aircraft.angle += Math.max(-dt * .0012, Math.min(dt * .0012, turn));
@@ -323,11 +327,14 @@ export class FriendsExpedition {
       const dy = (Math.sin(heading) * forward + Math.cos(heading) * strafe) / magnitude * speed * dt / 1000;
       const position = { x: Math.max(256, Math.min(FRONTIER_SIZE - 256, this.aircraft.x + dx)), y: Math.max(256, Math.min(FRONTIER_SIZE - 256, this.aircraft.y + dy)) };
       if (this.salvageState === 'active' && insideFriendsCombat(position.x, position.y, this.aircraft.z - 14)) { position.x = this.aircraft.x; position.y = this.aircraft.y; }
-      terrain?.collide(position, this.aircraft.z - 14, 175, 125, 0);
-      resolveWorldCollisions(position, 175, false, 'friends_frontier', this.aircraft.z - 14);
-      resolveFriendsBuildCollisions(pieces, position, this.aircraft.z - 14, 175, 125, 0);
+      terrain?.collide(position, this.aircraft.z - 14 + .05, 175, 125, 0);
+      resolveWorldCollisions(position, 175, false, 'friends_frontier', this.aircraft.z - 14 + .05);
+      resolveFriendsBuildCollisions(pieces, position, this.aircraft.z - 14 + .05, 175, 125, 0);
+      // Collision resolution may push a wide hull hundreds of units out of a
+      // terrain corner. Block that move instead of ejecting the craft.
+      if (Math.hypot(position.x - previousAircraft.x - dx, position.y - previousAircraft.y - dy) > .1) { position.x = previousAircraft.x; position.y = previousAircraft.y; }
       this.aircraft.x = position.x; this.aircraft.y = position.y;
-      let landingFloor = (terrain?.floor(this.aircraft.x, this.aircraft.y, this.aircraft.z - 14, 0) ?? 0) + 14;
+      let landingFloor = this.aircraftLanding.floor(terrain, this.aircraft.x, this.aircraft.y, this.aircraft.z - 14) + 14;
       for (const o of getNearbyWorldObstacles(this.aircraft.x, this.aircraft.y, 175, 'friends_frontier')) {
         const nearX = Math.max(o.x, Math.min(o.x + o.width, this.aircraft.x)), nearY = Math.max(o.y, Math.min(o.y + o.height, this.aircraft.y));
         // Only descend onto a roof already below the hull. A corner collision
@@ -336,7 +343,9 @@ export class FriendsExpedition {
       }
       for (const p of pieces) for (const local of friendsShapeBoxes(p.shape)) { const b = worldBox(p, local), top = b.z + b.h; const nx = Math.max(b.x - b.w / 2, Math.min(b.x + b.w / 2, this.aircraft.x)), ny = Math.max(b.y - b.d / 2, Math.min(b.y + b.d / 2, this.aircraft.y)); if (top <= this.aircraft.z - 14 + .01 && Math.hypot(this.aircraft.x - nx, this.aircraft.y - ny) < 175 - .01) landingFloor = Math.max(landingFloor, top + 14); }
       if (this.salvageState === 'active' && insideFriendsCombat(this.aircraft.x, this.aircraft.y, 0)) landingFloor = Math.max(landingFloor, 330);
-      this.aircraft.z = Math.max(landingFloor, Math.min(FRIENDS_FLIGHT_CEILING, this.aircraft.z + (input.jetHeld ? 1 : input.sliding ? -1 : 0) * 300 * dt / 1000));
+      this.aircraft.z = Math.max(landingFloor, Math.min(FRIENDS_FLIGHT_CEILING, this.aircraft.z + (input.jetHeld ? 300 : input.sliding ? -aircraftDescentSpeed(this.aircraft.z - landingFloor) : 0) * dt / 1000));
+      this.aircraft.groundZ = landingFloor - 14;
+      if(allowFlight&&!allowFlight(previousAircraft,this.aircraft))Object.assign(this.aircraft,previousAircraft);
     }
     const after = this.vehicles();
     for (const p of players) {

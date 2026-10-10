@@ -12,6 +12,31 @@ import {validFriendsCommand} from './FriendsCommands';
 import {CoopSnapshotInterpolator} from './snapshotInterpolation';
 const actor={id:'host',label:'Host',lifeState:'alive',x:0,y:0,z:0};
 describe('long Grand Traverse and operating controls',()=>{
+  it('waits indefinitely at spawn, including with a passenger, until the front controller starts it',()=>{
+    const sim=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]),p=sim['players'].get('host')!,service=sim['friends']!.scenic!,home=service.distance;
+    for(let i=0;i<300;i++)service.update(2000,[],new Set());
+    expect(service.distance).toBe(home);expect(service.speed).toBe(0);expect(service.held).toBe(true);
+    Object.assign(p,vehicleWorldPoint(service.vehicles()[1],{x:0,y:0,z:0}));
+    expect(service.interact(p,[p])).toBe(true);
+    for(let i=0;i<300;i++)service.update(2000,[p],new Set());
+    expect(service.distance).toBe(home);expect(service.speed).toBe(0);
+    expect(sim.friendsAction('host',{requestId:1,action:'scenic_depart'}).ok).toBe(false);
+    service.stand(p);Object.assign(p,vehicleWorldPoint(service.vehicles()[1],{x:-80,y:0,z:0}));
+    expect(sim.friendsAction('host',{requestId:2,action:'scenic_depart'}).ok).toBe(false);
+    Object.assign(p,vehicleWorldPoint(service.vehicles()[1],{x:52,y:0,z:0}));
+    expect(sim.friendsAction('host',{requestId:3,action:'scenic_depart'}).ok).toBe(true);
+    service.update(2000,[p],new Set());expect(service.distance).toBeGreaterThan(home);expect(service.speed).toBeGreaterThan(0);
+  });
+  it('starts on the first valid speed command but preserves subsequent manual holds',()=>{
+    const service=new FriendsScenicService();
+    expect(service.control(NaN,true)).toBe(false);expect(service.held).toBe(true);
+    expect(service.control(120,true)).toBe(true);expect(service.held).toBe(false);expect(service.dwell).toBe(0);
+    service.update(2000,[],new Set());expect(service.speed).toBeGreaterThan(0);
+    service.held=true;service.control(40,true);
+    for(let i=0;i<30;i++)service.update(2000,[],new Set());
+    expect(service.held).toBe(true);expect(service.speed).toBe(0);
+    const heldDistance=service.distance;service.update(2000,[],new Set());expect(service.distance).toBe(heldDistance);
+  });
   it('is more than three times the old length, with ten wagons, seven empty freight decks and full station capacity',()=>{
     const cars=scenicVehicles(0),length=225*10+105+90;
     expect(cars).toHaveLength(11);expect(length/765).toBeGreaterThan(3);expect(cars.filter(v=>v.wagonKind&&v.wagonKind!=='touring')).toHaveLength(7);

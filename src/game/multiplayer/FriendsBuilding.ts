@@ -1,3 +1,4 @@
+import { telescopicCraneSections, validCraneDimensions, restoreCraneDimensions, applyCraneMotion, type CraneDimensions } from './FriendsTelescopicCrane';
 import { boxOBB, overlapOBB } from './FriendsOrientedBox';
 import { orientedBuildBox, resolveAssemblyPose, type CraneAttachment, type AssemblyFrame } from './FriendsAssemblyPose';
 import { craneSocketPose, craneAssemblyError, craneTopologyError, isCranePart } from './FriendsCraneAssemblies';
@@ -43,7 +44,7 @@ export const FRIENDS_BUILD_CATALOG: Record<FriendsBuildShape, FriendsBuildDefini
   crane_boom: { name:'Crane boom',group:'Utilities',w:96,d:24,h:24,description:'An 8m truss section. Aim at a joint or free boom end to snap. R turns the next section; extend your own arm up to 32m.' },
   crane_winch: { name:'Freight winch',group:'Utilities',w:32,d:40,h:32,description:'Snap to a crane arm end for a rotating lift, or mount alone over a drop. Its cable descends from beneath the housing. F operates the linked pivot and winch.' },
   crane_console: { name:'Crane console',group:'Utilities',w:32,d:24,h:40,description:'A remote operator station. Links to the nearest fixed pivot or winch within 20m when placed. F opens that crane’s controls and load camera.' },
-  crane: { name: 'Freight crane', group: 'Utilities', w: 288, d: 80, h: 160, description: 'Mount on a high ledge; rotate the boom over the edge. A straight vertical rope lifts salvage solo. Stand beside the base and press F for connect, raise, lower, brake and release.' },
+  crane: { name: 'Freight crane', group: 'Utilities', w: 288, d: 80, h: 160, description: 'A powered telescopic crane: mast up to 256m, reach up to 256m, full 360° turning. Press F beside the base for mast, arm, rotation and cable controls.' },
   workbench: { name: 'Field workbench', group: 'Utilities', w: 96, d: 64, h: 64, description: 'Craft and access shared storage anywhere you establish a workshop.' },
   furnace: { name: 'Ore furnace', group: 'Utilities', w: 64, d: 64, h: 96, description: 'Smelt copper and iron beside your mine.' },
   storage: { name: 'Supply chest', group: 'Utilities', w: 64, d: 48, h: 48, description: 'Deposit and withdraw shared construction materials.' },
@@ -70,7 +71,7 @@ export const FRIENDS_BUILD_CATALOG: Record<FriendsBuildShape, FriendsBuildDefini
   survey_lens: { name: 'Survey lens', group: 'Utilities', w: 32, d: 32, h: 64, description: 'Mount high on your own tower to establish an observatory.' },
   gathering_beacon: { name: 'Gathering beacon', group: 'Utilities', w: 32, d: 32, h: 64, description: 'Mark a shared meeting place on the map.' },
 };
-export type FriendsBuildPose = { x: number; y: number; z: number; rotation: number; attachment?:{vehicleId:string;x:number;y:number;z:number}; vehicleFrame?:{angle:number;pitch:number}; assembly?:CraneAttachment; assemblyFrame?:AssemblyFrame; craneRootId?:number; craneAngle?:number };
+export type FriendsBuildPose = CraneDimensions & { cranePartBox?:BuildBox; x: number; y: number; z: number; rotation: number; attachment?:{vehicleId:string;x:number;y:number;z:number}; vehicleFrame?:{angle:number;pitch:number}; assembly?:CraneAttachment; assemblyFrame?:AssemblyFrame; craneRootId?:number; craneAngle?:number };
 export function resolveFriendsBuildPose<T extends FriendsBuildPose>(p:T,vehicles:readonly FriendsVehicle[]):T{
   const a=p.attachment,v=a&&vehicles.find(v=>v.id===a.vehicleId&&scenicCargoWagon(v));
   return v&&a?{...p,...vehicleWorldPoint(v,a),vehicleFrame:{angle:v.angle,pitch:v.pitch||0}}:p;
@@ -115,6 +116,14 @@ export function friendsShapeBoxes(shape: FriendsBuildShape): BuildBox[] {
     default: return [box(0, 0, 0, s.w, s.d, s.h)];
   }
 }
+export function friendsPieceBoxes(p: FriendsBuildPose & {shape:FriendsBuildShape}):BuildBox[] { return p.cranePartBox?[p.cranePartBox]:friendsShapeBoxes(p.shape); }
+export function craneCollisionPieces(p:FriendsBuildPiece):FriendsBuildPiece[] {
+  if(p.shape!=='crane'||p.cranePartBox)return [p];
+  const fixed=p.rotation*Math.PI/2,c=Math.cos(fixed),s=Math.sin(fixed);
+  return telescopicCraneSections(p).map(b=>({...p,x:p.x+b.x*c-b.y*s,y:p.y+b.x*s+b.y*c,z:p.z+b.z,rotation:0,
+    assemblyFrame:{angle:fixed+b.angle,pitch:0},cranePartBox:{x:0,y:0,z:0,w:b.w,d:b.d,h:b.h}}));
+}
+const pieceDefinition=(p:FriendsBuildPiece)=>p.cranePartBox?{...FRIENDS_BUILD_CATALOG[p.shape],w:p.cranePartBox.w,d:p.cranePartBox.d,h:p.cranePartBox.h}:FRIENDS_BUILD_CATALOG[p.shape];
 export const isSlope = (shape: FriendsBuildShape) => shape === 'voxel_ramp' || shape === 'ramp' || shape === 'long_ramp' || shape === 'roof';
 export const isVoxelBuildShape = (shape: FriendsBuildShape) => ['block', 'half_block', 'floor_tile', 'voxel_ramp', 'voxel_stairs'].includes(shape);
 export function buildLocal(p: FriendsBuildPose, x: number, y: number) {
@@ -133,6 +142,7 @@ export function worldBox(p: FriendsBuildPose, b: BuildBox): BuildBox {
 }
 const contains = (b: BuildBox, x: number, y: number, padding = 0) => Math.abs(x - b.x) <= b.w / 2 + padding + .00001 && Math.abs(y - b.y) <= b.d / 2 + padding + .00001;
 export function friendsBuildFloor(pieces: readonly FriendsBuildPiece[], x: number, y: number, z: number, step = FRIENDS_STEP_HEIGHT) {
+  pieces=pieces.flatMap(craneCollisionPieces);
   let floor: number | undefined;
   for (const p of pieces) {
     if(p.vehicleFrame||p.assemblyFrame){
@@ -141,13 +151,13 @@ export function friendsBuildFloor(pieces: readonly FriendsBuildPiece[], x: numbe
       if(top!==undefined){const height=vehiclePlaneHeight(frame,x,y,top),at=vehicleLocalPoint(frame,{x,y,z:height});top=friendsBuildFloor([unframed(p)],at.x,at.y,at.z,0.01);if(top!==undefined&&height<=z+step+.00001)floor=Math.max(floor??-Infinity,height);}
       continue;
     }
-    const q = buildLocal(p, x, y), def = FRIENDS_BUILD_CATALOG[p.shape];
+    const q = buildLocal(p, x, y), def = pieceDefinition(p);
     const padding = isPlayerRail(p.shape) ? 64 : 0;
     if (Math.abs(q.x) > def.w / 2 + padding + .00001 || Math.abs(q.y) > def.d / 2 + padding + .00001) continue;
     if (isSlope(p.shape)) {
       const top = p.z + (q.x / def.w + .5) * def.h;
       if (top <= z + step + .00001) floor = Math.max(floor ?? -Infinity, top);
-    } else for (const b of friendsShapeBoxes(p.shape)) {
+    } else for (const b of friendsPieceBoxes(p)) {
       const top = p.z + b.z + b.h;
       if (contains(b, q.x, q.y) && top <= z + step + .00001) floor = Math.max(floor ?? -Infinity, top);
     }
@@ -173,7 +183,7 @@ export function friendsWalkFloor(pieces:readonly FriendsBuildPiece[],x:number,y:
   if(radius<=0)return floor;
   for(const p of pieces){
     if(!isWalkIncline(p.shape)||p.vehicleFrame||('assemblyFrame' in p&&p.assemblyFrame))continue;
-    const q=buildLocal(p,x,y),def=FRIENDS_BUILD_CATALOG[p.shape],remaining=def.w/2-q.x;
+    const q=buildLocal(p,x,y),def=pieceDefinition(p),remaining=def.w/2-q.x;
     if(remaining<-.00001||remaining>radius||Math.abs(q.y)>def.d/2+.00001)continue;
     const feet=friendsBuildFloor([p],x,y,z,step);
     if(feet===undefined||Math.abs(feet-z)>step+.00001)continue;
@@ -188,28 +198,30 @@ export function friendsWalkFloor(pieces:readonly FriendsBuildPiece[],x:number,y:
   return floor;
 }
 export function friendsBuildCeiling(pieces: readonly FriendsBuildPiece[], x: number, y: number, z: number) {
+  pieces=pieces.flatMap(craneCollisionPieces);
   let ceiling: number | undefined;
   for (const p of pieces) {
     if(p.vehicleFrame||p.assemblyFrame){const f=pieceFrame(p),q=vehicleLocalPoint(f,{x,y,z}),h=friendsBuildCeiling([unframed(p)],q.x,q.y,q.z);if(h!==undefined)ceiling=Math.min(ceiling??Infinity,vehiclePlaneHeight(f,x,y,h));continue;}
     const q = buildLocal(p, x, y);
-    const def = FRIENDS_BUILD_CATALOG[p.shape];
+    const def = pieceDefinition(p);
     const padding = isPlayerRail(p.shape) ? 64 : 10;
     if (Math.abs(q.x) > def.w / 2 + padding || Math.abs(q.y) > def.d / 2 + padding) continue;
-    for (const b of friendsShapeBoxes(p.shape)) if (contains(b, q.x, q.y, 10) && p.z + b.z > z + .1) ceiling = Math.min(ceiling ?? Infinity, p.z + b.z);
+    for (const b of friendsPieceBoxes(p)) if (contains(b, q.x, q.y, 10) && p.z + b.z > z + .1) ceiling = Math.min(ceiling ?? Infinity, p.z + b.z);
   }
   return ceiling;
 }
 export function resolveFriendsBuildCollisions(pieces: readonly FriendsBuildPiece[], position: { x: number; y: number }, z: number, radius: number, bodyHeight = 50, step = FRIENDS_STEP_HEIGHT) {
+  pieces=pieces.flatMap(craneCollisionPieces);
   let collided = false;
   for (const p of pieces) {
     if(p.vehicleFrame||p.assemblyFrame){const f=pieceFrame(p),q=vehicleLocalPoint(f,{...position,z});if(resolveFriendsBuildCollisions([unframed(p)],q,q.z,radius,bodyHeight,step)){const world=vehicleWorldPoint(f,q);position.x=world.x;position.y=world.y;collided=true;}continue;}
-    const q = buildLocal(p, position.x, position.y), def = FRIENDS_BUILD_CATALOG[p.shape];
+    const q = buildLocal(p, position.x, position.y), def = pieceDefinition(p);
     const padding = radius + (isPlayerRail(p.shape) ? 64 : 0);
     if (Math.abs(q.x) >= def.w / 2 + padding || Math.abs(q.y) >= def.d / 2 + padding) continue;
     // Resolve stairs as an incline envelope: individual risers otherwise
     // catch the cylinder's leading edge several steps ahead of its feet.
     const incline = isSlope(p.shape) || (p.shape === 'stairs' || p.shape === 'voxel_stairs');
-    const boxes = (p.shape === 'stairs' || p.shape === 'voxel_stairs') ? [box(0, 0, 0, def.w, def.d, def.h)] : friendsShapeBoxes(p.shape);
+    const boxes = (p.shape === 'stairs' || p.shape === 'voxel_stairs') ? [box(0, 0, 0, def.w, def.d, def.h)] : friendsPieceBoxes(p);
     for (const b of boxes) {
       let top = b.z + b.h;
       // Extend only the low approach plane by the body's contact radius.
@@ -239,6 +251,7 @@ export function resolveFriendsBuildCollisions(pieces: readonly FriendsBuildPiece
 export type FriendsBuildRay = { x: number; y: number; z: number; dx: number; dy: number; dz: number };
 export type FriendsBuildHit = { piece: FriendsBuildPiece; distance: number; x: number; y: number; z: number; nx: number; ny: number; nz: number };
 export function raycastFriendsBuild(pieces: readonly FriendsBuildPiece[], ray: FriendsBuildRay, maxDistance = FRIENDS_BUILD_REACH): FriendsBuildHit | undefined {
+  const originals=pieces;pieces=pieces.flatMap(craneCollisionPieces);
   let best: FriendsBuildHit | undefined;
   for (const p of pieces) {
     if(p.vehicleFrame||p.assemblyFrame){
@@ -248,7 +261,7 @@ export function raycastFriendsBuild(pieces: readonly FriendsBuildPiece[], ray: F
     }
     const origin = buildLocal(p, ray.x, ray.y), a = p.rotation * Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
     const dirs = [ray.dx * c + ray.dy * s, -ray.dx * s + ray.dy * c, ray.dz], origins = [origin.x, origin.y, ray.z - p.z];
-    for (const b of friendsShapeBoxes(p.shape)) {
+    for (const b of friendsPieceBoxes(p)) {
       let enter = 0, leave = maxDistance, normal = [0, 0, 0], hit = true;
       const mins = [b.x - b.w / 2, b.y - b.d / 2, b.z], maxs = [b.x + b.w / 2, b.y + b.d / 2, b.z + b.h];
       // The ramp is a convex wedge: three slab axes plus its inclined plane.
@@ -269,7 +282,7 @@ export function raycastFriendsBuild(pieces: readonly FriendsBuildPiece[], ray: F
       best = { piece: p, distance: enter, x: ray.x + ray.dx * enter, y: ray.y + ray.dy * enter, z: ray.z + ray.dz * enter, nx: normal[0] * c - normal[1] * s, ny: normal[0] * s + normal[1] * c, nz: normal[2] };
     }
   }
-  return best;
+  return best?{...best,piece:originals.find(p=>p.id===best!.piece.id)??best.piece}:undefined;
 }
 export function getFriendsBuildPose(pieces: readonly FriendsBuildPiece[], ray: FriendsBuildRay, shape: FriendsBuildShape, rotation: number, terrain?: FriendsTerrain, vehicles:readonly FriendsVehicle[]=[]): FriendsBuildPose | undefined {
   const def = FRIENDS_BUILD_CATALOG[shape], r = ((Math.round(rotation) % 4) + 4) % 4;
@@ -318,13 +331,16 @@ function overlaps(a: BuildBox, b: BuildBox, margin = .1) {
   return Math.abs(a.x - b.x) < (a.w + b.w) / 2 - margin && Math.abs(a.y - b.y) < (a.d + b.d) / 2 - margin && a.z < b.z + b.h - margin && b.z < a.z + a.h - margin;
 }
 export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shape: unknown, pose: FriendsBuildPose | undefined, actor?: FriendsBuildActor, bodies: readonly FriendsBuildActor[] = [], ignoringId?: number, restoring = false, terrain?: FriendsTerrain, vehicles:readonly FriendsVehicle[]=[]): string | undefined {
+  if(pose?.cranePartBox)return 'Choose a valid build pose.';
+  if(pose&&!validCraneDimensions(pose))return 'Choose valid crane dimensions.';
+  if(pose&&(pose.mastExtension!==undefined||pose.boomExtension!==undefined)&&shape!=='crane')return 'Only freight cranes can telescope.';
   if(pose?.craneRootId!==undefined&&shape!=='crane_console')return 'Only a crane console can link to a controller.';
   if(pose?.craneAngle!==undefined&&(!Number.isFinite(pose.craneAngle)||Math.abs(pose.craneAngle)>Math.PI*2))return 'Choose a valid pivot angle.';
   if(pose?.assembly){
     if(!isFriendsShape(shape))return 'Choose a valid crane part.';
     const error=craneAssemblyError(pieces,shape,pose,ignoringId);if(error)return error;
     const resolved=resolveAssemblyPose(pose,pieces,new Map(pieces.filter(p=>p.assemblyFrame&&p.assembly).map(p=>[p.assembly!.rootId,p.assemblyFrame!.angle-(pieces.find(q=>q.id===p.assembly!.rootId)?.rotation??0)*Math.PI/2])));
-    const other=pieces.filter(p=>p.id!==ignoringId&&p.id!==pose.assembly!.parentId);
+    const other=pieces.filter(p=>p.id!==ignoringId&&p.id!==pose.assembly!.parentId).flatMap(craneCollisionPieces);
     // Socket topology provides support. Test authored geometry against the world
     // at its actual continuous orientation, including occupants.
     for(const localBox of friendsShapeBoxes(shape)){
@@ -332,7 +348,7 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
       if(b.z< TERRAIN_BOTTOM+32||b.z+b.h>6000)return 'Keep the arm inside the building height limit.';
       if(actor&&Math.hypot(resolved.x-actor.x,resolved.y-actor.y,resolved.z-actor.z)>FRIENDS_BUILD_REACH+64)return 'Move closer to that crane socket.';
       if(bodies.some(p=>p.lifeState==='alive'&&overlapOBB(exact,boxOBB(box(p.x,p.y,p.z,p.bodyWidth??38,p.bodyDepth??38,p.bodyHeight??50)),.1)))return 'A friend or load is in the way.';
-      if(other.some(p=>friendsShapeBoxes(p.shape).some(q=>overlapOBB(exact,boxOBB(orientedBuildBox(p,q)),.5))))return 'That arm section overlaps another piece.';
+      if(other.some(p=>friendsPieceBoxes(p).some(q=>overlapOBB(exact,boxOBB(orientedBuildBox(p,q)),.5))))return 'That arm section overlaps another piece.';
       if(b.x-b.w/2<128||b.x+b.w/2>FRONTIER_SIZE-128||b.y-b.d/2<128||b.y+b.d/2>FRONTIER_SIZE-128)return 'Keep the arm inside the valley.';
       if(terrain)for(let x=Math.floor((b.x-b.w/2)/32);x<=Math.floor((b.x+b.w/2)/32);x++)for(let y=Math.floor((b.y-b.d/2)/32);y<=Math.floor((b.y+b.d/2)/32);y++)for(let z=Math.floor(b.z/32);z<=Math.floor((b.z+b.h)/32);z++)if(terrain.material(x,y,z)&&overlapOBB(exact,boxOBB(box(x*32+16,y*32+16,z*32,32,32,32))))return 'Excavate a clear space for the arm.';
     }
@@ -351,9 +367,9 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
     if(['crane','crane_joint','crane_winch','crane_console'].includes(String(shape)))return 'Mount a freight crane on fixed ground or a player-built platform.';
     const localPose={...pose,x:a.x,y:a.y,z:a.z,attachment:undefined,vehicleFrame:undefined},boxes=friendsShapeBoxes(shape).map(b=>worldBox(localPose,b));
     const localPieces=pieces.filter(p=>p.id!==ignoringId&&p.attachment?.vehicleId===a.vehicleId).map(p=>({...p,...p.attachment!,attachment:undefined,vehicleFrame:undefined}));
-    if(boxes.some(b=>localPieces.some(p=>friendsShapeBoxes(p.shape).some(q=>overlaps(b,worldBox(p,q))))))return 'That freight space already contains a piece.';
+    if(boxes.some(b=>localPieces.some(p=>friendsPieceBoxes(p).some(q=>overlaps(b,worldBox(p,q))))))return 'That freight space already contains a piece.';
     if(v&&boxes.some(b=>bodies.some(body=>{const q=vehicleLocalPoint(v,body);return body.lifeState==='alive'&&overlaps(b,box(q.x,q.y,q.z,body.bodyWidth??38,body.bodyDepth??38,body.bodyHeight??50),0);})))return 'A friend or load is standing in the way.';
-    if(!restoring&&a.z!==0&&!boxes.some(b=>localPieces.some(p=>friendsShapeBoxes(p.shape).some(q=>overlaps(b,worldBox(p,q),-1)))))return 'Place cargo on the deck or on another secured piece.';
+    if(!restoring&&a.z!==0&&!boxes.some(b=>localPieces.some(p=>friendsPieceBoxes(p).some(q=>overlaps(b,worldBox(p,q),-1)))))return 'Place cargo on the deck or on another secured piece.';
     return;
   }
   if (!isFriendsShape(shape) || !pose || ![pose.x, pose.y, pose.z, pose.rotation].every(Number.isFinite) || !Number.isInteger(pose.rotation) || pose.rotation < 0 || pose.rotation > 3 || ![pose.x, pose.y, pose.z].every(n => n % 4 === 0)) return 'Choose a valid snapped piece.';
@@ -390,8 +406,12 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
       if(terrain?.material(Math.floor(x/32),Math.floor(y/32),Math.floor((pose.z+1)/32)))return 'Excavate the ground before laying track.';
     }
   }
-  const boxes = friendsShapeBoxes(shape).map(b => worldBox(pose, b));
-  for (const b of boxes) {
+  const candidate={...pose,id:ignoringId??-1,shape,finish:'teal' as const,author:'',revision:0};
+  pieces=pieces.flatMap(craneCollisionPieces);
+  const candidateParts=craneCollisionPieces(candidate).flatMap(p=>friendsPieceBoxes(p).map(b=>({bounds:worldBox(p,b),exact:boxOBB(orientedBuildBox(p,b))})));
+  const boxes=candidateParts.map(p=>p.bounds);
+  if(boxes.some(b=>b.z+b.h>6000||b.x-b.w/2<128||b.x+b.w/2>FRONTIER_SIZE-128||b.y-b.d/2<128||b.y+b.d/2>FRONTIER_SIZE-128))return 'Keep the crane inside the valley and below the height limit.';
+  for (const [index,b] of boxes.entries()) {
     if(!restoring)for(let dx=-b.w/2;dx<=b.w/2;dx+=32)for(let dy=-b.d/2;dy<=b.d/2;dy+=32)for(let z=b.z;z<=b.z+b.h;z+=32)
       if(scenicTransitProtected(b.x+dx,b.y+dy,z))return 'Leave the Grand Traverse railway clearance free. Build beside or below the line.';
     if (terrain) {
@@ -400,9 +420,9 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
     const obstruction=bodies.find(p => p.lifeState === 'alive' && overlaps(b, box(p.x, p.y, p.z, p.bodyWidth ?? 38, p.bodyDepth ?? 38, p.bodyHeight ?? 50), 0));
     if(obstruction)return obstruction.id===actor?.id?'Leave space for your operator.':'A friend or load is standing in the way.';
     if (getNearbyWorldObstacles(b.x, b.y, Math.max(b.w, b.d), 'friends_frontier').some(o => overlaps(b, box(o.x + o.width / 2, o.y + o.height / 2, 0, o.width, o.height, o.elevation)))) return 'That space overlaps a landmark.';
-    if (pieces.some(p => p.id !== ignoringId && !(isPlayerRail(shape) && isPlayerRail(p.shape)) && friendsShapeBoxes(p.shape).some(other => overlaps(b, worldBox(p, other))))) return 'That space already contains a piece.';
+    if (pieces.some(p => p.id !== ignoringId && !(isPlayerRail(shape) && isPlayerRail(p.shape)) && friendsPieceBoxes(p).some(other => p.cranePartBox||shape==='crane'?overlapOBB(candidateParts[index].exact,boxOBB(orientedBuildBox(p,other)),.1):overlaps(b,worldBox(p,other))))) return 'That space already contains a piece.';
   }
-  if (!restoring && !isPlayerRail(shape) && !(pose.z === 0 && !terrain) && !(terrain && Math.abs((terrain.floor(pose.x, pose.y, pose.z, 1) ?? -Infinity) - pose.z) <= 1) && !pieces.some(p => p.id !== ignoringId && boxes.some(b => friendsShapeBoxes(p.shape).some(other => overlaps(b, worldBox(p, other), -1)))) && !boxes.some(b => getNearbyWorldObstacles(b.x, b.y, extent + 8, 'friends_frontier').some(o => Math.abs(b.z - o.elevation) <= 1 && contains(box(o.x + o.width / 2, o.y + o.height / 2, 0, o.width, o.height, 0), b.x, b.y)))) return 'Attach this piece to your build or a landmark roof.';
+  if (!restoring && !isPlayerRail(shape) && !(pose.z === 0 && !terrain) && !(terrain && Math.abs((terrain.floor(pose.x, pose.y, pose.z, 1) ?? -Infinity) - pose.z) <= 1) && !pieces.some(p => p.id !== ignoringId && boxes.some(b => friendsPieceBoxes(p).some(other => overlaps(b, worldBox(p, other), -1)))) && !boxes.some(b => getNearbyWorldObstacles(b.x, b.y, extent + 8, 'friends_frontier').some(o => Math.abs(b.z - o.elevation) <= 1 && contains(box(o.x + o.width / 2, o.y + o.height / 2, 0, o.width, o.height, 0), b.x, b.y)))) return 'Attach this piece to your build or a landmark roof.';
   return undefined;
 }
 export type FriendsBuildEdit = { before?: FriendsBuildPiece; after?: FriendsBuildPiece };
@@ -415,7 +435,8 @@ export class FriendsBuilding {
   private reserved(shape:FriendsBuildShape|undefined,pose:FriendsBuildPose|undefined){return shape&&pose?this.placementGuard?.(shape,resolveFriendsBuildPose(pose,this.vehicleProvider())):undefined;}
   vehicleProvider:()=>readonly FriendsVehicle[]=()=>[];
   craneAngleProvider:()=>ReadonlyMap<number,number>=()=>new Map();
-  parkCrane(id:number,angle:number){const p=this.pieces.find(p=>p.id===id&&p.shape==='crane_joint');if(p&&Math.abs((p.craneAngle??0)-angle)>.0001){p.craneAngle=angle;p.revision=++this.revision;}}
+  craneMotionProvider:()=>readonly import('./FriendsCrane').FriendsCraneState[]=()=>[];
+  parkCrane(id:number,angle:number,mastExtension?:number,boomExtension?:number){const p=this.pieces.find(p=>p.id===id&&['crane_joint','crane'].includes(p.shape));if(p&&(Math.abs((p.craneAngle??0)-angle)>.0001||mastExtension!==undefined&&Math.abs((p.mastExtension??0)-mastExtension)>.0001||boomExtension!==undefined&&Math.abs((p.boomExtension??0)-boomExtension)>.0001)){Object.assign(p,{craneAngle:angle,...(mastExtension!==undefined?{mastExtension,boomExtension}: {})});p.revision=++this.revision;}}
   private revision = 0;
   private nextId = 1;
   private pieces: FriendsBuildPiece[] = [];
@@ -426,7 +447,7 @@ export class FriendsBuilding {
   constructor(saved?: Partial<FriendsBuildingSnapshot>, minimumRevision = 0, private terrain?: FriendsTerrain) {
     if (!saved || !Array.isArray(saved.pieces)) { this.revision = minimumRevision; return; }
     this.guestsCanBuild = saved.guestsCanBuild !== false;
-    for (const original of saved.pieces.slice(0, FRIENDS_BUILD_LIMIT).filter(p=>p&&typeof p==='object').sort((a,b)=>Number(Boolean(a.assembly))-Number(Boolean(b.assembly))||(a.assembly?a.id-b.id:0))) {const p=resolveAssemblyPose({...original,assemblyFrame:undefined},this.pieces);if(p.craneAngle!==undefined&&(!Number.isFinite(p.craneAngle)||Math.abs(p.craneAngle)>Math.PI*2))p.craneAngle=0; if (p && isFriendsShape(p.shape) && isFriendsFinish(p.finish) && Number.isSafeInteger(p.id) && p.id > 0 && p.id < 1000000000 && !this.pieces.some(q => q.id === p.id) && !friendsPlacementError(this.pieces, p.shape, p, undefined, [], undefined, true)) {
+    for (const original of saved.pieces.slice(0, FRIENDS_BUILD_LIMIT).filter(p=>p&&typeof p==='object').sort((a,b)=>Number(Boolean(a.assembly))-Number(Boolean(b.assembly))||(a.assembly?a.id-b.id:0))) {const p=resolveAssemblyPose({...original,...(original.shape==='crane'?restoreCraneDimensions(original):{}),assemblyFrame:undefined,cranePartBox:undefined},this.pieces);if(!validCraneDimensions(p)){p.mastExtension=0;p.boomExtension=0;}if(p.craneAngle!==undefined&&(!Number.isFinite(p.craneAngle)||Math.abs(p.craneAngle)>Math.PI*2))p.craneAngle=0; if (p && isFriendsShape(p.shape) && isFriendsFinish(p.finish) && Number.isSafeInteger(p.id) && p.id > 0 && p.id < 1000000000 && !this.pieces.some(q => q.id === p.id) && !friendsPlacementError(this.pieces, p.shape, p, undefined, [], undefined, true)) {
       this.pieces.push({ ...p, vehicleFrame:undefined, author: String(p.author || 'Friend').slice(0, 24), revision: 1 }); this.nextId = Math.max(this.nextId, p.id + 1);
     }
     }
@@ -436,7 +457,7 @@ export class FriendsBuilding {
   setGuestAccess(allowed: boolean) { this.guestsCanBuild = allowed; this.revision++; }
   getGuestAccess() { return this.guestsCanBuild; }
   getRevision() { return this.revision; }
-  getPieces(): readonly FriendsBuildPiece[] { return this.pieces.some(p=>p.attachment||p.assembly)?resolveFriendsBuildPieces(this.pieces,this.vehicleProvider(),this.craneAngleProvider()):this.pieces; }
+  getPieces(): readonly FriendsBuildPiece[] { const resolved=this.pieces.some(p=>p.attachment||p.assembly)?resolveFriendsBuildPieces(this.pieces,this.vehicleProvider(),this.craneAngleProvider()):this.pieces;return this.pieces.some(p=>p.shape==='crane')?applyCraneMotion(resolved,this.craneMotionProvider()):resolved; }
   snapshot(): FriendsBuildingSnapshot { return { revision: this.revision, pieces: this.getPieces().map(p => ({ ...p })), guestsCanBuild: this.guestsCanBuild }; }
   private record(actor: string, edits: Edit[]) {
     const history = this.undo.get(actor) || []; history.push(edits); if (history.length > 64) history.shift();
@@ -449,15 +470,14 @@ export class FriendsBuilding {
     const piece = this.pieces.find(p => p.id === pieceId && p.revision === expectedRevision);
     if (!piece) return 'The piece changed. Aim at it again.';
     const live = this.getPieces().find(p => p.id === pieceId)!;
-    if (!friendsShapeBoxes(live.shape).some(local => {
-      const b = worldBox(live, local);
+    if (!craneCollisionPieces(live).flatMap(p=>friendsPieceBoxes(p).map(local=>worldBox(p,local))).some(b => {
       return Math.hypot(Math.max(0, Math.abs(actor.x - b.x) - b.w / 2), Math.max(0, Math.abs(actor.y - b.y) - b.d / 2), Math.max(0, b.z - (actor.z + 26), actor.z + 26 - b.z - b.h)) <= FRIENDS_BUILD_REACH;
     })) return 'Move closer to that piece.';
     return this.removePieces(actor, new Set([pieceId]), economy);
   }
   blast(actor: FriendsBuildActor, center: {x:number;y:number;z:number}, radius: number, hostId: string, economy?: FriendsBuildEconomy): number {
     if (actor.id !== hostId && !this.guestsCanBuild) return 0;
-    const removed = new Set(this.getPieces().filter(p => friendsShapeBoxes(p.shape).some(local => {
+    const removed = new Set(this.getPieces().flatMap(craneCollisionPieces).filter(p => friendsPieceBoxes(p).some(local => {
       const b = worldBox(p, local);
       return Math.hypot(Math.max(0, Math.abs(center.x-b.x)-b.w/2), Math.max(0, Math.abs(center.y-b.y)-b.d/2), Math.max(0,b.z-center.z,center.z-b.z-b.h)) <= radius;
     })).map(p => p.id));
@@ -480,7 +500,7 @@ export class FriendsBuilding {
     this.record(actor.id, edits);
   }
   request(actor: FriendsBuildActor, request: FriendsBuildRequest, hostId: string, bodies: readonly FriendsBuildActor[], economy?: FriendsBuildEconomy): FriendsBuildResult {
-    if(request.pose){request={...request,pose:resolveAssemblyPose(resolveFriendsBuildPose({...request.pose,vehicleFrame:undefined,assemblyFrame:undefined},this.vehicleProvider()),this.pieces,this.craneAngleProvider())};}
+    if(request.pose){request={...request,pose:resolveAssemblyPose(resolveFriendsBuildPose({...request.pose,vehicleFrame:undefined,assemblyFrame:undefined,cranePartBox:undefined},this.vehicleProvider()),this.pieces,this.craneAngleProvider())};}
     const result = (ok: boolean, message: string): FriendsBuildResult => ({ playerId: actor.id, requestId: request.requestId, ok, message, revision: this.revision });
     if (!Number.isSafeInteger(request.requestId) || request.requestId <= (this.consumed.get(actor.id) || 0)) return result(false, 'This edit was already handled.');
     this.consumed.set(actor.id, request.requestId);

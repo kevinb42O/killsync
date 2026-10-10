@@ -22,7 +22,7 @@ function travelledWorld(){
 function expectHome(simulation:FriendsSimulation){
   const f=simulation.createSnapshot().friends!,service=f.scenicRailway!,home=scenicStationPoses()[0].distance+SCENIC_STOP_OFFSET;
   expect(service.distance).toBeCloseTo(home);expect(service.speed).toBe(0);expect(service.targetSpeed).toBe(132);
-  expect(service.dwell).toBe(45000);expect(service.nextStop).toBe(1);expect(service.held).toBe(false);expect(service.autoStops).toBe(true);
+  expect(service.dwell).toBe(45000);expect(service.nextStop).toBe(1);expect(service.held).toBe(true);expect(service.autoStops).toBe(true);
   expect(f.vehicles.find(v=>v.id==='grand-engine')!.routeDistance).toBeCloseTo(home);
   expect(f.transport!.scenicRailway).toBe(true);
 }

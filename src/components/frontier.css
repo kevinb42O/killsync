@@ -105,3 +105,6 @@
 .friends-stone-controls progress{width:52px;height:3px;border:0;border-radius:3px;accent-color:#e8cf94;overflow:hidden}
 .friends-stone-controls progress::-webkit-progress-bar{background:#ffffff26}
 .friends-stone-controls progress::-webkit-progress-value{background:#e8cf94}
+
+.friends-fishing-cast{touch-action:none;user-select:none}
+.friends-fishing-power{position:absolute;left:0;bottom:100%;width:100%;height:4px;margin-bottom:6px;accent-color:#bce7c1}

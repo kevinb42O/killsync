@@ -144,7 +144,7 @@ export class FriendsHaulingVisuals {
     this.reel.rotation.x=-elapsed/600*(hauling?.ropes.find(r=>r.id===localId)?.tension??0);
     this.gun.updateWorldMatrix(true,true);
     if(!hauling)return;
-    this.cranes.update(hauling.cranes??[],hauling.cargo,local);
+    this.cranes.update([...(hauling.cranes??[]),...(hauling.aircraftWinch?[hauling.aircraftWinch]:[])],hauling.cargo,local);
     const goalIds=new Set<string>(hauling.cargo.map(c=>haulingJob(c).goal.id));
     for(const [id,goal]of this.goals){
       goal.group.visible=goalIds.has(id);

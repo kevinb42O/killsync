@@ -77,18 +77,18 @@ try{
   });assert(report.performance.memory.presentations<=33);assert.equal(report.performance.memory.after.geometries,report.performance.memory.before.geometries);assert.equal(report.performance.memory.after.textures,report.performance.memory.before.textures);
   report.network=await page.evaluate(async()=>{
     const {ManualWebRTCSession}=await import('/src/game/multiplayer/ManualWebRTCSession.ts'),{FriendsSimulation,}=await import('/src/game/multiplayer/FriendsSimulation.ts'),{quantizePitch}=await import('/src/game/multiplayer/CoopSimulation.ts'),{MULTIPLAYER_PROTOCOL_VERSION:version}=await import('/src/game/multiplayer/protocol.ts');
-    const sim=new FriendsSimulation([{id:'host',label:'Host',color:'#0ff'},{id:'guest',label:'Guest',color:'#f0f'}]);let latest,sequence=0,action=0,alt=0;const errors=[];
+    const sim=new FriendsSimulation([{id:'host',label:'Host',color:'#0ff'},{id:'guest',label:'Guest',color:'#f0f'}]);let latest,sequence=0,action=0,alt=0,holding=false;const errors=[];
     const host=new ManualWebRTCSession({role:'host',friends:true,iceServers:[],onInput:(_peer,input)=>sim.setInput('guest',input),onError:e=>errors.push(e)}),guest=new ManualWebRTCSession({role:'guest',friends:true,iceServers:[],onState:f=>latest=f.payload,onError:e=>errors.push(e)});
     const wait=async(test)=>{const deadline=performance.now()+45000;while(!test()){if(performance.now()>deadline)throw Error('Fishing network timeout '+JSON.stringify({errors,fishing:latest?.friends?.fishing}));await new Promise(r=>setTimeout(r,20));}};
     let timer;
     try{
       await host.acceptAnswer(await guest.acceptOffer(await host.createOffer()));await wait(()=>host.connectedPeerCount===1&&guest.connectedPeerCount===1);host.admitFriendsPeer(host.peerInfo[0].peerId);
       const p=sim.players.get('guest');Object.assign(p,{x:12128,y:23600,z:224,verticalVelocity:0,friendsDevFlight:false});sim.friendsFrontier.terrain.set(Math.floor(p.x/32),Math.floor(p.y/32),6,2);
-      timer=setInterval(()=>{guest.sendInput({type:'input',version,sequence:++sequence,clientTime:Date.now(),movement:0,aimAngle:0,aimPitch:quantizePitch(-.3),friendsTool:7,selectedSlot:0,fireActionId:action,altFireActionId:alt,firing:action>0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false});sim.tick(50);host.broadcastState({type:'state',version,tick:sequence,sentAt:Date.now(),payload:sim.createSnapshot()});},50);
-      await wait(()=>latest?.friends?.fishing?.equipped.includes('guest'));action=1;await wait(()=>latest?.friends?.fishing?.casts[0]?.phase==='bite');action=2;await wait(()=>latest?.friends?.fishing?.fish.some(f=>f.ownerId==='guest'));
+      timer=setInterval(()=>{guest.sendInput({type:'input',version,sequence:++sequence,clientTime:Date.now(),movement:0,aimAngle:0,aimPitch:quantizePitch(-.3),friendsTool:7,selectedSlot:0,fireActionId:action,altFireActionId:alt,firing:holding,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false});sim.tick(50);host.broadcastState({type:'state',version,tick:sequence,sentAt:Date.now(),payload:sim.createSnapshot()});},50);
+      await wait(()=>latest?.friends?.fishing?.equipped.includes('guest'));action=1;holding=true;await wait(()=>latest?.friends?.fishing?.charges?.some(c=>c.playerId==='guest'));await new Promise(r=>setTimeout(r,1300));if(latest.friends.fishing.casts.length)throw Error('Holding unexpectedly cast');holding=false;await wait(()=>latest?.friends?.fishing?.casts[0]?.phase==='bite');action=2;await wait(()=>latest?.friends?.fishing?.fish.some(f=>f.ownerId==='guest'));
       const held=latest.friends.fishing.fish[0];if(!Number.isFinite(held.atMs))throw Error('Fish timestamp lost in transport');alt=1;await wait(()=>latest?.friends?.fishing?.fish[0]?.phase==='dry');
       if(sim.friends.fishing.pickup(p,7,sim.elapsedMs)!==true)throw Error('Network catch pickup failed');await wait(()=>latest?.friends?.fishing?.fish[0]?.phase==='held');action=3;await wait(()=>latest?.friends?.fishing?.fish[0]?.phase==='swimming');
-      return {catch:true,drop:true,pickup:true,swimAway:true,errors};
+      return {chargedRelease:true,catch:true,drop:true,pickup:true,swimAway:true,errors};
     }finally{clearInterval(timer);host.close();guest.close();}
   });assert.deepEqual(report.network.errors,[]);assert.deepEqual(report.errors,[]);
   console.log(JSON.stringify({assets:report.assets,toolbar:report.toolbar,mobile:report.mobile,audio:report.audio,performance:report.performance,network:report.network,errors:report.errors},null,2));

@@ -1,3 +1,4 @@
+import { FriendsAircraftDust } from './FriendsAircraftDust';
 import { rowboatWaterCutout } from './FriendsWaterClip';
 import { createRowboatVisual, updateRowboatVisual } from './FriendsRowboatVisuals';
 import { addFriendsAsset, fitFriendsAsset, loadFriendsAsset, type FriendsAssetId } from './FriendsAssets';
@@ -114,6 +115,9 @@ function createAircraft() {
     // Engine casing terminates beneath the luminous flange, never inside it.
     addFriendsAsset(group,'engine',{x:36,y:8,z:36},new THREE.Vector3(x,-13,z));
   }
+  // Compact belly winch, below the cargo deck and between the landing skids.
+  box(group,30,7,25,0,-12,0,dark);box(group,24,3,29,0,-16,0,cream);
+  const drum=cylinder(group,7,20,0,-12,0,teal);drum.rotation.x=Math.PI/2;
   // Landing skids and broad rear step help boarding from ground level.
   for (const z of [-60, 60]) { box(group, 240, 3, 5, 0, -12, z, dark); for (const x of [-80, 85]) cylinder(group, 2, 10, x, -7, z, cream); }
   box(group, 36, 4, 120, -140, -6, 0, cream);
@@ -125,10 +129,12 @@ export class FriendsVehicleVisuals {
   readonly group = new THREE.Group();
   private vehicles = new Map<string, THREE.Group>();
   private gangways = new Map<string, THREE.Group>();
+  private readonly aircraftDust = new FriendsAircraftDust(this.group);
   constructor(scene: THREE.Scene) { this.group.name = 'friends-vehicles'; scene.add(this.group); }
   update(snapshot: FriendsSnapshot | undefined, elapsedMs: number) {
     this.group.visible = Boolean(snapshot);
-    if (!snapshot){rowboatWaterCutout.value.x=1e8;return;}
+    if (!snapshot){this.aircraftDust.update(undefined,elapsedMs);rowboatWaterCutout.value.x=1e8;return;}
+    this.aircraftDust.update(snapshot.vehicles.find(v=>v.kind==='aircraft'),elapsedMs);
     const boat=snapshot.vehicles.find(v=>v.kind==='rowboat');
     if(boat)rowboatWaterCutout.value.set(boat.x,boat.y,boat.angle,boat.z-5);else rowboatWaterCutout.value.x=1e8;
     for(const mesh of this.vehicles.values())mesh.visible=false;
@@ -136,8 +142,8 @@ export class FriendsVehicleVisuals {
     for (const vehicle of snapshot.vehicles) {
       let mesh = this.vehicles.get(vehicle.id);
       if (!mesh) { mesh = vehicle.kind==='rowboat' ? createRowboatVisual() : vehicle.kind === 'train' ? vehicle.scenic ? createScenicTrainVisual(Boolean(vehicle.closed),Number(vehicle.id.split('-').at(-1)),vehicle.wagonKind) : vehicle.closed ? createLocomotive() : createTrainCar(Number(vehicle.id.at(-1))) : createAircraft(); mesh.name = vehicle.id; this.vehicles.set(vehicle.id, mesh); this.group.add(mesh); }
-      mesh.visible=true; this.pose(mesh, vehicle);if(vehicle.kind==='rowboat')updateRowboatVisual(mesh,vehicle,elapsedMs);if(vehicle.scenic)updateScenicTrainVisual(mesh,vehicle);
-      mesh.traverse(child => { if (child.name === 'sunskiff-rotor') child.rotation.y = elapsedMs * (vehicle.pilotId ? .06 : .018); });
+      mesh.visible=true; this.pose(mesh, vehicle);if(vehicle.kind==='rowboat')updateRowboatVisual(mesh,vehicle,elapsedMs);if(vehicle.scenic)updateScenicTrainVisual(mesh,vehicle,(snapshot.scenicRailway?.speed??0)>0);
+      if(vehicle.kind==='aircraft')mesh.traverse(child => { if (child.name === 'sunskiff-rotor') child.rotation.y = elapsedMs * (vehicle.pilotId ? .06 : .018); });
     }
     for (const link of trainGangways(snapshot.vehicles)) {
       const key = `${link.from.id}:${link.to.id}`;

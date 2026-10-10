@@ -131,8 +131,8 @@ export class FriendsInteractionSound {
         events.push({cue:'ropeCreak',volume:.06+.14*clamp(rope.tension),pan:0,rate:.9}); this.nextCreak=at+3500;
       }
     }
-    for (const crane of friends.hauling?.cranes || []) {
-      const before = old.hauling?.cranes?.find(c => c.pieceId === crane.pieceId);
+    for (const crane of [...(friends.hauling?.cranes||[]),...(friends.hauling?.aircraftWinch?[friends.hauling.aircraftWinch]:[])]) {
+      const before = crane.vehicleId?old.hauling?.aircraftWinch:old.hauling?.cranes?.find(c => c.pieceId === crane.pieceId);
       if (!before) continue;
       const outlet = craneOutlet(crane);
       if (crane.cargoId !== before.cargoId) {
@@ -141,15 +141,19 @@ export class FriendsInteractionSound {
         const click = spatialSound(hook, listener, yaw, 550, .18);
         if (click.volume > .003) events.push({cue:'ropeHook',...click,rate:crane.cargoId?1:.85});
       }
-      const sound = spatialSound(outlet, listener, yaw, 1000, .22);
+      const sound = spatialSound(crane.mastExtension!==undefined?{x:crane.x-64*Math.cos(crane.rotation*Math.PI/2),y:crane.y-64*Math.sin(crane.rotation*Math.PI/2),z:crane.z+40}:outlet, listener, yaw, 1000, .22);
       if (sound.volume <= .003) continue;
       const speed = Math.abs(crane.length-before.length) / dt;
       // Winch audio comes from the actual outlet, in both cable directions.
-      // Angular boom motion alone does not reel cable; distance per second
-      // keeps high-refresh interpolation from falling below a frame threshold.
-      const winching = speed > 2 && speed < CRANE_SPEED * 3 && crane.hasWinch !== false;
-      if (!crane.blocked && winching && sound.volume > this.motor.volume)
-        this.motor = {...sound,rate:.88+.16*clamp(speed/CRANE_SPEED)};
+      // Actual movement on any powered axis drives the same shared motor loop.
+      // Reject angle teleports and sample distance per second at any refresh rate.
+      const angleDelta=Math.abs(Math.atan2(Math.sin((crane.angle??0)-(before.angle??0)),Math.cos((crane.angle??0)-(before.angle??0))))/dt;
+      const extending=Math.max(Math.abs((crane.mastExtension??0)-(before.mastExtension??0)),Math.abs((crane.boomExtension??0)-(before.boomExtension??0)))/dt;
+      const turning=!crane.vehicleId&&angleDelta>.0001&&angleDelta<1;
+      const telescoping=extending>.01&&extending<=260;
+      const winching = (!crane.vehicleId||crane.mode!=='hold') && speed > 2 && speed < CRANE_SPEED * 3 && crane.hasWinch !== false;
+      if (!crane.blocked && (winching||turning||telescoping) && sound.volume > this.motor.volume)
+        this.motor = {...sound,rate:.88+.16*clamp(Math.max(speed/CRANE_SPEED,extending/240,turning?angleDelta/.26:0))};
     }
     // Shared treasure progress is append-only. Idle frames need no set/allocation.
     if (friends.progress.openedTreasures.length > old.progress.openedTreasures.length) {

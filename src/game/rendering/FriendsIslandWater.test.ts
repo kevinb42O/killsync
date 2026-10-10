@@ -45,8 +45,17 @@ describe('island fluid stability and bounded effects',()=>{
   });
   it('animates volcanic smoke in a single fixed-size instance batch',()=>{
     const plume=new FriendsVolcanoSmoke(),geometry=plume.geometry;
-    expect(plume.count).toBe(20);expect(plume.material.depthWrite).toBe(false);
-    plume.update(30);expect(plume.geometry).toBe(geometry);expect(plume.material.uniforms.time.value).toBe(30);
+    expect(plume.count).toBe(32);expect(plume.material.depthWrite).toBe(false);
+    const seeds=geometry.getAttribute('plumeSeed'),bands=geometry.getAttribute('plumeBand'),matrices=plume.instanceMatrix;
+    expect(seeds.count).toBe(32);expect(bands.count).toBe(32);
+    expect([...bands.array].filter(b=>b===0)).toHaveLength(20);
+    expect([...bands.array].filter(b=>b===1)).toHaveLength(12);
+    const version=matrices.version;
+    for(const seconds of [0,30,300]){
+      plume.update(seconds);expect(plume.count).toBe(32);expect(plume.geometry).toBe(geometry);
+      expect(plume.instanceMatrix).toBe(matrices);expect(matrices.version).toBe(version);
+      expect(plume.material.uniforms.time.value).toBe(seconds);
+    }
     plume.dispose();
   });
 });

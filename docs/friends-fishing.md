@@ -10,12 +10,13 @@ small contextual control buttons at the bottom of the screen.
 
 | Equipped | Primary action / LMB / RT | Secondary action / RMB / LT |
 | --- | --- | --- |
-| Rod, ready | Cast toward reachable water | — |
+| Rod, ready | Hold to charge; release to cast in the current aim direction | Cancel wind-up |
+| Bobber on dry ground / a dock | Retrieve without a catch | Retrieve |
 | Rod, waiting | Retrieve early | Retrieve |
 | Bobber submerged | Reel automatically for 2.8 seconds | Retrieve without a catch |
 | Fish in hands | Throw in the direction of the view | Gently drop |
 
-Touch players can tap the two small contextual buttons. F picks up a nearby dry
+Touch players hold and release the cast button; the other contextual button remains a tap. Full casting power takes 1.2 seconds, then stays capped until release. A small power meter and rod wind-up show preparation. Short holds cast nearby; longer holds add distance and lift. Direction and pitch are taken at release, with no water targeting or snapping. Pointer capture preserves a hold when a finger moves off the button; cancellation and focus loss safely cancel preparation. F picks up a nearby dry
 fish with the rod or empty hands equipped. Input edges prevent a held button
 from automatically catching or immediately throwing a fish.
 
@@ -24,6 +25,8 @@ landing. The bobber teases, submerges, splashes and sounds a cue. The generous
 four-second bite window requires one click. A missed bite draws a fresh random
 4–14 second delay. One koi model varies continuously in size; size does not
 change difficulty. There is no bait, inventory, score, tension meter or economy.
+
+The bobber uses a swept ballistic flight and can land anywhere. Terrain and walls intercept it, and dry landings keep the line attached without starting bites. Bite timing begins only after landing on exposed water; docks and bridges above water stay dry. Water eligibility is checked before hooking a fish and while waiting, so losing water cannot create a catch.
 
 Fishing uses the same water field as swimming and boats, covering lakes,
 rivers, pools and coastal sea without designated fishing spots. Casts and throws
@@ -53,8 +56,7 @@ sizes, triangle counts and the license are in
   Held catches are protected. Unattended distant fish expire after 90 seconds.
 - The host owns timing, movement and ownership. Snapshots send casts/fish, not
   rope nodes or skeletons. Fishing state is transient and excluded from saves.
-  Multiplayer protocol version 61 includes catch attribution and paid-out line
-  length, alongside slot 7 and fishing input blocking.
+  Multiplayer protocol version 63 includes transient casting preparation, bobber flight and dry landing state, alongside catch attribution, paid-out line length, slot 7 and fishing input blocking.
 
 Local browser samples in `artifacts/fishing/validation.json` measured fishing
 visual-update CPU p95 at 0.2 ms for one cast and 0.5 ms for five casts or 32 nearby
@@ -115,3 +117,17 @@ rowboats, swimming, controls, snapshots and audio. TypeScript and the production
 build passed. Browser checks decoded all three recordings, verified one reel
 voice and cancellation, checked fin rendering and framing, exercised the real
 arena controls, and replicated the full catch/release loop over WebRTC.
+
+## October 10 charged casting
+
+Casting now follows press → hold → release for mouse, controller and touch.
+The host owns charge timestamps, flight collisions, landing classification and
+bite eligibility; clients present wind-up, power and replicated line state.
+Secondary action, tool changes, blocking menus and invalid player states cancel
+preparation. Fish throwing, dropping and bite retrieval retain their existing
+single-press behavior.
+
+Regression coverage includes capped holds, release-time aiming, distance and
+pitch control, dry ground, bridges over water, walls, water disappearing during a
+bite, preparation cancellation, and the real host catch loop. Browser checks
+exercise casting controls and the full host-to-guest catch/release loop.

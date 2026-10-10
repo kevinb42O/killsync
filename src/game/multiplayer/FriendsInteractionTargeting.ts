@@ -83,10 +83,10 @@ export class FriendsBuildSpatialIndex {
   private dynamic: FriendsBuildPiece[] = [];
   private revision = -1;
   update(pieces: readonly FriendsBuildPiece[], revision: number) {
-    if (revision === this.revision) { if(this.dynamic.length)this.dynamic = pieces.filter(p => p.attachment||p.assembly); return; }
+    if (revision === this.revision) { if(this.dynamic.length)this.dynamic = pieces.filter(p => p.attachment||p.assembly||p.shape==='crane'); return; }
     this.revision = revision; this.cells.clear(); this.dynamic = [];
     for (const p of pieces) {
-      if (p.attachment||p.assembly) { this.dynamic.push(p); continue; }
+      if (p.attachment||p.assembly||p.shape==='crane') { this.dynamic.push(p); continue; }
       for (const b of friendsShapeBoxes(p.shape).map(local => worldBox(p, local))) {
         for (let x = Math.floor((b.x - b.w / 2) / 256); x <= Math.floor((b.x + b.w / 2) / 256); x++)
           for (let y = Math.floor((b.y - b.d / 2) / 256); y <= Math.floor((b.y + b.d / 2) / 256); y++) {

@@ -130,6 +130,10 @@ export class FriendsCargoPhysics {
     moving.forEach((collider,index)=>{
       const key=`${collider.buildId}:${index}`;present.add(key);let body=this.movingBuilds.get(key);
       if(!body){body=colliderBody(collider);this.movingBuilds.set(key,body);this.world.addBody(body);}
+      const shape=body.shapes[0];
+      if(shape instanceof Box&&(Math.abs(shape.halfExtents.x-collider.w/2/SCALE)>1e-7||Math.abs(shape.halfExtents.y-collider.d/2/SCALE)>1e-7||Math.abs(shape.halfExtents.z-collider.h/2/SCALE)>1e-7)) {
+        shape.halfExtents.set(collider.w/2/SCALE,collider.d/2/SCALE,collider.h/2/SCALE);shape.updateConvexPolyhedronRepresentation();shape.updateBoundingSphereRadius();body.shapeOffsets[0].z=collider.h/2/SCALE;body.updateBoundingRadius();
+      }
       body.position.set(collider.x/SCALE,collider.y/SCALE,collider.z/SCALE);body.quaternion.setFromEuler(0,0,collider.angle??0);body.aabbNeedsUpdate=true;
     });
     for(const [key,body] of this.movingBuilds)if(!present.has(key)){this.world.removeBody(body);this.movingBuilds.delete(key);}
@@ -157,7 +161,7 @@ export class FriendsCargoPhysics {
     this.body.angularFactor.set(active?0:1,active?0:1,active?0:1);
     if(active){this.body.velocity.x=this.body.velocity.y=0;this.body.angularVelocity.setZero();}
   }
-  translateCrane(c:PhysicalCargo,x:number,y:number){c.x+=x;c.y+=y;this.body.position.x+=x/SCALE;this.body.position.y+=y/SCALE;this.body.aabbNeedsUpdate=true;if(x||y)this.body.wakeUp();}
+  translateCrane(c:PhysicalCargo,x:number,y:number,z=0){c.x+=x;c.y+=y;c.z+=z;this.body.position.x+=x/SCALE;this.body.position.y+=y/SCALE;this.body.position.z+=z/SCALE;this.body.aabbNeedsUpdate=true;if(x||y||z)this.body.wakeUp();}
   driveCrane(error:number,speed:number) {
     this.craneSpeed=speed;
     const desired=Math.max(-speed,Math.min(speed,error*12));

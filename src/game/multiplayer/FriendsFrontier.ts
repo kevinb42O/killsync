@@ -29,7 +29,7 @@ export type FrontierSnapshot = {
   harvested: string[]; planted: FrontierTree[]; upgrades: number; contracts: number; built: number; mined: number; chopped: number;
   discovered?: string[]; feedback: Record<string, { message: string; until: number }>; damage?: { id: string; value: number; total: number; until?: number; by?: string; kind?: 'wood' | 'soil' | 'stone' | 'ore' };
 };
-export type FrontierRequest = { requestId: number; action: import('./FriendsCampfireSimulation').CampfireAction | import('./FriendsCrane').CraneAction | 'train_horn' | 'scenic_speed' | 'scenic_hold' | 'scenic_depart' | 'train_place' | 'train_remove' | 'train_hold' | 'train_depart' | 'planks' | 'smelt_copper' | 'smelt_iron' | 'upgrade' | 'deposit' | 'withdraw' | 'load' | 'unload' | 'contract' | 'plant' | 'home'; pieceId?: number; resource?: Resource;speedKmh?:number;stopAtStations?:boolean };
+export type FrontierRequest = { requestId: number; action: import('./FriendsCampfireSimulation').CampfireAction | import('./FriendsCrane').CraneAction | import('./FriendsAircraftWinch').AircraftHookAction | 'train_horn' | 'scenic_speed' | 'scenic_hold' | 'scenic_depart' | 'train_place' | 'train_remove' | 'train_hold' | 'train_depart' | 'planks' | 'smelt_copper' | 'smelt_iron' | 'upgrade' | 'deposit' | 'withdraw' | 'load' | 'unload' | 'contract' | 'plant' | 'home'; pieceId?: number; resource?: Resource;speedKmh?:number;stopAtStations?:boolean };
 export type FrontierResult = { silent?:boolean; playerId: string; requestId: number; ok: boolean; message: string };
 /** Broad woodland regions with irregular edges; most land remains meadow. */
 export function frontierForestDensity(x: number, y: number) {

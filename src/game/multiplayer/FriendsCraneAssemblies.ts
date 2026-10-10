@@ -1,3 +1,4 @@
+import { validCraneDimensions } from './FriendsTelescopicCrane';
 import { friendsShapeBoxes, type FriendsBuildShape, type FriendsBuildPiece, type FriendsBuildPose } from './FriendsBuilding';
 import { orientedBuildBox, resolveAssemblyPose, yawPoint, type CraneAttachment } from './FriendsAssemblyPose';
 export const CRANE_MAX_PARTS=32, CRANE_MAX_RADIUS=384;
@@ -32,6 +33,7 @@ export function craneAssemblyError(pieces:readonly FriendsBuildPiece[],shape:Fri
 }
 export function craneTopologyError(pieces:readonly FriendsBuildPiece[]) {
   for(const p of pieces) {
+    if(!validCraneDimensions(p))return 'Invalid crane dimensions.';
     if(p.assembly){const error=craneAssemblyError(pieces.filter(q=>q.id!==p.id),p.shape,p,p.id);if(error)return error;
       const visited=new Set([p.id]);let parent=pieces.find(q=>q.id===p.assembly!.parentId);
       while(parent?.assembly){if(visited.has(parent.id))return 'Crane connections cannot form a loop.';visited.add(parent.id);parent=pieces.find(q=>q.id===parent!.assembly!.parentId);}

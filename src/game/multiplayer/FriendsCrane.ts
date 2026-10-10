@@ -1,3 +1,4 @@
+import { telescopicCraneOutlet, type CraneDimensions } from './FriendsTelescopicCrane';
 import type { FriendsBuildPiece } from './FriendsBuilding';
 import type { PhysicalCargo, HaulingActor, HaulingEnvironment } from './FriendsHauling';
 import { cargoBounds, cargoLocalPoint, cargoWorldPoint } from './FriendsCargoPose';
@@ -8,14 +9,18 @@ export const CRANE_OUTLET = { x: 120, y: 0, z: 134 };
 export const CRANE_MIN_LENGTH = 12;
 export const CRANE_MAX_LENGTH = 6144;
 export const CRANE_SPEED = 56;
-export type CraneAction = 'crane_hook_connect' | 'crane_hook_release' | 'crane_left' | 'crane_right' | 'crane_stop_arm' | 'crane_stop_all' | 'crane_takeover' | 'crane_heartbeat' | 'crane_connect' | 'crane_raise' | 'crane_lower' | 'crane_hold' | 'crane_release';
-export type FriendsCraneState = {
+export type CraneAction = 'crane_stabilize' | 'crane_precision' | 'crane_mast_up' | 'crane_mast_down' | 'crane_stop_mast' | 'crane_extend' | 'crane_retract' | 'crane_stop_boom' | 'crane_hook_connect' | 'crane_hook_release' | 'crane_left' | 'crane_right' | 'crane_stop_arm' | 'crane_stop_all' | 'crane_takeover' | 'crane_heartbeat' | 'crane_connect' | 'crane_raise' | 'crane_lower' | 'crane_hold' | 'crane_release';
+export type FriendsCraneState = CraneDimensions & {
+  vehicleId?:string;
+  antiSway?:boolean; swayAngle?:number;
+  precision?:boolean; mastMode?:'hold'|'up'|'down'; boomMode?:'hold'|'extend'|'retract'; mastSpeed?:number; boomSpeed?:number;
   pieceId: number; x: number; y: number; z: number; rotation: number;
   length: number; mode: 'hold' | 'raise' | 'lower'; blocked: boolean;
   cargoId?: string; anchorX?: number; anchorY?: number; anchorZ?: number;
   operatorId?: string; leaseUntilMs?:number; angle?:number; armMode?:'hold'|'left'|'right'; angularSpeed?:number; outletLocal?:{x:number;y:number;z:number}; winchId?:number; hasWinch?:boolean; blockedReason?:string; memberCount?:number;
 };
-export function craneOutlet(piece: Pick<FriendsBuildPiece, 'x'|'y'|'z'|'rotation'> & Pick<FriendsCraneState,'angle'|'outletLocal'>,angle=piece.angle??0) {
+export function craneOutlet(piece: Pick<FriendsBuildPiece, 'x'|'y'|'z'|'rotation'> & Pick<FriendsCraneState,'angle'|'outletLocal'> & CraneDimensions,angle=piece.angle??0) {
+  if(piece.mastExtension!==undefined)return telescopicCraneOutlet({...piece,angle});
   const a = piece.rotation * Math.PI / 2+angle,point=piece.outletLocal??CRANE_OUTLET;
   return { x: piece.x + point.x*Math.cos(a)-point.y*Math.sin(a), y: piece.y + point.x*Math.sin(a)+point.y*Math.cos(a), z: piece.z + point.z };
 }
@@ -27,6 +32,10 @@ export function nearbyCrane(pieces: readonly FriendsBuildPiece[], actor: Pick<Ha
 }
 export function craneCargoAnchor(cargo: PhysicalCargo, crane: FriendsCraneState) {
   return cargoWorldPoint(cargo,{x:crane.anchorX??0,y:crane.anchorY??0,z:crane.anchorZ??48});
+}
+export function craneCableDistance(cargo:PhysicalCargo,crane:FriendsCraneState) {
+  const out=craneOutlet(crane),anchor=craneCargoAnchor(cargo,crane);
+  return Math.hypot(out.x-anchor.x,out.y-anchor.y,out.z-anchor.z);
 }
 export function craneCandidate(crane: FriendsCraneState, cargo: readonly PhysicalCargo[], env: Pick<HaulingEnvironment,'blocked'>, occupied: ReadonlySet<string>) {
   const outlet = craneOutlet(crane), hookZ = outlet.z-crane.length;

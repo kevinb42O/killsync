@@ -7,10 +7,10 @@ import { sanitizeFriendsArms } from './FriendsGestureControls';
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v60 adds throwable dynamite and shared blast impulses. Incrementing this makes
+/** v63 adds charged fishing casts and dry bobber landings. Incrementing this makes
  * a stale tab fail the handshake cleanly instead of silently misreading the
  * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 61;
+export const MULTIPLAYER_PROTOCOL_VERSION = 63;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
@@ -42,6 +42,8 @@ export interface MultiplayerInputFrame {
   friendsFishingBlocked?: boolean;
   /** Four held arm buttons; validated by the host, never persisted. */
   friendsArms?: number;
+  friendsAircraftWinch?: -1|0|1;
+  friendsAircraftHookHeld?: boolean;
   /** Held state travels with normal input; no toggle edges can be lost. */
   friendsFlashlight?: boolean;
   /** Spotlight half-angle quantized over 0..PI/2, in one byte. */
@@ -224,6 +226,8 @@ export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputF
   friendsTool: (boundedInteger(frame.friendsTool, 12) === 4 ? 0 : boundedInteger(frame.friendsTool, 12)) as 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12,
   friendsFishingBlocked: Boolean(frame.friendsFishingBlocked),
   friendsArms: sanitizeFriendsArms(frame.friendsArms),
+  friendsAircraftWinch:frame.friendsAircraftWinch===-1?-1:frame.friendsAircraftWinch===1?1:0,
+  friendsAircraftHookHeld:frame.friendsAircraftHookHeld===true,
   friendsFlashlight: frame.friendsFlashlight === true ? true : undefined,
   friendsFlashlightCone: frame.friendsFlashlight === true ? boundedInteger(frame.friendsFlashlightCone, 255) : undefined,
   friendsWorkPlane: frame.friendsWorkPlane && [0,1,2].includes(frame.friendsWorkPlane.axis) && Number.isFinite(frame.friendsWorkPlane.value) && frame.friendsWorkPlane.value>=-512 && frame.friendsWorkPlane.value<=48000 ? {axis:frame.friendsWorkPlane.axis,value:Math.round(frame.friendsWorkPlane.value/32)*32} : undefined,

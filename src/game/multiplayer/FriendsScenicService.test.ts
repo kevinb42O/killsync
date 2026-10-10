@@ -15,7 +15,7 @@ const actor=(id='p'):ScenicActor=>({id,lifeState:'alive',x:0,y:0,z:0});
 describe('Grand Traverse service and passenger frames',()=>{
   it('makes a complete circuit with every scheduled stop and a seated passenger',()=>{
     const service=new FriendsScenicService(),p=actor();Object.assign(p,vehicleWorldPoint(service.vehicles()[1],{x:0,y:0,z:0}));expect(service.interact(p,[p])).toBe(true);
-    const seen=new Set<string>(),chapters=new Set<number>();let previous=service.nextStop,stops=0,seconds=0,maxError=0;
+    service.depart();const seen=new Set<string>(),chapters=new Set<number>();let previous=service.nextStop,stops=0,seconds=0,maxError=0;
     for(;seconds<10000&&stops<5;seconds++){
       service.update(1000,[p],new Set());chapters.add(Number(service.snapshot().chapter&&sampleRailAlignment(scenicRailway(),service.distance).chapter));
       if(service.nextStop!==previous){seen.add(scenicStationPoses()[previous].id);previous=service.nextStop;stops++;expect(service.speed).toBe(0);}
@@ -37,11 +37,11 @@ describe('Grand Traverse service and passenger frames',()=>{
   });
   it('keeps a standing passenger on an incline through authoritative terrain movement',()=>{
     const simulation=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]),p=simulation['players'].get('host')!,service=simulation['friends']!.scenic!;
-    service.distance=90000;service.dwell=0;Object.assign(p,vehicleWorldPoint(service.vehicles()[1],{x:0,y:0,z:0}));
+    service.distance=90000;service.depart();Object.assign(p,vehicleWorldPoint(service.vehicles()[1],{x:0,y:0,z:0}));
     for(let i=0;i<300;i++){simulation.tick(50);const v=service.vehicles()[1];expect(Math.abs(vehicleLocalPoint(v,p).z)).toBeLessThan(.01);}
   });
   it('holds under an obstruction and starts fresh instead of restoring old journeys',()=>{
-    const service=new FriendsScenicService();service.dwell=0;for(let i=0;i<1000;i++)service.update(50,[],new Set());expect(service.speed).toBeGreaterThan(0);
+    const service=new FriendsScenicService();service.depart();for(let i=0;i<1000;i++)service.update(50,[],new Set());expect(service.speed).toBeGreaterThan(0);
     for(let i=0;i<1000;i++)service.update(50,[],new Set(),()=>true);expect(service.speed).toBe(0);expect(service.blocked).toBe(true);
     const save=service.snapshot(),restored=new FriendsScenicService(save);expect(restored.distance).toBeCloseTo(scenicStationPoses()[0].distance+SCENIC_STOP_OFFSET);expect(restored.speed).toBe(0);
     expect(new FriendsScenicService({...save,distance:NaN}).distance).not.toBeNaN();expect(new FriendsScenicService({...save,hash:'old'}).distance).toBeCloseTo(scenicStationPoses()[0].distance+SCENIC_STOP_OFFSET);
@@ -49,7 +49,7 @@ describe('Grand Traverse service and passenger frames',()=>{
   it('replicates seating, follows route curvature between network frames and ignores movement while seated',()=>{
     const simulation=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]),p=simulation['players'].get('host')!,service=simulation['friends']!.scenic!;
     Object.assign(p,vehicleWorldPoint(service.vehicles()[1],{x:0,y:0,z:0}));simulation.tick(50);expect(service.interact(p,[p])).toBe(true);
-    const a=simulation.createSnapshot();simulation.setInput('host',{type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:8,aimAngle:quantizeAngle(1),aimPitch:quantizePitch(.2),selectedSlot:0,firing:false,sprinting:true,sliding:false,reviving:false,jumpPressed:false,dashPressed:false});service.dwell=0;simulation.tick(50);
+    const a=simulation.createSnapshot();simulation.setInput('host',{type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:8,aimAngle:quantizeAngle(1),aimPitch:quantizePitch(.2),selectedSlot:0,firing:false,sprinting:true,sliding:false,reviving:false,jumpPressed:false,dashPressed:false});service.depart();simulation.tick(50);
     const b=simulation.createSnapshot(),rider=b.players[0],v=b.friends!.vehicles.find(v=>v.id===rider.friendsSeat!.vehicleId)!;expect(vehicleLocalPoint(v,rider)).toMatchObject(SCENIC_SEATS[rider.friendsSeat!.index]);expect(rider.angle).toBeCloseTo(1,3);
     const interpolated=new CoopSnapshotInterpolator().interpolate(a,b,.5),iv=interpolated.friends!.vehicles.find(v=>v.id===rider.friendsSeat!.vehicleId)!;expect(vehicleLocalPoint(iv,interpolated.players[0]).z).toBeCloseTo(13);
     const decoded=new SnapshotDecoder().decode(compactSnapshotWirePayload(b),1);expect(decoded?.players[0].friendsSeat).toEqual(rider.friendsSeat);expect(decoded?.friends!.scenicRailway?.hash).toBe(scenicRailway().hash);

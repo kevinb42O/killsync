@@ -1,7 +1,8 @@
+import { validCraneDimensions } from './FriendsTelescopicCrane';
 import { validCraneAttachment } from './FriendsCraneAssemblies';
 import type { MultiplayerReliableEvent } from './protocol';
 import { MULTIPLAYER_PROTOCOL_VERSION } from './protocol';
-const ACTIONS = new Set(['campfire_fuel','campfire_fresh','campfire_eat','crane_hook_connect','crane_hook_release','crane_left','crane_right','crane_stop_arm','crane_stop_all','crane_takeover','crane_heartbeat','crane_connect','crane_raise','crane_lower','crane_hold','crane_release','train_horn','scenic_speed','scenic_hold','scenic_depart','train_place','train_remove','train_hold','train_depart','planks','smelt_copper','smelt_iron','upgrade','deposit','withdraw','load','unload','contract','plant','home']);
+const ACTIONS = new Set(['campfire_fuel','campfire_fresh','campfire_eat','airwinch_hook_connect','airwinch_hook_release','crane_stabilize','crane_precision','crane_mast_up','crane_mast_down','crane_stop_mast','crane_extend','crane_retract','crane_stop_boom','crane_hook_connect','crane_hook_release','crane_left','crane_right','crane_stop_arm','crane_stop_all','crane_takeover','crane_heartbeat','crane_connect','crane_raise','crane_lower','crane_hold','crane_release','train_horn','scenic_speed','scenic_hold','scenic_depart','train_place','train_remove','train_hold','train_depart','planks','smelt_copper','smelt_iron','upgrade','deposit','withdraw','load','unload','contract','plant','home']);
 const BUILDS = new Set(['place','place_group','remove','paint','move','undo','redo','permissions']);
 const REQUEST_KEY = 'killsync.friends.request-id.v1';
 let lastRequestId = 0;
@@ -19,6 +20,8 @@ export function validFriendsCommand(value: unknown, build: boolean): boolean {
     if (!Array.isArray(r.poses) || !r.poses.length || r.poses.length > 64 || !r.poses.every(p => validFriendsCommand({requestId:1,action:'place',pose:p},true))) return false;
   }
   if (build && r.pose !== undefined) { const p=r.pose as Record<string,unknown>; if (!p || !['x','y','z','rotation'].every(k=>typeof p[k]==='number' && Number.isFinite(p[k])) || !Number.isInteger(p.rotation) || Number(p.rotation)<0 || Number(p.rotation)>3) return false; }
+  if(build&&(r.pose as any)?.cranePartBox!==undefined)return false;
+  if(build&&r.pose&&!validCraneDimensions(r.pose as any))return false;
   if(build&&(r.pose as any)?.craneAngle!==undefined&&(!Number.isFinite((r.pose as any).craneAngle)||Math.abs((r.pose as any).craneAngle)>Math.PI*2))return false;
   if(build&&(r.pose as any)?.assembly!==undefined&&!validCraneAttachment((r.pose as any).assembly))return false;
   if(build&&(r.pose as any)?.craneRootId!==undefined&&(!Number.isSafeInteger((r.pose as any).craneRootId)||(r.pose as any).craneRootId<1))return false;

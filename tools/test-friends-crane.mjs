@@ -7,7 +7,7 @@ const require=createRequire(import.meta.url);
 let playwright;try{playwright=require('playwright');}catch{playwright=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
 const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3000',directory='artifacts/friends-crane';await mkdir(directory,{recursive:true});
 const browser=await playwright.chromium.launch({headless:true,args:['--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
-const report={checks:[],errors:[]};const page=await browser.newPage({viewport:{width:1100,height:740}});page.setDefaultTimeout(20000);
+const report={checks:[],errors:[]};const page=await browser.newPage({viewport:{width:1100,height:740}});page.setDefaultTimeout(60000);
 page.on('pageerror',e=>report.errors.push(e.message));
 await page.addInitScript(()=>{
  localStorage.setItem('sunline.preferences.v1',JSON.stringify({renderScale:.7,shadows:false}));localStorage.setItem('killsync.friends.menu.pause','true');

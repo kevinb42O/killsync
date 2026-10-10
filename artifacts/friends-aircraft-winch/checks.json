@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "AZERTY E pays out, V attaches, A raises cargo, and release brakes without triggering hand gestures",
+    "flight movement, ascent and winching work simultaneously, with real load sway",
+    "opposite winch directions brake together",
+    "QWERTY Q retracts after switching layout; menus brake the motor and cancel pending release",
+    "window blur clears held winch input",
+    "short V holds cancel; a deliberate hold releases the moving load",
+    "F still leaves the cockpit and Q resumes its original gesture outside it",
+    "mobile joystick movement remains held while operating the winch with a second finger",
+    "mobile hold controls reel the rope and touch cancellation brakes immediately"
+  ],
+  "errors": []
+}

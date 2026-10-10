@@ -12,8 +12,15 @@ const base: FriendsModeSetupProps = {
 describe('Friends setup presentation', () => {
   it('offers a host launch with just one person, without operator configuration', () => {
     const html = renderToStaticMarkup(<FriendsModeSetup {...base} mode="host"/>);
-    expect(html).toContain('Head into the island'); expect(html).toContain('Room for 4 more'); expect(html).toContain('Copy invite link');
+    expect(html).toContain('Head into the island'); expect(html).toContain('Room for 5 more'); expect(html).toContain('1 of 6'); expect(html).toContain('Copy invite link');
     expect(html).not.toContain('Operator'); expect(html).not.toContain('Deploy');
+  });
+  it('updates open slots as guests join and removes the invitation at capacity', () => {
+    const guests = Array.from({ length: 5 }, (_, i) => ({ id: `guest-${i}`, label: `Guest ${i}`, color: '#486b57' }));
+    const partial = renderToStaticMarkup(<FriendsModeSetup {...base} mode="host" guestPlayers={guests.slice(0, 2)}/>);
+    expect(partial).toContain('Room for 3 more'); expect(partial).toContain('3 of 6');
+    const full = renderToStaticMarkup(<FriendsModeSetup {...base} mode="host" guestPlayers={guests}/>);
+    expect(full).toContain('6 of 6'); expect(full).not.toContain('Room for');
   });
   it('explains the guest waiting state and correctly identifies spectator connections', () => {
     const guest = renderToStaticMarkup(<FriendsModeSetup {...base} mode="guest" connected rosterPlayers={[base.localPlayer]}/>);

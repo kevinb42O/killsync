@@ -7,6 +7,21 @@ import {sampleRailAlignment} from '../world/FriendsRailAlignment';
 afterEach(()=>vi.unstubAllGlobals());
 const canvas=()=>vi.stubGlobal('document',{createElement:()=>({getContext:()=>({fillRect(){},strokeRect(){},fillText(){}})})});
 describe('scenic train body and running gear',()=>{
+  it('switches off parked lights and reuses stationary articulation, then refreshes on movement or parent changes',()=>{
+    canvas();const parent=new THREE.Group(),mesh=createScenicTrainVisual(true,0),vehicle=scenicVehicles(0)[0];parent.add(mesh);
+    mesh.position.set(vehicle.x,vehicle.z,vehicle.y);mesh.rotation.set(0,-vehicle.angle,vehicle.pitch||0,'YXZ');
+    const headlight=mesh.getObjectByName('scenic-headlight') as THREE.SpotLight;
+    expect(headlight.visible).toBe(false);
+    updateScenicTrainVisual(mesh,vehicle,false);
+    expect(mesh.userData.scenicLampMaterial.color.getHex()).toBe(0x514d43);
+    const bogie=mesh.userData.scenicBogies[0].group as THREE.Group,pose=vi.spyOn(bogie.position,'set');
+    updateScenicTrainVisual(mesh,vehicle,false);expect(pose).not.toHaveBeenCalled();
+    updateScenicTrainVisual(mesh,vehicle,true);expect(headlight.visible).toBe(true);expect(mesh.userData.scenicLampMaterial.color.getHex()).toBe(0xffd6a1);expect(pose).not.toHaveBeenCalled();
+    parent.position.x=100;updateScenicTrainVisual(mesh,vehicle,false);expect(pose).toHaveBeenCalledTimes(1);expect(headlight.visible).toBe(false);
+    const grainPoint=new THREE.Vector3(20,13,38).applyMatrix4(mesh.matrixWorld).applyMatrix4(mesh.userData.railwayFinishResources.frame);expect(grainPoint.distanceTo(new THREE.Vector3(20,13,38))).toBeLessThan(.00001);
+    const moved=scenicVehicles(100)[0];mesh.position.set(moved.x,moved.z,moved.y);mesh.rotation.set(0,-moved.angle,moved.pitch||0,'YXZ');
+    updateScenicTrainVisual(mesh,moved,true);expect(pose).toHaveBeenCalledTimes(2);expect(headlight.visible).toBe(true);
+  });
   it('keeps its roof within the surveyed clearance and the walking canopy underside',()=>{
     canvas();for(const closed of [false,true]){const mesh=createScenicTrainVisual(closed,0),bounds=new THREE.Box3().setFromObject(mesh);expect(bounds.max.y).toBeLessThan(132);expect(bounds.min.z).toBeGreaterThan(-61);expect(bounds.max.z).toBeLessThan(61);
       expect(mesh.getObjectByName(closed?'scenic-locomotive-roof':'scenic-carriage-canopy')).toBeDefined();}

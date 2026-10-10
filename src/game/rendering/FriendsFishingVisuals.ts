@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
 import type { FishingSnapshot, CaughtFish } from '../multiplayer/FriendsFishing';
-import { FISH_GROUND_RADIUS } from '../multiplayer/FriendsFishing';
+import { FISH_GROUND_RADIUS, fishingCastPower } from '../multiplayer/FriendsFishing';
 import { friendsAudio } from '../FriendsAudio';
 import { acquireEquipmentLighting, frameHeldEquipment, loadFriendsGrip } from './FriendsHeldEquipment';
 import { createFishingFish, loadFishingFish, loadFishingRod } from './FriendsFishingAssets';
@@ -108,13 +108,13 @@ export class FriendsFishingVisuals {
     for(const id of state?.equipped??[]){
       const player=players.find(p=>p.id===id);if(!player)continue;const local=id===localId&&firstPerson;if(local&&tool!==7)continue;
       if(!local&&Math.hypot(player.x-this.cameraPoint.x,player.y-this.cameraPoint.z)>1800)continue;
-      active.add(id);const r=this.rod(id,local),cast=state?.casts.find(c=>c.playerId===id),t=cast?(now-cast.atMs)/1000:0;
-      if(local){frameHeldEquipment(r.root,this.camera);r.root.rotation.set(-.48+(cast?.phase==='casting'?.65*Math.sin(Math.min(1,t/.65)*Math.PI):0)-(cast?.phase==='bite'?.12*Math.sin(now*.023):0)-(cast?.phase==='reeling'?.10+.035*Math.sin(now*.017):0),0,-.12);this.lighting.setVisible(true);}
-      else{if(!handPoint(id,this.start))this.start.set(player.x,player.z+25,player.y);r.root.position.copy(this.start);r.root.scale.setScalar(32);r.root.rotation.set(-.45,Math.PI/2-player.angle,-.12);}
+      active.add(id);const r=this.rod(id,local),cast=state?.casts.find(c=>c.playerId===id),t=cast?(now-cast.atMs)/1000:0,charge=state?.charges?.find(c=>c.playerId===id),power=charge?fishingCastPower(now-charge.chargeAt):0;
+      if(local){frameHeldEquipment(r.root,this.camera);r.root.rotation.set(-.48-power*.32+(cast?.phase==='casting'?.65*Math.sin(Math.min(1,t/.65)*Math.PI):0)-(cast?.phase==='bite'?.12*Math.sin(now*.023):0)-(cast?.phase==='reeling'?.10+.035*Math.sin(now*.017):0),0,-.12);this.lighting.setVisible(true);}
+      else{if(!handPoint(id,this.start))this.start.set(player.x,player.z+25,player.y);r.root.position.copy(this.start);r.root.scale.setScalar(32);r.root.rotation.set(-.45-power*.32,Math.PI/2-player.angle,-.12);}
       r.root.visible=true;r.line.visible=r.float.visible=r.ring.visible=Boolean(cast);
       const tension=cast?.lineLength?THREE.MathUtils.clamp((Math.hypot(player.x-cast.x,player.y-cast.y,player.z+26-cast.z)/cast.lineLength-.94)/.06,0,1):0;
-      const flex=cast?.phase==='bite'?.75+Math.sin(now*.018)*.15:cast?.phase==='reeling'?.5+.12*Math.sin(now*.018):cast?.phase==='casting'?.35*Math.sin(Math.min(1,t/.65)*Math.PI):.04+tension*.26;
-      if(r.mesh?.morphTargetInfluences)r.mesh.morphTargetInfluences[0]=flex;if(r.tip)r.tip.position.z=-.2*flex;
+      const flex=charge?.15+power*.4:cast?.phase==='bite'?.75+Math.sin(now*.018)*.15:cast?.phase==='reeling'?.5+.12*Math.sin(now*.018):cast?.phase==='casting'?.35*Math.sin(Math.min(1,t/.65)*Math.PI):.04+tension*.26;
+      if(r.mesh?.morphTargetInfluences)r.mesh.morphTargetInfluences[0]=flex;if(r.tip)r.tip.position.z=r.tip.userData.restZ+r.tip.userData.bendZ*flex;
       if(r.reelArm&&local&&cast?.phase==='reeling')r.reelArm.update(r.root,this.camera,now);
       if(!cast){this.stopReel(r);r.phase='';continue;}
       if(!local||cast.phase!=='reeling')this.stopReel(r);
@@ -126,13 +126,13 @@ export class FriendsFishingVisuals {
       // Host snapshots arrive more slowly than rendering. Interpolate the
       // shared float/fish/line endpoint so retrieval does not jump each tick.
       if(r.serial===cast.id&&r.previousFloat.distanceTo(this.end)<140)this.end.lerpVectors(r.previousFloat,this.end,1-Math.exp(-Math.max(0,dt)*.035));
-      r.float.position.copy(this.end);r.float.rotation.set(moving*.28,bite?now*.001:0,(bite?.38:Math.sin(now*.002)*.07)+moving*.22);r.float.visible=cast.phase!=='reeling'||Boolean(cast.empty);r.previousFloat.copy(this.end);
+      r.float.position.copy(this.end);r.float.rotation.set(moving*.28,bite?now*.001:0,(bite?.38:waiting?Math.sin(now*.002)*.07:0)+moving*.22);r.float.visible=cast.phase!=='reeling'||Boolean(cast.empty);r.previousFloat.copy(this.end);
       r.ring.position.set(cast.x,cast.target.z-1.8,cast.y);const ripple=((now-cast.atMs)%1100)/1100;r.ring.scale.setScalar(4+ripple*(bite?23:10+moving*12));r.ring.visible=waiting||bite;
       if(r.tip){r.root.updateWorldMatrix(true,true);if(local){const p=project(r.tip);this.start.set(p.x,p.y,p.z);}else r.tip.getWorldPosition(this.start);}
       else this.start.copy(r.root.position);
-      if(r.serial!==cast.id){this.dropPosition.set(cast.target.x,cast.target.z,cast.target.y);r.lineOffset=this.start.distanceTo(this.dropPosition)-Math.hypot(player.x-cast.target.x,player.y-cast.target.y,player.z+26-cast.target.z);}
+      if(r.serial!==cast.id||r.phase==='casting'&&cast.phase!=='casting'){this.dropPosition.set(cast.target.x,cast.target.z,cast.target.y);r.lineOffset=this.start.distanceTo(this.dropPosition)-Math.hypot(player.x-cast.target.x,player.y-cast.target.y,player.z+26-cast.target.z);}
       const slack=Math.max(1,(cast.lineLength??this.start.distanceTo(this.end)+12)+r.lineOffset-this.start.distanceTo(this.end));
-      r.line.update(this.start,this.end,cast.phase==='casting'?24:cast.phase==='reeling'?2:bite?Math.min(3,slack):slack,dt,this.cameraPoint,waiting||bite?cast.target.z-2:undefined,camera instanceof THREE.PerspectiveCamera?camera:undefined,typeof window==='undefined'?900:window.innerHeight);
+      r.line.update(this.start,this.end,cast.phase==='casting'?24:cast.phase==='reeling'?2:bite?Math.min(3,slack):slack,dt,this.cameraPoint,waiting||bite||cast.phase==='dry'?cast.target.z-2:undefined,camera instanceof THREE.PerspectiveCamera?camera:undefined,typeof window==='undefined'?900:window.innerHeight);
       if(bite&&now>=r.nextSplash){this.splash(cast.x,cast.target.z-2,cast.y,now);r.nextSplash=now+650;}
       if(r.serial!==cast.id||r.phase!==cast.phase){
         if(waiting)this.splash(cast.x,cast.target.z-2,cast.y,now);

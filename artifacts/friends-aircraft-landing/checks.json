@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "uneven terrain footprint touchdown remains stationary, emits bounded dust, and takes off cleanly"
+  ],
+  "errors": [],
+  "state": {
+    "x": 8000,
+    "y": 8000,
+    "z": 46,
+    "groundZ": 32,
+    "dustVisible": true,
+    "particles": 96
+  }
+}

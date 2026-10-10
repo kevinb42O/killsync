@@ -102,7 +102,7 @@ describe('confirmed Friends interaction sounds', () => {
     expect(sound.sample(snapshot({cranes:moved as any}),listener,100,0,contact).motor.volume).toBeGreaterThan(0);
     expect(sound.sample(snapshot({cranes:moved as any}),listener,200,0,contact).motor.volume).toBe(0);
   });
-  it('uses real cable speed for both crane directions at 240 Hz, with no winch sound for arm rotation or limits',()=>{
+  it('uses real cable speed for both crane directions at 240 Hz, rejecting angle discontinuities and blocked or idle motors',()=>{
     const crane={pieceId:1,x:30,y:0,z:0,length:100,angle:0,rotation:0,blocked:false,hasWinch:true};
     const sound=new FriendsInteractionSound();sound.sample(snapshot({cranes:[crane] as any}),listener,0,0,contact);
     const raising={...crane,length:100-56/240};
@@ -111,6 +111,23 @@ describe('confirmed Friends interaction sounds', () => {
     expect(sound.sample(snapshot({cranes:[{...crane,angle:.05}] as any}),listener,3000/240,0,contact).motor.volume).toBe(0);
     expect(sound.sample(snapshot({cranes:[{...raising,blocked:true}] as any}),listener,4000/240,0,contact).motor.volume).toBe(0);
     expect(sound.sample(snapshot({cranes:[{...crane,hasWinch:false}] as any}),listener,5000/240,0,contact).motor.volume).toBe(0);
+  });
+  it('uses the rope motor for real turning and telescoping at 240 Hz, audible beside a giant crane base',()=>{
+    const c={pieceId:1,x:64,y:0,z:0,length:100,angle:3.141,mastExtension:2912,boomExtension:2888,rotation:0,blocked:false,hasWinch:true};
+    const sound=new FriendsInteractionSound();sound.sample(snapshot({cranes:[c] as any}),listener,0,0,contact);
+    const turning={...c,angle:c.angle+.02/240};
+    expect(sound.sample(snapshot({cranes:[turning] as any}),listener,1000/240,0,contact).motor.volume).toBeGreaterThan(0);
+    const extending={...turning,mastExtension:c.mastExtension-48/240};
+    expect(sound.sample(snapshot({cranes:[extending] as any}),listener,2000/240,0,contact).motor.volume).toBeGreaterThan(0);
+    expect(sound.sample(snapshot({cranes:[extending] as any}),listener,3000/240,0,contact).motor.volume).toBe(0);
+  });
+  it('uses the crane motor for helicopter reeling, while yaw and automatic cable clamping stay quiet',()=>{
+    const c={pieceId:-1,vehicleId:'sunskiff',x:30,y:0,z:100,length:60,angle:0,rotation:0,mode:'lower' as const,blocked:false,hasWinch:true,outletLocal:{x:0,y:0,z:-18}};
+    const sound=new FriendsInteractionSound();sound.sample(snapshot({aircraftWinch:c}),listener,0,0,contact);
+    expect(sound.sample(snapshot({aircraftWinch:{...c,length:65.6}}),listener,100,0,contact).motor.volume).toBeGreaterThan(0);
+    expect(sound.sample(snapshot({aircraftWinch:{...c,length:65.6,angle:.05,mode:'hold'}}),listener,200,0,contact).motor.volume).toBe(0);
+    expect(sound.sample(snapshot({aircraftWinch:{...c,length:60,mode:'hold'}}),listener,300,0,contact).motor.volume).toBe(0);
+    expect(sound.sample(snapshot({aircraftWinch:{...c,length:65.6,blocked:true}}),listener,400,0,contact).motor.volume).toBe(0);
   });
   it('plays a hook click beside the cargo even when the winch is high above the listener',()=>{
     const crane={pieceId:1,x:20,y:0,z:1800,length:1886,angle:0,rotation:0,blocked:false};

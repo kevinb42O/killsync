@@ -18,7 +18,7 @@ const fixture=()=>{
   const env:HaulingEnvironment={revision:'crane',floor:()=>0,collide:()=>false,blocked:()=>false,vehicles:[],builds:[piece]};
   h.syncCranes(env);return {piece,cargo:h.getCargo()[0],player,h,env};
 };
-const run=(f:ReturnType<typeof fixture>,seconds:number,env=f.env)=>{for(let t=0;t<seconds*1000;t+=50)f.h.update(50,t,[f.player],new Map(),env);};
+const run=(f:ReturnType<typeof fixture>,seconds:number,env=f.env)=>{for(let t=0;t<seconds*1000;t+=50){f.h.controlCrane(f.player,77,'crane_heartbeat',env,true,t);f.h.update(50,t,[f.player],new Map(),env);}};
 const connect=(f:ReturnType<typeof fixture>)=>f.h.controlCrane(f.player,77,'crane_connect',f.env);
 
 describe('buildable vertical freight crane',()=>{

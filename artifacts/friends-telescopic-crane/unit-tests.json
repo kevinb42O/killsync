@@ -1,0 +1,21 @@
+{
+  "passed": 1780,
+  "failed": 3,
+  "total": 1783,
+  "failures": [
+    {
+      "test": "Friends setup presentation offers a host launch with just one person, without operator configuration",
+      "file": "/Users/kevin/PROJECTS/vampire-survivors-2026/src/components/FriendsModeSetup.test.tsx"
+    },
+    {
+      "test": "transient Friends tool bar removes hidden controls from focus and accessibility while keeping action feedback available",
+      "file": "/Users/kevin/PROJECTS/vampire-survivors-2026/src/components/FriendsToolbelt.test.tsx"
+    },
+    {
+      "test": "island fluid stability and bounded effects animates volcanic smoke in a single fixed-size instance batch",
+      "file": "/Users/kevin/PROJECTS/vampire-survivors-2026/src/game/rendering/FriendsIslandWater.test.ts"
+    }
+  ],
+  "baselineVerification": "All three failures reproduced on an untouched HEAD checkout. Swimming passed on rerun.",
+  "additionalFinalRegression": "19 telescopic simulation and visual tests passed after the final static-console sweep adjustment."
+}

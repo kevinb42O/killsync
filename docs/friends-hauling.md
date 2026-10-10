@@ -65,9 +65,24 @@ off-screen; selecting a tool again reveals it and restarts the timer.
 ## Freight cranes and ground crew
 
 Find **Freight crane**, **Slewing joint**, **Crane boom**, **Freight winch** and
-**Crane console** in the construction library's Workshop category. The original
-freight crane remains a fixed vertical lift. The modular kit lets you build the
-tower and platform with ordinary construction pieces, then compose a rotating arm.
+**Crane console** in the construction library's Workshop category. The prefab
+freight crane now has a telescopic mast up to **256m above its mounting surface**,
+a telescopic arm reaching **256m from the mast**, and continuous **360° turning**.
+The foot and ground console stay fixed. Eight steel stages and their brass collars
+extend with the boom; the hook and attached load follow the actual moving tip.
+Existing cranes start at their original dimensions. Height, reach and parked angle
+are saved and synchronized with other players.
+
+The prefab menu has **Turn left/right**, **Extend up / Retract down**, and
+**Extend arm / Retract arm**, each with its own hold button, plus the existing cable
+and load controls. **Precision speed** reduces turning and extension speed to 20%
+for careful placement. Turning and telescoping use the existing rope-reeling motor
+sound, audible at the fixed base even when the hook is far away. Movement sweeps
+check the arm, mast, load and cable; obstruction brakes every axis. Maximum size
+also depends on clearance inside the world bounds.
+
+The modular kit lets you build the tower and platform with ordinary construction
+pieces, then compose a rotating arm.
 
 Place a slewing joint on fixed ground or a supported platform. Aim at its top to
 snap an 8m boom section into its socket. Aim at the next boom to extend its free
@@ -79,13 +94,13 @@ a drop. The pivot is 10.7m tall, providing space for the arm above its operator.
 
 A crane console links to the nearest fixed crane or pivot within 20m when placed.
 Stand beside that console or the crane base and press F (controller Y / touch USE).
-The same menu controls the linked joint and winch. **Rotate left/right**, **Hold
-arm**, **Raise**, **Lower**, **Stop / hold**, **Stop all**, **Connect load** and
+The same menu controls the linked joint and winch. **Turn left/right**, **Hold
+turn**, **Raise**, **Lower**, **Stop / hold**, **Stop all**, **Connect load** and
 **Release load** are available according to the installed parts. Rotation and
 vertical lift can run together. Hold a direction button to move and release it
 to brake that axis. Mouse, touch, and keyboard Space/Enter holds are supported;
 releasing outside the button still brakes. Losing window focus or closing your
-controls brakes held movement. Closing your controls brakes both motors.
+controls brakes held movement. Closing your controls brakes every axis.
 
 The live load camera follows the hook or attached cargo and shows the landing
 area. Orbit, zoom, switch to whole-crane framing, and toggle its light. It uses the
@@ -117,8 +132,15 @@ The host computes guided load movement beneath the rotating outlet. It checks
 intermediate arm, cargo and cable poses against terrain, authored structures and
 trees, transport, crew and other loads before committing movement. Both motors
 stall on an obstruction, preserving the current pose without accumulating cable
-stretch or arm travel. Cargo retains contact physics vertically; release restores
-gravity. This is a guided crane, with no free pendulum swing or chained pivots.
+stretch or arm travel. Cargo retains contact physics vertically. The telescopic prefab adds a host-side
+horizontal pendulum: acceleration and braking excite sway, cable drop follows its
+geometric length, and swept cargo/cable checks stop it at obstructions. **Natural
+swing / Anti-sway** toggles damping and displays the load angle; stopping the
+motors lets the suspended load settle. Release transfers tip and swing velocity
+to the existing cargo solver. The model uses two offsets and velocities per
+attached load, bounded fixed substeps, local collision sweeps only while moving,
+and existing rope buffers and instanced hooks. Settled loads retain the idle
+fast path. Modular cranes retain their guided lift; chained pivots are unsupported.
 
 Dismantle from the tip inward after releasing the load and braking. Parent edits,
 orphan connections and conflicting sockets are rejected; undo/redo validates the
@@ -197,3 +219,39 @@ restoration, briefing attachment/completion edges, mission content, rotated load
 rope geometry and high-FOV muzzle alignment have dedicated regression tests.
 
 Physics dependency: [cannon-es](https://github.com/pmndrs/cannon-es), MIT licensed.
+
+The crane live view supports pointer dragging: left/right orbits and up/down
+tilts with bounded elevation. Pointer capture keeps drags working outside the
+view; release, cancellation and window blur end them. Camera updates are local
+and limited to one per animation frame. Reset camera restores the default view.
+Older 384m boom saves clamp to the current 256m reach while retaining mast height
+and angle.
+
+
+## Helicopter winch
+
+The existing Sunskiff has a belly winch with up to 512m of cable. While piloting,
+hold A to retract and E to extend on AZERTY; Q and E on QWERTY. Release to brake;
+holding both directions also brakes. The motor ramps smoothly to about 4.7m/s
+and uses the existing crane motor sound. These keys retain their hand gestures
+outside the cockpit. F still releases pilot controls.
+
+Hover above a settled, unstrapped salvage core, lower the hook to its lifting
+plate, and press V to connect. Hold V for 650ms to release a connected load; a
+short hold cancels. The cockpit HUD shows rope length, motor status, obstruction,
+sway and release progress. Mobile pilots have hold buttons. Ground crew can
+connect or disconnect with F beside the hook without taking the pilot controls.
+
+Cargo sways with helicopter acceleration and retains momentum when released.
+Loaded retraction stops at 2m clearance below the winch; the empty hook stows
+fully. Cable and load collision checks stop blocked movement. Aircraft movement
+is checked before passengers or cargo move, with at most 40 sweep samples per
+step. A deployed empty cable is checked too. A stowed winch uses the original
+aircraft movement and skips terrain and cable queries; rope meshes reuse the crane renderer and buffers.
+
+Host-owned winch state travels in ordinary world motion snapshots, independently
+of construction patches, with guest interpolation. Menus, blur, stale inputs
+and pilot changes brake the winch and cancel release progress. A new pilot must
+release held keys before operating it. Resetting the helicopter releases its load
+before moving the aircraft. World reload uses the existing dock reset and stows
+the winch; live attachments are not saved.

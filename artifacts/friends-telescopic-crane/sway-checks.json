@@ -1,0 +1,14 @@
+{
+  "regression": {
+    "files": 14,
+    "passed": 163,
+    "failed": 0
+  },
+  "finalIdleAndReplicationChecks": {
+    "passed": 15,
+    "failed": 0
+  },
+  "browser": "Passed actual load sway, anti-sway menu control, combined axes, giant limits, Escape, touch cancellation; no page errors.",
+  "typecheck": "Passed",
+  "rendering": "Angled cable and tilted hook reuse existing geometry; stationary loads skip sway floor/collider queries."
+}

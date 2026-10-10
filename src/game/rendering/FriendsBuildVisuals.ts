@@ -1,3 +1,4 @@
+import { FriendsTelescopicCraneVisuals } from './FriendsTelescopicCraneVisuals';
 import { createCraneGeometry, createCranePartGeometry } from './FriendsCraneGeometry';
 import { isPlayerRail, sampleRail, railLength } from '../world/FriendsPlayerRail';
 import * as THREE from 'three';
@@ -81,6 +82,7 @@ function buildQuaternion(p:FriendsBuildPose,target:THREE.Quaternion){
 }
 export class FriendsBuildVisuals {
   readonly group = new THREE.Group();
+  private telescopic=new FriendsTelescopicCraneVisuals(this.group);
   private geometries = new Map<FriendsBuildShape, THREE.BufferGeometry>();
   private materials = new Map<string, THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[]>();
   private batches = new Map<string, THREE.InstancedMesh>();
@@ -131,6 +133,7 @@ export class FriendsBuildVisuals {
   private geometry(shape: FriendsBuildShape) { let g = this.geometries.get(shape); if (!g) { g = prepareFriendsBuildGeometry(createFriendsBuildGeometry(shape), shape); this.geometries.set(shape, g); } return g; }
   update(building: FriendsBuildingSnapshot | undefined) {
     this.group.visible = Boolean(building); if (!building) return;
+    this.telescopic.update(building.pieces);
     if(building.revision===this.revision){
       if(!building.pieces.some(p=>p.attachment||p.assembly))return;
       const byId=new Map(building.pieces.map(p=>[p.id,p])),matrix=new THREE.Matrix4(),q=new THREE.Quaternion();
@@ -143,7 +146,7 @@ export class FriendsBuildVisuals {
     const changedDetails = new Set([...this.detailStamps.keys(), ...newDetails.keys()].filter(shape => this.detailStamps.get(shape) !== newDetails.get(shape)));
     this.detailStamps = newDetails;
     const grouped = new Map<string, typeof building.pieces>();
-    for (const p of building.pieces) { const k = `${p.shape}:${p.finish}:${p.attachment?'cargo':'world'}`, a = grouped.get(k) || []; a.push(p); grouped.set(k, a); }
+    for (const p of building.pieces) { if(p.shape==='crane')continue; const k = `${p.shape}:${p.finish}:${p.attachment?'cargo':'world'}`, a = grouped.get(k) || []; a.push(p); grouped.set(k, a); }
     for (const mesh of this.batches.values()) mesh.visible = false;
     const matrix = new THREE.Matrix4(), quaternion = new THREE.Quaternion(), position = new THREE.Vector3();
     for (const [key, pieces] of grouped) {
@@ -227,5 +230,5 @@ export class FriendsBuildVisuals {
       this.detailBatches.splice(i,1);this.detailGeometries.splice(i,1);this.detailMaterials.splice(i,1);
     }
   }
-  dispose() { this.faceMarker.geometry.dispose();(this.faceMarker.material as THREE.Material).dispose();this.edges.forEach(g=>g.dispose());this.pulses.forEach(p=>(p.line.material as THREE.Material).dispose());this.removalMaterial.dispose(); this.groupGhost?.dispose(); this.groupGhostMaterial.dispose(); this.clearDetails(); this.group.removeFromParent(); this.outline?.geometry.dispose(); this.batches.forEach(m => m.dispose()); this.geometries.forEach(g => g.dispose()); this.materials.forEach(material => { for (const m of Array.isArray(material) ? material : [material]) { m.map?.dispose(); m.normalMap?.dispose(); m.roughnessMap?.dispose(); m.dispose(); } }); this.ghostMaterial.dispose(); this.outlineMaterial.dispose(); }
+  dispose() { this.telescopic.dispose();this.faceMarker.geometry.dispose();(this.faceMarker.material as THREE.Material).dispose();this.edges.forEach(g=>g.dispose());this.pulses.forEach(p=>(p.line.material as THREE.Material).dispose());this.removalMaterial.dispose(); this.groupGhost?.dispose(); this.groupGhostMaterial.dispose(); this.clearDetails(); this.group.removeFromParent(); this.outline?.geometry.dispose(); this.batches.forEach(m => m.dispose()); this.geometries.forEach(g => g.dispose()); this.materials.forEach(material => { for (const m of Array.isArray(material) ? material : [material]) { m.map?.dispose(); m.normalMap?.dispose(); m.roughnessMap?.dispose(); m.dispose(); } }); this.ghostMaterial.dispose(); this.outlineMaterial.dispose(); }
 }

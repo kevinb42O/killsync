@@ -38,7 +38,9 @@ export function scenicControlNearby(player:ScenicActor,vehicles:readonly Friends
   const p=vehicleLocalPoint(car,player);return Math.abs(p.z)<22&&Math.hypot(p.x-SCENIC_CONTROL.x,p.y-SCENIC_CONTROL.y)<48;
 }
 export class FriendsScenicService {
-  distance:number;speed=0;nextStop=1;dwell=45000;held=false;blocked=false;
+  distance:number;speed=0;nextStop=1;dwell=45000;held=true;blocked=false;
+  private awaitingDriver=true;
+  get waitingForDriver(){return this.awaitingDriver;}
   targetSpeed=132;autoStops=true;
   private acceleration=0;private brakeScale=1;
   brakingDistance(){const scale=Math.max(1,this.targetSpeed/132,this.brakeScale);return this.speed*this.speed/(2*10.8*scale)+this.speed*1.8+128;}
@@ -47,8 +49,9 @@ export class FriendsScenicService {
     this.brakeScale=Math.max(this.brakeScale,this.targetSpeed/132,this.speed/132);this.targetSpeed=speedKmh/3.6*12;
     // Re-enable stops at the next station ahead, including after continuous running.
     if(autoStops&&!this.autoStops){const r=scenicRailway();this.nextStop=scenicStationPoses().map((s,i)=>({i,gap:railWrap(s.distance+SCENIC_STOP_OFFSET-this.distance,r.length)})).sort((a,b)=>a.gap-b.gap)[0].i;}
-    this.autoStops=autoStops;return true;
+    this.autoStops=autoStops;if(this.awaitingDriver)this.depart();return true;
   }
+  depart(){this.awaitingDriver=false;this.held=false;this.dwell=0;}
   constructor(_legacyJourney?:ScenicServiceSave){
     const home=scenicStationPoses()[0];this.distance=home.distance+SCENIC_STOP_OFFSET;
   }
@@ -74,7 +77,7 @@ export class FriendsScenicService {
   update(dt:number,players:readonly ScenicActor[],jumping:ReadonlySet<string>,blocked:(distance:number)=>boolean=()=>false){
     const r=scenicRailway(),stops=scenicStationPoses();this.blocked=blocked(this.distance);
     // Small integration steps keep high-speed braking independent of host tick size.
-    for(let remaining=Math.max(0,Math.min(dt,2000));remaining>0;){
+    for(let remaining=Math.max(0,Math.min(dt,2000));remaining>0&&!(this.held&&this.speed===0);){
       const ms=Math.min(remaining,50),seconds=ms/1000;remaining-=ms;
       const stop=stops[this.nextStop],gap=railWrap(stop.distance+SCENIC_STOP_OFFSET-this.distance,r.length);
       if(this.dwell>0&&!this.held&&!this.blocked)this.dwell=Math.max(0,this.dwell-ms);

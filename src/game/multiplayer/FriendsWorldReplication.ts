@@ -1,3 +1,4 @@
+import { applyCraneMotion } from './FriendsTelescopicCrane';
 import { durableBuildPieces } from './FriendsAssemblyPose';
 import { craneTopologyError } from './FriendsCraneAssemblies';
 import { isFriendsFinish, isFriendsShape, resolveFriendsBuildPieces } from './FriendsBuilding';
@@ -114,6 +115,6 @@ export class FriendsWorldGuest {
     // The host appends the shared skiff after the scenic train. Reconstruct
     // that same order when expanding the compact train motion on guests.
     const vehicles=motion.scenicRailway?[...motion.vehicles.filter(v=>v.kind!=='rowboat'),...scenicVehicles(motion.scenicRailway.distance),...motion.vehicles.filter(v=>v.kind==='rowboat')]:motion.vehicles;
-    return {...m.snapshot,friends:{...motion,vehicles,...this.world,building:this.world.building&&{...this.world.building,pieces:resolveFriendsBuildPieces(this.world.building.pieces,vehicles||[],new Map((motion.hauling?.cranes??[]).filter((c:any)=>c.angle!==undefined).map((c:any)=>[c.pieceId,c.angle])))},frontier:{...this.world.frontier,feedback:m.feedback||{},damage:m.damage,interaction:m.interaction}}};
+    return {...m.snapshot,friends:{...motion,vehicles,...this.world,building:this.world.building&&{...this.world.building,pieces:applyCraneMotion(resolveFriendsBuildPieces(this.world.building.pieces,vehicles||[],new Map((motion.hauling?.cranes??[]).filter((c:any)=>c.angle!==undefined).map((c:any)=>[c.pieceId,c.angle]))),motion.hauling?.cranes)},frontier:{...this.world.frontier,feedback:m.feedback||{},damage:m.damage,interaction:m.interaction}}};
   }
 }

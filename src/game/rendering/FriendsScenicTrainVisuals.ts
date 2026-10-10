@@ -61,7 +61,7 @@ export function createScenicTrainVisual(closed:boolean,index:number,wagonKind:Sc
       box(3,22,2,-76,41,side*52.5,M.zinc);box(3,22,2,-70,41,side*52.5,M.zinc);
     }
     for(const side of [-32,32]){const lamp=cylinder(5,3,87,36,side,M.steel);lamp.rotation.z=Math.PI/2;const lens=cylinder(3.8,3.5,88,36,side,M.light);lens.rotation.z=Math.PI/2;}
-    const headlight=new THREE.SpotLight(0xffdfb5,80000,1800,.48,.55,2);headlight.name='scenic-headlight';headlight.position.set(92,36,0);headlight.target.position.set(900,20,0);headlight.castShadow=true;headlight.shadow.mapSize.set(512,512);headlight.shadow.camera.near=4;headlight.shadow.normalBias=.3;headlight.shadow.bias=-.0001;group.add(headlight,headlight.target);
+    const headlight=new THREE.SpotLight(0xffdfb5,80000,1800,.48,.55,2);headlight.name='scenic-headlight';headlight.visible=false;headlight.position.set(92,36,0);headlight.target.position.set(900,20,0);headlight.castShadow=true;headlight.shadow.mapSize.set(512,512);headlight.shadow.camera.near=4;headlight.shadow.normalBias=.3;headlight.shadow.bias=-.0001;group.add(headlight,headlight.target);group.userData.scenicHeadlight=headlight;
     box(52,18,66,-44,112,0,M.steel);
     for(let x=-64;x<=-24;x+=8)box(2,2,64,x,122,0,M.zinc);
     const exhaust=cylinder(5,15,8,60,0,M.steel);exhaust.name='scenic-exhaust';
@@ -133,14 +133,25 @@ export function createScenicTrainVisual(closed:boolean,index:number,wagonKind:Sc
   }
   // These local transforms are fixed; carriage and bogie groups still animate.
   group.traverse(o=>{if(o instanceof THREE.Mesh){o.updateMatrix();o.matrixAutoUpdate=false;}});
+  group.userData.scenicLampMaterial=materials[M.light];
+  (materials[M.light] as THREE.MeshBasicMaterial).color.setHex(0x514d43);
   group.userData.scenicRunningGear=gear;updateScenicRunningGear(group);return group;
 }
 
-export function updateScenicTrainVisual(group:THREE.Group,vehicle:FriendsVehicle){
+export function updateScenicTrainVisual(group:THREE.Group,vehicle:FriendsVehicle,powered=true){
+  if(group.userData.scenicPowered!==powered){
+    group.userData.scenicPowered=powered;
+    const headlight=group.userData.scenicHeadlight as THREE.SpotLight|undefined;if(headlight)headlight.visible=powered;
+    (group.userData.scenicLampMaterial as THREE.MeshBasicMaterial).color.setHex(powered?0xffd6a1:0x514d43);
+  }
   const route=scenicRailway(),distance=vehicle.routeDistance??0,previous=group.userData.scenicPreviousDistance as number|undefined;
+  group.updateWorldMatrix(true,false);
+  const lastFrame=group.userData.scenicPreviousFrame as THREE.Matrix4|undefined;
+  if(previous===distance&&lastFrame?.equals(group.matrixWorld))return;
+  if(lastFrame)lastFrame.copy(group.matrixWorld);else group.userData.scenicPreviousFrame=group.matrixWorld.clone();
   let movement=previous===undefined?0:distance-previous;if(movement>route.length/2)movement-=route.length;if(movement<-route.length/2)movement+=route.length;
   const phase=(group.userData.scenicWheelPhase||0)+(Math.abs(movement)<512?movement:0)/6;group.userData.scenicWheelPhase=phase%(Math.PI*2);group.userData.scenicPreviousDistance=distance;
-  group.updateWorldMatrix(true,false);group.userData.railwayFinishResources.frame.copy(group.matrixWorld).invert();
+  group.userData.railwayFinishResources.frame.copy(group.matrixWorld).invert();
   const inverse=group.quaternion.clone().invert();
   for(const bogie of group.userData.scenicBogies as Bogie[]){
     const p=sampleRailAlignment(route,distance+bogie.offset),local=vehicleLocalPoint(vehicle,{x:p.x,y:p.y,z:p.z+14});bogie.group.position.set(local.x,local.z,local.y);

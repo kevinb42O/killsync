@@ -1,0 +1,43 @@
+{
+  "checks": [
+    "crane builds on a high player platform through host validation",
+    "crane is searchable and selectable in the production building menu",
+    "camera drag orbits left/right and tilts up/down; capture outside, mouse release, blur, reset, and toolbar controls work without moving the crane",
+    "mast and arm extend together with a connected load; releasing outside a button brakes only that axis",
+    "menu turns the prefab smoothly and the actual connected load swings on its cable",
+    "anti-sway switches through the actual menu",
+    "precision speed switches through the actual menu",
+    "real host motors reach a 256m mast and 256m arm with world collision checks enabled",
+    "Escape brakes all axes on the fully extended crane",
+    "touch drag orbits and tilts the camera, and touch cancellation releases camera capture",
+    "touch holds rotate the crane; touch cancellation applies the brake"
+  ],
+  "errors": [],
+  "giant": {
+    "pieceId": 401,
+    "x": 7904,
+    "y": 8000,
+    "z": 1072,
+    "rotation": 0,
+    "length": 12,
+    "mode": "hold",
+    "blocked": false,
+    "mastExtension": 2912,
+    "boomExtension": 2888,
+    "mastMode": "hold",
+    "boomMode": "hold",
+    "angle": 0.13680432200427434,
+    "armMode": "hold",
+    "winchId": 401,
+    "hasWinch": true,
+    "memberCount": 0,
+    "operatorId": "friend-9b37861e026a28cf936d7095bfc1bffc",
+    "leaseUntilMs": 43500.00000000009,
+    "swayAngle": 0,
+    "angularSpeed": 0,
+    "mastSpeed": 0,
+    "boomSpeed": 0,
+    "antiSway": true,
+    "precision": false
+  }
+}

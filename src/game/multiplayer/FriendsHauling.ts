@@ -1,7 +1,11 @@
+import { AIRCRAFT_WINCH_MIN_LENGTH, AIRCRAFT_WINCH_MAX_LENGTH, AIRCRAFT_WINCH_SPEED, AIRCRAFT_WINCH_RELEASE_MS, aircraftWinchPose, createAircraftWinch, aircraftWinchDirection, type AircraftWinchState, type AircraftHookAction } from './FriendsAircraftWinch';
+import { craneCableDrop, stepCraneSway, type CraneSway } from './FriendsCraneSway';
+import { CRANE_MAX_MAST_EXTENSION, CRANE_MAX_BOOM_EXTENSION, CRANE_EXTENSION_SPEED } from './FriendsTelescopicCrane';
+import { sweepTelescopicCrane, cargoOBB, intersectsCraneWorld } from './FriendsCraneSweep';
 import { firstPersonEyeZ } from './FirstPersonEye';
 import { sweepCrane } from './FriendsCraneSweep';
 import { FriendsPlayerCarry, rayCarryPlayer, type PlayerCarryRope } from './FriendsPlayerCarry';
-import { CRANE_MIN_LENGTH, CRANE_MAX_LENGTH, CRANE_SPEED, craneOutlet, craneHookInteraction, nearbyCrane, craneCandidate, craneCargoAnchor, type FriendsCraneState, type CraneAction } from './FriendsCrane';
+import { CRANE_MIN_LENGTH, CRANE_MAX_LENGTH, CRANE_SPEED, craneOutlet, craneHookInteraction, nearbyCrane, craneCandidate, craneCargoAnchor, craneCableDistance, type FriendsCraneState, type CraneAction } from './FriendsCrane';
 import type { FriendsBuildPiece } from './FriendsBuilding';
 import { scenicCargoWagon } from '../world/FriendsTrainLayout';
 import { vehicleLocalPoint, vehicleWorldPoint, vehicleRotation, composeRotation } from './FriendsVehiclePose';
@@ -33,13 +37,13 @@ export type PhysicalCargo = Point & {
 };
 export type CargoRope = { id: string; cargoId: string; anchorX: number; anchorY: number; anchorZ: number; length: number; tension: number; blocked: boolean; bends?:Point[] };
 export type HaulingSave = { version: 1; spawnRevision?: number; cargo: PhysicalCargo[]; delivered: boolean; completedCargoIds?: string[] };
-export type HaulingSnapshot = HaulingSave & { cranes?: FriendsCraneState[]; ropes: CargoRope[]; playerRopes?: PlayerCarryRope[]; feedback: Record<string, { message: string; until: number }> };
+export type HaulingSnapshot = HaulingSave & { aircraftWinch?: AircraftWinchState; cranes?: FriendsCraneState[]; ropes: CargoRope[]; playerRopes?: PlayerCarryRope[]; feedback: Record<string, { message: string; until: number }> };
 export type HaulingEnvironment = {
   revision: string;
   floor: (x: number, y: number, z: number, step: number) => number | undefined;
   operatorFloor?: HaulingEnvironment['floor'];
   collide: (point: { x: number; y: number }, z: number, radius: number, height: number, step: number) => boolean;
-  blocked: (from: Point, to: Point) => boolean;
+  blocked: (from: Point, to: Point, ignoreBuildId?:number) => boolean;
   eyeCeiling?: (actor: Point) => number | undefined;
   vehicles: readonly FriendsVehicle[];
   builds?: readonly FriendsBuildPiece[];
@@ -147,6 +151,13 @@ export class FriendsHauling {
   private physicsRemainder=0;
   private craneBuilds?:readonly FriendsBuildPiece[];
   private craneRevision='';
+  private sway = new Map<number,CraneSway & {tip:Point; tipVX:number; tipVY:number; tipVZ:number}>();
+  private aircraftWinch?:AircraftWinchState;
+  private aircraftHookHeld=false;
+  private aircraftHookConsumed=false;
+  private aircraftReleaseMs=0;
+  private aircraftPilotId?:string;
+  private aircraftInputArmed=false;
   private cranes = new Map<number,FriendsCraneState>();
   constructor(saved?: HaulingSave, floor?: HaulingEnvironment['floor'], resetAtStart=false) {
     const initial=FRIENDS_HAULING_JOBS.map(job=>({id:job.id,...haulingPickup(job),angle:0,vx:0,vy:0,vz:0,spin:0} satisfies PhysicalCargo));
@@ -177,7 +188,7 @@ export class FriendsHauling {
     const pieces=(env.builds??[]).filter(p=>['crane','crane_joint','crane_winch'].includes(p.shape)&&!p.attachment&&!p.assembly),byId=new Map(pieces.map(p=>[p.id,p]));
     for(const [id,state] of this.cranes) {
       const p=byId.get(id);
-      if(!p || p.x!==state.x || p.y!==state.y || p.z!==state.z || p.rotation!==state.rotation) {this.cranes.delete(id);this.restRevision='';}
+      if(!p || p.x!==state.x || p.y!==state.y || p.z!==state.z || p.rotation!==state.rotation) {this.cranes.delete(id);this.sway.delete(id);this.restRevision='';}
     }
     for(const p of pieces) {
       const winch=p.shape==='crane_joint'?env.builds?.find(q=>q.shape==='crane_winch'&&q.assembly?.rootId===p.id):p;
@@ -188,14 +199,15 @@ export class FriendsHauling {
         existing.winchId=winch?.id;existing.hasWinch=Boolean(winch);existing.outletLocal=local;existing.memberCount=env.builds?.filter(q=>q.assembly?.rootId===p.id).length??0;
         continue;
       }
-      const angle=p.shape==='crane_joint'?p.craneAngle??0:undefined,outlet=craneOutlet({...p,angle,outletLocal:local}),floor=env.floor(outlet.x,outlet.y,outlet.z-12,0);
+      const angle=['crane_joint','crane'].includes(p.shape)?p.craneAngle??0:undefined,dimensions=p.shape==='crane'?{mastExtension:p.mastExtension??0,boomExtension:p.boomExtension??0,mastMode:'hold' as const,boomMode:'hold' as const}:{},outlet=craneOutlet({...p,...dimensions,angle,outletLocal:local}),floor=env.floor(outlet.x,outlet.y,outlet.z-12,0);
       const length=clamp(outlet.z-(floor??outlet.z-240)-32,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
-      this.cranes.set(p.id,{pieceId:p.id,x:p.x,y:p.y,z:p.z,rotation:p.rotation,length,mode:'hold',blocked:false,angle,armMode:p.shape==='crane_joint'?'hold':undefined,outletLocal:local,winchId:winch?.id,hasWinch:Boolean(winch),memberCount:env.builds?.filter(q=>q.assembly?.rootId===p.id).length??0});
+      this.cranes.set(p.id,{pieceId:p.id,x:p.x,y:p.y,z:p.z,rotation:p.rotation,length,mode:'hold',blocked:false,...dimensions,angle,armMode:angle!==undefined?'hold':undefined,outletLocal:local,winchId:winch?.id,hasWinch:Boolean(winch),memberCount:env.builds?.filter(q=>q.assembly?.rootId===p.id).length??0});
     }
   }
+  getCraneStates():readonly FriendsCraneState[]{return [...this.cranes.values()];}
   getCraneAngles(){return new Map([...this.cranes.values()].filter(c=>c.angle!==undefined).map(c=>[c.pieceId,c.angle!]));}
-  craneArmIsMoving(id:number){const c=this.cranes.get(id);return Boolean(c?.armMode&&c.armMode!=='hold');}
-  craneIsMoving(id:number){const c=this.cranes.get(id);return Boolean(c&&(c.mode!=='hold'||c.armMode&&c.armMode!=='hold'));}
+  craneArmIsMoving(id:number){const c=this.cranes.get(id);return Boolean(c&&(c.armMode&&c.armMode!=='hold'||c.mastMode&&c.mastMode!=='hold'||c.boomMode&&c.boomMode!=='hold'));}
+  craneIsMoving(id:number){const c=this.cranes.get(id);return Boolean(c&&(c.mode!=='hold'||this.craneArmIsMoving(id)));}
   hasCraneCargo() { return [...this.cranes.values()].some(c=>c.cargoId); }
   craneHasCargo(id:number) { return Boolean(this.cranes.get(id)?.cargoId); }
   controlCrane(player: HaulingActor, pieceId:number, action:CraneAction, env:HaulingEnvironment, canOperate=true,elapsed=0) {
@@ -214,39 +226,160 @@ export class FriendsHauling {
       if(state.operatorId!==player.id)return result(false,'Another crew member has the controls.');
       state.leaseUntilMs=elapsed+3000;return result(true,'');
     }
-    const stopping=['crane_stop_all','crane_stop_arm','crane_hold'].includes(action);
+    const stopping=['crane_stop_all','crane_stop_arm','crane_hold','crane_stop_mast','crane_stop_boom'].includes(action);
     if(!ground && !stopping && action!=='crane_takeover' && state.operatorId && state.operatorId!==player.id && (state.leaseUntilMs??0)>elapsed)return result(false,'A crew member is operating this crane. Use Take controls or Stop all.');
     if(!ground&&(!stopping||!state.operatorId||state.operatorId===player.id)){state.operatorId=player.id;state.leaseUntilMs=elapsed+3000;}
-    if(action==='crane_takeover'||action==='crane_stop_all'){state.mode='hold';state.armMode=state.angle!==undefined?'hold':undefined;state.angularSpeed=0;const c=this.cargo.find(c=>c.id===state.cargoId);if(c)state.length=clamp(craneOutlet(state).z-craneCargoAnchor(c,state).z,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);return result(true,action==='crane_takeover'?'You have the crane controls. Motors braked.':'Both motors braked.');}
+    if(action==='crane_takeover'||action==='crane_stop_all'){state.mode='hold';state.armMode=state.angle!==undefined?'hold':undefined;this.brakeExtensions(state);state.angularSpeed=0;const c=this.cargo.find(c=>c.id===state.cargoId);if(c)state.length=clamp(craneCableDistance(c,state),CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);return result(true,action==='crane_takeover'?'You have the crane controls. Motors braked.':'All crane motors braked.');}
+    if(action==='crane_stabilize'){state.antiSway=!state.antiSway;return result(true,state.antiSway?'Anti-sway enabled · gently settling the load.':'Natural load swing enabled.');}
+    if(action==='crane_precision'){state.precision=!state.precision;return result(true,state.precision?'Precision speed enabled.':'Standard speed enabled.');}
     if(action==='crane_left'||action==='crane_right'||action==='crane_stop_arm'){
       if(state.angle===undefined)return result(false,'This winch has no rotating pivot.');
+      if(action==='crane_left'&&state.armMode==='right'||action==='crane_right'&&state.armMode==='left')state.angularSpeed=0;
       state.armMode=action==='crane_left'?'left':action==='crane_right'?'right':'hold';state.blocked=false;state.blockedReason=undefined;
       if(state.armMode==='hold')state.angularSpeed=0;
       return result(true,state.armMode==='hold'?'Arm braked.':state.armMode==='left'?'Rotating arm left.':'Rotating arm right.');
+    }
+    if(['crane_mast_up','crane_mast_down','crane_stop_mast','crane_extend','crane_retract','crane_stop_boom'].includes(action)) {
+      if(state.mastExtension===undefined)return result(false,'This crane has no telescopic mast or boom.');
+      if(action.startsWith('crane_mast')||action==='crane_stop_mast'){const mode=action==='crane_mast_up'?'up':action==='crane_mast_down'?'down':'hold';if(mode!==state.mastMode||mode==='hold')state.mastSpeed=0;state.mastMode=mode;}
+      else {const mode=action==='crane_extend'?'extend':action==='crane_retract'?'retract':'hold';if(mode!==state.boomMode||mode==='hold')state.boomSpeed=0;state.boomMode=mode;}
+      state.blocked=false;state.blockedReason=undefined;
+      return result(true,action==='crane_stop_mast'?'Mast braked.':action==='crane_stop_boom'?'Boom braked.':'Telescopic motor running.');
     }
     if(state.hasWinch===false)return result(false,'Snap a freight winch to the free end of the arm first.');
     const outlet=craneOutlet(state),cargo=this.cargo.find(c=>c.id===state.cargoId);
     if(action==='crane_connect') {
       if(cargo)return result(false,'This crane already has a load.');
-      const occupied=new Set([...this.cranes.values()].flatMap(c=>c.cargoId?[c.cargoId]:[]));
+      const occupied=new Set([...this.cranes.values()].flatMap(c=>c.cargoId?[c.cargoId]:[]));if(this.aircraftWinch?.cargoId)occupied.add(this.aircraftWinch.cargoId);
       const candidate=craneCandidate(state,this.cargo,env,occupied);
       if(!candidate)return result(false,'Lower the hook beside a settled, unstrapped core directly beneath the boom.');
       Object.assign(state,{cargoId:candidate.cargo.id,anchorX:candidate.anchor.x,anchorY:candidate.anchor.y,anchorZ:candidate.anchor.z,length:candidate.distance,mode:'hold',blocked:false});
-      if(!ground)state.operatorId=player.id;else{state.armMode=state.angle!==undefined?'hold':undefined;state.angularSpeed=0;}
+      if(!ground)state.operatorId=player.id;else{state.armMode=state.angle!==undefined?'hold':undefined;state.angularSpeed=0;this.brakeExtensions(state);}
+      this.sway.set(state.pieceId,{x:0,y:0,vx:0,vy:0,tip:outlet,tipVX:0,tipVY:0,tipVZ:0});state.swayAngle=0;
       return result(true,'Load connected. Raise or lower it; the brake holds it when stopped.');
     }
     if(action==='crane_release') {
       if(!cargo)return result(false,'The hook is already free.');
-      state.length=clamp(outlet.z-craneCargoAnchor(cargo,state).z,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
-      this.restRevision='';this.physics.get(cargo.id)?.setCraneGuide(false);
+      state.length=clamp(craneCableDistance(cargo,state),CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
+      const swing=this.sway.get(state.pieceId);
+      if(swing){cargo.vx=swing.vx+swing.tipVX;cargo.vy=swing.vy+swing.tipVY;cargo.vz=clamp(cargo.vz+swing.tipVZ+(swing.x*swing.vx+swing.y*swing.vy)/craneCableDrop(state.length,swing.x,swing.y),-280,280);}
+      this.restRevision='';const physics=this.physics.get(cargo.id);physics?.setCraneGuide(false);physics?.sync(cargo);
+      this.sway.delete(state.pieceId);state.swayAngle=0;
       delete state.cargoId;delete state.anchorX;delete state.anchorY;delete state.anchorZ;
-      state.mode='hold';state.blocked=false;if(!ground)state.operatorId=player.id;else{state.armMode=state.angle!==undefined?'hold':undefined;state.angularSpeed=0;}
+      state.mode='hold';state.blocked=false;if(!ground)state.operatorId=player.id;else{state.armMode=state.angle!==undefined?'hold':undefined;state.angularSpeed=0;this.brakeExtensions(state);}
       return result(true,'Load released. Unsupported cargo falls under gravity.');
     }
-    if(action==='crane_hold' && cargo)state.length=clamp(outlet.z-craneCargoAnchor(cargo,state).z,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
+    if(action==='crane_hold' && cargo)state.length=clamp(craneCableDistance(cargo,state),CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
     state.mode=action==='crane_raise'?'raise':action==='crane_lower'?'lower':'hold';
     state.blocked=false;state.blockedReason=undefined;
     return result(true,state.mode==='raise'?'Winch raising.':state.mode==='lower'?'Winch lowering.':'Brake engaged.');
+  }
+  private brakeExtensions(c:FriendsCraneState){if(c.mastMode)c.mastMode='hold';if(c.boomMode)c.boomMode='hold';c.mastSpeed=c.boomSpeed=0;}
+  /** Keep the existing vertical/contact solver; sweep the horizontal pendulum
+   * separately so a swinging load cannot tunnel through terrain or a teammate. */
+  private updateCraneSway(crane:FriendsCraneState,cargo:PhysicalCargo,dt:number,env:HaulingEnvironment,players:readonly HaulingActor[]) {
+    if(crane.mastExtension===undefined&&!crane.vehicleId)return;
+    const out=craneOutlet(crane),anchor=craneCargoAnchor(cargo,crane),seconds=Math.min(.1,Math.max(0,dt/1000));
+    if(!seconds)return;
+    let previous=this.sway.get(crane.pieceId);
+    if(!previous){previous={x:anchor.x-out.x,y:anchor.y-out.y,vx:0,vy:0,tip:out,tipVX:0,tipVY:0,tipVZ:0};this.sway.set(crane.pieceId,previous);}
+    const tipVX=(out.x-previous.tip.x)/seconds,tipVY=(out.y-previous.tip.y)/seconds,tipVZ=(out.z-previous.tip.z)/seconds;
+    const old={x:anchor.x-out.x,y:anchor.y-out.y,vx:previous.vx,vy:previous.vy};
+    if(old.x===0&&old.y===0&&old.vx===0&&old.vy===0&&tipVX===0&&tipVY===0&&previous.tipVX===0&&previous.tipVY===0){
+      Object.assign(previous,{tip:out,tipVX,tipVY,tipVZ});crane.swayAngle=0;return;
+    }
+    const floor=env.floor(cargo.x,cargo.y,cargo.z+1,0),grounded=floor!==undefined&&cargo.z<=floor+.5;
+    const next=grounded?{...old,vx:0,vy:0}:stepCraneSway(old,crane.length,seconds,Boolean(crane.antiSway),tipVX-previous.tipVX,tipVY-previous.tipVY);
+    const shift={x:next.x-old.x,y:next.y-old.y,z:craneCableDrop(crane.length,old.x,old.y)-craneCableDrop(crane.length,next.x,next.y)};
+    const moving=Math.hypot(shift.x,shift.y,shift.z)>.0001;
+    let blocked:string|undefined;
+    if(moving){
+      const count=Math.max(1,Math.ceil(Math.hypot(shift.x,shift.y,shift.z)/3)),ignore=new Set<number>();
+      for(let i=1;i<=count;i++){
+        const offset={x:shift.x*i/count,y:shift.y*i/count,z:shift.z*i/count};
+        blocked=intersectsCraneWorld(cargoOBB(cargo,offset),env,ignore,players,this.cargo,cargo.id);
+        if(!blocked&&env.blocked(out,{x:anchor.x+offset.x,y:anchor.y+offset.y,z:anchor.z+offset.z},crane.pieceId))blocked='Cable obstruction';
+        if(blocked)break;
+      }
+      if(!blocked){const physics=this.physics.get(cargo.id);if(physics)physics.translateCrane(cargo,shift.x,shift.y,shift.z);else{cargo.x+=shift.x;cargo.y+=shift.y;cargo.z+=shift.z;}this.restRevision='';}
+    }
+    if(blocked){next.x=old.x;next.y=old.y;next.vx=next.vy=0;crane.blocked=true;crane.blockedReason=blocked;crane.mode='hold';if(crane.armMode)crane.armMode='hold';crane.angularSpeed=0;this.brakeExtensions(crane);}
+    Object.assign(previous,next,{tip:out,tipVX,tipVY,tipVZ});
+    crane.swayAngle=Math.asin(Math.min(1,Math.hypot(next.x,next.y)/Math.max(1,crane.length)))*180/Math.PI;
+  }
+  getAircraftWinch(){return this.aircraftWinch;}
+  private ensureAircraftWinch(env:HaulingEnvironment){
+    const v=env.vehicles.find(v=>v.kind==='aircraft');if(!v)return;
+    if(!this.aircraftWinch)this.aircraftWinch=createAircraftWinch(v);
+    return this.aircraftWinch;
+  }
+  private releaseAircraftLoad(){
+    const state=this.aircraftWinch;if(!state)return;
+    const cargo=this.cargo.find(c=>c.id===state.cargoId),swing=this.sway.get(state.pieceId);
+    if(cargo){
+      if(swing){cargo.vx=clamp(swing.vx+swing.tipVX,-650,650);cargo.vy=clamp(swing.vy+swing.tipVY,-650,650);cargo.vz=clamp(cargo.vz+swing.tipVZ+(swing.x*swing.vx+swing.y*swing.vy)/craneCableDrop(state.length,swing.x,swing.y),-280,280);}
+      const physics=this.physics.get(cargo.id);physics?.setCraneGuide(false);physics?.sync(cargo);this.restRevision='';
+    }
+    delete state.cargoId;delete state.anchorX;delete state.anchorY;delete state.anchorZ;
+    this.sway.delete(state.pieceId);state.swayAngle=0;state.releaseProgress=0;state.mode='hold';state.winchSpeed=0;
+  }
+  resetAircraftWinch(){this.releaseAircraftLoad();this.aircraftWinch=undefined;this.aircraftHookHeld=false;this.aircraftHookConsumed=false;this.aircraftReleaseMs=0;this.aircraftPilotId=undefined;this.aircraftInputArmed=false;}
+  private connectAircraftLoad(env:HaulingEnvironment){
+    const state=this.ensureAircraftWinch(env);if(!state||state.cargoId||state.length<AIRCRAFT_WINCH_MIN_LENGTH)return false;
+    const occupied=new Set([...this.cranes.values()].flatMap(c=>c.cargoId?[c.cargoId]:[]));
+    const candidate=craneCandidate(state,this.cargo,env,occupied);if(!candidate||candidate.distance<AIRCRAFT_WINCH_MIN_LENGTH||Math.abs(candidate.distance-state.length)>24)return false;
+    Object.assign(state,{cargoId:candidate.cargo.id,anchorX:candidate.anchor.x,anchorY:candidate.anchor.y,anchorZ:candidate.anchor.z,length:candidate.distance,mode:'hold',winchSpeed:0,blocked:false,blockedReason:undefined});
+    this.sway.set(state.pieceId,{x:0,y:0,vx:0,vy:0,tip:craneOutlet(state),tipVX:0,tipVY:0,tipVZ:0});state.swayAngle=0;this.restRevision='';return true;
+  }
+  controlAircraftHook(player:HaulingActor,action:AircraftHookAction,env:HaulingEnvironment){
+    const state=this.ensureAircraftWinch(env),target=state&&craneHookInteraction([state],this.cargo,player,env.blocked);
+    if(!state||env.vehicles.some(v=>v.pilotId===player.id)||!target||target.action!==(action==='airwinch_hook_connect'?'crane_hook_connect':'crane_hook_release'))return {ok:false,message:'Stand beside the helicopter hook with a clear path to the load.'};
+    if(action==='airwinch_hook_release'){this.releaseAircraftLoad();return {ok:true,message:'Helicopter load released.'};}
+    return this.connectAircraftLoad(env)?{ok:true,message:'Helicopter load connected.'}:{ok:false,message:'Lower the hook beside a settled, unstrapped core.'};
+  }
+  /** Validate flight before moving passengers, cargo or a deployed empty cable.
+   * Stowed winches use the original aircraft update without this extra sweep. */
+  allowAircraftFlight(from:FriendsVehicle,to:FriendsVehicle,env:HaulingEnvironment,players:readonly HaulingActor[]){
+    const state=this.aircraftWinch,cargo=this.cargo.find(c=>c.id===state?.cargoId);if(!state||(!cargo&&state.length===0))return true;
+    const old=craneOutlet({...state,...aircraftWinchPose(from)}),out=craneOutlet({...state,...aircraftWinchPose(to)}),shift={x:out.x-old.x,y:out.y-old.y,z:out.z-old.z};
+    const travel=Math.hypot(shift.x,shift.y,shift.z);if(travel<.0001)return true;
+    const count=Math.ceil(travel/3);if(count>40){state.blocked=true;state.blockedReason='Load travel limit';state.mode='hold';state.winchSpeed=0;return false;}
+    const anchor=cargo?craneCargoAnchor(cargo,state):{...old,z:old.z-state.length},ignore=new Set<number>(),world={...env,vehicles:env.vehicles.filter(v=>v.id!==state.vehicleId)};
+    for(let i=1;i<=count;i++){
+      const t=i/count,offset={x:shift.x*t,y:shift.y*t,z:shift.z*t},tip={x:old.x+offset.x,y:old.y+offset.y,z:old.z+offset.z};
+      const reason=(cargo&&intersectsCraneWorld(cargoOBB(cargo,offset),world,ignore,players,this.cargo,cargo.id))|| (env.blocked(tip,{x:anchor.x+offset.x,y:anchor.y+offset.y,z:anchor.z+offset.z})?'Cable obstruction':undefined);
+      if(reason){state.blocked=true;state.blockedReason=reason;state.mode='hold';state.winchSpeed=0;return false;}
+    }
+    state.blocked=false;state.blockedReason=undefined;return true;
+  }
+  private updateAircraftWinch(dt:number,players:readonly HaulingActor[],inputs:ReadonlyMap<string,MultiplayerInputFrame>,env:HaulingEnvironment,elapsed:number){
+    const vehicle=env.vehicles.find(v=>v.kind==='aircraft'),state=this.ensureAircraftWinch(env);if(!vehicle||!state){this.resetAircraftWinch();return;}
+    const before=craneOutlet(state);Object.assign(state,aircraftWinchPose(vehicle));const out=craneOutlet(state),load=this.cargo.find(c=>c.id===state.cargoId);
+    if(load){const shift={x:out.x-before.x,y:out.y-before.y,z:out.z-before.z},physics=this.physics.get(load.id);if(physics)physics.translateCrane(load,shift.x,shift.y,shift.z);else{load.x+=shift.x;load.y+=shift.y;load.z+=shift.z;}if(shift.x||shift.y||shift.z)this.restRevision='';}
+    const pilot=players.find(p=>p.id===vehicle.pilotId&&p.lifeState==='alive'&&!p.friendsDevFlight),input=pilot&&inputs.get(pilot.id),seconds=Math.max(0,Math.min(100,dt))/1000;
+    const pilotChanged=this.aircraftPilotId!==pilot?.id;if(pilotChanged){this.aircraftInputArmed=false;this.aircraftPilotId=pilot?.id;this.aircraftHookHeld=Boolean(input?.friendsAircraftHookHeld);this.aircraftHookConsumed=this.aircraftHookHeld;this.aircraftReleaseMs=0;}
+    state.operatorId=pilot?.id;
+    const requestedDirection=input?aircraftWinchDirection(input.friendsAircraftWinch):0;
+    if(!requestedDirection&&!input?.friendsAircraftHookHeld)this.aircraftInputArmed=Boolean(input);
+    const direction=this.aircraftInputArmed?requestedDirection:0,nextMode=direction===-1?'raise':direction===1?'lower':'hold';
+    if(nextMode!==state.mode)state.winchSpeed=0;
+    state.mode=nextMode;state.winchSpeed=direction?Math.min(AIRCRAFT_WINCH_SPEED,(state.winchSpeed??0)+180*seconds):0;
+    if(direction){state.blocked=false;state.blockedReason=undefined;}
+    const held=Boolean(input?.friendsAircraftHookHeld);
+    if(!held){this.aircraftHookConsumed=false;this.aircraftReleaseMs=0;}
+    else if(!this.aircraftHookConsumed){
+      if(!state.cargoId){this.aircraftHookConsumed=true;const connected=this.connectAircraftLoad(env);if(pilot)this.tell(pilot.id,connected?'Helicopter load connected.':'Hover with the hook beside a settled core, then press V.',elapsed);}
+      else {this.aircraftReleaseMs+=seconds*1000;if(this.aircraftReleaseMs>=AIRCRAFT_WINCH_RELEASE_MS){this.releaseAircraftLoad();this.aircraftHookConsumed=true;if(pilot)this.tell(pilot.id,'Load released with its current momentum.',elapsed);}}
+    }
+    this.aircraftHookHeld=held;state.releaseProgress=state.cargoId?Math.min(1,this.aircraftReleaseMs/AIRCRAFT_WINCH_RELEASE_MS):0;
+    if(!state.cargoId){
+      if(state.length===0&&!direction)return; // Stowed winches need no terrain or cable queries.
+      const floor=env.floor(out.x,out.y,out.z,0),maximum=Math.max(0,Math.min(AIRCRAFT_WINCH_MAX_LENGTH,out.z-(floor??-512)-8));
+      const length=clamp(state.length+direction*(state.winchSpeed??0)*seconds,0,maximum);
+      if(length>0&&env.blocked(out,{...out,z:out.z-length})){state.blocked=true;state.blockedReason='Cable obstruction';state.mode='hold';state.winchSpeed=0;}
+      else state.length=length;
+      if(length===0||length===maximum){state.mode='hold';state.winchSpeed=0;}
+    }
   }
   getCargo() { return this.cargo; }
   hasSecuredTrainCargo() { return this.cargo.some(c => c.secured?.vehicleId.startsWith('sunline')); }
@@ -255,7 +388,7 @@ export class FriendsHauling {
   private recoverCargo(cargo:PhysicalCargo,physics?:FriendsCargoPhysics){
     // Release first: recovery must never drag an attached player to a pickup.
     for(const [id,rope]of this.ropes)if(rope.cargoId===cargo.id)this.detach(id);
-    for(const crane of this.cranes.values())if(crane.cargoId===cargo.id){delete crane.cargoId;crane.mode='hold';}
+    for(const crane of [...this.cranes.values(),...(this.aircraftWinch?[this.aircraftWinch]:[])])if(crane.cargoId===cargo.id){delete crane.cargoId;crane.mode='hold';this.sway.delete(crane.pieceId);crane.swayAngle=0;}
     Object.assign(cargo,haulingPickup(cargo),{angle:0,orientation:undefined,secured:undefined,vx:0,vy:0,vz:0,spin:0,angularVelocityX:0,angularVelocityY:0});
     physics?.sync(cargo);
   }
@@ -292,7 +425,7 @@ export class FriendsHauling {
     const target = haulingInteraction(this.cargo, player, env.vehicles, this.delivered, [...this.completedCargoIds]);
     if (!target || env.blocked({ x: player.x, y: player.y, z: player.z + 26 }, cargoWorldPoint(target.cargo,{x:0,y:0,z:24}))) return false;
     const c = target.cargo;
-    if([...this.cranes.values()].some(crane=>crane.cargoId===c.id)){this.tell(player.id,'Release the crane hook before securing or delivering the load.',elapsed);return true;}
+    if(this.aircraftWinch?.cargoId===c.id||[...this.cranes.values()].some(crane=>crane.cargoId===c.id)){this.tell(player.id,'Release the crane hook before securing or delivering the load.',elapsed);return true;}
     if (c.secured) { c.secured = undefined; this.tell(player.id, 'Straps released. The core can be hauled off the deck.', elapsed); }
     else if (Math.hypot(c.vx, c.vy, c.vz) > 20 || Math.hypot(c.spin,c.angularVelocityX??0,c.angularVelocityY??0)>.35) this.tell(player.id, 'Let the core settle before securing or delivering it.', elapsed);
     else if (!this.completedCargoIds.has(c.id) && cargoInDeliveryBay(c)) {
@@ -315,6 +448,7 @@ export class FriendsHauling {
   }
   update(dt: number, elapsed: number, players: readonly HaulingActor[], inputs: ReadonlyMap<string, MultiplayerInputFrame>, env: HaulingEnvironment) {
     this.syncCranes(env);
+    this.updateAircraftWinch(dt,players,inputs,env,elapsed);
     for (const id of Object.keys(this.feedback)) if (this.feedback[id].until <= elapsed || !players.some(p => p.id === id)) delete this.feedback[id];
     const actorById = new Map(players.map(p => [p.id, p]));
     for (const [id, rope] of this.ropes) {
@@ -327,18 +461,35 @@ export class FriendsHauling {
     const cranePieces=new Map((env.builds??[]).filter(p=>['crane','crane_joint','crane_winch'].includes(p.shape)&&!p.assembly).map(p=>[p.id,p]));
     for(const crane of this.cranes.values()) {
       const piece=cranePieces.get(crane.pieceId),operator=actorById.get(crane.operatorId??'');
-      if((crane.mode!=='hold'||crane.armMode&&crane.armMode!=='hold') && (!piece || !operator || !nearbyCrane((env.builds??[]).filter(p=>p.id===crane.pieceId||p.craneRootId===crane.pieceId),operator)||env.craneAccess?.(operator.id)===false || crane.angle!==undefined && (crane.leaseUntilMs??0)<elapsed)) {
+      if((crane.mode!=='hold'||this.craneArmIsMoving(crane.pieceId)) && (!piece || !operator || !nearbyCrane((env.builds??[]).filter(p=>p.id===crane.pieceId||p.craneRootId===crane.pieceId),operator)||env.craneAccess?.(operator.id)===false || crane.angle!==undefined && (crane.leaseUntilMs??0)<elapsed)) {
         const load=this.cargo.find(c=>c.id===crane.cargoId);
-        if(load)crane.length=clamp(craneOutlet(crane).z-craneCargoAnchor(load,crane).z,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
-        crane.mode='hold';if(crane.armMode)crane.armMode='hold';crane.angularSpeed=0;delete crane.operatorId;crane.leaseUntilMs=0;
+        if(load)crane.length=clamp(craneCableDistance(load,crane),CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
+        crane.mode='hold';if(crane.armMode)crane.armMode='hold';crane.angularSpeed=0;this.brakeExtensions(crane);delete crane.operatorId;crane.leaseUntilMs=0;
       }
-      if(crane.mode==='hold'&&(!crane.armMode||crane.armMode==='hold')&&(crane.leaseUntilMs??Infinity)<elapsed){delete crane.operatorId;crane.leaseUntilMs=0;}
-      if(crane.angle!==undefined && crane.armMode && crane.armMode!=='hold') {
+      if(crane.mode==='hold'&&!this.craneArmIsMoving(crane.pieceId)&&(crane.leaseUntilMs??Infinity)<elapsed){delete crane.operatorId;crane.leaseUntilMs=0;}
+      if(crane.mastExtension!==undefined && this.craneArmIsMoving(crane.pieceId)) {
+        const seconds=Math.min(100,Math.max(0,dt))/1000,radius=184+(crane.boomExtension??0),scale=crane.precision?.2:1,maxAngular=Math.min(Math.PI/12,112/radius)*scale;
+        crane.angularSpeed=crane.armMode==='hold'?0:Math.min(maxAngular,(crane.angularSpeed??0)+seconds*.4);
+        crane.mastSpeed=crane.mastMode==='hold'?0:Math.min(CRANE_EXTENSION_SPEED*scale,(crane.mastSpeed??0)+seconds*360);
+        crane.boomSpeed=crane.boomMode==='hold'?0:Math.min(CRANE_EXTENSION_SPEED*scale,(crane.boomSpeed??0)+seconds*360);
+        const next={...crane,angle:(crane.angle??0)+(crane.armMode==='left'?1:crane.armMode==='right'?-1:0)*crane.angularSpeed*seconds,
+          mastExtension:clamp(crane.mastExtension+(crane.mastMode==='up'?1:crane.mastMode==='down'?-1:0)*crane.mastSpeed*seconds,0,CRANE_MAX_MAST_EXTENSION),
+          boomExtension:clamp((crane.boomExtension??0)+(crane.boomMode==='extend'?1:crane.boomMode==='retract'?-1:0)*crane.boomSpeed*seconds,0,CRANE_MAX_BOOM_EXTENSION)};
+        const load=this.cargo.find(c=>c.id===crane.cargoId),reason=sweepTelescopicCrane(crane,next,env,players,this.cargo,load);
+        if(reason){crane.blocked=true;crane.blockedReason=reason;crane.mode='hold';crane.armMode='hold';crane.angularSpeed=0;this.brakeExtensions(crane);}
+        else {
+          const before=craneOutlet(crane),after=craneOutlet(next);Object.assign(crane,{angle:Math.atan2(Math.sin(next.angle),Math.cos(next.angle)),mastExtension:next.mastExtension,boomExtension:next.boomExtension});
+          if(load){const dx=after.x-before.x,dy=after.y-before.y,dz=after.z-before.z,physics=this.physics.get(load.id);if(physics)physics.translateCrane(load,dx,dy,dz);else{load.x+=dx;load.y+=dy;load.z+=dz;}this.restRevision='';}
+          if(next.mastExtension===0||next.mastExtension===CRANE_MAX_MAST_EXTENSION){crane.mastMode='hold';crane.mastSpeed=0;}
+          if(next.boomExtension===0||next.boomExtension===CRANE_MAX_BOOM_EXTENSION){crane.boomMode='hold';crane.boomSpeed=0;}
+        }
+      }
+      if(crane.mastExtension===undefined && crane.angle!==undefined && crane.armMode && crane.armMode!=='hold') {
         const radius=Math.max(64,Math.hypot(crane.outletLocal?.x??0,crane.outletLocal?.y??0)),speed=Math.min(Math.PI/15,CRANE_SPEED/radius);
         crane.angularSpeed=Math.min(speed,(crane.angularSpeed??0)+Math.max(0,Math.min(100,dt))/1000*.35);
         const next=crane.angle+(crane.armMode==='left'?1:-1)*crane.angularSpeed*Math.min(100,Math.max(0,dt))/1000,load=this.cargo.find(c=>c.id===crane.cargoId);
         const reason=sweepCrane(env.builds??[],crane.pieceId,crane.angle,next,a=>craneOutlet(crane,a),env,players,this.cargo,load,crane.hasWinch!==false?crane.length:undefined);
-        if(reason){crane.blocked=true;crane.blockedReason=reason;crane.mode='hold';crane.armMode='hold';crane.angularSpeed=0;if(load)crane.length=clamp(craneOutlet(crane).z-craneCargoAnchor(load,crane).z,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);}
+        if(reason){crane.blocked=true;crane.blockedReason=reason;crane.mode='hold';crane.armMode='hold';crane.angularSpeed=0;this.brakeExtensions(crane);if(load)crane.length=clamp(craneCableDistance(load,crane),CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);}
         else {const old=craneOutlet(crane),outlet=craneOutlet(crane,next);crane.angle=Math.atan2(Math.sin(next),Math.cos(next));if(load){const dx=outlet.x-old.x,dy=outlet.y-old.y,physics=this.physics.get(load.id);if(physics)physics.translateCrane(load,dx,dy);else{load.x+=dx;load.y+=dy;}}}
       }
       if(!crane.cargoId && crane.hasWinch!==false) {
@@ -346,8 +497,8 @@ export class FriendsHauling {
         const proposed=clamp(crane.length+direction*CRANE_SPEED*Math.min(100,Math.max(0,dt))/1000,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
         const floor=env.floor(outlet.x,outlet.y,outlet.z-CRANE_MIN_LENGTH,0),maximum=Math.min(CRANE_MAX_LENGTH,outlet.z-(floor??-512)-32);
         const length=Math.min(proposed,Math.max(CRANE_MIN_LENGTH,maximum));
-        const pathBlocked=env.blocked(outlet,{...outlet,z:outlet.z-length});
-        if(pathBlocked){crane.blocked=true;crane.blockedReason='Cable obstruction';crane.armMode=crane.angle!==undefined?'hold':undefined;crane.angularSpeed=0;}
+        const pathBlocked=env.blocked(outlet,{...outlet,z:outlet.z-length},crane.pieceId);
+        if(pathBlocked){crane.blocked=true;crane.blockedReason='Cable obstruction';crane.armMode=crane.angle!==undefined?'hold':undefined;crane.angularSpeed=0;this.brakeExtensions(crane);}
         if(!pathBlocked)crane.length=length;
         if(crane.blocked || length===CRANE_MIN_LENGTH || length===maximum || length===CRANE_MAX_LENGTH)crane.mode='hold';
       }
@@ -371,10 +522,11 @@ export class FriendsHauling {
         Object.assign(cargo,securedCargoPose({...cargo,secured:{vehicleId:newDeck.id,x:p.x,y:p.y,z:p.z,orientation:yawCargoOrientation(cargo,-oldDeck.angle),angle}},[newDeck]),{secured:undefined,...motion});
       }
       const ropes=[...this.ropes.values()].filter(r=>r.cargoId===cargo.id);
-      const crane=[...this.cranes.values()].find(c=>c.cargoId===cargo.id);
+      const crane=[...this.cranes.values()].find(c=>c.cargoId===cargo.id)??(this.aircraftWinch?.cargoId===cargo.id?this.aircraftWinch:undefined);
+      if(crane)this.updateCraneSway(crane,cargo,dt,env,players);
       if(!crane&&!ropes.length&&!oldDeck&&this.restRevision===env.revision&&Math.hypot(cargo.vx,cargo.vy,cargo.vz,cargo.spin,cargo.angularVelocityX??0,cargo.angularVelocityY??0)===0)continue;
-      if(crane?.mode==='hold' && (!crane.armMode||crane.armMode==='hold') && !ropes.length && this.restRevision===env.revision && Math.abs(craneOutlet(crane).z-crane.length-craneCargoAnchor(cargo,crane).z)<.02 && Math.abs(cargo.vz)<.02){cargo.vx=cargo.vy=cargo.vz=cargo.spin=0;cargo.angularVelocityX=cargo.angularVelocityY=0;continue;}
-      const cranePathBlocked=Boolean(crane && env.blocked(craneOutlet(crane),craneCargoAnchor(cargo,crane)));
+      if(crane?.mode==='hold' && (crane.swayAngle??0)===0 && Math.hypot(this.sway.get(crane.pieceId)?.vx??0,this.sway.get(crane.pieceId)?.vy??0)===0 && !this.craneArmIsMoving(crane.pieceId) && !ropes.length && this.restRevision===env.revision && Math.abs(craneOutlet(crane).z-crane.length-craneCargoAnchor(cargo,crane).z)<.02 && Math.abs(cargo.vz)<.02){cargo.vx=cargo.vy=cargo.vz=cargo.spin=0;cargo.angularVelocityX=cargo.angularVelocityY=0;continue;}
+      const cranePathBlocked=Boolean(crane && env.blocked(craneOutlet(crane),craneCargoAnchor(cargo,crane),crane.pieceId));
       let physics=this.physics.get(cargo.id);if(!physics){physics=new FriendsCargoPhysics();this.physics.set(cargo.id,physics);}physics.prepare(cargo,crane?{...env,dynamicColliders:region=>[
         ...(env.dynamicColliders?.(region)??[]),
         ...players.filter(p=>p.lifeState==='alive'&&!p.friendsDevFlight&&p.x+19>=region.minX&&p.x-19<=region.maxX&&p.y+19>=region.minY&&p.y-19<=region.maxY&&p.z+50>=region.minZ&&p.z<=region.maxZ).map(p=>({x:p.x,y:p.y,z:p.z,w:38,d:38,h:50})),
@@ -394,16 +546,16 @@ export class FriendsHauling {
       }
       for(let step=0;step<steps;step++){
         if(crane) {
-          const outlet=craneOutlet(crane),anchor=craneCargoAnchor(cargo,crane),actual=outlet.z-anchor.z;
+          const outlet=craneOutlet(crane),anchor=craneCargoAnchor(cargo,crane),actual=craneCableDistance(cargo,crane);
           const pathBlocked=cranePathBlocked;
           crane.blocked=pathBlocked || crane.mode==='hold' && crane.blocked;
-          if(pathBlocked && crane.mode!=='hold'){crane.mode='hold';crane.length=clamp(actual,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);}
+          if(pathBlocked){crane.armMode=crane.angle!==undefined?'hold':undefined;crane.angularSpeed=0;this.brakeExtensions(crane);crane.mode='hold';crane.length=clamp(actual,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);}
           const direction=crane.mode==='raise'?-1:crane.mode==='lower'?1:0;
           // Limit stored error to one short motor travel. A collision stalls the
           // reel instead of accumulating energy or bypassing the cargo solver.
-          crane.length=clamp(crane.length+direction*CRANE_SPEED*seconds,Math.max(CRANE_MIN_LENGTH,actual-8),Math.min(CRANE_MAX_LENGTH,actual+8));
-          if(crane.length===CRANE_MIN_LENGTH || crane.length===CRANE_MAX_LENGTH)crane.mode='hold';
-          physics.driveCrane(outlet.z-crane.length-anchor.z,CRANE_SPEED);
+          crane.length=clamp(crane.length+direction*(crane.vehicleId?this.aircraftWinch?.winchSpeed??0:CRANE_SPEED)*seconds,Math.max(crane.vehicleId?AIRCRAFT_WINCH_MIN_LENGTH:CRANE_MIN_LENGTH,actual-8),Math.min(CRANE_MAX_LENGTH,actual+8));
+          if(crane.length===(crane.vehicleId?AIRCRAFT_WINCH_MIN_LENGTH:CRANE_MIN_LENGTH) || crane.length===CRANE_MAX_LENGTH){crane.mode='hold';if(crane.vehicleId&&this.aircraftWinch)this.aircraftWinch.winchSpeed=0;}
+          physics.driveCrane(outlet.z-craneCableDrop(crane.length,anchor.x-outlet.x,anchor.y-outlet.y)-anchor.z,CRANE_SPEED);
         }
         for(const rope of ropes){
           if(!this.ropes.has(rope.id))continue;
@@ -463,9 +615,9 @@ export class FriendsHauling {
         }
       }
       if(crane) {
-        const actual=craneOutlet(crane).z-craneCargoAnchor(cargo,crane).z;
+        const actual=craneCableDistance(cargo,crane);
         if(crane.mode!=='hold' && Math.abs(actual-crane.length)>6 && Math.abs(cargo.vz)<2) {
-          crane.blocked=true;crane.mode='hold';crane.length=clamp(actual,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
+          crane.blocked=true;crane.mode='hold';crane.armMode=crane.angle!==undefined?'hold':undefined;crane.angularSpeed=0;this.brakeExtensions(crane);crane.length=clamp(actual,CRANE_MIN_LENGTH,CRANE_MAX_LENGTH);
         }
       }
       cargo.x=clamp(cargo.x,168,47832);cargo.y=clamp(cargo.y,168,47832);
@@ -474,5 +626,5 @@ export class FriendsHauling {
     this.previousVehicles = env.vehicles.map(v => ({ ...v })); this.restRevision = env.revision;
   }
   save(): HaulingSave { return { version: 1, spawnRevision: HAULING_SPAWN_REVISION, delivered: this.delivered, completedCargoIds:[...this.completedCargoIds], cargo: this.cargo.map(c => ({ ...c, orientation:c.orientation ? [...c.orientation] as [number,number,number,number]:undefined, secured: c.secured ? { ...c.secured,orientation:c.secured.orientation?[...c.secured.orientation] as [number,number,number,number]:undefined } : undefined })) }; }
-  snapshot(): HaulingSnapshot { return { ...this.save(), playerRopes: this.playerCarry.snapshot(), cranes:[...this.cranes.values()].map(c=>({...c})), ropes: [...this.ropes.values()].map(r => ({ ...r,bends:r.bends?.map(p=>({...p})) })), feedback: Object.fromEntries(Object.entries(this.feedback).map(([id, f]) => [id, { ...f }])) }; }
+  snapshot(): HaulingSnapshot { return { ...this.save(), playerRopes: this.playerCarry.snapshot(), aircraftWinch:this.aircraftWinch&&{...this.aircraftWinch},cranes:[...this.cranes.values()].map(c=>({...c})), ropes: [...this.ropes.values()].map(r => ({ ...r,bends:r.bends?.map(p=>({...p})) })), feedback: Object.fromEntries(Object.entries(this.feedback).map(([id, f]) => [id, { ...f }])) }; }
 }

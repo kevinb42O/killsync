@@ -1,3 +1,4 @@
+import { applyCraneMotion } from './FriendsTelescopicCrane';
 import { resolveFriendsBuildPieces, friendsBuildFloor, type FriendsBuildPiece } from './FriendsBuilding';
 import { scenicVehicles, SCENIC_SEATS } from './FriendsScenicService';
 import { scenicRailway } from '../world/FriendsScenicRailway';
@@ -233,7 +234,8 @@ function interpolateFriends(previous: FriendsSnapshot | undefined, current: Frie
   });
   const hauling = current.hauling && previous.hauling ? { ...current.hauling,
     cargo: interpolateEntities(previous.hauling.cargo, current.hauling.cargo, alpha, (old,next) => next.secured ? securedCargoPose(next,vehicles) : old.secured ? next : ({ ...next, x:lerp(old.x,next.x,alpha), y:lerp(old.y,next.y,alpha), z:lerp(old.z,next.z,alpha), angle:lerpAngle(old.angle,next.angle,alpha), orientation:interpolateCargoRotation(old,next,alpha) })),
-    cranes: current.hauling.cranes?.map(next=>{const old=previous.hauling?.cranes?.find(c=>c.pieceId===next.pieceId);return old && old.cargoId===next.cargoId ? {...next,length:lerp(old.length,next.length,alpha),angle:old.angle!==undefined&&next.angle!==undefined?lerpAngle(old.angle,next.angle,alpha):next.angle} : next;}),
+    aircraftWinch:(()=>{const next=current.hauling?.aircraftWinch,old=previous.hauling?.aircraftWinch;if(!next||!old||next.cargoId!==old.cargoId)return next;return {...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha),angle:lerpAngle(old.angle??0,next.angle??0,alpha),length:lerp(old.length,next.length,alpha),swayAngle:lerp(old.swayAngle??0,next.swayAngle??0,alpha),releaseProgress:lerp(old.releaseProgress??0,next.releaseProgress??0,alpha)};})(),
+    cranes: current.hauling.cranes?.map(next=>{const old=previous.hauling?.cranes?.find(c=>c.pieceId===next.pieceId);return old && old.cargoId===next.cargoId ? {...next,swayAngle:lerp(old.swayAngle??0,next.swayAngle??0,alpha),length:lerp(old.length,next.length,alpha),mastExtension:next.mastExtension===undefined?undefined:lerp(old.mastExtension??0,next.mastExtension,alpha),boomExtension:next.boomExtension===undefined?undefined:lerp(old.boomExtension??0,next.boomExtension,alpha),angle:old.angle!==undefined&&next.angle!==undefined?lerpAngle(old.angle,next.angle,alpha):next.angle} : next;}),
     ropes: interpolateEntities(previous.hauling.ropes, current.hauling.ropes, alpha, (old,next) => ({...next, tension:lerp(old.tension,next.tension,alpha), length:lerp(old.length,next.length,alpha)})),
   } : current.hauling;
   const fishing=current.fishing&&previous.fishing?{...current.fishing,
@@ -242,7 +244,7 @@ function interpolateFriends(previous: FriendsSnapshot | undefined, current: Frie
   }:current.fishing;
   const stones=current.stones&&previous.stones?{...current.stones,stones:interpolateEntities(previous.stones.stones,current.stones.stones,alpha,(old,next)=>old.skips===next.skips?{...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha)}:next)}:current.stones;
   const birds=current.birds&&previous.birds?{...current.birds,birds:interpolateEntities(previous.birds.birds,current.birds.birds,alpha,(old,next)=>old.phase===next.phase?{...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha),angle:lerpAngle(old.angle,next.angle,alpha)}:next)}:current.birds;
-  return { ...current, vehicles, hauling, fishing, stones, birds, building:current.building&&{...current.building,pieces:resolveFriendsBuildPieces(current.building.pieces,vehicles,new Map((hauling?.cranes??[]).filter(c=>c.angle!==undefined).map(c=>[c.pieceId,c.angle!])))} };
+  return { ...current, vehicles, hauling, fishing, stones, birds, building:current.building&&{...current.building,pieces:applyCraneMotion(resolveFriendsBuildPieces(current.building.pieces,vehicles,new Map((hauling?.cranes??[]).filter(c=>c.angle!==undefined).map(c=>[c.pieceId,c.angle!]))),hauling?.cranes)} };
 }
 function passengerAnchor(vehicles: FriendsVehicle[], player: CoopPlayerSnapshot,pieces:readonly FriendsBuildPiece[]=[]) {
   if (player.friendsDevFlight) return undefined;
