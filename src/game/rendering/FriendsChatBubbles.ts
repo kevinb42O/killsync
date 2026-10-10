@@ -106,18 +106,18 @@ export class FriendsChatBubbles {
     this.bubbles.set(message.playerId, { sprite, texture, width: width + 8, height: height + 12, startedAt: now, duration: friendsChatDuration(message.text) });
   }
 
-  update(camera: THREE.PerspectiveCamera, viewportHeight: number, rigs: ReadonlyMap<string, PlayerVisualRig>, players: readonly { id: string }[], now = performance.now()) {
+  update(camera: THREE.PerspectiveCamera, viewportHeight: number, rigs: ReadonlyMap<string, PlayerVisualRig>, players: readonly { id: string }[], now = performance.now(), residents?: ReadonlyMap<string, PlayerVisualRig>) {
     if (!this.bubbles.size) return;
     for (const [id, bubble] of this.bubbles) {
       const age = now - bubble.startedAt;
       if (age >= bubble.duration) { this.remove(id); continue; }
       // A chat event can arrive before the next roster snapshot for a new join.
-      if (!players.some(player => player.id === id)) {
+      if (!residents?.has(id) && !players.some(player => player.id === id)) {
         bubble.sprite.visible = false;
         if (age > 1_500) this.remove(id);
         continue;
       }
-      const rig = rigs.get(id);
+      const rig = rigs.get(id) ?? residents?.get(id);
       bubble.sprite.visible = false;
       // The local first-person speaker remains visible to everyone else.
       if (!rig || !rig.root.visible || viewportHeight <= 0) continue;

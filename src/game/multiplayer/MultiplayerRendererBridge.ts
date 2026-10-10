@@ -65,6 +65,7 @@ import { FriendsRemoteToolVisuals } from '../rendering/FriendsRemoteToolVisuals'
 import { FriendsChatBubbles } from '../rendering/FriendsChatBubbles';
 import type { CoopChatMessage } from './CoopChat';
 import { createFriendsCharacterRig, disposeFriendsCharacterRig, placeFriendsCharacter, updateFriendsCharacter, friendsCharacterHandPoint } from '../rendering/FriendsCharacterVisuals';
+import { FriendsInhabitants } from '../rendering/FriendsInhabitants';
 import { FriendsMarshmallowVisuals } from '../rendering/FriendsMarshmallowVisuals';
 import { MARSHMALLOW_TOOL } from './FriendsCampfireSimulation';
 import { isCampfireSeat } from './FriendsCampfireSeats';
@@ -152,6 +153,7 @@ export class MultiplayerRendererBridge {
   private readonly confettiVisuals?:FriendsConfettiVisuals;
   private readonly fishingVisuals?:FriendsFishingVisuals;
   private readonly marshmallows?:FriendsMarshmallowVisuals;
+  private readonly inhabitants?: FriendsInhabitants;
   private readonly friendsSpawnVisuals?: FriendsSpawnVisuals;
   private readonly friendsWorldArrival?: FriendsWorldArrival;
   private footstepTravel = 0;
@@ -285,6 +287,7 @@ export class MultiplayerRendererBridge {
       cameraKey: this.renderer.camKeyLight,
       rim: this.renderer.scene.getObjectByName('world-counter-rim') as THREE.DirectionalLight,
     });
+    if(worldId==='friends_frontier')this.inhabitants=new FriendsInhabitants(this.renderer.scene,message=>this.showChatMessage(message));
     if(worldId==='friends_frontier')this.scenicRailVisuals=new FriendsScenicRailwayVisuals(this.renderer.scene);
     if(worldId==='friends_frontier')this.gestureViewmodels=new FriendsGestureViewmodels(this.renderer.viewmodelScene);
     if(worldId==='friends_frontier'){this.birdVisuals=new FriendsBirdVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.stoneVisuals=new FriendsStoneVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.confettiVisuals=new FriendsConfettiVisuals(this.renderer.scene);this.fishingVisuals=new FriendsFishingVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.marshmallows=new FriendsMarshmallowVisuals(this.renderer.scene,this.renderer.viewmodelScene);this.switchReach=new FriendsSwitchReach(this.renderer.scene);}
@@ -1198,6 +1201,7 @@ export class MultiplayerRendererBridge {
     }
     if(this.switchReach?.update(deltaMs,this.renderer.camera,localPlayerId,snapshot.players,!useThirdPerson)){friendsAudio.play('flashlight',.1,1000);}
     if(this.switchReach?.forPlayer(localPlayerId)){this.gestureViewmodels!.root.visible=false;this.frontierVisuals?.hideHeldTool();if(this.localFirearmInstance)this.localFirearmInstance.group.visible=false;this.renderer.fpsWeaponGroup.visible=false;}
+    if(this.frontierVisuals)this.inhabitants?.update(this.visualElapsedMs,deltaMs,snapshot.players,local,this.renderer.camera,this.frontierVisuals.terrain,snapshot.friends?.building?.pieces,snapshot.friends?.frontier);
     this.marshmallows?.update(snapshot.players,snapshot.friends?.campfire,localPlayerId,this.renderer.camera,this.visualElapsedMs/1000,deltaMs,!useThirdPerson,(id,out)=>{const rig=this.remotePlayers.get(id);if(!rig||!friendsCharacterHandPoint(rig,out))return false;rig.root.localToWorld(out);return true;},this.friendsTool===MARSHMALLOW_TOOL&&this.friendsToolFiring&&!this.interactionBlocked&&!isSpectating&&!useThirdPerson&&local.lifeState==='alive'&&!local.motion?.swimming);
     if(snapshot.friends?.campfire?.equipped?.includes(localPlayerId)){this.frontierVisuals?.hideHeldTool();if(this.localFirearmInstance)this.localFirearmInstance.group.visible=false;this.renderer.fpsWeaponGroup.visible=false;if(this.gestureViewmodels)this.gestureViewmodels.root.visible=false;}
     this.birdVisuals?.update(snapshot.friends?.birds,snapshot.players,localPlayerId,this.friendsTool,this.renderer.camera,snapshot.elapsedMs,!useThirdPerson,this.interactionBlocked||creativeBuilding||isSpectating,(id,out)=>{const rig=this.remotePlayers.get(id);if(!rig||!friendsCharacterHandPoint(rig,out))return false;rig.root.localToWorld(out);return true;},point=>this.renderer.projectViewmodelPointToWorld(point));
@@ -1268,7 +1272,7 @@ export class MultiplayerRendererBridge {
       }
       this.friendsHaulingVisuals.update(snapshot, localPlayerId, this.friendsTool, snapshot.elapsedMs,
         point => this.renderer.projectViewmodelPointToWorld(point), !useThirdPerson);
-      this.chatBubbles?.update(this.renderer.camera, this.renderer.renderer.domElement.clientHeight, this.remotePlayers, snapshot.players);
+      this.chatBubbles?.update(this.renderer.camera, this.renderer.renderer.domElement.clientHeight, this.remotePlayers, snapshot.players,performance.now(),this.inhabitants?.speechRigs);
     });
   }
 
@@ -1295,6 +1299,7 @@ export class MultiplayerRendererBridge {
     this.friendsBuildVisuals.dispose();
     this.interactionVisuals.dispose();this.remoteTools.dispose();this.remoteFlashlights.dispose();
     this.birdVisuals?.dispose();this.stoneVisuals?.dispose();this.confettiVisuals?.dispose();this.fishingVisuals?.dispose();this.marshmallows?.dispose();this.gestureViewmodels?.dispose();this.switchReach?.dispose();
+    this.inhabitants?.dispose();
     this.frontierVisuals?.dispose();
     this.sharedFlashlights?.dispose();
     this.friendsSpawnVisuals?.dispose();

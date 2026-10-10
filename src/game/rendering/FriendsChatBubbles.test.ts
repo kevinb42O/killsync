@@ -89,4 +89,15 @@ describe('Friends overhead chat', () => {
     bubbles.update(camera, 900, rigs, [], 2000);
     expect(scene.children).toHaveLength(0);
   });
+  it('renders a resident bubble using its own rig without adding a fake player to the roster',()=>{
+    const scene=new THREE.Scene(),bubbles=new FriendsChatBubbles(scene);
+    const root=new THREE.Group(),nameplate=new THREE.Sprite();root.add(nameplate);root.position.z=-250;
+    const residents=new Map([['ambient-npc-0',{root,nameplate} as CoopOperatorRig]]);
+    const camera=new THREE.PerspectiveCamera(70,1,1,2000);camera.updateMatrixWorld(true);
+    bubbles.show({...message('npc'),playerId:'ambient-npc-0'},0);
+    bubbles.update(camera,900,new Map(),[],2000,residents);
+    expect(scene.children).toHaveLength(1);expect(scene.children[0].visible).toBe(true);
+    residents.clear();bubbles.update(camera,900,new Map(),[],2100,residents);
+    expect(scene.children).toHaveLength(0);bubbles.dispose();
+  });
 });

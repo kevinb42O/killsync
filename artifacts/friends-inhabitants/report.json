@@ -1,0 +1,31 @@
+{
+  "errors": [],
+  "on": {
+    "calls": 508,
+    "triangles": 394953
+  },
+  "off": {
+    "calls": 501,
+    "triangles": 394679
+  },
+  "extraDraws": 7,
+  "thinkingTickMs": 0.14150000000062088,
+  "travelled": [
+    2501.313037835928,
+    3462.6859375092904,
+    2420.6337498961343,
+    3176.415967991009
+  ],
+  "closest": 48.17947001354068,
+  "campfireFrames": 1039,
+  "maxSeated": 2,
+  "stableGeometry": true,
+  "seated": 2,
+  "glError": 0,
+  "playerCount": 1,
+  "joined": true,
+  "companyCount": 1,
+  "speechCount": 3,
+  "rosterCount": 1,
+  "bubbleCount": 1
+}

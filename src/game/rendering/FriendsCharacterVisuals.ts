@@ -80,7 +80,8 @@ export function updateFriendsCharacter(rig:PlayerVisualRig, player:CoopPlayerSna
   const flashlight=player.lifeState==='alive'&&!falling ? player.friendsFlashlight : undefined;
   const aimYaw=hands?.yaw??flashlight?.yaw??player.angle;
   const delta=Math.atan2(Math.sin(aimYaw-player.angle),Math.cos(aimYaw-player.angle));
-  const holdMask=fishingHold==='fish'?12:fishingHold||player.friendsWeaponEquipped?8:hands?.mask??0;
+  // A marshmallow occupies the right hand; the free left hand can still greet.
+  const holdMask=fishingHold==='marshmallow'?8|((hands?.mask??0)&1):fishingHold==='fish'?12:fishingHold||player.friendsWeaponEquipped?8:hands?.mask??0;
   applyFriendsArmPose(model,holdMask|(flashlight?4:0),hands?.pitch??flashlight?.pitch??0,dt,actor.arms,seated,delta);
   if(hands){
     model.parts[0].rotation.y-=delta*.5;
