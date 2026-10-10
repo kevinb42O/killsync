@@ -34,17 +34,17 @@ export class FriendsTerrainEditFeedback {
     for(const source of materials.slice(0,5)){
       const material=source.clone();material.onBeforeCompile=source.onBeforeCompile;material.customProgramCacheKey=source.customProgramCacheKey;
       material.polygonOffset=true;material.polygonOffsetFactor=-1;material.polygonOffsetUnits=-1;
-      const mesh=new THREE.InstancedMesh(this.geometry,material,CAPACITY*6);mesh.count=0;mesh.frustumCulled=false;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.batches.push(mesh);this.group.add(mesh);
+      const mesh=new THREE.InstancedMesh(this.geometry,material,CAPACITY*6);mesh.castShadow=true;mesh.receiveShadow=true;mesh.count=0;mesh.frustumCulled=false;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.batches.push(mesh);this.group.add(mesh);
     }
   }
-  mask(material:THREE.MeshStandardMaterial){
+  mask(material:THREE.Material){
     if(this.masked.has(material))return;this.masked.add(material);
     const decorate=material.onBeforeCompile,key=material.customProgramCacheKey.bind(material);
     material.onBeforeCompile=(shader,renderer)=>{
       decorate(shader,renderer);
       shader.uniforms.editCount=this.count;shader.uniforms.editCells=this.cells;shader.uniforms.editLow=this.low;shader.uniforms.editHigh=this.high;
-      shader.vertexShader='varying vec3 editWorld;varying vec3 editNormal;\n'+shader.vertexShader.replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
-        vec4 editPosition=vec4(transformed,1.);vec3 editN=objectNormal;
+      shader.vertexShader='varying vec3 editWorld;varying vec3 editNormal;\n'+shader.vertexShader.replace('#include <project_vertex>',`#include <project_vertex>
+        vec4 editPosition=vec4(transformed,1.);vec3 editN=normal;
         #ifdef USE_INSTANCING
         editPosition=instanceMatrix*editPosition;editN=mat3(instanceMatrix)*editN;
         #endif

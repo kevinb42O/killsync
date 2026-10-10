@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { configureTerrainCoverage } from './FriendsTerrainCoverage';
+import { configureTerrainCoverage, createTerrainShadowMaterials } from './FriendsTerrainCoverage';
 import { createIslandRuinMaterials, FriendsIslandVisuals } from './FriendsIslandVisuals';
 import { frontierMaterial } from './FriendsFrontierVisuals';
 afterEach(() => vi.restoreAllMocks());
@@ -10,6 +10,23 @@ const compile = (material: THREE.Material) => {
   return shader;
 };
 describe('terrain layer ownership', () => {
+  it('partitions spotlight and point-light shadows at the solid side of chunk seams',()=>{
+    const coverage=new THREE.DataTexture(),near=createTerrainShadowMaterials(coverage,94,'near'),surface=createTerrainShadowMaterials(coverage,94,'surface');
+    const keys=new Set<string>();
+    for(const [layer,materials] of [['near',near],['surface',surface]] as const)for(const [kind,material] of Object.entries(materials)){
+      const source=kind==='depth'?THREE.ShaderLib.depth:THREE.ShaderLib.distance;
+      const shader={vertexShader:source.vertexShader,fragmentShader:source.fragmentShader,uniforms:{}} as Parameters<THREE.Material['onBeforeCompile']>[0];
+      material.onBeforeCompile(shader,{} as THREE.WebGLRenderer);
+      expect(shader.uniforms.fineCoverage.value).toBe(coverage);
+      expect(shader.vertexShader).toContain('transformed-normal*.01');
+      expect(shader.vertexShader).toContain('terrainPosition=instanceMatrix*terrainPosition');
+      expect(shader.fragmentShader).toContain(`if(terrainDetail${layer==='near'?'<':'>='}.5)discard`);
+      expect(shader.fragmentShader).not.toContain('cameraPosition');
+      expect(shader.fragmentShader).not.toContain('gl_FragCoord.xy');
+      keys.add(material.customProgramCacheKey());material.dispose();
+    }
+    expect(keys.size).toBe(4);
+  });
   it('partitions the horizon, surface shell and excavation without sharing GPU programs',()=>{
     const coverage=new THREE.DataTexture(),blockCoverage=new THREE.DataTexture(),altitude={value:1};
     const near=new THREE.MeshStandardMaterial(),shell=new THREE.MeshStandardMaterial(),far=new THREE.MeshStandardMaterial();

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { meshBlockHorizon, type HorizonMeshData } from '../world/FriendsHorizonMesh';
 import { FriendsTerrain, TERRAIN_GENERATION, type TerrainGrade } from '../world/FriendsTerrain';
 import { BLOCK_CACHE_BYTES, BLOCK_CACHE_TILES, BLOCK_DETAIL_END, BLOCK_RETAIN, BLOCK_SURFACE_TILE, distanceToTerrainTile, surfaceTilesAround } from './FriendsTerrainStreaming';
+import { createTerrainShadowMaterials } from './FriendsTerrainCoverage';
 
 /** Greedy exterior shells have no allocated underground voxel volume. Two
  * bounded worker jobs and two uploads per frame keep streaming responsive. */
@@ -18,7 +19,7 @@ export class FriendsBlockSurface extends THREE.Group {
   private wants=new Set<string>();
   private planStamp='';
   private wanted:ReturnType<typeof surfaceTilesAround>=[];
-  constructor(private material:THREE.Material,private ready:Uint8Array,private coverage:THREE.DataTexture,private grid:number){super();this.name='frontier-block-surface-shells';this.startWorker();}
+  constructor(private material:THREE.Material,private ready:Uint8Array,private coverage:THREE.DataTexture,private grid:number,private shadows?:ReturnType<typeof createTerrainShadowMaterials>){super();this.name='frontier-block-surface-shells';this.startWorker();}
   private startWorker(){
     try{
       this.worker=new Worker(new URL('./friendsSurface.worker.ts',import.meta.url),{type:'module'});
@@ -49,7 +50,9 @@ export class FriendsBlockSurface extends THREE.Group {
   private install(data:HorizonMeshData,time:number){
     const key=`${data.tx},${data.ty}`;this.release(key);
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(data.positions,3));geometry.setAttribute('normal',new THREE.BufferAttribute(data.normals,3,true));geometry.setAttribute('uv',new THREE.BufferAttribute(data.uv,2));geometry.setAttribute('color',new THREE.BufferAttribute(data.colors,3,true));geometry.setIndex(new THREE.BufferAttribute(data.indices,1));geometry.computeBoundingSphere();
-    const mesh=new THREE.Mesh(geometry,this.material);mesh.position.set(data.tx,0,data.ty);mesh.receiveShadow=true;this.add(mesh);
+    const mesh=new THREE.Mesh(geometry,this.material);mesh.position.set(data.tx,0,data.ty);mesh.receiveShadow=true;
+    if(this.shadows){mesh.customDepthMaterial=this.shadows.depth;mesh.customDistanceMaterial=this.shadows.distance;}
+    this.add(mesh);
     const bytes=data.positions.byteLength+data.normals.byteLength+data.uv.byteLength+data.colors.byteLength+data.indices.byteLength;
     this.bytes+=bytes;this.tiles.set(key,{mesh,bytes,installed:time});
   }

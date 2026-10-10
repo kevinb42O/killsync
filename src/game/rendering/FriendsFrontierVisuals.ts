@@ -29,7 +29,7 @@ import { FriendsClouds } from './FriendsClouds';
 import { FriendsBirds } from './FriendsBirds';
 import { FriendsCampfire } from './FriendsCampfire';
 import type { CampfireSnapshot } from '../multiplayer/FriendsCampfireSimulation';
-import { configureTerrainCoverage } from './FriendsTerrainCoverage';
+import { configureTerrainCoverage, createTerrainShadowMaterials } from './FriendsTerrainCoverage';
 import { FRIENDS_TERRAIN_SURFACES } from '../world/FriendsTerrainAppearance';
 
 const GROVE_CELL_OFFSETS = Array.from({ length: 121 }, (_, i) => [i % 11 - 5, Math.floor(i / 11) - 5] as const)
@@ -109,6 +109,8 @@ export class FriendsFrontierVisuals {
   private fineGrid = Math.ceil(FRONTIER_SIZE / 512);
   private fineData = new Uint8Array(this.fineGrid * this.fineGrid);
   private fineCoverage = new THREE.DataTexture(this.fineData,this.fineGrid,this.fineGrid,THREE.RedFormat);
+  private nearShadows = createTerrainShadowMaterials(this.fineCoverage,this.fineGrid,'near');
+  private surfaceShadows = createTerrainShadowMaterials(this.fineCoverage,this.fineGrid,'surface');
   private blockData=new Uint8Array(this.fineGrid*this.fineGrid);
   private blockCoverage=new THREE.DataTexture(this.blockData,this.fineGrid,this.fineGrid,THREE.RedFormat);
   private blockAltitude={value:1};
@@ -154,11 +156,14 @@ export class FriendsFrontierVisuals {
     const blockMask={texture:this.blockCoverage,altitude:this.blockAltitude};
     configureTerrainCoverage(this.farMaterial,this.fineCoverage,this.fineGrid,'horizon',blockMask);
     configureTerrainCoverage(this.blockMaterial,this.fineCoverage,this.fineGrid,'surface',blockMask);
-    this.surface=new FriendsBlockSurface(this.blockMaterial,this.blockData,this.blockCoverage,this.fineGrid);this.group.add(this.surface);
+    this.surface=new FriendsBlockSurface(this.blockMaterial,this.blockData,this.blockCoverage,this.fineGrid,this.surfaceShadows);this.group.add(this.surface);
     for(const material of this.materials)configureTerrainCoverage(material,this.fineCoverage,this.fineGrid,'near');
     this.far = new FriendsBlockHorizon(this.farMaterial, 5900, 5630); this.group.add(this.far);
     this.clouds = new FriendsClouds(renderer); this.group.add(this.clouds);
     for(const material of [...this.materials,this.farMaterial,this.blockMaterial]){this.clouds.shade(material);this.editFeedback.mask(material);}
+    for(const shadows of [this.nearShadows,this.surfaceShadows]){
+      this.editFeedback.mask(shadows.depth);this.editFeedback.mask(shadows.distance);
+    }
     this.island.traverse(o=>{if(o instanceof THREE.Mesh)for(const m of Array.isArray(o.material)?o.material:[o.material])if(m instanceof THREE.MeshStandardMaterial)this.clouds.shade(m);});
     this.coast=createIslandOcean();this.group.add(this.coast);
     this.clouds.setAtmosphere(this.atmosphere);
@@ -185,7 +190,9 @@ export class FriendsFrontierVisuals {
   private install(cx: number, cy: number, data: TerrainMeshData) {
     const key = `${cx},${cy}`, old = this.chunks.get(key); if (old) { old.geometry.dispose(); old.removeFromParent(); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3)); g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3,true)); g.setAttribute('uv', new THREE.BufferAttribute(data.uv, 2)); g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3,true));g.setAttribute('caveGlow',new THREE.BufferAttribute(data.glow,3)); for (const group of data.groups) g.addGroup(group.start, group.count, group.materialIndex);
-    g.computeBoundingSphere(); const mesh = new THREE.Mesh(g, this.materials); mesh.position.set(cx * 512, 0, cy * 512); mesh.receiveShadow = true; mesh.castShadow = true; this.group.add(mesh); this.chunks.set(key, mesh); this.dirty.delete(key); this.fineData[cy*this.fineGrid+cx]=255; this.fineCoverage.needsUpdate=true;
+    g.computeBoundingSphere(); const mesh = new THREE.Mesh(g, this.materials); mesh.position.set(cx * 512, 0, cy * 512); mesh.receiveShadow = true; mesh.castShadow = true;
+    mesh.customDepthMaterial=this.nearShadows.depth;mesh.customDistanceMaterial=this.nearShadows.distance;
+    this.group.add(mesh); this.chunks.set(key, mesh); this.dirty.delete(key); this.fineData[cy*this.fineGrid+cx]=255; this.fineCoverage.needsUpdate=true;
     this.volumeBytes.set(key,data.positions.byteLength+data.normals.byteLength+data.uv.byteLength+data.colors.byteLength+data.glow.byteLength);
     const queued=this.editQueuedAt.get(key);if(queued!==undefined){this.meshLatencies.push(performance.now()-queued);if(this.meshLatencies.length>128)this.meshLatencies.shift();this.editQueuedAt.delete(key);}
     this.editFeedback.installed(cx,cy);this.editFeedback.refresh(this.terrain);
@@ -337,6 +344,7 @@ export class FriendsFrontierVisuals {
   setEnvironment(change:FriendsEnvironmentChange){this.localEnvironmentPreview=!change.reset;this.environmentPreview.change(change);}
   toggleFlashlight() { this.flashlight.toggle(); }
   dispose() {
+    for(const shadows of [this.nearShadows,this.surfaceShadows]){shadows.depth.dispose();shadows.distance.dispose();}
     this.floodWater.dispose();
     this.campfire.dispose();this.retreats.dispose();
     this.birds.dispose();

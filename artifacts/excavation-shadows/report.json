@@ -1,0 +1,45 @@
+{
+  "errors": [],
+  "cases": [
+    {
+      "kind": "spot",
+      "phase": "pending",
+      "before": 0,
+      "after": 187,
+      "reference": 187
+    },
+    {
+      "kind": "spot",
+      "phase": "installed",
+      "before": 0,
+      "after": 187,
+      "reference": 187
+    },
+    {
+      "kind": "spot",
+      "phase": "intact",
+      "brightness": 0
+    },
+    {
+      "kind": "point",
+      "phase": "pending",
+      "before": 0,
+      "after": 187,
+      "reference": 187
+    },
+    {
+      "kind": "point",
+      "phase": "installed",
+      "before": 0,
+      "after": 187,
+      "reference": 187
+    },
+    {
+      "kind": "point",
+      "phase": "intact",
+      "brightness": 0
+    }
+  ],
+  "webglError": 0,
+  "shaderErrors": 0
+}
