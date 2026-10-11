@@ -1,0 +1,22 @@
+{
+  "errors": [],
+  "samples": [
+    {
+      "waterOrder": 1,
+      "baselineWarmPixels": 0,
+      "fixedWarmPixels": 1390
+    },
+    {
+      "waterOrder": 2,
+      "baselineWarmPixels": 0,
+      "fixedWarmPixels": 1390
+    },
+    {
+      "waterOrder": 3,
+      "baselineWarmPixels": 0,
+      "fixedWarmPixels": 1390
+    }
+  ],
+  "occlusionDelta": 0,
+  "glError": 0
+}

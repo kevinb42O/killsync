@@ -118,6 +118,10 @@ export class FriendsCampfire {
     for(let i=0;i<3;i++){const g=new THREE.PlaneGeometry(76,88,1,6);g.translate(0,44,0);g.rotateY(i*Math.PI/3);planes.push(g);}
     const flames=createCampfireFlames(this.time);
     this.flame=new THREE.Mesh(mergeGeometries(planes),flames);planes.forEach(g=>g.dispose());
+    // Ocean layers (1/2) and rivers (3) do not write depth. Composite the
+    // foreground fire afterward so background water cannot wash it out.
+    // Keep depth testing enabled so terrain, logs and seats still occlude it.
+    this.flame.renderOrder=4;
     this.flame.name='campfire-flowing-flames';this.flame.position.y=10;this.group.add(this.flame);
     // Arrival's mesh wireframe override groups non-indexed vertices in threes.
     // A multiple of three also keeps this Points geometry valid in that pass.
@@ -127,6 +131,7 @@ export class FriendsCampfire {
     this.sparks=new THREE.Points(sparkGeometry,new THREE.ShaderMaterial({uniforms:{time:this.time},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
       vertexShader:`uniform float time;varying float fade;void main(){float age=fract(time*.18+position.x);fade=sin(age*3.14159)*(1.-age);vec3 p=vec3((position.y-.5)*35.+sin(age*8.+position.z*12.)*age*18.,12.+age*135.,(position.z-.5)*35.);vec4 view=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*view;gl_PointSize=clamp(550./max(1.,-view.z),1.,4.);}`,
       fragmentShader:'varying float fade;void main(){float a=1.-smoothstep(.1,.5,length(gl_PointCoord-.5));gl_FragColor=vec4(1.,.42,.08,a*fade);}'}));
+    this.sparks.renderOrder=4;
     this.sparks.name='campfire-rising-embers';this.sparks.frustumCulled=false;this.group.add(this.sparks);
     this.group.traverse(object=>{
       if(object instanceof THREE.Mesh||object instanceof THREE.Points)object.onBeforeRender=()=>{this.renderedDrawCalls++;};
