@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import type { CoopPlayerSnapshot } from '../multiplayer/CoopSimulation';
-import type { FishingSnapshot, CaughtFish } from '../multiplayer/FriendsFishing';
+import type { FishingSnapshot, CaughtFish, FishingCast } from '../multiplayer/FriendsFishing';
 import { FISH_GROUND_RADIUS, FISHING_REEL_MS, FISHING_CAST_RELEASE_MS } from '../multiplayer/FriendsFishing';
+import { isGiantShark } from '../multiplayer/FriendsGiantShark';
+import type { FishSpecies } from '../multiplayer/FriendsFishSpecies';
 import { friendsAudio } from '../FriendsAudio';
 import { acquireEquipmentLighting, frameHeldEquipment, loadFriendsGrip } from './FriendsHeldEquipment';
 import { createFishingFish, loadFishingFish, loadFishingRod } from './FriendsFishingAssets';
 import { FriendsFishingLine } from './FriendsFishingLine';
-import { FriendsFishingBobber } from './FriendsFishingBobber';
+import { FriendsFishingBobber, FISHING_BOBBER_WALK_SCALE, FISHING_BOBBER_TIP_SCALE } from './FriendsFishingBobber';
 import { friendsWaterAt } from '../world/FriendsWaterSurface';
 import { groundFishMotion } from './FriendsFishGroundAnimation';
 import { heldFishFraming } from './FriendsFishingPresentation';
@@ -14,10 +16,10 @@ import { FriendsFishingReelArm } from './FriendsFishingReelArm';
 import { fishingRodPose, type FishingRodPose } from './FriendsFishingRodPose';
 
 type Rod={hanging?:boolean;bobber:FriendsFishingBobber;releaseFrom:THREE.Vector3;releaseScale:number;root:THREE.Group;tip?:THREE.Object3D;mesh?:THREE.Mesh;arm?:THREE.Mesh;reelHand?:THREE.Mesh;reelArm?:FriendsFishingReelArm;armRequested?:boolean;line:FriendsFishingLine;float:THREE.Group;ring:THREE.Mesh;phase:string;serial:number;local:boolean;lineOffset:number;previousFloat:THREE.Vector3;nextSplash:number;reelVoice?:AudioBufferSourceNode};
-type Fish={root:THREE.Group;model?:ReturnType<typeof createFishingFish>;action?:THREE.AnimationAction;clip?:string;id:number;phase:string;animationAt:number};
+type Fish={species?:FishSpecies;request?:symbol;root:THREE.Group;model?:ReturnType<typeof createFishingFish>;action?:THREE.AnimationAction;clip?:string;id:number;phase:string;animationAt:number};
 function softShadowTexture(){const pixels=new Uint8Array(32*32*4);for(let y=0;y<32;y++)for(let x=0;x<32;x++){const r=Math.hypot((x-15.5)/15.5,(y-15.5)/15.5),v=Math.round(Math.max(0,1-r*r)**2*255),i=(y*32+x)*4;pixels[i]=pixels[i+1]=pixels[i+2]=v;pixels[i+3]=255;}const texture=new THREE.DataTexture(pixels,32,32);texture.magFilter=texture.minFilter=THREE.LinearFilter;texture.needsUpdate=true;return texture;}
-/** All world catches share one skinned mesh/material. Only visible fish advance
- * their six-bone animation; transient line buffers are owned by active rods. */
+/** Fish templates share geometry/materials per species. Only visible catches
+ * advance animation; transient line buffers are owned by active rods. */
 export class FriendsFishingVisuals {
   readonly group=new THREE.Group();
   readonly held=new THREE.Group();
@@ -95,7 +97,7 @@ export class FriendsFishingVisuals {
     r.root.updateWorldMatrix(true,true);r.tip.getWorldPosition(this.bobberTip);
     const scale=r.local?r.root.scale.y/32:1,length=23*scale;
     this.bobberCarrier.copy(r.local?this.cameraPoint:r.root.position);
-    const attachment=r.bobber.update(this.bobberTip,this.bobberCarrier,length,dt,r.local?1/32:1);
+    const attachment=r.bobber.update(this.bobberTip,this.bobberCarrier,length,dt,r.local?FISHING_BOBBER_WALK_SCALE:1,FISHING_BOBBER_TIP_SCALE);
     this.bobberRotation.setFromUnitVectors(this.bobberAxis,this.end.copy(r.bobber.direction).negate());
     // The line attaches to the stem, rather than disappearing into the ball.
     this.end.copy(attachment).addScaledVector(r.bobber.direction,6.5*scale);
@@ -115,15 +117,32 @@ export class FriendsFishingVisuals {
       r.releaseScale=scale*r.releaseFrom.distanceTo(this.cameraPoint)/Math.max(.01,distance);
     }else{r.float.getWorldPosition(r.releaseFrom);r.releaseScale=1;}
   }
-  private fish(id:number){
-    let f=this.fishes.get(id);if(f)return f;
-    f=this.pool.pop()??{root:new THREE.Group(),id,phase:'',animationAt:0};f.id=id;f.phase='';f.animationAt=0;this.fishes.set(id,f);this.group.add(f.root);
-    if(!f.model){const entry=f;void loadFishingFish().then(source=>{if(this.disposed)return;entry.model=createFishingFish(source);entry.root.add(entry.model.root);}).catch(()=>{});}
+  private fish(id:number,species:FishSpecies='koi'){
+    let f=this.fishes.get(id);
+    if(!f){
+      f=this.pool.pop()??{root:new THREE.Group(),id,phase:'',animationAt:0};f.id=id;f.phase='';f.animationAt=0;this.fishes.set(id,f);this.group.add(f.root);
+    }
+    if(f.species!==species){
+      f.species=species;f.clip=undefined;f.action=undefined;
+      if(f.model){f.model.mixer.stopAllAction();f.model.root.traverse(o=>{if(o instanceof THREE.SkinnedMesh)o.skeleton.dispose();});f.model.root.removeFromParent();f.model=undefined;}
+      const entry=f,request=Symbol();entry.request=request;
+      void loadFishingFish(species).then(source=>{
+        if(this.disposed||entry.request!==request)return;
+        entry.model=createFishingFish(source);entry.root.add(entry.model.root);
+      }).catch(error=>console.warn(`Fishing ${species} could not load`,error));
+    }
     return f;
   }
-  private animate(f:Fish,state:CaughtFish|undefined,dt:number,now:number){
+  private animate(f:Fish,state:CaughtFish|undefined,dt:number,now:number,fatigue?:number){
     if(!f.model)return;
-    const name=state?.phase==='dry'?'Out_Of_Water':state?.phase==='held'?'Held':'Swimming_Fast';
+    if(!f.model.clips.length){
+      // Static downloaded trout/pike still wriggle, flop and swim on release.
+      const dry=state?.phase==='dry',held=state?.phase==='held';
+      f.model.root.rotation.y=Math.sin(now*(dry?.012:.006)+f.id)*(held?.012:dry?.09:.06);
+      f.model.root.rotation.x=dry?groundFishMotion(now,f.id).roll*3:0;
+      return;
+    }
+    const name=state?.phase==='dry'?'Out_Of_Water':state?.phase==='held'?'Held':state?.phase==='landed'||fatigue!==undefined&&fatigue>.7?'Swimming_Normal':'Swimming_Fast';
     if(name!==f.clip){
       const clip=f.model.clips.find(c=>c.name.endsWith('|'+name));if(clip){
         // Stop airborne root motion immediately when the fish lands.
@@ -132,6 +151,9 @@ export class FriendsFishingVisuals {
         f.action.setEffectiveTimeScale(state?.phase==='held'?.65:1);
       }f.clip=name;
     }
+    if(fatigue!==undefined)f.action?.setEffectiveTimeScale(.2+.8*(1-fatigue));
+    else if(state?.phase==='landed')f.action?.setEffectiveTimeScale(.2);
+    else if(state?.phase==='swimming'&&isGiantShark(state))f.action?.setEffectiveTimeScale(.2+Math.min(.65,(now-state.atMs)/6000));
     if(state?.phase==='dry')f.action?.setEffectiveTimeScale(groundFishMotion(now,state.id).speed);
     const distance=f.root.parent===this.held?0:f.root.position.distanceTo(this.cameraPoint),interval=distance>900?125:distance>450?66:0;
     if(now-f.animationAt>=interval){f.model.mixer.update(Math.min(250,f.animationAt?now-f.animationAt:dt)/1000);f.animationAt=now;}
@@ -142,14 +164,15 @@ export class FriendsFishingVisuals {
     for(const id of state?.equipped??[]){
       const player=players.find(p=>p.id===id);if(!player)continue;const local=id===localId&&firstPerson;if(local&&tool!==7)continue;
       if(!local&&Math.hypot(player.x-this.cameraPoint.x,player.y-this.cameraPoint.z)>1800)continue;
-      active.add(id);const r=this.rod(id,local),cast=state?.casts.find(c=>c.playerId===id),t=cast?(now-cast.atMs)/1000:0,charge=state?.charges?.find(c=>c.playerId===id);
+      active.add(id);const r=this.rod(id,local),landed=state?.fish.find(f=>f.tetheredBy===id&&f.phase==='landed');
+      const cast:FishingCast|undefined=state?.casts.find(c=>c.playerId===id)??(landed?{...landed,playerId:id,phase:'reeling',from:landed,target:landed,biteAt:0,reelActive:false,sharkFatigue:1,sharkLoad:0,sharkAngle:landed.angle}:undefined),charge=state?.charges?.find(c=>c.playerId===id);
       const tension=cast?.lineLength?THREE.MathUtils.clamp((Math.hypot(player.x-cast.x,player.y-cast.y,player.z+26-cast.z)/cast.lineLength-.94)/.06,0,1):0;
       const pose=fishingRodPose(this.rodPose,charge?now-charge.chargeAt:undefined,cast,now,tension);
       if(local){frameHeldEquipment(r.root,this.camera);r.root.position.y+=pose.lift;r.root.position.z+=pose.draw;r.root.rotation.set(pose.pitch,0,-.12,'YXZ');this.lighting.setVisible(true);}
       else{if(!handPoint(id,this.start))this.start.set(player.x,player.z+25,player.y);r.root.position.copy(this.start);r.root.position.y+=pose.lift*32;r.root.scale.setScalar(32);r.root.rotation.set(pose.pitch,-Math.PI/2-player.angle,-.12,'YXZ');}
       r.root.visible=true;r.line.visible=r.float.visible=r.ring.visible=Boolean(cast);
       if(r.mesh?.morphTargetInfluences)r.mesh.morphTargetInfluences[0]=pose.flex;if(r.tip)r.tip.position.z=r.tip.userData.restZ+r.tip.userData.bendZ*pose.flex;
-      if(r.reelArm&&local&&cast?.phase==='reeling')r.reelArm.update(r.root,this.camera,now);
+      if(r.reelArm){r.reelArm.mesh.visible=false;if(local&&cast?.phase==='reeling'&&cast.reelActive!==false)r.reelArm.update(r.root,this.camera,cast.reelElapsedMs??now);}
       const paidOut=Boolean(cast)&&(cast.phase!=='casting'||now-(cast.castAt??cast.atMs)>=FISHING_CAST_RELEASE_MS);
       if(!paidOut){
         if(!r.hanging)r.bobber.reset();
@@ -163,9 +186,11 @@ export class FriendsFishingVisuals {
         if(r.line.parent!==this.group)this.group.add(r.line);
         r.float.scale.setScalar(1);
       }
-      if(!local||cast.phase!=='reeling')this.stopReel(r);
+      if(!local||cast.phase!=='reeling'||cast.reelActive===false)this.stopReel(r);
+      else if(!r.reelVoice)r.reelVoice=friendsAudio.play('fishingReel',.18,100,1,Math.max(.05,((cast.reelDurationMs??FISHING_REEL_MS)-(cast.reelElapsedMs??0))/1000)+(cast.sharkFatigue!==undefined?8:0),{fadeOutSeconds:.08,loop:true});
       const bite=cast.phase==='bite',waiting=cast.phase==='waiting';
       this.end.set(cast.x,cast.z,cast.y);
+      if(cast.sharkAngle!==undefined){this.end.x+=Math.cos(cast.sharkAngle)*34*cast.size*.4;this.end.z+=Math.sin(cast.sharkAngle)*34*cast.size*.4;}
       if(waiting){this.end.y+=Math.sin(now*.004+cast.id)*.9;const before=cast.biteAt-now;if(before<1300)this.end.y-=Math.max(0,Math.sin(now*.019))*2.4;}
       if(bite){this.end.y-=8+Math.sin(now*.023)*2;this.end.x+=Math.sin(now*.025)*1.6;this.end.z+=Math.cos(now*.021)*1.6;}
       const moving=r.serial===cast.id?Math.min(1,r.previousFloat.distanceTo(this.end)/Math.max(1,dt)*16):0;
@@ -193,20 +218,21 @@ export class FriendsFishingVisuals {
       const slack=Math.max(1,(cast.lineLength??this.start.distanceTo(this.end)+12)+r.lineOffset-this.start.distanceTo(this.end));
       if(paidOut)r.line.update(this.start,this.end,cast.phase==='casting'?24*releaseBlend:cast.phase==='reeling'?2:bite?Math.min(3,slack):slack,dt,this.cameraPoint,waiting||bite||cast.phase==='dry'?cast.target.z-2:undefined,camera instanceof THREE.PerspectiveCamera?camera:undefined,typeof window==='undefined'?900:window.innerHeight);
       r.line.visible=paidOut||Boolean(r.tip);
+      if((cast.sharkLoad??0)>.65&&now>=r.nextSplash){this.splash(cast.x,cast.z+34*cast.size*.25,cast.y,now);r.nextSplash=now+1400;}
       if(bite&&now>=r.nextSplash){this.splash(cast.x,cast.target.z-2,cast.y,now);r.nextSplash=now+650;}
       if(r.serial!==cast.id||r.phase!==cast.phase){
         if(waiting)this.splash(cast.x,cast.target.z-2,cast.y,now);
-        if(local){if(cast.phase==='casting')friendsAudio.play('fishingCast',.16,100);else if(waiting)friendsAudio.play('fishingSplash',.18,100);else if(bite)friendsAudio.play('fishingBite',.10,100,1,.45,{fadeOutSeconds:.08});else if(cast.phase==='reeling'){this.stopReel(r);r.reelVoice=friendsAudio.play('fishingReel',.18,100,1,Math.max(.05,(cast.reelDurationMs??FISHING_REEL_MS)/1000-t),{fadeOutSeconds:.08,loop:true});}}
+        if(local){if(cast.phase==='casting')friendsAudio.play('fishingCast',.16,100);else if(waiting)friendsAudio.play('fishingSplash',.18,100);else if(bite)friendsAudio.play('fishingBite',.10,100,1,.45,{fadeOutSeconds:.08});}
         r.serial=cast.id;r.phase=cast.phase;
       }
-      if(cast.phase==='reeling'&&!cast.empty){
-        activeFish.add(cast.id);const f=this.fish(cast.id);if(f.root.parent!==this.group)this.group.add(f.root);f.root.visible=true;f.root.position.copy(this.end);f.root.rotation.set(0,Math.PI/2-player.angle,.25);f.root.scale.setScalar(cast.size);this.animate(f,undefined,dt,now);
+      if(cast.phase==='reeling'&&!cast.empty&&!landed&&(!isGiantShark(cast)||cast.sharkAngle!==undefined)){
+        activeFish.add(cast.id);const f=this.fish(cast.id,cast.species);if(f.root.parent!==this.group)this.group.add(f.root);f.root.visible=true;f.root.position.copy(this.end);if(cast.sharkAngle!==undefined){f.root.position.x-=Math.cos(cast.sharkAngle)*34*cast.size*.4;f.root.position.z-=Math.sin(cast.sharkAngle)*34*cast.size*.4;}f.root.rotation.set(0,cast.sharkAngle!==undefined?-Math.PI/2-cast.sharkAngle:Math.PI/2-player.angle,cast.sharkAngle!==undefined?0:.25);f.root.scale.setScalar(cast.size);this.animate(f,undefined,dt,now,cast.sharkFatigue);
       }
     }
     for(const s of state?.fish??[]){
       const local=s.ownerId===localId&&firstPerson,owner=s.ownerId?players.find(p=>p.id===s.ownerId):undefined;
       if(!local&&Math.hypot(s.x-this.cameraPoint.x,s.y-this.cameraPoint.z)>1800)continue;
-      activeFish.add(s.id);const f=this.fish(s.id);f.root.visible=true;
+      activeFish.add(s.id);const f=this.fish(s.id,s.species);f.root.visible=true;
       if(local&&s.phase==='held'){
         if(f.root.parent!==this.held)this.held.add(f.root);this.held.visible=true;this.lighting.setVisible(true);
         const {depth,scale,narrow,fishScale,spread,lift}=heldFishFraming(s.size,this.camera?.fov,this.camera?.aspect),arrival=THREE.MathUtils.smoothstep(now-s.atMs,0,450);
@@ -219,7 +245,7 @@ export class FriendsFishingVisuals {
         else this.end.set(s.x,s.z,s.y);
         if(s.phase==='dry'||f.phase!==s.phase||f.root.position.distanceTo(this.end)>100)f.root.position.copy(this.end);else f.root.position.lerp(this.end,1-Math.exp(-dt*.018));
         let fade=s.phase==='fading'?Math.max(.001,1-(now-s.atMs)/900):1;
-        f.root.scale.setScalar(s.size*fade);f.root.rotation.set(0,Math.PI/2-s.angle,s.phase==='dry'?Math.PI/2+groundFishMotion(now,s.id).roll:s.phase==='air'?Math.sin(now*.012)*.35:0);
+        f.root.scale.setScalar(s.size*fade);f.root.rotation.set(0,(isGiantShark(s)?-Math.PI/2:Math.PI/2)-s.angle,s.phase==='dry'?Math.PI/2+groundFishMotion(now,s.id).roll:s.phase==='air'?Math.sin(now*.012)*.35:0);
         if(s.phase==='dry'&&shadowCount<40){this.dropPosition.set(s.x,s.z-FISH_GROUND_RADIUS*s.size+.2,s.y);this.dropScale.set(28*s.size,1,22*s.size);this.dropMatrix.compose(this.dropPosition,this.dropRotation,this.dropScale);this.shadows.setMatrixAt(shadowCount++,this.dropMatrix);}
       }
       if(f.phase!==s.phase&&s.phase==='swimming'&&f.root.position.distanceTo(this.cameraPoint)<500)friendsAudio.play('fishingSplash',.20,100,1,.75,{fadeOutSeconds:.12});

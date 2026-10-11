@@ -1,0 +1,6 @@
+Fishing boat — Innerscene original model, CC0-1.0 (public domain).
+Source: https://www.innerscene.com/tools/library/3d-parts/fishing-boat-3c5a6bfd
+Download: https://www.innerscene.com/api/library/fishing-boat-3c5a6bfd/download
+License: https://creativecommons.org/publicdomain/zero/1.0/
+The source explicitly permits use, modification and redistribution for any purpose.
+Downloaded 2026-10-11; optimized and adapted for this game.

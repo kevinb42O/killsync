@@ -6,6 +6,18 @@ import { FRIENDS_DELIVERY_BAY } from '../world/FriendsHaulingGoal';
 
 const core:PhysicalCargo={id:'lantern-core',...SALVAGE_CORE_SPAWN,angle:0,vx:0,vy:0,vz:0,spin:0};
 describe('global cargo light column',()=>{
+  it('faces the camera using the destination parent world position',()=>{
+    const parent=new THREE.Group(),beacon=new FriendsCargoBeacon();parent.position.set(27008,352,19568);parent.add(beacon);
+    beacon.updateLocation({x:0,y:0,z:2},1500,'#d5afff');
+    const column=beacon.getObjectByName('cargo-light-column') as THREE.Mesh<THREE.PlaneGeometry,THREE.ShaderMaterial>;
+    const camera=new THREE.PerspectiveCamera(110,16/9,2,110000);camera.position.set(27108,500,19768);
+    beacon.faceCamera(camera);
+    expect(column.rotation.y).toBeCloseTo(Math.atan2(100,200),6);
+    expect(column.scale.x).toBeCloseTo(Math.max(32,Math.hypot(100,200)*2*Math.tan(THREE.MathUtils.degToRad(55))*.035),6);
+    expect(beacon.getWorldPosition(new THREE.Vector3()).toArray()).toEqual([27008,354,19568]);
+    const geometry=vi.spyOn(column.geometry,'dispose'),material=vi.spyOn(column.material,'dispose');
+    beacon.dispose();expect(geometry).toHaveBeenCalledOnce();expect(material).toHaveBeenCalledOnce();
+  });
   it('keeps a readable projected width at high FOV and from the far side of the island',()=>{
     const beacon=new FriendsCargoBeacon();beacon.update(core,0);
     const column=beacon.getObjectByName('cargo-light-column') as THREE.Mesh;

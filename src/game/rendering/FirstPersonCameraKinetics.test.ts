@@ -2,6 +2,36 @@ import { describe, expect, it } from 'vitest';
 import { FirstPersonCameraKinetics } from './FirstPersonCameraKinetics';
 
 describe('FirstPersonCameraKinetics', () => {
+  it.each([0, -2000, 144])('stops land bob immediately while swimming at elevation %s and resumes on shore', (verticalOffset) => {
+    const kinetics = new FirstPersonCameraKinetics();
+    const input = {
+      deltaTime: 16.67, yaw: 0, pitch: 0, playerVelocity: { x: 0, y: -220 },
+      isSprinting: true, isMoving: true, isAiming: false, adsProgress: 0,
+      idleCameraMotion: false,
+    };
+    let land = kinetics.update(input);
+    for (let frame = 0; frame < 120; frame++) land = kinetics.update(input);
+    expect(land.movingWeight).toBeGreaterThan(.9);
+    const phase = land.stridePhase;
+    kinetics.notifyJump();
+    kinetics.notifyLand(1.8);
+    for (let frame = 0; frame < 120; frame++) {
+      const water = kinetics.update({ ...input, isSwimming: true, isAirborne: true, verticalOffset });
+      expect(water.movingWeight).toBe(0);
+      expect(water.sprintWeight).toBe(0);
+      expect(water.stridePhase).toBe(phase);
+      expect(water.cameraTranslation).toEqual({ x: 0, y: 0, z: 0 });
+      expect(water.cameraRotation.yaw).toBe(0);
+      expect(water.jumpDisplacement).toBe(0);
+      expect(water.landDisplacement).toBe(0);
+      expect(water.viewmodelTranslation).toEqual({ x: 0, y: 0, z: 0 });
+    }
+    const shore = kinetics.update({ ...input, isSwimming: false, isAirborne: false, verticalOffset: 0 });
+    expect(shore.stridePhase).not.toBe(phase);
+    expect(shore.movingWeight).toBeGreaterThan(0);
+    expect(shore.landDisplacement).toBe(0);
+  });
+
   it('keeps the Friends camera exactly still after resetting a landing impulse', () => {
     const kinetics = new FirstPersonCameraKinetics();
     kinetics.notifyLand(1.8); kinetics.notifyJump(); kinetics.reset();

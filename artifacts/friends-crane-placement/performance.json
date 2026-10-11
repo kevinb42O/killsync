@@ -1,0 +1,110 @@
+{
+  "method": "Chromium headless with Apple Metal, 1100x740, render scale 0.7, shadows disabled. Production Friends arena; authored staging terrain and camera settle for 10 seconds before placement. Build through authoritative friendsBuild. Before uses HEAD versions of only the three changed rendering modules via Vite baseline fixtures; after uses working tree. Timed WebGL calls tagged by current renderBufferDirect object. Placement window: first 1200ms. Ordinary background shader warmup calls are reported separately (object=null).",
+  "before": {
+    "maxRenderMs": 161.09999999403954,
+    "craneBlockingCalls": [
+      {
+        "label": "GL.getProgramInfoLog",
+        "ms": 98,
+        "t": 27721,
+        "object": "braided-hauling-rope"
+      },
+      {
+        "label": "GL.getShaderInfoLog",
+        "ms": 7.0999999940395355,
+        "t": 27819.09999999404,
+        "object": "braided-hauling-rope"
+      },
+      {
+        "label": "GL.getProgramInfoLog",
+        "ms": 20.599999994039536,
+        "t": 27831.09999999404,
+        "object": "telescopic-crane-steel"
+      },
+      {
+        "label": "GL.getShaderInfoLog",
+        "ms": 0.10000000894069672,
+        "t": 27851.69999998808,
+        "object": "telescopic-crane-steel"
+      },
+      {
+        "label": "GL.getProgramInfoLog",
+        "ms": 20.200000002980232,
+        "t": 27853.89999999106,
+        "object": "telescopic-crane-winches"
+      },
+      {
+        "label": "GL.getShaderInfoLog",
+        "ms": 0.10000000894069672,
+        "t": 27874.19999998808,
+        "object": "telescopic-crane-winches"
+      },
+      {
+        "label": "GL.getProgramInfoLog",
+        "ms": 44.70000000298023,
+        "t": 28111.79999999702,
+        "object": "braided-hauling-rope"
+      },
+      {
+        "label": "GL.getShaderInfoLog",
+        "ms": 0.19999998807907104,
+        "t": 28156.5,
+        "object": "braided-hauling-rope"
+      },
+      {
+        "label": "GL.getProgramInfoLog",
+        "ms": 66.09999999403954,
+        "t": 28267.09999999404,
+        "object": "telescopic-crane-steel"
+      },
+      {
+        "label": "GL.getShaderInfoLog",
+        "ms": 4.899999991059303,
+        "t": 28333.29999999702,
+        "object": "telescopic-crane-steel"
+      },
+      {
+        "label": "GL.getShaderInfoLog",
+        "ms": 0.10000000894069672,
+        "t": 28338.19999998808,
+        "object": "telescopic-crane-steel"
+      },
+      {
+        "label": "GL.getProgramInfoLog",
+        "ms": 1.2999999970197678,
+        "t": 28339.29999999702,
+        "object": "telescopic-crane-winches"
+      },
+      {
+        "label": "GL.getShaderInfoLog",
+        "ms": 0.10000000894069672,
+        "t": 28340.69999998808,
+        "object": "telescopic-crane-winches"
+      }
+    ]
+  },
+  "after": {
+    "maxRenderMs": 11.299999997019768,
+    "craneBlockingCalls": []
+  },
+  "verification": {
+    "unitTests": 183,
+    "testFiles": 13,
+    "typescript": "passed",
+    "browserChecks": [
+      "crane builds on a high player platform through host validation",
+      "crane is searchable and selectable in the production building menu",
+      "camera drag orbits left/right and tilts up/down; capture outside, mouse release, blur, reset, and toolbar controls work without moving the crane",
+      "mast and arm extend together with a connected load; releasing outside a button brakes only that axis",
+      "menu turns the prefab smoothly and the actual connected load swings on its cable",
+      "anti-sway switches through the actual menu",
+      "precision speed switches through the actual menu",
+      "real host motors reach a 256m mast and 256m arm with world collision checks enabled",
+      "Escape brakes all axes on the fully extended crane",
+      "touch drag orbits and tilts the camera, and touch cancellation releases camera capture",
+      "touch holds rotate the crane; touch cancellation applies the brake"
+    ],
+    "browserErrors": []
+  },
+  "limits": "Single controlled before/after pair; device timings vary. An unrelated background warmup query still occurs after placement. This change addresses crane first-use shader stalls, not all world streaming or background compilation."
+}

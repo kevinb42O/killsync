@@ -107,7 +107,7 @@ export function friendsFloodWater(terrain:FriendsTerrain){let field=fields.get(t
 /** Natural rivers retain their existing ownership. Live collision prevents
  * underwater feedback through replaced beds, roofs and excavated dry gaps. */
 export function friendsLiveWaterAt(terrain:FriendsTerrain,x:number,y:number,z:number){
-  if(![x,y,z].every(Number.isFinite)||x<0||y<0||x>=48000||y>=48000)return;
+  if(![x,y,z].every(Number.isFinite))return;
   const dynamic=friendsFloodWater(terrain).sample(x,y,z);if(dynamic)return dynamic;
   const vx=Math.floor(x/SIZE),vy=Math.floor(y/SIZE),vz=Math.floor(z/SIZE);
   if(terrain.material(vx,vy,vz))return;
@@ -116,7 +116,7 @@ export function friendsLiveWaterAt(terrain:FriendsTerrain,x:number,y:number,z:nu
   const surface=friendsLiveWaterSurface(terrain,x,y);return surface?.bodyId===s.bodyId?{...s,depth:surface.depth}:s;
 }
 export function friendsLiveWaterSurface(terrain:FriendsTerrain,x:number,y:number){
-  if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=48000||y>=48000)return;
+  if(!Number.isFinite(x)||!Number.isFinite(y))return;
   const dynamic=friendsFloodWater(terrain).surface(x,y);if(dynamic)return dynamic;
   const s=friendsWaterAt(x,y);if(!s)return;
   const vx=Math.floor(x/SIZE),vy=Math.floor(y/SIZE),top=Math.ceil(s.level/SIZE)-1;

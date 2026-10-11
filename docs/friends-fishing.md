@@ -11,9 +11,9 @@ small contextual control buttons at the bottom of the screen.
 | Equipped | Primary action / LMB / RT | Secondary action / RMB / LT |
 | --- | --- | --- |
 | Rod, ready | Hold to charge; release to cast in the current aim direction | Cancel wind-up |
-| Bobber on dry ground / a dock | Retrieve without a catch | Retrieve |
-| Rod, waiting | Retrieve early | Retrieve |
-| Bobber submerged | Reel automatically for 2.8 seconds | Retrieve without a catch |
+| Bobber on dry ground / a dock | Hold to retrieve without a catch; release to pause | Retrieve |
+| Rod, waiting | Hold to retrieve early; release to pause | Retrieve |
+| Bobber submerged | Hold to hook and reel; release to pause | Retrieve without a catch |
 | Fish in hands | Throw in the direction of the view | Gently drop |
 
 Touch players hold and release the cast button; the other contextual button remains a tap. Full casting power takes 1.2 seconds, then stays capped until release. A small power meter and rod wind-up show preparation. Short holds cast nearby; longer holds add distance and lift. Direction and pitch are taken at release, with no water targeting or snapping. Pointer capture preserves a hold when a finger moves off the button; cancellation and focus loss safely cancel preparation. F picks up a nearby dry
@@ -22,9 +22,8 @@ from automatically catching or immediately throwing a fish.
 
 Each new cast draws an independent random **7–28 second** bite delay after
 landing. The bobber teases, submerges, splashes and sounds a cue. The generous
-four-second bite window requires one click. A missed bite draws a fresh random
-4–14 second delay. One koi model varies continuously in size; size does not
-change difficulty. There is no bait, inventory, score, tension meter or economy.
+four-second bite window requires pressing the primary action, then holding it to reel. A missed bite draws a fresh random
+4–14 second delay. Larger catches take longer to reel in and periodically pull line back. Releasing the primary action pauses retrieval, crank animation and reel audio; holding it again resumes the same catch. Small fish take about 2.8 seconds, with another 1.6 seconds per size unit above 0.5. Surges fade near landing, and a hooked fish cannot escape during a pause or struggle. There is no bait, inventory, score, tension meter or economy.
 
 The bobber uses a swept ballistic flight and can land anywhere. Terrain and walls intercept it, and dry landings keep the line attached without starting bites. Bite timing begins only after landing on exposed water; docks and bridges above water stay dry. Water eligibility is checked before hooking a fish and while waiting, so losing water cannot create a catch.
 
@@ -102,7 +101,7 @@ a turning reel hand, rod flex and a brief catch arrival movement.
 
 Walking away takes up slack and then pulls the bobber at a bounded speed;
 walking toward it leaves the bobber afloat. The line settles onto the water.
-Dragging into a bank or obstruction safely retrieves without a catch. Pickup
+Dragging onto a reachable bank keeps the bobber on the paid-out line and stops bites. Walls and steep ledges stop its movement without automatically reeling or deleting the cast. Moving beyond the original casting range also keeps the line attached; only an explicit reel returns the bobber. Pickup
 checks line of sight, and initial releases no longer jump through a wall.
 
 Three real CC0 recordings provide the cast, continuous reel and small water
@@ -163,3 +162,125 @@ arc, without a forced upward velocity bonus. The bobber and outgoing line appear
 when the forward stroke pays out, avoiding a visible drop during the wind-up.
 `tools/test-friends-fishing-aim.mjs` checks normal skyward, steep skyward and
 downward casts through the actual game input and camera path.
+
+## October 11 species and trophy catches
+
+New catches choose from trout, perch, zander and pike in freshwater (including
+rivers and pools), or mackerel, cod, tuna and shark when the bobber is in the
+sea. Freshwater species have equal odds; sea odds are 45%, 35%, 17% and 3%
+respectively. The host selects species and size at the hook, retaining both
+through retrieval, ownership transfers, drop, throw and release. Protocol v64
+replicates the species identifier. Missing species in older presentation
+fixtures falls back to koi; new catches never select koi.
+
+| Species | Smallest | Ordinary upper range | Trophy maximum |
+| --- | --- | --- | --- |
+| Trout | 15 cm | 70 cm | 140 cm |
+| Perch | 12 cm | 40 cm | 95 cm |
+| Zander | 18 cm | 90 cm | 160 cm |
+| Pike | 20 cm | 110 cm | 210 cm |
+| Mackerel | 15 cm | 45 cm | 95 cm |
+| Cod | 25 cm | 110 cm | 220 cm |
+| Tuna | 35 cm | 220 cm | 450 cm |
+| Shark | 70 cm | 450 cm | 850 cm |
+
+Sizes are continuous game ranges, with smaller catches favoured. Five percent
+of each species enter the trophy range; trophy sharks start at six metres.
+This makes six-metre-plus sharks approximately 0.15% of successful sea catches.
+Fishing controls and bite/reel timings stay the same. Pickup reach includes
+the fish's body radius so a dropped giant shark remains reachable.
+
+Catch cards and the session log show species and length, with metres for
+catches of at least one metre. The overall personal best includes its species.
+
+Five new internet-sourced GLBs are bundled locally (about 692 KB total).
+Trout is Poly by Google's CC BY 3.0 model; tuna and shark are Quaternius CC0
+models. Pike adapts the trout; perch/zander adapt Quaternius Red Snapper;
+mackerel adapts Tuna; cod adapts Coral Grouper. The five adaptations change
+proportions and add species palettes, stripes or spots. They are stylized
+approximations. Trout/pike use subtle procedural whole-model motion; other
+species retain swimming/held/ground skeleton animation. See
+[model sources, licenses and changes](../public/models/friends/fishing/README.md)
+and the bundled CREDITS.txt for attribution.
+
+Templates are cached per species and share mesh geometry/materials. Pooled
+presentations dispose old skeletons on species changes and guard asynchronous
+loads against stale replacements. No models are fetched from external sites
+during gameplay.
+
+Validation includes catch-pool/size-distribution tests, a complete giant shark
+catch/drop/pickup/release loop, species snapshot roundtrips, and rendered
+checks of all eight catches in held/reeling/dry/released states. Browser
+captures, six giant-shark viewport/FOV checks and repeated species/pool
+replacement results are in `artifacts/fishing-species/validation.json`.
+
+## October 11 giant-shark fights and water landings
+
+Sharks measuring at least **600 cm** use a dedicated water catch path. The
+current hold-to-reel input, size-dependent retrieval duration and accumulated
+`reelElapsedMs` remain the source of fishing effort. Ordinary fish retain their
+existing surges, pause/resume behaviour, held catches, pickup, drop and throw.
+
+Giant shark fatigue derives from active reeling effort divided by the existing
+retrieval duration. Host time drives bounded runs and lateral swimming, including
+while the player pauses reeling. Pausing adds no fatigue or retrieval effort.
+Resistance, swimming speed and rod flex weaken as effort approaches completion.
+The host controls movement, turning, fatigue and resistance; guests render the
+same replicated result.
+
+The shark's full-size model stays in the world, mostly submerged. Its imported
+fin span and submerged belly are included in conservative footprint checks.
+Depth, sampled floors, terrain/build obstacles and inflated rowboat hulls reject
+unsafe positions. Movement is swept in small increments. Safe landing prefers
+water alongside the angler and searches farther offshore when shallow coastal
+water cannot accommodate the body. Giant-shark tethers allow up to 1,600 world
+units (40 metres); ordinary casting/retrieval ranges are unchanged. A blocked
+landing retains the fight at its last safe water position and retries; effort
+alone does not award a catch or teleport a shark into place.
+
+A tired shark arriving at safe water enters `landed`, with `tetheredBy` separate
+from held-fish `ownerId`. The rod remains equipped and its line attaches near
+the shark's mouth. The character keeps the rod pose, and the catch is never
+presented in the first-person hands, thrown or picked up. `landedAt` records
+completion and persists during release, allowing the catch log to count the
+original catch once even if a short landing is followed by release between
+snapshots. The UI offers one Release shark action.
+
+Primary or secondary input releases a landed shark. Tool/menu changes,
+swimming, death, disconnect and excessive tether distance also release it.
+Secondary input can abandon an unfinished fight, without catch attribution.
+Released giants gradually increase swimming speed and dive only where the
+whole submerged footprint remains clear, fading after eight seconds. Attached
+landed sharks are protected from loose-fish eviction; released sharks use the
+existing bounded loose-fish pool. Fishing state remains transient.
+
+Protocol **v65** carries the fight fields and the landed/tether/completion
+state. Reload all multiplayer clients after this update. No extra model assets
+or independent client fish physics are introduced.
+
+Focused simulation tests cover pause/fatigue, safe footprint placement,
+obstructed landing recovery, release/cancellation/disconnect and ordinary
+fish regression. `tools/test-friends-giant-shark.mjs` exercises the real coastal
+host simulation, desktop/mobile rendering, one-time catch credit, gentle
+release and host-to-guest WebRTC fight/landing/release/cleanup. Captures and
+measurements are in `artifacts/giant-shark/validation.json`. The boat catch
+regression now holds the reel input after the bite, matching hold-to-reel.
+
+Final giant-shark validation: 122 focused tests, TypeScript and production
+build passed. The ordinary browser regression passed audio pause/resume,
+model pool/memory checks and the ordinary WebRTC catch loop.
+`tools/test-friends-giant-shark-arena.mjs` also passed real mouse hold/pause,
+continued shark movement during pause, no premature catch credit, world
+landing with the rod, one release button and real touch release. Its
+desktop/mobile captures are in `artifacts/giant-shark-arena/`.
+
+Review fixes: giant-shark body checks use conservative cached empty terrain
+volumes, invalidated by terrain revisions and water epochs. Builds, boats and
+trees remain live checks; tree candidates and vehicle poses are shared within
+a host tick. Unavailable landing searches retry at most every 500 ms. A local
+warmed five-player/five-shark CPU benchmark dropped from 41.9 ms median and
+54.2 ms p95 per host tick to 5.5 ms median and 16.8 ms p95, with zero measured
+ticks exceeding 50 ms. These measurements cover host CPU, not GPU frame time.
+The fishing boat checks continuous hull overlap with build boxes, including
+narrow walls between water probes. The seaside pier's shared raycasts include
+glazing, rails and walking slabs, while preserving the entrance opening.

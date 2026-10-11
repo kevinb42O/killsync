@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export const FRIENDS_ASSETS = {
+  fishingBoat: 'fishing-boat/boat',
+  coastalPier: 'coastal-pier/pier',
+  pierChair: 'pier-interior/chair',
+  pierChairLod: 'pier-interior/chair-lod',
   fishingRod:'fishing/rod', fishingFish:'fishing/koi',
   rowboat: 'watercraft-kit/boat-row-large',
   frontierPine: 'quaternius/PineTree_1', frontierPineSmall: 'quaternius/PineTree_5', frontierPineTall: 'quaternius/PineTree_3', frontierBirch: 'quaternius/BirchTree_1', frontierMaple: 'quaternius/MapleTree_1', frontierBush: 'quaternius/Bush',

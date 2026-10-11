@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Bookmark, Check, Copy, DoorOpen, Globe, Leaf, Link2, LoaderCircle, MapPin, Moon, Pause, Play, RefreshCw, Sprout, Users } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bookmark, Check, Copy, DoorOpen, Globe, Leaf, Link2, LoaderCircle, MapPin, Moon, RefreshCw, Sprout, Users } from 'lucide-react';
 import type { CoopPlayerSeed } from '../game/multiplayer/CoopSimulation';
 import type { PublicLobby } from '../game/multiplayer/LobbySignaling';
 import { FRIENDS_MAX_PLAYERS } from '../game/multiplayer/protocol';
@@ -25,16 +25,9 @@ export interface FriendsModeSetupProps {
   onCreateAnswer: () => void; onAcceptAnswer: () => void; onCopyText: (text: string) => void;
 }
 
-function initialPaused() {
-  if (typeof window === 'undefined') return false;
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
-  try { return localStorage.getItem('killsync.friends.menu.pause') === 'true'; } catch { return false; }
-}
-
 export function FriendsModeSetup(p: FriendsModeSetupProps) {
   useEffect(() => friendsAudio.acquire(), []);
   const [view, setView] = useState<'welcome' | 'join'>(p.initialRoomCode ? 'join' : 'welcome');
-  const [paused, setPaused] = useState(initialPaused);
   const [nameTouched, setNameTouched] = useState(false);
   const [save] = useState(() => readFriendsWorld());
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -54,16 +47,6 @@ export function FriendsModeSetup(p: FriendsModeSetupProps) {
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [p.mode, p.loading, view, p.onLeave, p.onClose]);
-  useEffect(() => {
-    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = () => { if (preference.matches) setPaused(true); };
-    preference.addEventListener('change', onChange);
-    return () => preference.removeEventListener('change', onChange);
-  }, []);
-  const toggleScenery = () => {
-    const next = !paused; setPaused(next);
-    try { localStorage.setItem('killsync.friends.menu.pause', String(next)); } catch { /* Optional preference */ }
-  };
   const names = p.mode === 'host' || p.mode === 'direct_host' ? [p.localPlayer, ...p.guestPlayers] : p.rosterPlayers;
   const roster = <div className="friends-menu__people">
     <div className="friends-menu__section-title"><h3>{t('roster')}</h3><span>{t('of', { current: names.length, max: FRIENDS_MAX_PLAYERS })}</span></div>
@@ -83,13 +66,12 @@ export function FriendsModeSetup(p: FriendsModeSetupProps) {
   </div>;
   const title = (text: string) => <h2 ref={headingRef} tabIndex={-1}>{text}</h2>;
   return <div className="friends-menu" ref={menuRef} aria-label={t('mode')} onPointerDown={event => event.stopPropagation()} onClickCapture={event => { if ((event.target as HTMLElement).closest('button')) friendsAudio.play('click', .22); }}>
-    <FriendsMenuBackdrop paused={paused} language={p.language}/>
+    <FriendsMenuBackdrop/>
     <div className="friends-menu__layout">
       <header className="friends-menu__header">
         <div className="friends-menu__brand"><button type="button" className="friends-menu__back" onClick={goBack} aria-label={p.mode === 'choose' && view === 'welcome' ? t('close') : t('back')}><ArrowLeft size={19}/></button><Leaf size={21} aria-hidden="true"/><span>{t('mode')}</span></div>
         <div className="friends-menu__utilities">
           <label className="friends-menu__language"><Globe size={16} aria-hidden="true"/><span className="friends-menu__sr">{t('language')}</span><select aria-label={t('language')} value={p.language} onChange={event => p.onLanguage(event.target.value as CoopLanguage)}><option value="en">English</option><option value="ru">Русский</option></select></label>
-          <button type="button" className="friends-menu__motion" onClick={toggleScenery} aria-label={t(paused ? 'resume' : 'pause')} aria-pressed={paused}>{paused ? <Play size={16}/> : <Pause size={16}/>}<span>{t(paused ? 'resume' : 'pause')}</span></button>
         </div>
       </header>
       <main className="friends-menu__main">

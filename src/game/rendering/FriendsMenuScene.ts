@@ -57,12 +57,12 @@ export function createFriendsMenuScene(host: HTMLElement, paused: () => boolean)
         camera.lookAt(target.x, target.y, target.z);
         world.update(elapsed);
         if (host.dataset.phase !== world.phase) host.dataset.phase = world.phase;
-        // Reveal the world only after its whole island shell is installed.
+        renderer.render(scene, camera);
+        // Reveal the world only after its whole island shell has rendered.
         // Partial worker results would expose the pale sea floor through gaps.
         if (!ready && world.ready) {
           ready = true; host.dataset.state = 'ready';
         }
-        renderer.render(scene, camera);
       }
     }
     frame = requestAnimationFrame(render);

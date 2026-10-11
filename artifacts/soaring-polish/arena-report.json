@@ -1,0 +1,25 @@
+{
+  "errors": [],
+  "steps": [
+    "Fun opened",
+    "Glider visible",
+    "Glider selected"
+  ],
+  "funBar": {
+    "slot": 6,
+    "selected": true,
+    "mobile": false,
+    "bounds": {
+      "x": 743.015625,
+      "y": 827,
+      "width": 54,
+      "height": 46
+    }
+  },
+  "flight": {
+    "phase": "flying",
+    "wing": true,
+    "defaultHandsHidden": true,
+    "cameraRoll": 0
+  }
+}

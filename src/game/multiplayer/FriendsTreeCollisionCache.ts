@@ -1,13 +1,15 @@
 import { frontierTrees, type FrontierSnapshot, type FrontierTree } from './FriendsFrontier';
 import type { FriendsTerrain } from '../world/FriendsTerrain';
 
-type Forest = Pick<FrontierSnapshot, 'harvested' | 'planted'>;
+type Forest = Pick<FrontierSnapshot, 'planted'> & {harvested:readonly string[]|ReadonlySet<string>};
 type SupportTerrain = Pick<FriendsTerrain, 'supports' | 'revision' | 'waterEpoch'>;
 
-/** Guest snapshots are immutable. Retain only the current nine-cell candidate
- * list; weak support entries do not retain trees after leaving the region. */
+/** Supports guest snapshot arrays and host harvesting Sets. Retain only the
+ * current nine-cell list; weak support entries do not retain departed trees. */
 export class FriendsTreeCollisionCache {
-  private harvested?: readonly string[];
+  private harvested?: Forest['harvested'];
+  private harvestedCount=-1;
+  private plantedCount=-1;
   private removed = new Set<string>();
   private planted?: readonly FrontierTree[];
   private cellX = NaN;
@@ -19,7 +21,9 @@ export class FriendsTreeCollisionCache {
   private support = new WeakMap<FrontierTree, boolean>();
 
   collide(position: {x:number;y:number}, z:number, radius:number, forest:Forest, terrain:SupportTerrain) {
-    if (forest.harvested !== this.harvested) {
+    const count=Array.isArray(forest.harvested)?forest.harvested.length:(forest.harvested as ReadonlySet<string>).size;
+    if (forest.harvested !== this.harvested||count!==this.harvestedCount) {
+      this.harvestedCount=count;
       this.harvested = forest.harvested;
       this.removed = new Set(forest.harvested);
     }
@@ -30,7 +34,8 @@ export class FriendsTreeCollisionCache {
       this.support = new WeakMap();
     }
     const cx = Math.floor(position.x / 512), cy = Math.floor(position.y / 512);
-    if (cx !== this.cellX || cy !== this.cellY || forest.planted !== this.planted) {
+    if (cx !== this.cellX || cy !== this.cellY || forest.planted !== this.planted||forest.planted.length!==this.plantedCount) {
+      this.plantedCount=forest.planted.length;
       this.cellX = cx; this.cellY = cy; this.planted = forest.planted;
       const candidates = [...forest.planted];
       // Keep the original order: earlier trunk contacts can move the body.

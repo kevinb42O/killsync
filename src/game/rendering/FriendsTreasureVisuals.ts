@@ -16,7 +16,7 @@ export class FriendsTreasureVisuals extends THREE.Group {
       const mesh = new THREE.Mesh(box, material); mesh.position.set(x, y, z); mesh.scale.set(sx, sy, sz); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh);
     };
     for (const t of CAVE_TREASURES) {
-      const root = new THREE.Group(); root.position.set(t.x, t.z, t.y); root.rotation.y = t.angle; this.add(root);
+      const root = new THREE.Group(); root.position.set(t.x, t.z, t.y); root.rotation.y = t.angle; root.scale.setScalar(t.relic?.65:.5); this.add(root);
       addBox(root, 0, 4, 0, 66, 8, 44, wood);
       addBox(root, 0, 20, 20, 66, 32, 5, wood); addBox(root, 0, 20, -20, 66, 32, 5, wood);
       for (const x of [-31, 31]) addBox(root, x, 20, 0, 5, 32, 44, wood);

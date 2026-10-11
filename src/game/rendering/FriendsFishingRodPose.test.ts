@@ -21,6 +21,19 @@ describe('fishing casting stroke',()=>{
       expect(fishingRodPose(pose(),undefined,c,1100)).toEqual(airborne);
     }
   });
+  it('freezes the reel pose while released and bends more for larger struggling fish',()=>{
+    const c=cast();c.phase='reeling';c.reelActive=false;c.reelElapsedMs=500;
+    const paused=fishingRodPose(pose(),undefined,c,2000);
+    expect(fishingRodPose(pose(),undefined,c,20000)).toEqual(paused);
+    c.reelActive=true;c.size=.3;const small=fishingRodPose(pose(),undefined,c,2000).flex;
+    c.size=4;expect(fishingRodPose(pose(),undefined,c,2000).flex).toBeGreaterThan(small);
+  });
+  it('uses authoritative shark resistance even while cranking is paused, and relaxes when tired',()=>{
+    const c=cast();c.phase='reeling';c.reelActive=false;c.sharkFatigue=.2;c.sharkLoad=.8;
+    const fighting=fishingRodPose(pose(),undefined,c,2000).flex;
+    c.sharkLoad=.1;expect(fishingRodPose(pose(),undefined,c,2000).flex).toBeLessThan(fighting);
+    c.sharkFatigue=1;c.sharkLoad=0;expect(fishingRodPose(pose(),undefined,c,2000).flex).toBeCloseTo(.1);
+  });
   it('settles smoothly without replaying a cast and uses less load for empty retrieval',()=>{
     const c=cast();let previous=fishingRodPose(pose(),undefined,c,1000).pitch;
     for(let now=1001;now<=1850;now++){

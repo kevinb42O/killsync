@@ -1,3 +1,6 @@
+import { FriendsTreeCollisionCache } from './FriendsTreeCollisionCache';
+import { FriendsRockCollisionCache } from '../world/FriendsRocks';
+import { FRIENDS_MIN_EDIT_VOXEL } from '../world/FriendsTerrainLimits';
 import { emberRetreatTreeClearance } from '../world/FriendsRetreatSites';
 import { lavaRiverTreeClearance } from '../world/FriendsLavaRiver';
 import { friendsCampfireContains } from '../world/FriendsTerrain';
@@ -15,8 +18,8 @@ import { FRIENDS_BUILD_CATALOG, friendsShapeBoxes, worldBox, type FriendsBuildPi
 export const MATERIAL_NAMES = { wood: 'Timber', soil: 'Soil', stone: 'Stone', copper: 'Copper ore', iron: 'Iron ore', planks: 'Planks', ingots: 'Ingots', saplings: 'Saplings' } as const;
 export type Resource = keyof typeof MATERIAL_NAMES;
 export type Materials = Record<Resource, number>;
-export type FrontierTool = 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
-export const FRONTIER_TOOLS = { 0: 'Combat', 1: 'Axe', 2: 'Pickaxe', 3: 'Shovel', 5: 'Rope', 6: 'Empty hands', 7: 'Fishing rod', 8: 'Stone', 9: 'Bird seeds', 10: 'Marshmallow', 11: 'Confetti' } as const;
+export type FrontierTool = 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+export const FRONTIER_TOOLS = { 0: 'Combat', 1: 'Axe', 2: 'Pickaxe', 3: 'Shovel', 5: 'Rope', 6: 'Empty hands', 7: 'Fishing rod', 8: 'Stone', 9: 'Bird seeds', 10: 'Marshmallow', 11: 'Confetti', 13: 'Glider' } as const;
 export const PACK_CAPACITY = 160;
 export const FRIENDS_TEST_MODE = true; // Temporary playtest rules: free construction and uncapped inventories.
 export const emptyMaterials = (): Materials => ({ wood: 0, soil: 0, stone: 0, copper: 0, iron: 0, planks: 0, ingots: 0, saplings: 0 });
@@ -72,6 +75,7 @@ export function buildCost(shape: FriendsBuildShape, finish: FriendsBuildFinish):
   if (shape === 'furnace') return { stone: 16, copper: 4 };
   if (shape === 'storage') return { planks: 8 };
   if (shape === 'landing_pad') return { stone: 20, ingots: 6 };
+  if(finish==='crystal')return {ingots:3,planks:2};
   const units = Math.max(1, Math.ceil(FRIENDS_BUILD_CATALOG[shape].w * FRIENDS_BUILD_CATALOG[shape].d * FRIENDS_BUILD_CATALOG[shape].h / 131072));
   return finish === 'grass' || finish === 'soil' ? { soil: Math.min(6, units) } : finish === 'copper' ? { copper: Math.min(6, units) } : finish === 'iron' ? { iron: Math.min(6, units) } : finish === 'teal' ? { ingots: Math.min(6, units) } : finish === 'timber' ? { wood: Math.min(6, units) } : { stone: Math.min(6, units) };
 }
@@ -85,6 +89,8 @@ export class FriendsFrontier {
   readonly terrain: FriendsTerrain;
   retreatActive:readonly string[]=[];
   demolishBuild?: (actor: FrontierActor, piece: FriendsBuildPiece) => string | undefined;
+  private rocks = new FriendsRockCollisionCache();
+  private canopyTrees = new FriendsTreeCollisionCache();
   private state: FrontierSnapshot;
   private handled = new Map<string, number>();
   private nextHit = new Map<string, number>();
@@ -104,6 +110,11 @@ export class FriendsFrontier {
       this.state.planted = this.state.planted.filter(t => !lavaRiverTreeClearance(t.x, t.y) && !emberRetreatTreeClearance(t.x, t.y));
       if (this.state.planted.length !== saved.planted.length) this.changed();
     }
+  }
+  awardCaveSupplies(supplies:Partial<Materials>={},tools=false) {
+    for(const r of Object.keys(supplies) as Resource[])this.state.stock[r]+=supplies[r]??0;
+    if(tools)this.state.upgrades=1;
+    this.changed();
   }
   private get capacity() { return this.testing ? Infinity : PACK_CAPACITY; }
   preserveTerrainWork(_pieces: readonly FriendsBuildPiece[], _previous?: TerrainSnapshot) {
@@ -209,7 +220,7 @@ export class FriendsFrontier {
       if (scenicTransitProtected(tx, ty, (nz + .5) * 32)) { this.tell(actor, 'Keep the Grand Traverse railway clear.', elapsed); return; }
       if (pieces.some(p => friendsShapeBoxes(p.shape).some(local => { const b = worldBox(p, local); return Math.abs(tx - b.x) < b.w / 2 + 16 - .01 && Math.abs(ty - b.y) < b.d / 2 + 16 - .01 && nz * 32 < b.z + b.h && (nz + 1) * 32 > b.z; }))) { this.tell(actor, 'Keep structures clear.', elapsed); return; }
       if (!this.testing && !pack.soil) { this.tell(actor, 'Gather soil with the shovel first.', elapsed); return; }
-      if (nz < -16 || nz >= 192 || this.terrain.material(nx, ny, nz) || [actor, ...bodies].some(p => Math.hypot(tx - p.x, ty - p.y) < 44 && nz * 32 < p.z + 50 && (nz + 1) * 32 > p.z)) { this.tell(actor, 'Leave space for your operator.', elapsed); return; }
+      if (nz < FRIENDS_MIN_EDIT_VOXEL || nz >= 192 || this.terrain.material(nx, ny, nz) || [actor, ...bodies].some(p => Math.hypot(tx - p.x, ty - p.y) < 44 && nz * 32 < p.z + 50 && (nz + 1) * 32 > p.z)) { this.tell(actor, 'Leave space for your operator.', elapsed); return; }
       if (!this.terrain.set(nx, ny, nz, 1)) { this.tell(actor, 'This world has reached its excavation budget.', elapsed); return; }
       this.damage.delete([nx, ny, nz].join(','));
       if (!this.testing) pack.soil--; this.changed();
@@ -235,6 +246,16 @@ export class FriendsFrontier {
         }
     if(destroyed){this.state.mined+=destroyed;this.changed();}
     return destroyed;
+  }
+  collideRocks(position:{x:number;y:number},z:number,radius:number) {
+    return this.rocks.collide(position,z,radius,{planted:this.state.planted,harvested:this.harvested},this.terrain);
+  }
+  rockFloor(x:number,y:number,z:number) {
+    return this.rocks.floor(x,y,z,{planted:this.state.planted,harvested:this.harvested},this.terrain);
+  }
+  /** Many canopy samples share a bounded candidate/support cache. */
+  canopyTreeBlocked(position:{x:number;y:number},z:number,radius:number){
+    return this.canopyTrees.collide(position,z,radius,{planted:this.state.planted,harvested:this.harvested},this.terrain);
   }
   collideTrees(position: { x: number; y: number }, z: number, radius: number) {
     let collided = false;

@@ -104,6 +104,13 @@ Source and license: [casting hand credits](public/models/hellbinder/README.md).
 
 ## Friends mode — Sunline Expedition
 
+Friends now includes first-person **paragliding**. Open **Fun** and select **Glider** in slot **6**,
+use **M** to find the marked mountain launches, and run downhill into the wind
+after inflation. Follow windward ridges or circle in thermals to gain height.
+Your friends see your colored wing and harness. See the [soaring guide](docs/friends-soaring.md)
+for flight controls, the weather model and multiplayer validation. All players
+must reload for multiplayer protocol **69**.
+
 Friends multiplayer now supports playable late joins, simultaneous admission,
 paced world synchronization, acknowledged edits, persistent crew packs and
 rejoining after disconnection. See the [implementation and validation report](docs/friends-multiplayer-validation.md)

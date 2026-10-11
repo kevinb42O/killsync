@@ -61,7 +61,7 @@ document.getElementById('caveEntrance')!.onclick=()=>caveView(6090,5500,900,6384
 document.getElementById('tunnelSky')!.onclick=()=>caveView(6384,5152,160,6385,5152,900);
 document.getElementById('cathedral')!.onclick=()=>caveView(8160,4880,280,8650,4800,-80);
 document.getElementById('blueVault')!.onclick=()=>caveView(8992,5510,50,9300,5750,-80);
-document.getElementById('treasury')!.onclick=()=>{const t=CAVE_TREASURES.find(t=>t.id==='reliquary-4-0')!;caveView(t.x-150,t.y+130,t.z+62,t.x,t.y,t.z+22);};
+document.getElementById('treasury')!.onclick=()=>{const t=CAVE_TREASURES.find(t=>t.id==='descent-vault-cache')!;caveView(t.x-150,t.y+130,t.z+62,t.x,t.y,t.z+22);};
 document.getElementById('flashlight')!.onclick=()=>{flashlightReview=true;world.toggleFlashlight();};
 document.getElementById('openTreasures')!.onclick=()=>{openedTreasures=openedTreasures.length?[]:CAVE_TREASURES.map(t=>t.id);};
 // Real terrain fixture: switching snapshots verifies block shells, excavation

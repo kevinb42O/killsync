@@ -1,10 +1,12 @@
+import { GLIDER_TOOL } from './FriendsGliderControls';
+export { GLIDER_TOOL } from './FriendsGliderControls';
 import { DYNAMITE_TOOL } from './FriendsDynamite';
 export { DYNAMITE_TOOL } from './FriendsDynamite';
 import type { FrontierTool } from './FriendsFrontier';
 import { CONFETTI_TOOL } from './FriendsConfetti';
 export { CONFETTI_TOOL } from './FriendsConfetti';
 
-export const FRIENDS_FUN_ORDER: readonly FrontierTool[] = [8,9,10,CONFETTI_TOOL,DYNAMITE_TOOL];
+export const FRIENDS_FUN_ORDER: readonly FrontierTool[] = [8,9,10,CONFETTI_TOOL,DYNAMITE_TOOL,GLIDER_TOOL];
 export function cycleFriendsFun(tool:FrontierTool,direction:number):FrontierTool {
   const index=Math.max(0,FRIENDS_FUN_ORDER.indexOf(tool));
   return FRIENDS_FUN_ORDER[(index+Math.sign(direction)+FRIENDS_FUN_ORDER.length)%FRIENDS_FUN_ORDER.length];

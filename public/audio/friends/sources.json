@@ -34,7 +34,10 @@
     "waterBreathIn": "https://pixabay.com/sound-effects/people-inalare-274160/",
     "stoneHurt": "https://pixabay.com/sound-effects/people-oof-2-580732/",
     "emberOceanSteam": "https://freesound.org/people/sethlind/sounds/265013/",
-    "waterSubmerged": "https://pixabay.com/sound-effects/film-special-effects-underwater-loop-amb-6182/"
+    "waterSubmerged": "https://pixabay.com/sound-effects/film-special-effects-underwater-loop-amb-6182/",
+    "boat_engine.ogg": "https://freesound.org/people/lolamadeus/sounds/179362/",
+    "boat_hull_water.ogg": "https://freesound.org/people/thatjeffcarter/sounds/223295/",
+    "seagull": "https://freesound.org/people/squashy555/sounds/353416/"
   },
   "assets": [
     {
@@ -1125,6 +1128,36 @@
       "durationSeconds": 59,
       "bytes": 417109,
       "processing": "Only original 0\u201360s; 1s circular crossfade gives 59s loop; stereo 32kHz Vorbis q3; linear gain 0.716416544, RMS target -23dBFS, peak limited to -6dBFS. No synthesis."
+    },
+    {
+      "file": "boat_engine.ogg",
+      "author": "lolamadeus",
+      "sourcePage": "https://freesound.org/people/lolamadeus/sounds/179362/",
+      "source": "https://cdn.freesound.org/previews/179/179362_544580-lq.ogg",
+      "license": "CC0-1.0",
+      "downloaded": "2026-10-11",
+      "sha256": "07f91db5570fd438bf91ac5eb6fe4dc7216da2bd7d0578228c2b56f38f6a4f56",
+      "edit": "Unmodified public Ogg preview. Runtime 0.8-second seam crossfade; engine playback rate 0.85\u20131.15 follows confirmed speed."
+    },
+    {
+      "file": "boat_hull_water.ogg",
+      "author": "thatjeffcarter",
+      "sourcePage": "https://freesound.org/people/thatjeffcarter/sounds/223295/",
+      "source": "https://cdn.freesound.org/previews/223/223295_1306869-lq.ogg",
+      "license": "CC-BY-4.0",
+      "downloaded": "2026-10-11",
+      "sha256": "df828b5f8b0ff0912e2434b15f0db0629bda0038261afa85db12dddd7fcaa15d",
+      "edit": "Unmodified public Ogg preview. Runtime 0.8-second seam crossfade; engine playback rate 0.85\u20131.15 follows confirmed speed."
+    },
+    {
+      "file": "seagull_beach.ogg",
+      "author": "squashy555",
+      "sourcePage": "https://freesound.org/people/squashy555/sounds/353416/",
+      "source": "https://cdn.freesound.org/previews/353/353416_1149179-lq.ogg",
+      "license": "CC0-1.0",
+      "downloaded": "2026-10-11",
+      "sha256": "a3cf9b1edbd68388fb3b8150ed24f656b6b061b2ff6cfe827444b8cfc47d0995",
+      "edit": "Unmodified public Ogg preview. Runtime plays non-looping four-second excerpts at offsets 0, 12 and 24 seconds, with 0.3-second tail fades and spatial gain."
     }
   ],
   "defaultLicense": "CC0-1.0",

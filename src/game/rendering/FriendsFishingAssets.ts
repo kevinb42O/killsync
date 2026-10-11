@@ -6,36 +6,65 @@ import { loadFriendsAsset } from './FriendsAssets';
 import { groundedFishClip } from './FriendsFishGroundAnimation';
 import { heldFishClip } from './FriendsFishingPresentation';
 
-let fishTemplate:Promise<{root:THREE.Group;clips:THREE.AnimationClip[]}>|undefined;
+import { FISH_SPECIES, type FishSpecies } from '../multiplayer/FriendsFishSpecies';
+
+const fishTemplates=new Map<FishSpecies,Promise<{root:THREE.Group;clips:THREE.AnimationClip[]}>>();
 let rodTemplate:Promise<THREE.Group>|undefined;
-/** Collapse the downloaded fish's five palette submeshes into one skinned draw.
- * Every clone shares the finished geometry/material and owns only its skeleton. */
-export function loadFishingFish(){
-  fishTemplate??=new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/friends/fishing/koi.glb`).then(gltf=>{
-    const meshes:THREE.SkinnedMesh[]=[];gltf.scene.traverse(o=>{if(o instanceof THREE.SkinnedMesh)meshes.push(o);});
-    const first=meshes[0];
-    if(first&&meshes.every(m=>m.parent===first.parent&&m.matrix.equals(first.matrix))){
-      const parts=meshes.map(m=>{
-        const g=m.geometry.clone(),count=g.getAttribute('position').count,color=(m.material as THREE.MeshStandardMaterial).color;
-        const colors=new Float32Array(count*3);for(let i=0;i<count;i++)colors.set([color.r,color.g,color.b],i*3);
-        g.setAttribute('color',new THREE.BufferAttribute(colors,3));return g;
-      });
-      const geometry=mergeGeometries(parts);parts.forEach(g=>g.dispose());
-      // Thin fins must remain visible from either side while a catch is held.
-      const material=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
-      const mesh=new THREE.SkinnedMesh(geometry,material);mesh.name='fishing-koi';mesh.bind(first.skeleton,first.bindMatrix);mesh.position.copy(first.position);mesh.quaternion.copy(first.quaternion);mesh.scale.copy(first.scale);first.parent!.add(mesh);
-      for(const m of meshes){m.removeFromParent();m.geometry.dispose();(m.material as THREE.Material).dispose();}
+/** Downloaded meshes retain their skeletons. Adaptations are cached once per
+ * species, with shared geometry/materials and only per-catch animation state. */
+export function loadFishingFish(species:FishSpecies='koi'){
+  let template=fishTemplates.get(species);if(template)return template;
+  template=new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/friends/fishing/${FISH_SPECIES[species].model}.glb`).then(gltf=>{
+    const adapted=['perch','zander','pike','mackerel','cod'].includes(species);
+    const shape=new THREE.Group();shape.add(gltf.scene);
+    // The Google trout faces +Z; the animated pack faces -Z.
+    if(FISH_SPECIES[species].model==='trout')shape.rotation.y=Math.PI;
+    if(species==='pike')shape.scale.set(.85,.62,1.3);
+    if(species==='zander')shape.scale.set(.86,.78,1.25);
+    if(species==='mackerel')shape.scale.set(.72,.72,1.22);
+    if(species==='cod')shape.scale.set(.9,.85,1.12);
+    shape.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(shape),extent=bounds.getSize(new THREE.Vector3());
+    const point=new THREE.Vector3(),color=new THREE.Color();
+    const meshes:THREE.Mesh[]=[];gltf.scene.traverse(o=>{if(o instanceof THREE.Mesh)meshes.push(o);});
+    // Preserve dark eye/mouth palettes and original colours on exact models.
+    for(const m of meshes){
+      const geometry=m.geometry.clone(),position=geometry.getAttribute('position'),base=(m.material as THREE.MeshStandardMaterial).color;
+      const colors=new Float32Array(position.count*3);
+      for(let i=0;i<position.count;i++){
+        color.copy(base);point.fromBufferAttribute(position,i).applyMatrix4(m.matrixWorld);
+        if(adapted&&(base.r+base.g+base.b)>.035){
+          const dorsal=(point.y-bounds.min.y)/extent.y,longitudinal=(point.z-bounds.min.z)/extent.z;
+          const belly=dorsal<.38;
+          color.set(belly?'#c9c5a3':species==='mackerel'?'#3d7380':species==='cod'?'#787b55':species==='pike'?'#5a743e':species==='zander'?'#89936b':'#8f9b48');
+          if(species==='perch'){
+            if(m.name.endsWith('_1'))color.set('#cf693a');
+            else if(!belly&&Math.sin(longitudinal*Math.PI*12)>.55)color.multiplyScalar(.43);
+          }
+          if(species==='zander'&&!belly&&Math.sin(longitudinal*Math.PI*14)>.65)color.multiplyScalar(.65);
+          if(species==='mackerel'&&dorsal>.52&&Math.sin(longitudinal*Math.PI*26+point.x*3)>.3)color.multiplyScalar(.4);
+          if(species==='pike'&&!belly&&Math.sin(longitudinal*87+point.x*.14)*Math.sin(dorsal*65)>.65)color.set('#b5ba77');
+          if(species==='cod'&&!belly&&Math.sin(longitudinal*113+point.x*12)*Math.sin(dorsal*81)>.6)color.multiplyScalar(.5);
+        }
+        color.toArray(colors,i*3);
+      }
+      geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));m.geometry.dispose();m.geometry=geometry;
     }
-    gltf.scene.traverse(o=>{if(o instanceof THREE.Mesh){o.castShadow=o.receiveShadow=false;o.frustumCulled=false;}});
-    gltf.scene.updateMatrixWorld(true);
-    const bounds=new THREE.Box3().setFromObject(gltf.scene),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
-    const root=new THREE.Group();root.add(gltf.scene);gltf.scene.position.sub(center);root.scale.setScalar(34/Math.max(size.x,size.y,size.z));
+    const first=meshes[0];
+    const material=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
+    if(first instanceof THREE.SkinnedMesh&&meshes.every(m=>m instanceof THREE.SkinnedMesh&&m.parent===first.parent&&m.matrix.equals(first.matrix))){
+      const geometry=mergeGeometries(meshes.map(m=>m.geometry));
+      const mesh=new THREE.SkinnedMesh(geometry,material);mesh.name=`fishing-${species}`;mesh.bind(first.skeleton,first.bindMatrix);mesh.position.copy(first.position);mesh.quaternion.copy(first.quaternion);mesh.scale.copy(first.scale);first.parent!.add(mesh);
+      for(const m of meshes){m.removeFromParent();m.geometry.dispose();(m.material as THREE.Material).dispose();}
+    }else for(const m of meshes){(m.material as THREE.Material).dispose();m.material=material;}
+    shape.traverse(o=>{if(o instanceof THREE.Mesh){o.castShadow=o.receiveShadow=false;o.frustumCulled=false;}});
+    const root=new THREE.Group();root.add(shape);shape.position.sub(bounds.getCenter(new THREE.Vector3()));root.scale.setScalar(34/extent.z);
     const clips=gltf.animations.map(clip=>clip.name.endsWith('|Out_Of_Water')?groundedFishClip(clip):clip);
     const swim=clips.find(clip=>clip.name.endsWith('|Swimming_Normal'));
     if(swim)clips.push(heldFishClip(swim,root));
     return {root,clips};
   });
-  return fishTemplate;
+  fishTemplates.set(species,template);return template;
 }
 export function createFishingFish(source:Awaited<ReturnType<typeof loadFishingFish>>){
   const root=clone(source.root) as THREE.Group,mixer=new THREE.AnimationMixer(root);

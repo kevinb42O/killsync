@@ -1,0 +1,91 @@
+{
+  "date": "2026-10-11T22:02:15.376Z",
+  "note": "Node CPU microbenchmark, warm repeated chunk meshes; not browser FPS.",
+  "report": [
+    {
+      "name": "The Last Shift",
+      "chunk": [
+        18,
+        12
+      ],
+      "verticalVoxels": 42,
+      "medianMs": 26.17,
+      "rangeMs": [
+        22.59,
+        26.17,
+        31.53
+      ],
+      "samples": 13226,
+      "vertices": 2004,
+      "bytes": 64128
+    },
+    {
+      "name": "The Listening Cavern",
+      "chunk": [
+        26,
+        14
+      ],
+      "verticalVoxels": 117,
+      "medianMs": 49.72,
+      "rangeMs": [
+        47.59,
+        49.72,
+        63.05
+      ],
+      "samples": 36283,
+      "vertices": 3462,
+      "bytes": 110784
+    },
+    {
+      "name": "The Heart Forge",
+      "chunk": [
+        31,
+        14
+      ],
+      "verticalVoxels": 170,
+      "medianMs": 85.64,
+      "rangeMs": [
+        85.02,
+        85.64,
+        87.4
+      ],
+      "samples": 49572,
+      "vertices": 3414,
+      "bytes": 109248
+    },
+    {
+      "name": "The Bedrock Vault",
+      "chunk": [
+        30,
+        9
+      ],
+      "verticalVoxels": 132,
+      "medianMs": 45.76,
+      "rangeMs": [
+        45.72,
+        45.76,
+        46.48
+      ],
+      "samples": 41296,
+      "vertices": 4074,
+      "bytes": 130368
+    },
+    {
+      "name": "The Last Stone",
+      "chunk": [
+        29,
+        7
+      ],
+      "verticalVoxels": 141,
+      "medianMs": 44.56,
+      "rangeMs": [
+        43.69,
+        44.56,
+        44.86
+      ],
+      "samples": 44822,
+      "vertices": 2856,
+      "bytes": 91392
+    }
+  ]
+}

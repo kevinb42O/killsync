@@ -91,12 +91,15 @@ export class FriendsShaderWarmup {
     // turn background preparation into a periodic full-scene CPU hitch.
     do {
       const object = scan.stack.pop()!;
-      if (this.options.initialView && !object.visible) continue;
+      // Explicit dormant gameplay batches must be ready before their first
+      // placement. They remain hidden and are compiled in the real HDR setup.
+      const startupWarmup = object.userData.friendsStartupWarmup === true;
+      if (this.options.initialView && !object.visible && !startupWarmup) continue;
       for (let i = object.children.length - 1; i >= 0; i--) scan.stack.push(object.children[i]);
       const renderable = object as Renderable;
       if (!(renderable instanceof THREE.Mesh || renderable instanceof THREE.Points || renderable instanceof THREE.Line || renderable instanceof THREE.Sprite)) continue;
       if (!renderable.geometry.getAttribute('position')?.count) continue;
-      if (this.options.initialView && (!renderable.layers.test(this.viewLayers) ||
+      if (this.options.initialView && !startupWarmup && (!renderable.layers.test(this.viewLayers) ||
         (renderable.frustumCulled && !(renderable instanceof THREE.Sprite ? this.frustum.intersectsSprite(renderable) : this.frustum.intersectsObject(renderable))))) continue;
       const key = this.signature(renderable, scan.materials);
       if (this.seen.has(key) || scan.queued.has(key)) continue;

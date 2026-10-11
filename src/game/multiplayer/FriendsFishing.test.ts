@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { FriendsFishing, FISHING_BITE_MS, FISHING_CHARGE_MS, FISHING_CAST_RELEASE_MS, fishingEmptyReelMs, FISHING_REEL_MS, FISHING_WAIT_MIN_MS, FISHING_WAIT_MAX_MS, LOOSE_FISH_LIMIT, fishLengthCm, fishingCatchSize, type FishingActor, type FishingEnvironment } from './FriendsFishing';
+import { FriendsFishing, FISHING_BITE_MS, FISHING_CHARGE_MS, FISHING_CAST_RELEASE_MS, fishingEmptyReelMs, fishingFishReelMs, FISHING_REEL_MS, FISHING_WAIT_MIN_MS, FISHING_WAIT_MAX_MS, LOOSE_FISH_LIMIT, fishLengthCm, fishingCatchSize, type FishingActor, type FishingEnvironment } from './FriendsFishing';
 import { SnapshotDecoder, compactSnapshotWirePayload } from './snapshotReplication';
 import { FriendsSimulation } from './FriendsSimulation';
 import { quantizePitch, quantizeAngle } from './CoopSimulation';
+import { SEA_FISH, FRESHWATER_FISH, speciesCatchSize } from './FriendsFishSpecies';
 import { firstPersonEyeZ } from './FirstPersonEye';
 import { friendsToolInput } from './FriendsToolControls';
 import { clampInputFrame, MULTIPLAYER_PROTOCOL_VERSION, type MultiplayerInputFrame } from './protocol';
@@ -15,16 +16,67 @@ const player=():FishingActor=>({id:'host',x:0,y:0,z:0,angle:0,lifeState:'alive'}
 const environment:FishingEnvironment={water:(x)=>x>=80?{level:0,depth:40,bodyId:'test'}:undefined,floor:(x)=>x>=80?-40:0,blocked:()=>false};
 const fixtureFlightMs=900;
 const fixtureBiteDelay=fixtureFlightMs+(FISHING_WAIT_MIN_MS+FISHING_WAIT_MAX_MS)/2+50;
-function fixture(sizeRandom=.5,env:FishingEnvironment=environment){
+function fixture(sizeRandom=.5,env:FishingEnvironment=environment,speciesRandom=.5){
   let samples=0;
-  const fishing=new FriendsFishing(()=>++samples%2?.5:sizeRandom),p=player();let now=0,command=input();
+  const fishing=new FriendsFishing(()=>{const draw=++samples%3;return draw===1?.5:draw===2?speciesRandom:sizeRandom;}),p=player();let now=0,command=input();
   const step=(ms=50)=>{for(let t=0;t<ms;t+=50){now+=50;fishing.update(50,now,[p],new Map([[p.id,command]]),env);}};
-  const click=()=>{command={...command,fireActionId:(command.fireActionId??0)+1,firing:false};step();};
-  const catchFish=()=>{click();step(fixtureBiteDelay);expect(fishing.snapshot().casts[0]?.phase).toBe('bite');click();step(FISHING_REEL_MS);expect(fishing.held(p.id)).toBeDefined();};
+  const click=()=>{command={...command,fireActionId:(command.fireActionId??0)+1,firing:fishing.snapshot().casts.length>0};step();};
+  const catchFish=()=>{click();step(fixtureBiteDelay);expect(fishing.snapshot().casts[0]?.phase).toBe('bite');click();step(fishing.snapshot().casts[0].reelDurationMs!);expect(fishing.held(p.id)).toBeDefined();};
   return {fishing,p,step,click,catchFish,get now(){return now;},set command(i:MultiplayerInputFrame){command=i;},get command(){return command;}};
 }
 
 describe('casual Friends fishing',()=>{
+  it.each(['lake','sea'])('retains %s species and length through hooking, replication, drop, pickup and release',bodyId=>{
+    const f=fixture(.999,{...environment,water:x=>x>=80?{level:0,depth:400,bodyId}:undefined,floor:x=>x>=80?-400:0},.999);
+    f.click();f.step(fixtureBiteDelay);f.click();
+    const hooked=f.fishing.snapshot().casts[0];
+    expect((bodyId==='sea'?SEA_FISH:FRESHWATER_FISH) as readonly string[]).toContain(hooked.species);
+    expect(hooked.size).toBeCloseTo(speciesCatchSize(hooked.species!,.999));
+    if(bodyId==='sea'){expect(hooked.species).toBe('shark');expect(fishLengthCm(hooked.size)).toBeGreaterThan(600);}
+    f.step(hooked.reelDurationMs!+4000);const caught=(bodyId==='sea'?f.fishing.landed('host'):f.fishing.held('host'))!;
+    expect(caught.species).toBe(hooked.species);expect(caught.size).toBe(hooked.size);
+    const snapshot=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]).createSnapshot();snapshot.friends!.fishing=f.fishing.snapshot();
+    expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(snapshot),1)?.friends?.fishing?.fish[0]).toMatchObject({species:caught.species,size:caught.size});
+    if(bodyId==='sea'){expect(f.fishing.held('host')).toBeUndefined();expect(caught.phase).toBe('landed');expect(f.fishing.pickup(f.p,7,f.now)).toBe(false);f.command={...f.command,altFireActionId:1};f.step(1200);}
+    else{f.command={...f.command,altFireActionId:1};f.step(1200);expect(f.fishing.pickup(f.p,7,f.now)).toBe(true);expect(f.fishing.held('host')?.species).toBe(caught.species);f.click();f.step(2000);}
+    expect(f.fishing.snapshot().fish[0]).toMatchObject({species:caught.species,size:caught.size,phase:'swimming'});
+  });
+  const sharkEnvironment:FishingEnvironment={...environment,water:x=>x>=80?{level:0,depth:400,bodyId:'sea'}:undefined,floor:x=>x>=80?-400:0};
+  const hookShark=(env=sharkEnvironment)=>{const f=fixture(.999,env,.999);f.click();f.step(fixtureBiteDelay);f.click();return f;};
+  it('keeps a paused giant shark fighting without adding fatigue, then lands it tired in water',()=>{
+    const f=hookShark();f.step(1500);f.command={...f.command,firing:false};f.step();
+    const paused=f.fishing.snapshot().casts[0],positions=new Set<string>();
+    for(let i=0;i<100;i++){f.step();const c=f.fishing.snapshot().casts[0];positions.add(`${c.x},${c.y}`);expect(c.reelElapsedMs).toBe(paused.reelElapsedMs);expect(c.sharkFatigue).toBe(paused.sharkFatigue);}
+    expect(positions.size).toBeGreaterThan(20);expect(f.fishing.snapshot().fish).toHaveLength(0);
+    f.click();f.step(paused.reelDurationMs!+5000);
+    const landed=f.fishing.landed('host')!;expect(landed).toMatchObject({phase:'landed',tetheredBy:'host',caughtBy:'host',species:'shark'});expect(landed.ownerId).toBeUndefined();
+    expect(landed.z).toBeLessThan(0);expect(f.fishing.held('host')).toBeUndefined();expect(f.fishing.snapshot().equipped).toContain('host');
+    f.step(10000);expect(f.fishing.snapshot().fish).toHaveLength(1);expect(f.fishing.landed('host')).toMatchObject({id:landed.id,x:landed.x,y:landed.y});
+  });
+  it.each(['primary','secondary','tool','swim','dead','disconnect','distance'])('releases a landed shark cleanly on %s without throwing or recording a second fish',action=>{
+    const f=hookShark();f.step(f.fishing.snapshot().casts[0].reelDurationMs!+5000);const landed=f.fishing.landed('host')!;expect(landed).toBeDefined();
+    if(action==='primary')f.command={...f.command,fireActionId:3};
+    if(action==='secondary')f.command={...f.command,altFireActionId:1};
+    if(action==='tool')f.command={...f.command,friendsTool:6};
+    if(action==='swim')f.p.swimming=true;
+    if(action==='dead')f.p.lifeState='dead';
+    if(action==='distance')f.p.x=-2000;
+    if(action==='disconnect')f.fishing.update(50,f.now+50,[],new Map(),sharkEnvironment);else f.step();
+    expect(f.fishing.landed('host')).toBeUndefined();expect(f.fishing.snapshot().casts).toHaveLength(0);
+    expect(f.fishing.snapshot().fish).toHaveLength(1);expect(f.fishing.snapshot().fish[0]).toMatchObject({id:landed.id,phase:'swimming',landedAt:landed.landedAt,caughtBy:'host'});
+    f.step(8500);expect(f.fishing.snapshot().fish[0]?.phase).toBe('fading');f.step(1000);expect(f.fishing.snapshot().fish).toHaveLength(0);
+  });
+  it('releases an unfinished shark without a catch credit on cancellation',()=>{
+    const f=hookShark();f.step(1000);f.command={...f.command,altFireActionId:1};f.step();
+    expect(f.fishing.snapshot().casts).toHaveLength(0);expect(f.fishing.snapshot().fish[0]).toMatchObject({phase:'swimming',species:'shark'});
+    expect(f.fishing.snapshot().fish[0].landedAt).toBeUndefined();expect(f.fishing.snapshot().fish[0].caughtBy).toBeUndefined();
+  });
+  it('does not exhaust a shark from wall time and can recover when blocked water opens up',()=>{
+    let blocked=false;const f=hookShark({...sharkEnvironment,waterObstacle:()=>blocked});f.step(500);
+    const elapsed=f.fishing.snapshot().casts[0].reelElapsedMs;blocked=true;f.step(25000);
+    expect(f.fishing.snapshot().fish).toHaveLength(0);expect(f.fishing.snapshot().casts[0].sharkFatigue).toBe(1);
+    blocked=false;f.step(6000);expect(f.fishing.landed('host')).toBeDefined();expect(elapsed).toBeGreaterThan(0);
+  });
   it('holds indefinitely at capped power and casts once on release using the latest aim',()=>{
     const f=fixture();f.command={...f.command,fireActionId:1,firing:true};f.step(50);
     const chargeAt=f.fishing.snapshot().charges![0].chargeAt;f.step(FISHING_CHARGE_MS*3);
@@ -142,9 +194,37 @@ describe('casual Friends fishing',()=>{
     expect(after.x).toBeLessThan(before.x-30);expect(after.lineLength).toBe(before.lineLength);expect(after.biteAt).toBe(before.biteAt);
     const x=after.x;f.p.x+=40;f.step(500);expect(f.fishing.snapshot().casts[0].x).toBeCloseTo(x);
   });
-  it('retrieves safely when a dragged bobber reaches the dry bank',()=>{
-    const f=fixture();f.click();f.step(900);f.p.x=-170;f.step(7000);
-    expect(f.fishing.snapshot().casts).toHaveLength(0);expect(f.fishing.snapshot().fish).toHaveLength(0);
+  it('keeps the line out when movement drags the bobber onto a dry bank until explicitly reeled',()=>{
+    const f=fixture();f.click();f.step(900);const before=f.fishing.snapshot().casts[0];
+    f.p.x=-170;f.step(7000);const dragged=f.fishing.snapshot().casts[0];
+    expect(dragged).toMatchObject({id:before.id,phase:'dry',lineLength:before.lineLength,biteAt:0,z:2});
+    expect(dragged.x).toBeLessThan(80);expect(dragged.reelDurationMs).toBeUndefined();
+    f.step(60000);expect(f.fishing.snapshot().casts[0]).toMatchObject({id:before.id,x:dragged.x,phase:'dry'});
+    const snapshot=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}]).createSnapshot();snapshot.friends!.fishing=f.fishing.snapshot();
+    expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(snapshot),1)?.friends?.fishing?.casts[0]).toMatchObject({id:before.id,phase:'dry',lineLength:before.lineLength});
+    expect(f.fishing.snapshot().fish).toHaveLength(0);
+    f.click();f.step(7000);expect(f.fishing.snapshot().casts).toHaveLength(0);
+  });
+  it.each(['wall','ledge'])('stops at a %s without automatically retrieving the bobber',obstacle=>{
+    let obstructed=false;
+    const env={...environment,blocked:(a:{x:number},b:{x:number})=>obstructed&&obstacle==='wall'&&a.x>=90&&b.x<90,
+      floor:(x:number)=>obstructed&&obstacle==='ledge'?(x<90?20:-40):environment.floor(x,0,2,0)};
+    const f=fixture(.5,env);f.click();f.step(900);const before=f.fishing.snapshot().casts[0];obstructed=true;
+    expect(before.x).toBeGreaterThan(90);
+    f.p.x=-170;f.step(7000);const stopped=f.fishing.snapshot().casts[0];
+    expect(stopped.id).toBe(before.id);expect(stopped.x).toBeGreaterThanOrEqual(90);
+    expect(stopped.phase).not.toBe('reeling');expect(stopped.lineLength).toBe(before.lineLength);
+    expect(stopped.reelDurationMs).toBeUndefined();
+    f.step(30000);expect(f.fishing.snapshot().casts[0].x).toBe(stopped.x);
+  });
+  it('keeps distant casts attached while the taut bobber catches up with player movement',()=>{
+    const f=fixture(.5,{...environment,water:()=>({level:0,depth:40,bodyId:'test'}),floor:()=>-40});
+    f.click();f.step(900);const before=f.fishing.snapshot().casts[0];
+    f.p.x=-800;f.step();const moved=f.fishing.snapshot().casts[0];
+    expect(moved).toMatchObject({id:before.id,phase:'waiting',lineLength:before.lineLength});
+    expect(moved.x).toBeLessThan(before.x);expect(before.x-moved.x).toBeLessThanOrEqual(85*.05);
+    f.step(12000);expect(f.fishing.snapshot().casts[0].id).toBe(before.id);
+    f.click();f.step(7000);expect(f.fishing.snapshot().casts).toHaveLength(0);
   });
   it('preserves the original catcher when another player picks up the fish',()=>{
     const f=fixture();f.catchFish();f.command={...f.command,altFireActionId:1};f.step(1200);
@@ -166,12 +246,36 @@ describe('casual Friends fishing',()=>{
     const f=fixture();f.p.friendsSeat={vehicleId:'rail-train',index:0};f.click();expect(f.fishing.snapshot().casts).toHaveLength(0);
   });
 
-  it('casts, signals a bite, automatically reels and holds exactly one fish despite repeated held input',()=>{
+  it('casts, signals a bite, reels while held and holds exactly one fish despite repeated held input',()=>{
     const f=fixture();f.click();expect(f.fishing.snapshot().casts[0].phase).toBe('casting');
     f.step(fixtureFlightMs);expect(f.fishing.snapshot().casts[0].phase).toBe('waiting');
-    f.step(fixtureBiteDelay-fixtureFlightMs);expect(f.fishing.snapshot().casts[0].phase).toBe('bite');f.click();f.step(FISHING_REEL_MS+500);
+    f.step(fixtureBiteDelay-fixtureFlightMs);expect(f.fishing.snapshot().casts[0].phase).toBe('bite');f.click();f.step(f.fishing.snapshot().casts[0].reelDurationMs!+500);
     expect(f.fishing.snapshot().casts).toHaveLength(0);expect(f.fishing.snapshot().fish).toHaveLength(1);expect(f.fishing.held('host')?.phase).toBe('held');
     f.step(4000);expect(f.fishing.held('host')).toBeDefined();
+  });
+  it.each([false,true])('pauses and resumes the same reel on LMB release (empty=%s)',empty=>{
+    const f=fixture(.999);f.click();f.step(empty?fixtureFlightMs:fixtureBiteDelay);f.click();f.step(700);
+    f.command={...f.command,firing:false};f.step();const paused=f.fishing.snapshot().casts[0];
+    expect(paused.reelActive).toBe(false);f.step(30000);
+    expect(f.fishing.snapshot().casts[0]).toMatchObject({id:paused.id,x:paused.x,y:paused.y,z:paused.z,reelElapsedMs:paused.reelElapsedMs});
+    expect(f.fishing.snapshot().fish).toHaveLength(0);
+    f.click();f.step(paused.reelDurationMs!);
+    expect(f.fishing.snapshot().casts).toHaveLength(0);expect(Boolean(f.fishing.held('host'))).toBe(!empty);
+  });
+  it('makes large fish take longer and visibly pull line back while held, without losing the catch',()=>{
+    const durations:number[]=[];
+    for(const sample of [0,.999]){
+      const f=fixture(sample);f.click();f.step(fixtureBiteDelay);f.click();
+      const hooked=f.fishing.snapshot().casts[0];durations.push(hooked.reelDurationMs!);
+      let previous=hooked.x,pulls=0;
+      for(let i=0;i<Math.ceil(hooked.reelDurationMs!/50)+5;i++){
+        f.step();const c=f.fishing.snapshot().casts[0];if(!c)break;
+        if(c.x>previous+.01)pulls++;previous=c.x;
+      }
+      expect(f.fishing.held('host')).toMatchObject({size:hooked.size,species:hooked.species});
+      if(sample>.9)expect(pulls).toBeGreaterThan(0);
+    }
+    expect(durations[1]).toBeGreaterThan(durations[0]*1.5);
   });
   it('gives another bite after a miss and cancels early retrieval without manufacturing a fish',()=>{
     const f=fixture();f.click();f.step(fixtureBiteDelay);expect(f.fishing.snapshot().casts[0].phase).toBe('bite');f.step(FISHING_BITE_MS);expect(f.fishing.snapshot().casts[0].phase).toBe('waiting');
@@ -228,12 +332,12 @@ describe('casual Friends fishing',()=>{
   });
   it('enforces the loose limit when many held catches are released together, without deleting a held fish',()=>{
     const fishing=new FriendsFishing(()=>.5),players=Array.from({length:LOOSE_FISH_LIMIT+4},(_,i)=>({...player(),id:`angler-${i}`}));
-    const commands=(fireActionId:number,release=false)=>new Map(players.map((p,i)=>[p.id,input({fireActionId,altFireActionId:release&&i>0?1:0})]));
+    const commands=(fireActionId:number,release=false)=>new Map(players.map((p,i)=>[p.id,input({fireActionId,firing:fireActionId===2,altFireActionId:release&&i>0?1:0})]));
     fishing.update(50,50,players,commands(1),environment);
     fishing.update(50,950,players,commands(1),environment);
     fishing.update(50,20000,players,commands(1),environment);
     fishing.update(50,20050,players,commands(2),environment);
-    const caughtAt=20050+FISHING_REEL_MS;
+    const caughtAt=20050+fishingFishReelMs(speciesCatchSize('zander',.5));
     fishing.update(50,caughtAt,players,commands(2),environment);
     expect(fishing.snapshot().fish.every(f=>f.phase==='held')).toBe(true);
     expect(fishing.snapshot().fish).toHaveLength(players.length);
@@ -266,9 +370,18 @@ describe('casual Friends fishing',()=>{
     let action=1,caught=false;
     for(let i=1;i<=750;i++){
       const state=sim.createSnapshot().friends?.fishing;if(state?.casts[0]?.phase==='bite'&&action===1)action=2;
-      sim.setInput('host',input({sequence:i,fireActionId:action,firing:i<26}));sim.tick(50);
+      sim.setInput('host',input({sequence:i,fireActionId:action,firing:i<26||action===2}));sim.tick(50);
       if(sim.createSnapshot().friends?.fishing?.fish.some(f=>f.ownerId==='host')){caught=true;break;}
     }
     expect(caught).toBe(true);const snapshot=sim.createSnapshot();expect(new SnapshotDecoder().decode(compactSnapshotWirePayload(snapshot),1)?.friends?.fishing).toEqual(snapshot.friends?.fishing);expect(new FriendsSimulation([{id:'host',label:'Host',color:'#fff'}],1,snapshot.friends!.progress,snapshot.friends!.building,snapshot.friends!.projects,snapshot.friends!.frontier,snapshot.friends!.transport).createSnapshot().friends?.fishing?.fish).toHaveLength(0);expect(sim.createSnapshot().projectiles).toHaveLength(0);expect(sim.createSnapshot().friends?.frontier?.interaction?.actions.host).toBeUndefined();
   });
+});
+
+it('bounds landing retries when a giant shark has no safe water',()=>{
+  const fishing=new FriendsFishing(),p=player(),point={x:300,y:0,z:2};
+  fishing['casts'].set(p.id,{id:1,playerId:p.id,phase:'reeling',species:'shark',size:10,atMs:0,biteAt:0,from:point,target:point,...point,reelDurationMs:18000});
+  let probes=0;
+  const env={water:()=>{probes++;return {level:0,depth:10,bodyId:'sea'};},floor:()=>-10,blocked:()=>false};
+  for(let now=50;now<=5000;now+=50)fishing.update(50,now,[p],new Map([[p.id,input({firing:true})]]),env);
+  expect(fishing.snapshot().casts).toHaveLength(1);expect(probes).toBeLessThan(4000);
 });

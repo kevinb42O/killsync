@@ -3,6 +3,7 @@ import { isQuietSeat } from '../world/FriendsRetreatSites';
 
 type Point = { x: number; y: number; z: number };
 type CarryActor = HaulingActor & {
+  friendsSoaring?: unknown;
   friendsSeat?: { vehicleId: string; index: number };
   sprinting?: boolean; sliding?: boolean; crouching?: boolean; jetActive?: boolean;
   platformVelocityX?: number; platformVelocityY?: number; platformVelocityZ?: number;
@@ -33,6 +34,7 @@ export class FriendsPlayerCarry {
   }
   canAttach(carrier: CarryActor, passenger: CarryActor) {
     return carrier.id !== passenger.id && carrier.lifeState === 'alive' && passenger.lifeState === 'alive'
+      && !carrier.friendsSoaring && !passenger.friendsSoaring
       && !this.hasCarrier(carrier.id) && !this.isCarried(carrier.id)
       && !this.hasCarrier(passenger.id) && !this.isCarried(passenger.id);
   }

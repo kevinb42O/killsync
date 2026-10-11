@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+const require=createRequire(import.meta.url),{chromium}=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
+const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3014';
+(async()=>{const b=await chromium.launch({headless:true,args:['--autoplay-policy=no-user-gesture-required']});try{const p=await b.newPage();await p.goto(origin+'/tools/friends-world-audio-review.html');const report=await p.evaluate(async()=>{const {crossfadeLoop}=await import('/src/game/FriendsAudio.ts'),context=new AudioContext(),results=[];for(const file of ['boat_engine.ogg','boat_hull_water.ogg']){const r=await fetch('/audio/friends/'+file),bytes=await r.arrayBuffer(),byteLength=bytes.byteLength,buffer=await context.decodeAudioData(bytes),loop=crossfadeLoop(context,buffer,.8);let peak=0,energy=0;for(let c=0;c<buffer.numberOfChannels;c++)for(const v of buffer.getChannelData(c)){peak=Math.max(peak,Math.abs(v));energy+=v*v;}results.push({file,bytes:byteLength,channels:buffer.numberOfChannels,duration:buffer.duration,loopDuration:loop.duration,peak,rms:Math.sqrt(energy/(buffer.length*buffer.numberOfChannels))});}await context.close();
+const {FriendsAudio}=await import('/src/game/FriendsAudio.ts'),{QUIET_WORLD_SOUND}=await import('/src/game/FriendsWorldSound.ts');
+const audio=new FriendsAudio(),release=audio.acquire();audio.setSettings({music:0,effects:1,ambience:1,muted:false});audio.activate();
+const mix={...QUIET_WORLD_SOUND,boatEngine:{volume:.2,pan:.3,rate:1.1},boatWater:{volume:.08,pan:-.3}};audio.setWorldSound(mix);
+const deadline=performance.now()+15000;while(audio.worldLoops.size<2&&performance.now()<deadline)await new Promise(r=>setTimeout(r,50));
+if(!audio.worldLoops.has('boatEngine')||!audio.worldLoops.has('boatWater'))throw Error('Boat graph did not start');
+const motor=audio.worldLoops.get('boatEngine').source,water=audio.worldLoops.get('boatWater').source;
+for(let i=0;i<30;i++)audio.setWorldSound(mix);
+if(audio.worldLoops.get('boatEngine').source!==motor||audio.worldLoops.get('boatWater').source!==water)throw Error('Duplicate loops');
+audio.setSettings({effects:0});if(audio.worldLoops.has('boatEngine')||!audio.worldLoops.has('boatWater'))throw Error('Incorrect volume bus');
+audio.setSettings({muted:true});if(audio.worldLoops.size||audio.retiringWorldSources.size)throw Error('Mute did not release loops');release();audio.dispose();return {assets:results,graph:{sharedLoops:2,effectsIndependent:true,muteCleanup:true}}});if(report.assets.some(r=>r.duration<5||r.peak<.001))throw Error('Invalid sound');fs.writeFileSync('artifacts/fishing-boat/audio-validation.json',JSON.stringify(report,null,2));console.log(report);}finally{await b.close()}})();

@@ -1,0 +1,265 @@
+{
+  "errors": [],
+  "fighting": {
+    "held": false,
+    "fishParent": "friends-fishing",
+    "clip": "Swimming_Fast",
+    "rod": true,
+    "gl": 0,
+    "state": {
+      "charges": [],
+      "equipped": [
+        "review"
+      ],
+      "casts": [
+        {
+          "id": 900,
+          "playerId": "review",
+          "phase": "reeling",
+          "x": 1634.4748757492548,
+          "y": 24246.336731858304,
+          "z": -253.14894079394855,
+          "target": {
+            "x": 2350,
+            "y": 23600,
+            "z": -166.5
+          },
+          "from": {
+            "x": 1655.4792080457667,
+            "y": 24225.254558322584,
+            "z": -253.14894079394855
+          },
+          "size": 9.958698916935122,
+          "atMs": 50,
+          "biteAt": 0,
+          "lineLength": 1340.0569704991292,
+          "species": "shark",
+          "empty": false,
+          "reelDurationMs": 17933.918267096196,
+          "reelElapsedMs": 1950,
+          "reelUpdatedAt": 2000,
+          "reelActive": true,
+          "reelAutomatic": false,
+          "sharkFatigue": 0.10873251293766144,
+          "sharkAngle": 3.81238898038469,
+          "sharkLandingAngle": 4.212388980384691,
+          "sharkLanding": {
+            "x": 1878.338511015546,
+            "y": 24103.50596622534,
+            "z": -253.14894079394855
+          },
+          "sharkLoad": 0.7687001215407346
+        }
+      ],
+      "fish": []
+    }
+  },
+  "paused": {
+    "before": {
+      "id": 900,
+      "playerId": "review",
+      "phase": "reeling",
+      "x": 1632.1265138735932,
+      "y": 24248.924735378772,
+      "z": -253.14894079394855,
+      "target": {
+        "x": 2350,
+        "y": 23600,
+        "z": -166.5
+      },
+      "from": {
+        "x": 1655.4792080457667,
+        "y": 24225.254558322584,
+        "z": -253.14894079394855
+      },
+      "size": 9.958698916935122,
+      "atMs": 50,
+      "biteAt": 0,
+      "lineLength": 1343.3531458477948,
+      "species": "shark",
+      "empty": false,
+      "reelDurationMs": 17933.918267096196,
+      "reelElapsedMs": 1950,
+      "reelUpdatedAt": 2050,
+      "reelActive": false,
+      "reelAutomatic": false,
+      "sharkFatigue": 0.10873251293766144,
+      "sharkAngle": 3.77238898038469,
+      "sharkLandingAngle": 4.212388980384691,
+      "sharkLanding": {
+        "x": 1878.338511015546,
+        "y": 24103.50596622534,
+        "z": -253.14894079394855
+      },
+      "sharkLoad": 0.7946237483914054
+    },
+    "after": {
+      "id": 900,
+      "playerId": "review",
+      "phase": "reeling",
+      "x": 1667.918787512932,
+      "y": 24230.59972223907,
+      "z": -253.14894079394855,
+      "target": {
+        "x": 2350,
+        "y": 23600,
+        "z": -166.5
+      },
+      "from": {
+        "x": 1655.4792080457667,
+        "y": 24225.254558322584,
+        "z": -253.14894079394855
+      },
+      "size": 9.958698916935122,
+      "atMs": 50,
+      "biteAt": 0,
+      "lineLength": 1303.3302238273343,
+      "species": "shark",
+      "empty": false,
+      "reelDurationMs": 17933.918267096196,
+      "reelElapsedMs": 1950,
+      "reelUpdatedAt": 4050,
+      "reelActive": false,
+      "reelAutomatic": false,
+      "sharkFatigue": 0.10873251293766144,
+      "sharkAngle": 4.212388980385577,
+      "sharkLandingAngle": 4.212388980384691,
+      "sharkLanding": {
+        "x": 1878.338511015546,
+        "y": 24103.50596622534,
+        "z": -253.14894079394855
+      },
+      "sharkLoad": 0.29790605741060544
+    },
+    "held": false,
+    "fishParent": "friends-fishing",
+    "clip": "Swimming_Fast",
+    "rod": true,
+    "gl": 0,
+    "state": {
+      "charges": [],
+      "equipped": [
+        "review"
+      ],
+      "casts": [
+        {
+          "id": 900,
+          "playerId": "review",
+          "phase": "reeling",
+          "x": 1667.918787512932,
+          "y": 24230.59972223907,
+          "z": -253.14894079394855,
+          "target": {
+            "x": 2350,
+            "y": 23600,
+            "z": -166.5
+          },
+          "from": {
+            "x": 1655.4792080457667,
+            "y": 24225.254558322584,
+            "z": -253.14894079394855
+          },
+          "size": 9.958698916935122,
+          "atMs": 50,
+          "biteAt": 0,
+          "lineLength": 1303.3302238273343,
+          "species": "shark",
+          "empty": false,
+          "reelDurationMs": 17933.918267096196,
+          "reelElapsedMs": 1950,
+          "reelUpdatedAt": 4050,
+          "reelActive": false,
+          "reelAutomatic": false,
+          "sharkFatigue": 0.10873251293766144,
+          "sharkAngle": 4.212388980385577,
+          "sharkLandingAngle": 4.212388980384691,
+          "sharkLanding": {
+            "x": 1878.338511015546,
+            "y": 24103.50596622534,
+            "z": -253.14894079394855
+          },
+          "sharkLoad": 0.29790605741060544
+        }
+      ],
+      "fish": []
+    }
+  },
+  "landed": {
+    "held": false,
+    "fishParent": "friends-fishing",
+    "clip": "Swimming_Normal",
+    "rod": true,
+    "gl": 0,
+    "state": {
+      "charges": [],
+      "equipped": [
+        "review"
+      ],
+      "casts": [],
+      "fish": [
+        {
+          "id": 900,
+          "size": 9.958698916935122,
+          "species": "shark",
+          "phase": "landed",
+          "tetheredBy": "review",
+          "caughtBy": "review",
+          "landedAt": 20050,
+          "atMs": 20050,
+          "x": 1878.338511015546,
+          "y": 24103.50596622534,
+          "z": -253.14894079394855,
+          "angle": 4.212388980384691,
+          "vx": 0,
+          "vy": 0,
+          "vz": 0
+        }
+      ]
+    }
+  },
+  "released": {
+    "held": false,
+    "fishParent": "friends-fishing",
+    "clip": "Swimming_Fast",
+    "rod": true,
+    "gl": 0,
+    "state": {
+      "charges": [],
+      "equipped": [
+        "review"
+      ],
+      "casts": [],
+      "fish": [
+        {
+          "id": 900,
+          "size": 9.958698916935122,
+          "species": "shark",
+          "phase": "swimming",
+          "caughtBy": "review",
+          "landedAt": 20050,
+          "atMs": 22100,
+          "x": 1864.4950985883497,
+          "y": 24078.165769750754,
+          "z": -253.14894079394855,
+          "angle": 4.212388980384691,
+          "vx": 0,
+          "vy": 0,
+          "vz": 0
+        }
+      ]
+    }
+  },
+  "performance": {
+    "hostTickP50": 7.299999997019768,
+    "hostTickP95": 22.099999994039536
+  },
+  "network": {
+    "version": 65,
+    "pausedFight": true,
+    "landed": true,
+    "released": true,
+    "cleaned": true,
+    "lengthCm": 846,
+    "errors": []
+  }
+}

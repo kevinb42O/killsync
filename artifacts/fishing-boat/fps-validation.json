@@ -1,0 +1,30 @@
+{
+  "firstPersonStopped": {
+    "fps": 20.220468332137493,
+    "frameP95Ms": 50.80000000000018,
+    "simulationP95Ms": 1.199999988079071,
+    "calls": 22,
+    "triangles": 95428
+  },
+  "firstPersonSailing": {
+    "fps": 20.003935200367287,
+    "frameP95Ms": 50.900000000001455,
+    "simulationP95Ms": 2,
+    "calls": 20,
+    "triangles": 88662
+  },
+  "thirdPersonStopped": {
+    "fps": 59.9993370239003,
+    "frameP95Ms": 17.5,
+    "simulationP95Ms": 2,
+    "calls": 35,
+    "triangles": 102058
+  },
+  "thirdPersonSailing": {
+    "fps": 59.99933702390028,
+    "frameP95Ms": 16.80000000000291,
+    "simulationP95Ms": 2,
+    "calls": 35,
+    "triangles": 102058
+  }
+}

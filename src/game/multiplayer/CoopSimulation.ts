@@ -1,3 +1,7 @@
+import { friendsFinishUnlocked } from './FriendsBuilding';
+import type { FriendsSoaringState } from './FriendsSoaring';
+import { CAVE_TREASURES } from '../world/FriendsCave';
+import { FriendsFishingClearance } from './FriendsFishingClearance';
 import { FriendsBuildSpatialIndex } from './FriendsInteractionTargeting';
 import { applyCraneMotion } from './FriendsTelescopicCrane';
 import { craneCollisionPieces, friendsPieceBoxes } from './FriendsBuilding';
@@ -16,7 +20,7 @@ import { dequantizeFriendsFlashlightCone, type FriendsFlashlightState } from './
 import { scenicControlNearby } from './FriendsScenicService';
 import { isCampfireSeat } from './FriendsCampfireSeats';
 import { FriendsCommandResults, validFriendsCommand } from './FriendsCommands';
-import { FRIENDS_STEP_HEIGHT, FRIENDS_SPAWN_PLATFORM } from '../world/FriendsTerrain';
+import { TERRAIN_BOTTOM, FRIENDS_STEP_HEIGHT, FRIENDS_SPAWN_PLATFORM } from '../world/FriendsTerrain';
 import { PLAYER_TRAIN_COST, isPlayerRail, railSamples } from '../world/FriendsPlayerRail';
 import { FriendsFrontier, type FrontierSnapshot, type FrontierRequest, type FrontierActor } from './FriendsFrontier';
 import { FriendsBuilding, FRIENDS_BUILD_CATALOG, friendsShapeBoxes, isSlope, worldBox, friendsBuildFloor, friendsWalkFloor, friendsInclineConnects, friendsBuildCeiling, friendsVehicleBuildBodies, raycastFriendsBuild, type FriendsBuildingSnapshot, type FriendsBuildRequest, type FriendsBuildResult } from './FriendsBuilding';
@@ -26,7 +30,7 @@ import { routeHaulingRope } from './FriendsRopePath';
 import { collidePhysicalCargo, physicalCargoBuildBodies, type HaulingEnvironment } from './FriendsHauling';
 import { FriendsProjects, type FriendsProjectSnapshot } from './FriendsProjects';
 import { insideFriendsCombat, FRIENDS_SALVAGE } from '../world/FriendsRegion';
-import { FriendsExpedition, friendsCockpitInteraction, friendsRowboatInteraction, friendsWorldFloor, friendsVehicleFloor, friendsVehicleCeiling, FRIENDS_FLIGHT_CEILING, resolveFriendsVehicleCollisions, type FriendsTransportSave, type FriendsProgress, type FriendsSnapshot } from './FriendsExpedition';
+import { FriendsExpedition, friendsCockpitInteraction, friendsRowboatInteraction, friendsFishingBoatInteraction, friendsWorldFloor, friendsVehicleFloor, friendsVehicleCeiling, FRIENDS_FLIGHT_CEILING, resolveFriendsVehicleCollisions, type FriendsTransportSave, type FriendsProgress, type FriendsSnapshot } from './FriendsExpedition';
 import type { CoopGameMode } from './CoopGameMode';
 import { FRIENDS_HUB } from '../world/FriendsRegion';
 import { COOP_SPELLS, isCoopSpell, MANA_MAX, MANA_REGEN_PER_SECOND, type CoopSpellId } from '../combat/coopSpells';
@@ -248,6 +252,7 @@ export interface CoopPlayerSnapshot extends CoopPlayerSeed {
   jetFuel?: number;
   jetActive?: boolean;
   friendsSeat?: {vehicleId:string;index:number};
+  friendsSoaring?: FriendsSoaringState;
   friendsDevFlight?: boolean;
   friendsDevSuperjump?: boolean;
   lastProcessedInput?: number;
@@ -484,6 +489,7 @@ type EnemyNavigationState = { x: number; y: number; stuckMs: number; waypoint?: 
 
 /** A small, deterministic, DOM-free authoritative combat simulation. */
 export class CoopSimulation {
+  private fishingClearance=new FriendsFishingClearance();
   private players = new Map<string, CoopPlayer>();
   private inputByPlayer = new Map<string, MultiplayerInputFrame>();
   private latestInputSequence = new Map<string, number>();
@@ -915,7 +921,10 @@ export class CoopSimulation {
 
     if (this.friends) {
       const validInputs = new Map<string, MultiplayerInputFrame>();
-      for (const [id, input] of this.inputByPlayer) if (this.elapsedMs - (this.inputReceivedAtMs.get(id) ?? -Infinity) <= COOP_STALE_INPUT_MS) validInputs.set(id, input);
+      for (const [id, input] of this.inputByPlayer) if (this.elapsedMs - (this.inputReceivedAtMs.get(id) ?? -Infinity) <= COOP_STALE_INPUT_MS) {
+        const wing=this.players.get(id)?.friendsSoaring;
+        validInputs.set(id,wing||input.friendsGlider?{...input,friendsTool:13 as const,firing:false,aiming:false,friendsArms:0,friendsFishingBlocked:true}:input);
+      }
       this.friends.update(dt, this.elapsedMs, [...this.players.values()], validInputs, this.friendsBuilding?.getPieces(), this.friendsFrontier?.terrain,(before,after)=>{const winch=this.friends!.hauling.getAircraftWinch();return !winch||!winch.cargoId&&winch.length===0||this.friends!.hauling.allowAircraftFlight(before,after,this.haulingEnvironment(),[...this.players.values()]);});
     }
     // Remote-shot compensation runs during input processing, so seed the
@@ -927,16 +936,19 @@ export class CoopSimulation {
       const storedInput = this.inputByPlayer.get(player.id);
       const stale = storedInput && (receivedAt === undefined || this.elapsedMs - receivedAt > COOP_STALE_INPUT_MS);
       const rawInput = stale ? { ...storedInput, friendsAircraftWinch:0 as const,friendsAircraftHookHeld:false,movement: 0, firing: false, aiming: false, sprinting: false, sliding: false, reviving: false, jumpPressed: false, jetHeld: false, friendsDevFlightDown: false, reloadPressed: false, dashPressed: false } : storedInput;
-      const input = rawInput && player.carryingHostage
+      if(player.lifeState!=='alive'&&player.friendsSoaring){delete player.friendsSoaring;player.gliderNeedsStow=true;}
+      const input = rawInput && (player.friendsSoaring || rawInput.friendsGlider) && this.friends
+        ? {...rawInput, friendsTool:6 as const, firing:false, aiming:false, reloadPressed:false, friendsArms:0, friendsFlashlight:false}
+        : rawInput && player.carryingHostage
         ? { ...rawInput, firing: false, aiming: false, sprinting: false, sliding: false, jetHeld: false, dashPressed: false, reloadPressed: false, altFireActionId: player.lastAltFireActionId }
         : rawInput;
-      if (this.friends) player.friendsWeaponEquipped = Boolean(!stale && rawInput && !rawInput.friendsTool && player.lifeState === 'alive' && !isQuietSeat(player.friendsSeat));
-      const handsAllowed = Boolean(this.friends && !stale && input?.friendsTool === 6 && !this.friends.fishing.held(player.id) && player.lifeState === 'alive'
+      if (this.friends) player.friendsWeaponEquipped = Boolean(!player.friendsSoaring && !input?.friendsGlider && !stale && rawInput && !rawInput.friendsTool && player.lifeState === 'alive' && !isQuietSeat(player.friendsSeat));
+      const handsAllowed = Boolean(!player.friendsSoaring && !input?.friendsGlider && this.friends && !stale && input?.friendsTool === 6 && !this.friends.fishing.held(player.id) && player.lifeState === 'alive'
         && !isQuietSeat(player.friendsSeat) && !this.friends.vehicles().some(v => v.pilotId === player.id));
       if (handsAllowed) player.friendsHands = {mask:sanitizeFriendsArms(input!.friendsArms),
         yaw:input!.aimAngle/65535*Math.PI*2, pitch:dequantizePitch(input!.aimPitch)};
       else delete player.friendsHands;
-      if(this.friends && !stale && input?.friendsFlashlight === true && input.friendsTool !== 6 && !this.friends.fishing.held(player.id) && player.lifeState === 'alive'
+      if(this.friends && !player.friendsSoaring && !input?.friendsGlider && !stale && input?.friendsFlashlight === true && input.friendsTool !== 6 && !this.friends.fishing.held(player.id) && player.lifeState === 'alive'
         && !this.friends.vehicles().some(v => v.kind==='aircraft' && v.pilotId === player.id))
         player.friendsFlashlight = { pitch: dequantizePitch(input.aimPitch), cone: dequantizeFriendsFlashlightCone(input.friendsFlashlightCone),
           yaw: Math.round(input.aimAngle / 65535 * Math.PI * 2 * 1000) / 1000 };
@@ -991,7 +1003,7 @@ export class CoopSimulation {
           (position, radius) => this.getPlayerStructureWallContact(position, player.z, radius),
           (position, radius) => this.getPlayerStructureFloor(position, radius),
           this.currentWorldId,
-          this.friends ? { elevationAware: true, onLanding: () => this.emitCombatEvent({kind:'player_damaged',x:player.x,y:player.y,playerId:player.id,amount:0,color:'#fb7185'}), towingScale: this.friends.hauling.movementScale(player.id), devFlightAllowed: player.id === this.friendsHostId, devSuperjumpAllowed: player.id === this.friendsHostId, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, waterAt: (x,y,z)=>friendsLiveWaterAt(this.friendsFrontier!.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined,
+          this.friends ? { soaring:{timeMs:this.elapsedMs-dt,worldTimeMs:this.worldElapsedMs()-dt,weather:this.friendsEnvironment.snapshot,available:!player.carryingHostage&&!this.friends.hauling.playerCarry.hasCarrier(player.id)&&!this.friends.hauling.playerCarry.isCarried(player.id),canopyBlocked:(x,y,z)=>this.friendsFrontier!.terrain.collide({x,y},z,4,8,0)||this.movementBuildIndex().collide(this.friendsBuilding!.getPieces(),{x,y},z,4,8,0)||this.friendsFrontier!.canopyTreeBlocked({x,y},z,4)||resolveFriendsVehicleCollisions(this.friends!.vehicles(),{x,y},z,4)}, elevationAware: true, onLanding: () => this.emitCombatEvent({kind:'player_damaged',x:player.x,y:player.y,playerId:player.id,amount:0,color:'#fb7185'}), towingScale: this.friends.hauling.movementScale(player.id), devFlightAllowed: player.id === this.friendsHostId, devSuperjumpAllowed: player.id === this.friendsHostId, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, waterAt: (x,y,z)=>friendsLiveWaterAt(this.friendsFrontier!.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined,
         );
         if ((!this.friends || player.friendsWeaponEquipped) && Math.hypot(player.x - player.lastArtifactX, player.y - player.lastArtifactY) >= 60) {
           player.echoPositions.push({ x: player.x, y: player.y });
@@ -1043,15 +1055,35 @@ export class CoopSimulation {
         if (!piloting && !isQuietSeat(player.friendsSeat) && !(this.friendsFrontier && input.friendsTool) && input.firing && (COOP_FIREARM_BY_ID[this.weapon(player).weaponId].fireMode === 'auto' || triggerPressed)) this.tryCastWeapon(player, triggerPressed, fireActionId);
         player.previousFiring = input.firing;
       }
-      if (!input && !player.friendsSeat && !this.friends?.hauling.playerCarry.isCarried(player.id)) advancePlayerMovement(player, undefined, dt, this.friends ? (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius) : undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId, this.friends ? { elevationAware: true, onLanding: () => this.emitCombatEvent({kind:'player_damaged',x:player.x,y:player.y,playerId:player.id,amount:0,color:'#fb7185'}), devFlightAllowed: player.id === this.friendsHostId, devSuperjumpAllowed: player.id === this.friendsHostId, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, waterAt: (x,y,z)=>friendsLiveWaterAt(this.friendsFrontier!.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined);
+      if (!input && !player.friendsSeat && !this.friends?.hauling.playerCarry.isCarried(player.id)) advancePlayerMovement(player, undefined, dt, this.friends ? (position, radius) => this.resolvePlayerStructureCollisions(position, player.z, radius) : undefined, undefined, (position, radius) => this.getPlayerStructureFloor(position, radius), this.currentWorldId, this.friends ? { soaring:{timeMs:this.elapsedMs-dt,worldTimeMs:this.worldElapsedMs()-dt,weather:this.friendsEnvironment.snapshot,available:!player.carryingHostage&&!this.friends.hauling.playerCarry.hasCarrier(player.id)&&!this.friends.hauling.playerCarry.isCarried(player.id),canopyBlocked:(x,y,z)=>this.friendsFrontier!.terrain.collide({x,y},z,4,8,0)||this.movementBuildIndex().collide(this.friendsBuilding!.getPieces(),{x,y},z,4,8,0)||this.friendsFrontier!.canopyTreeBlocked({x,y},z,4)||resolveFriendsVehicleCollisions(this.friends!.vehicles(),{x,y},z,4)}, elevationAware: true, onLanding: () => this.emitCombatEvent({kind:'player_damaged',x:player.x,y:player.y,playerId:player.id,amount:0,color:'#fb7185'}), devFlightAllowed: player.id === this.friendsHostId, devSuperjumpAllowed: player.id === this.friendsHostId, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: true, waterAt: (x,y,z)=>friendsLiveWaterAt(this.friendsFrontier!.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles(), position.x, position.y, position.z), overhead: position => this.friendsOverhead(position) } : undefined);
     }
 
     this.friendsFrontier?.tickTools(this.elapsedMs, new Set(this.players.keys()), new Set([...this.players.values()]
       .filter(p => p.lifeState === 'alive' && friendsToolInput(this.inputByPlayer.get(p.id)?.friendsTool || 0, Boolean(this.inputByPlayer.get(p.id)?.firing), Boolean(this.inputByPlayer.get(p.id)?.aiming)).held && this.elapsedMs - (this.inputReceivedAtMs.get(p.id) ?? -Infinity) <= COOP_STALE_INPUT_MS).map(p => p.id)), this.friendsBuilding?.getPieces());
     if (this.friends) {
       const validInputs = new Map<string, MultiplayerInputFrame>();
-      for (const [id, input] of this.inputByPlayer) if (this.elapsedMs - (this.inputReceivedAtMs.get(id) ?? -Infinity) <= COOP_STALE_INPUT_MS) validInputs.set(id, input);
-      const fishingEnvironment={...this.haulingEnvironment(),water:(x:number,y:number)=>friendsLiveWaterSurface(this.friendsFrontier!.terrain,x,y)};
+      for (const [id, input] of this.inputByPlayer) if (this.elapsedMs - (this.inputReceivedAtMs.get(id) ?? -Infinity) <= COOP_STALE_INPUT_MS) {
+        const wing=this.players.get(id)?.friendsSoaring;
+        validInputs.set(id,wing||input.friendsGlider?{...input,friendsTool:13 as const,firing:false,aiming:false,friendsArms:0,friendsFishingBlocked:true}:input);
+      }
+      let fishingBoats:ReturnType<FriendsExpedition['vehicles']>|undefined,fishingVehicles:ReturnType<FriendsExpedition['vehicles']>|undefined;
+      const fishingTrees=new Map<string,ReturnType<FriendsFrontier['treesNear']>>();
+      const fishingEnvironment={...this.haulingEnvironment(),waterClearance:(x:number,y:number,bottom:number,top:number,radius:number)=>{
+        if(!this.fishingClearance.clear(this.friendsFrontier!.terrain,x,y,bottom,top,radius))return false;
+        const point={x,y},height=top-bottom;
+        return !this.movementBuildIndex().collide(this.friendsBuilding!.getPieces(),point,bottom,radius,height,0)
+          &&!collideRetreats(point,bottom,radius,this.friends!.retreats.state.active,height)
+          &&!(()=>{
+            const cx=Math.floor(x/512),cy=Math.floor(y/512),key=`${cx},${cy}`;
+            let trees=fishingTrees.get(key);
+            if(!trees){trees=this.friendsFrontier!.treesNear(cx*512+256,cy*512+256);fishingTrees.set(key,trees);}
+            return trees.some(tree=>bottom<tree.z+180*tree.scale&&top>tree.z&&Math.hypot(x-tree.x,y-tree.y)<radius+10*tree.scale);
+          })()
+          &&!resolveFriendsVehicleCollisions(fishingVehicles??=this.friends!.vehicles(),point,bottom,radius);
+      },waterObstacle:(x:number,y:number,margin:number)=>(fishingBoats??=(fishingVehicles??=this.friends!.vehicles()).filter(v=>v.kind==='rowboat'||v.kind==='fishingBoat')).some(v=>{
+        const dx=x-v.x,dy=y-v.y,c=Math.cos(v.angle),s=Math.sin(v.angle);
+        return Math.abs(dx*c+dy*s)<v.length/2+margin&&Math.abs(-dx*s+dy*c)<v.width/2+margin;
+      }),water:(x:number,y:number)=>friendsLiveWaterSurface(this.friendsFrontier!.terrain,x,y)};
       this.friendsDynamite.update(dt,this.elapsedMs,[...this.players.values()],validInputs,fishingEnvironment,id=>id===this.friendsHostId||this.friendsBuilding!.getGuestAccess());
       this.friendsDynamite.tick(this.elapsedMs, charge => {
         const actor = this.players.get(charge.actorId), building = this.friendsBuilding, frontier = this.friendsFrontier;
@@ -1298,15 +1330,23 @@ export class CoopSimulation {
       && projectile.x > -100 && projectile.y > -100 && projectile.x < COOP_WORLD_SIZE + 100 && projectile.y < COOP_WORLD_SIZE + 100);
   }
 
-  private recoverFriend(player: CoopPlayer) {
+  private recoverFriend(player: CoopPlayer, local=false) {
+    if(player.friendsSoaring||this.inputByPlayer.get(player.id)?.friendsGlider)player.gliderNeedsStow=true;
+    delete player.friendsSoaring;
     this.friends?.releasePlayer(player.id);
     delete player.friendsSeat;
-    player.x = FRIENDS_HUB.x; player.y = FRIENDS_HUB.y + 90; player.z = FRIENDS_SPAWN_PLATFORM.top;
+    if(local && Number.isFinite(player.x) && Number.isFinite(player.y)) {
+      // A last-resort repair stays at the exploration location, never at home.
+      const terrain=this.friendsFrontier!.terrain;
+      player.z=terrain.surfaceHeight(player.x,player.y);
+    } else {
+      player.x = FRIENDS_HUB.x; player.y = FRIENDS_HUB.y + 90; player.z = FRIENDS_SPAWN_PLATFORM.top;
+    }
     player.platformVelocityX = 0; player.platformVelocityY = 0; player.platformVelocityZ = 0;
     player.verticalVelocity = 0; player.health = player.maxHealth; player.lifeState = 'alive';
     player.velocityX = player.velocityY = 0;
     player.coyoteMs = player.jumpBufferMs = player.slideMs = 0;
-    player.slideHeld = false;
+    player.slideHeld = false; player.fallPeakZ=undefined; player.airborneMs=player.groundedMs=0; player.jetLaunchFloor=player.z;
     player.invulnerableRemainingMs = 5000; player.isAiming = false; player.isReloading = false; player.isSwitching = false;
     player.airActionConsumedSinceGrounded = false; player.jetActive = false; player.jetIgnitedThisAirTime = false;
     player.sliding = false; player.crouching = false; player.swimming = false; player.swimSubmerged = false;
@@ -1322,7 +1362,15 @@ export class CoopSimulation {
       for (const enemy of this.enemies) { enemy.attackWindupUntilMs = undefined; this.cancelEnemyHazards(enemy.id); }
       if (this.elapsedMs - this.friendsEmptySinceMs >= 10000) { this.enemies = this.enemies.filter(e => e.missionId !== -777); expedition.resetSalvage(this.elapsedMs); }
     } else this.friendsEmptySinceMs = undefined;
-    for (const player of this.players.values()) { if (player.z < -600 && !player.friendsDevFlight && !friendsLiveWaterAt(this.friendsFrontier!.terrain,player.x,player.y,player.z+10)) this.recoverFriend(player); this.friendsFrontier?.pack(player); this.friendsFrontier?.explore(player, this.elapsedMs); }
+    for (const player of this.players.values()) {
+      if(!player.friendsDevFlight&&expedition.recoverCaveLava(player,this.elapsedMs,this.friendsBuilding?.getPieces())){
+        // Use the established discontinuity signal for prediction/interpolation.
+        this.emitCombatEvent({kind:'player_redeployed',x:player.x,y:player.y,playerId:player.id,color:'#ff9560'});
+        this.emitCombatEvent({kind:'player_damaged',x:player.x,y:player.y,playerId:player.id,amount:0,color:'#ff9560'});
+      }
+      if(player.z<TERRAIN_BOTTOM-128&&!player.friendsDevFlight&&!friendsLiveWaterAt(this.friendsFrontier!.terrain,player.x,player.y,player.z+10))this.recoverFriend(player,true);
+      this.friendsFrontier?.pack(player);this.friendsFrontier?.explore(player,this.elapsedMs);
+    }
     const buildRevision = this.friendsBuilding!.getRevision();
     if (buildRevision !== this.friendsBuildCheckedRevision) {
       this.friendsBuildCheckedRevision = buildRevision;
@@ -1396,7 +1444,7 @@ export class CoopSimulation {
       mode: this.mode,
       friends: this.friends ? { ...this.friends.snapshot(), environment: this.friendsEnvironment.snapshot, dynamite: this.friendsDynamite.snapshot(), building: this.friendsBuilding?.snapshot(), projects: this.friendsProjects?.snapshot(), frontier: this.friendsFrontier?.snapshot() } : undefined,
       realityBreach: this.friends ? undefined : this.realityBreach.snapshot(this.worldElapsedMs()),
-      players: [...this.players.values()].map(({ swimming, swimSubmerged, velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, fallPeakZ, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, jetLaunchFloor, airborneMs, groundedMs, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastAltFireActionId: _lastAltFireActionId, lastGrenadeActionId: _lastGrenadeActionId, grenadeRechargeAtMs: _grenadeRechargeAtMs, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, artifactTargetId: _artifactTargetId, artifactHitCount: _artifactHitCount, artifactLastActionAtMs: _artifactLastActionAtMs, artifactBarrierExpiresAtMs: _artifactBarrierExpiresAtMs, artifactProcExpiresAtMs: _artifactProcExpiresAtMs, lastArtifactX: _lastArtifactX, lastArtifactY: _lastArtifactY, slipstreamReadyAtMs: _slipstreamReadyAtMs, echoPositions: _echoPositions, ...player }) => ({ ...player, privateExfilAvailable: this.friends ? undefined : this.fieldMissionDirector.completions > 0 || this.runDirector.snapshot(this.elapsedMs).contractIndex > 0, privateExfilCalled: this.friends ? undefined : this.privateExfilCalled, fabricatorRechargeRemainingMs: this.friends ? undefined : this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { swimming, swimSubmerged, velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, fallPeakZ, jetLaunchFloor, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, jetFuel: player.jetFuel, jetActive: player.jetActive, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: this.friends && !player.friendsWeaponEquipped ? [] : player.weaponStates.map(state => ({ ...state })), weaponLevels: this.friends && !player.friendsWeaponEquipped ? [] : player.weaponStates.map(state => state.level),
+      players: [...this.players.values()].map(({ gliderNeedsStow, swimming, swimSubmerged, velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, fallPeakZ, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, jetLaunchFloor, airborneMs, groundedMs, lastReloadSequence: _lastReloadSequence, lastFireActionId: _lastFireActionId, lastAltFireActionId: _lastAltFireActionId, lastGrenadeActionId: _lastGrenadeActionId, grenadeRechargeAtMs: _grenadeRechargeAtMs, lastInteractActionId: _lastInteractActionId, slideAngle, aimPitch: _aimPitch, previousFiring: _previousFiring, shotSequence: _shotSequence, lastDamageEventAtMs: _lastDamageEventAtMs, passiveRuntime: _passiveRuntime, lastArmorDamageAtMs: _lastArmorDamageAtMs, fabricatorRechargeAtMs, artifactTargetId: _artifactTargetId, artifactHitCount: _artifactHitCount, artifactLastActionAtMs: _artifactLastActionAtMs, artifactBarrierExpiresAtMs: _artifactBarrierExpiresAtMs, artifactProcExpiresAtMs: _artifactProcExpiresAtMs, lastArtifactX: _lastArtifactX, lastArtifactY: _lastArtifactY, slipstreamReadyAtMs: _slipstreamReadyAtMs, echoPositions: _echoPositions, ...player }) => ({ ...player, friendsSoaring:player.friendsSoaring?{...player.friendsSoaring}:undefined, privateExfilAvailable: this.friends ? undefined : this.fieldMissionDirector.completions > 0 || this.runDirector.snapshot(this.elapsedMs).contractIndex > 0, privateExfilCalled: this.friends ? undefined : this.privateExfilCalled, fabricatorRechargeRemainingMs: this.friends ? undefined : this.results || player.fabricatorCharges === COOP_MAX_FABRICATOR_CHARGES ? 0 : Math.max(0, fabricatorRechargeAtMs - this.elapsedMs), motion: { gliderNeedsStow, swimming, swimSubmerged, velocityX, velocityY, coyoteMs, jumpBufferMs, bufferedJumpSequence, lastJumpInputSequence, slideMs, slideHeld, fallPeakZ, jetLaunchFloor, verticalVelocity, lastJumpSequence, lastWallJumpSequence, lastDoubleJumpSequence, wallJumpDirectionX, wallJumpDirectionY, airActionConsumedSinceGrounded, jetIgnitedThisAirTime, airborneMs, groundedMs, jetFuel: player.jetFuel, jetActive: player.jetActive, slideAngle }, passiveModules: player.passiveModules.map(module => ({ ...module })), weaponStates: this.friends && !player.friendsWeaponEquipped ? [] : player.weaponStates.map(state => ({ ...state })), weaponLevels: this.friends && !player.friendsWeaponEquipped ? [] : player.weaponStates.map(state => state.level),
         fabricatorCharges: this.friends ? undefined : player.fabricatorCharges,
         mana: this.friends && !player.friendsWeaponEquipped ? undefined : player.mana,
         grenades: this.friends && !player.friendsWeaponEquipped ? undefined : player.grenades,
@@ -1480,6 +1528,7 @@ export class CoopSimulation {
   private friendsBuildMutation(playerId: string, request: FriendsBuildRequest): FriendsBuildResult {
     const player = this.players.get(playerId);
     if (!player || !this.friendsBuilding) return { playerId, requestId: request?.requestId || 0, ok: false, message: 'Building is available in Friends mode.', revision: 0 };
+    if(request.finish&&!friendsFinishUnlocked(request.finish,this.friends?.progress.openedTreasures))return {playerId,requestId:request.requestId,ok:false,message:request.finish==='ancient'?'Recover the Buried Archive relay to unlock ancient masonry.':'Recover the Listening Cavern lens to unlock crystal lighting.',revision:this.friendsBuilding.getRevision()};
     const target=this.friendsBuilding.getPieces().find(p=>p.id===request.pieceId);
     if(this.friends?.hasTrain() && (['undo','redo'].includes(request.action) || target && this.friends.trackInUse(target.id) && ['move','remove'].includes(request.action))) return {playerId,requestId:request.requestId,ok:false,message:'Dismantle the train before editing or undoing its track.',revision:this.friendsBuilding.getRevision()};
     if(this.friends?.hauling.hasCraneCargo() && (['undo','redo'].includes(request.action) || target && this.friends.hauling.craneHasCargo(target.assembly?.rootId??target.craneRootId??target.id) && ['move','remove'].includes(request.action))) return {playerId,requestId:request.requestId,ok:false,message:'Release the crane load before moving, dismantling or undoing its support.',revision:this.friendsBuilding.getRevision()};
@@ -1996,16 +2045,20 @@ export class CoopSimulation {
   }
 
   private handleFieldInteraction(player: CoopPlayer) {
+    if(player.friendsSoaring)return;
+    if(this.friends?.vehicles().some(v=>v.kind==='fishingBoat'&&v.pilotId===player.id)){this.friends.interact(player,this.elapsedMs);return;}
     if(this.friends?.fishing.pickup(player,this.inputByPlayer.get(player.id)?.friendsTool??6,this.elapsedMs,this.haulingEnvironment()))return;
-    if (this.friends && (player.friendsSeat || friendsCockpitInteraction(this.friends.vehicles(), player)||friendsRowboatInteraction(this.friends.vehicles(),player))) { this.friends.interact(player, this.elapsedMs); return; }
+    if (this.friends && (player.friendsSeat || friendsFishingBoatInteraction(this.friends.vehicles(),player) || friendsCockpitInteraction(this.friends.vehicles(), player)||friendsRowboatInteraction(this.friends.vehicles(),player))) { this.friends.interact(player, this.elapsedMs, this.friendsBuilding?.getPieces()); return; }
     if (this.collectManualDrop(player)) return;
     if (this.friends) {
       if (this.friends.hauling.interact(player, this.haulingEnvironment(), this.elapsedMs)) return;
-      const outcome = this.friends.interact(player, this.elapsedMs);
+      const outcome = this.friends.interact(player, this.elapsedMs, this.friendsBuilding?.getPieces());
       if (outcome === 'salvage') {
         const types = ['basic', 'basic', 'fast', 'ranged', 'tank', 'basic', 'fast', 'ranged'] as const;
         types.forEach((type, index) => this.spawnMissionEnemy(type, 4260, 7050, 'guard', 1, '#ff9878', index, -777));
       }
+      if(outcome==='caveLift')this.emitCombatEvent({kind:'player_redeployed',x:player.x,y:player.y,playerId:player.id,color:'#8de6ce'});
+      if(outcome==='treasure'){const id=this.friends.progress.openedTreasures?.at(-1),reward=CAVE_TREASURES.find(t=>t.id===id);if(reward)this.friendsFrontier!.awardCaveSupplies(reward.supplies,reward.tools);}
       if (outcome === 'signal') player.coins += 150;
       if (outcome === 'restore') for (const member of this.players.values()) member.coins += 900;
       return;
@@ -2756,7 +2809,7 @@ export class CoopSimulation {
     let collided = this.friends ? resolveFriendsVehicleCollisions(this.friends.vehicles(), position, z, radius) : false;
     if (this.friends) collided = collideRetreats(position,z,radius,this.friends.retreats.state.active) || collided;
     if (this.friends) collided = collidePhysicalCargo(this.friends.hauling.getCargo(), position, z, radius) || collided;
-    if (this.friendsFrontier) { collided = this.friendsFrontier.terrain.collide(position, z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.movementBuildIndex().near(position.x,position.y,radius+65),position,z,x,y,top)) || collided; collided = this.friendsFrontier.collideTrees(position, z, radius) || collided; }
+    if (this.friendsFrontier) { collided = this.friendsFrontier.terrain.collide(position, z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.movementBuildIndex().near(position.x,position.y,radius+65),position,z,x,y,top)) || collided; collided = this.friendsFrontier.collideTrees(position, z, radius) || collided; collided = this.friendsFrontier.collideRocks(position, z, radius) || collided; }
     if (this.friendsBuilding) collided = this.movementBuildIndex().collide(this.friendsBuilding.getPieces(), position, z, radius) || collided;
     if (z > 34) return collided;
     for (const structure of this.structures) {
@@ -2851,6 +2904,8 @@ export class CoopSimulation {
     const retreatPoint={x:position.x,y:position.y,z:position.z??0};
     const retreatTop=this.friends&&Math.max(retreatFloor(retreatPoint,this.friends.retreats.state.active)??-Infinity,retreatPathFloor(retreatPoint,this.friends.retreats.state.active)??-Infinity);
     if(retreatTop!==undefined)floor=Math.max(floor??-Infinity,retreatTop);
+    const rockFloor = this.friendsFrontier?.rockFloor(position.x, position.y, position.z ?? 0);
+    if (rockFloor !== undefined) floor = Math.max(floor ?? -Infinity, rockFloor);
     const terrainFloor = this.friendsFrontier?.terrain.floor(position.x, position.y, position.z ?? 0);
     if (terrainFloor !== undefined) floor = Math.max(floor ?? -Infinity, terrainFloor);
     const creativeFloor = this.friendsBuilding && friendsWalkFloor(this.movementBuildIndex().near(position.x,position.y,radius+65), position.x, position.y, position.z ?? 0, radius, this.friendsFrontier?.terrain);

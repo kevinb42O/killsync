@@ -10,10 +10,19 @@ export class FriendsCraneVisuals {
   private hookGeometry=createCraneHookGeometry();
   private hookMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.64,metalness:.4});
   private hooks?:THREE.InstancedMesh;
+  private spareRope?:FriendsRopeMesh;
   private start=new THREE.Vector3();private end=new THREE.Vector3();
   private down=new THREE.Vector3(0,-1,0);private direction=new THREE.Vector3();private tilt=new THREE.Quaternion();
   private matrix=new THREE.Matrix4();private rotation=new THREE.Quaternion();private scale=new THREE.Vector3(1,1,1);
-  constructor(parent:THREE.Group,private ropeMaterial:THREE.MeshStandardMaterial) {this.group.name='freight-crane-cables';parent.add(this.group);}
+  constructor(parent:THREE.Group,private ropeMaterial:THREE.MeshStandardMaterial) {
+    this.group.name='freight-crane-cables';parent.add(this.group);
+    this.hooks=new THREE.InstancedMesh(this.hookGeometry,this.hookMaterial,8);
+    this.hooks.name='freight-crane-hooks';this.hooks.castShadow=false;
+    this.hooks.count=0;this.hooks.visible=false;this.hooks.userData.friendsStartupWarmup=true;this.group.add(this.hooks);
+    this.spareRope=new FriendsRopeMesh(this.ropeMaterial);this.spareRope.castShadow=false;
+    this.spareRope.name='freight-crane-rope-reserve';this.spareRope.visible=false;
+    this.spareRope.geometry.setDrawRange(0,0);this.spareRope.userData.friendsStartupWarmup=true;this.group.add(this.spareRope);
+  }
   update(cranes:readonly FriendsCraneState[],cargo:readonly PhysicalCargo[],viewer?:{x:number;y:number;z:number}) {
     const visible=cranes.filter(c=>{
       if(!viewer||c.hasWinch===false||c.vehicleId&&c.length===0)return false;
@@ -33,7 +42,7 @@ export class FriendsCraneVisuals {
       const outlet=craneOutlet(crane),load=cargo.find(c=>c.id===crane.cargoId),anchor=load?craneCargoAnchor(load,crane):{...outlet,z:outlet.z-crane.length};
       this.start.set(outlet.x,outlet.z,outlet.y);this.end.set(anchor.x,anchor.z,anchor.y);
       let rope=this.ropes.get(crane.pieceId);
-      if(!rope){const mesh=new FriendsRopeMesh(this.ropeMaterial);mesh.castShadow=false;this.group.add(mesh);rope={mesh,stamp:''};this.ropes.set(crane.pieceId,rope);}
+      if(!rope){const mesh=this.spareRope??new FriendsRopeMesh(this.ropeMaterial);this.spareRope=undefined;mesh.name='braided-hauling-rope';mesh.visible=true;mesh.castShadow=false;this.group.add(mesh);rope={mesh,stamp:''};this.ropes.set(crane.pieceId,rope);}
       // Stationary lifts retain their GPU buffers. Use actual end distance and
       // full tension so the existing three-strand braid stays perfectly straight.
       const stamp=`${outlet.x}:${outlet.y}:${outlet.z}:${anchor.x}:${anchor.y}:${anchor.z}`;
@@ -44,5 +53,5 @@ export class FriendsCraneVisuals {
     });
     this.hooks.instanceMatrix.needsUpdate=true;this.hooks.computeBoundingSphere();
   }
-  dispose(){for(const rope of this.ropes.values())rope.mesh.geometry.dispose();this.ropes.clear();this.hooks?.dispose();this.hookGeometry.dispose();this.hookMaterial.dispose();this.ropeMaterial.dispose();this.group.removeFromParent();}
+  dispose(){for(const rope of this.ropes.values())rope.mesh.geometry.dispose();this.ropes.clear();this.spareRope?.geometry.dispose();this.hooks?.dispose();this.hookGeometry.dispose();this.hookMaterial.dispose();this.ropeMaterial.dispose();this.group.removeFromParent();}
 }

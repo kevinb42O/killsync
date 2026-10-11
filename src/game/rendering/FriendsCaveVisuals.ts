@@ -52,7 +52,7 @@ export class FriendsCaveVisuals extends THREE.Group {
     }
     // Crystalline veins contrast with amber firelight in the deepest chamber.
     const crystals:THREE.Matrix4[]=[];
-    for(const room of CAVE_ROOMS)for(let i=0;i<14;i++){const angle=i*2.399,r=.68+.12*Math.sin(i*7.1),x=room.x+Math.cos(angle)*room.rx*r,y=room.y+Math.sin(angle)*room.ry*r;
+    for(const room of CAVE_ROOMS.filter(r=>!r.id.startsWith('deep-')&&!r.id.startsWith('reliquary')&&!r.id.startsWith('descent-')))for(let i=0;i<14;i++){const angle=i*2.399,r=.68+.12*Math.sin(i*7.1),x=room.x+Math.cos(angle)*room.rx*r,y=room.y+Math.sin(angle)*room.ry*r;
       const floor=caveColumn(x,y).find(([a,b])=>a<=room.floor+32&&b>=room.floor+80)?.[0];if(floor===undefined)continue;
       if(CAVE_TREASURES.some(t=>Math.hypot(t.x-x,t.y-y)<90))continue;
       const h=room.id==='blue'?50+(i%4)*18:18+(i%4)*10;
@@ -61,7 +61,7 @@ export class FriendsCaveVisuals extends THREE.Group {
     const crystal=new THREE.InstancedMesh(new THREE.CylinderGeometry(.1,1,1,5),applyFriendsCaveLighting(new THREE.MeshStandardMaterial({color:0x74b8b8,emissive:0x13353c,emissiveIntensity:.045,metalness:.28,roughness:.27})),crystals.length);crystals.forEach((m,i)=>crystal.setMatrixAt(i,m));crystal.castShadow=crystal.receiveShadow=true;crystal.computeBoundingSphere();this.add(crystal);
     this.dust=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,uniforms:{time:{value:0}},vertexShader:`attribute float seed;varying float depthFade;uniform float time;void main(){vec3 p=position;p.y+=sin(time*.3+seed)*12.;p.x+=sin(time*.15+seed)*9.;vec4 mv=modelViewMatrix*vec4(p,1.);depthFade=clamp(1.-length(mv.xyz)/1800.,0.,1.);gl_PointSize=clamp(1100./max(10.,-mv.z),1.,4.);gl_Position=projectionMatrix*mv;}`,fragmentShader:`varying float depthFade;void main(){float a=pow(max(0.,1.-length(gl_PointCoord-.5)*2.),2.);gl_FragColor=vec4(.9,.62,.31,a*depthFade*.04);}`});
     const dustPositions:number[]=[],seeds:number[]=[];
-    for(const room of CAVE_ROOMS)for(let i=0;i<72;i++){const angle=i*2.399,r=Math.sqrt((i+.5)/72)*.85,x=room.x+Math.cos(angle)*room.rx*r,y=room.y+Math.sin(angle)*room.ry*r;const ranges=caveColumn(x,y);const range=ranges.at(-1);if(!range)continue;dustPositions.push(x,range[0]+32+(range[1]-range[0]-64)*((i*.618)%1),y);seeds.push(i);}
+    for(const room of CAVE_ROOMS.filter(r=>!r.id.startsWith('deep-')&&!r.id.startsWith('reliquary')&&!r.id.startsWith('descent-')))for(let i=0;i<72;i++){const angle=i*2.399,r=Math.sqrt((i+.5)/72)*.85,x=room.x+Math.cos(angle)*room.rx*r,y=room.y+Math.sin(angle)*room.ry*r;const ranges=caveColumn(x,y);const range=ranges.at(-1);if(!range)continue;dustPositions.push(x,range[0]+32+(range[1]-range[0]-64)*((i*.618)%1),y);seeds.push(i);}
     const particles=new THREE.BufferGeometry();particles.setAttribute('position',new THREE.Float32BufferAttribute(dustPositions,3));particles.setAttribute('seed',new THREE.Float32BufferAttribute(seeds,1));this.add(new THREE.Points(particles,this.dust));
   }
   invalidateShadows(){this.shadowStamp='';}

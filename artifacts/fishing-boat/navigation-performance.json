@@ -1,0 +1,31 @@
+{
+  "benchmark": "150 host boat updates of 50 ms per scenario; same process, route and terrain; previous 16 ms substeps and uncached terrain vs current code",
+  "before": {
+    "straight": {
+      "averageMs": 1.619977773333335,
+      "p95Ms": 2.2741250000000264,
+      "terrainCollisionCalls": 12600
+    },
+    "turning": {
+      "averageMs": 1.4636149799999945,
+      "p95Ms": 1.7229170000000522,
+      "terrainCollisionCalls": 12600
+    }
+  },
+  "after": {
+    "straight": {
+      "averageMs": 0.4613903266666724,
+      "p95Ms": 1.259083000000146,
+      "terrainCollisionCalls": 1467
+    },
+    "turning": {
+      "averageMs": 0.24912635333333127,
+      "p95Ms": 0.41412500000001273,
+      "terrainCollisionCalls": 483
+    },
+    "stationary": {
+      "averageMs": 0.004488899999999679,
+      "terrainCollisionCalls": 0
+    }
+  }
+}

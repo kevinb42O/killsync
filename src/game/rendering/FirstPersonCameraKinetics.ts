@@ -34,6 +34,8 @@ export interface FirstPersonKineticsInput {
   isReloading?: boolean;
   isDashing?: boolean;
   isSliding?: boolean;
+  /** Surface swimming and submerged diving use no land gait or impact bounce. */
+  isSwimming?: boolean;
   isAirborne?: boolean;
   verticalOffset?: number;
   verticalVelocity?: number;
@@ -179,8 +181,20 @@ export class FirstPersonCameraKinetics {
     const dtSec = Math.max(0.0001, Math.min(0.1, input.deltaTime / 1000));
     const intensity = Math.max(0, this.intensity);
 
+    // Water movement is not a footstep gait. Clear residual land motion on
+    // entry, including jump/landing impulses from the presentation bridge.
+    if (input.isSwimming) {
+      this.movingWeight = 0;
+      this.sprintWeight = 0;
+      this.airborneWeight = 0;
+      this.jumpSpringPos = this.jumpSpringVel = 0;
+      this.landSpringPos = this.landSpringVel = 0;
+      this.wasAirborne = false;
+      this.airborneTimer = 0;
+    }
+
     // 0. Airborne transition & Jump / Land impulse detection
-    const isAirborne = !!input.isAirborne || (input.verticalOffset !== undefined && input.verticalOffset > 0.08);
+    const isAirborne = !input.isSwimming && (!!input.isAirborne || (input.verticalOffset !== undefined && input.verticalOffset > 0.08));
     const vertOffset = input.verticalOffset !== undefined ? input.verticalOffset : (isAirborne ? 1.0 : 0.0);
     const vertDelta = vertOffset - this.lastVerticalOffset;
 
@@ -245,14 +259,14 @@ export class FirstPersonCameraKinetics {
     }
 
     // 1. Smooth state blends
-    const targetMoving = (input.isMoving && !isAirborne && !input.isSliding) ? 1.0 : 0.0;
+    const targetMoving = (input.isMoving && !input.isSwimming && !isAirborne && !input.isSliding) ? 1.0 : 0.0;
     // Sprint intent and the gait sample are deliberately separate. The
     // renderer can briefly report zero velocity while a network correction or
     // collision is being presented; tying this to targetMoving made the
     // low-ready sprint pose drop even though the player was still holding
     // sprint. Keep the pose latched to the authoritative sprint state, while
     // targetMoving still controls whether stride bob advances.
-    const targetSprint = (input.isSprinting && !isAirborne && !input.isSliding) ? 1.0 : 0.0;
+    const targetSprint = (input.isSprinting && !input.isSwimming && !isAirborne && !input.isSliding) ? 1.0 : 0.0;
     
     // Smooth transition rates (~12/s response time avoids any start/stop pop)
     this.movingWeight += (targetMoving - this.movingWeight) * (1 - Math.exp(-12 * dtSec));

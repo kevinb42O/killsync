@@ -7,6 +7,7 @@ export const CARGO_BEACON_HEIGHT = 24000;
 /** A single billboard quad: an objective light column occluded by world geometry. */
 export class FriendsCargoBeacon extends THREE.Group {
   private readonly cameraPosition = new THREE.Vector3();
+  private readonly worldPosition = new THREE.Vector3();
   private readonly geometry = new THREE.PlaneGeometry(1, CARGO_BEACON_HEIGHT);
   private readonly material = new THREE.ShaderMaterial({
     uniforms: { tint: { value: new THREE.Color('#ffc36e') }, seconds: { value: 0 } },
@@ -34,7 +35,7 @@ export class FriendsCargoBeacon extends THREE.Group {
   }
   /** Keep the column vertical and readable even at the player's high FOV. */
   faceCamera(camera:THREE.Camera){
-    const p=camera.getWorldPosition(this.cameraPosition),dx=p.x-this.position.x,dz=p.z-this.position.z;
+    const p=camera.getWorldPosition(this.cameraPosition),origin=this.getWorldPosition(this.worldPosition),dx=p.x-origin.x,dz=p.z-origin.z;
     this.column.rotation.y=Math.atan2(dx,dz);
     const apparentWidth=camera instanceof THREE.PerspectiveCamera ? 2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*.035 : .05;
     this.column.scale.x=Math.max(32,Math.hypot(dx,dz)*apparentWidth);
@@ -42,9 +43,12 @@ export class FriendsCargoBeacon extends THREE.Group {
   }
   update(cargo:PhysicalCargo|undefined,elapsed:number,delivered=false,color='#ffc36e'){
     this.visible=Boolean(cargo);if(!cargo)return;
-    this.position.set(cargo.x,cargoBounds(cargo).maxZ+2,cargo.y);
+    this.updateLocation({x:cargo.x,y:cargo.y,z:cargoBounds(cargo).maxZ+2},elapsed,delivered?'#a5f279':color);
+  }
+  updateLocation(point:{x:number;y:number;z:number},elapsed:number,color:string){
+    this.position.set(point.x,point.z,point.y);
     this.material.uniforms.seconds.value=elapsed/1000;
-    this.material.uniforms.tint.value.set(delivered?'#a5f279':color);
+    this.material.uniforms.tint.value.set(color);
   }
   dispose(){this.removeFromParent();this.geometry.dispose();this.material.dispose();}
 }

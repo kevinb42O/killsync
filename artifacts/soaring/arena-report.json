@@ -1,0 +1,9 @@
+{
+  "errors": [],
+  "flight": {
+    "phase": "flying",
+    "wing": true,
+    "defaultHandsHidden": true,
+    "cameraRoll": 0
+  }
+}

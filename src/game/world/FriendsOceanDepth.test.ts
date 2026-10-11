@@ -17,7 +17,8 @@ describe('offshore continental slope and deep ocean collision',()=>{
  it('meshes the seabed at its actual depth without tall empty chunk bounds',()=>{
   const t=new FriendsTerrain(),cx=Math.floor(44000/512),cy=Math.floor(23852/512),r=t.columnRange(cx*16+8,cy*16+8);expect(r.top).toBeLessThan(-100);expect(r.top-r.bottom).toBeLessThan(8);
   const mesh=meshTerrainChunk(t,cx,cy);expect(mesh.positions.length).toBeGreaterThan(0);expect([...mesh.positions].filter((_,i)=>i%3===1).some(v=>v<-3400)).toBe(true);
-  expect(meshOrganicHorizon(cx*512,cy*512,512,baseTerrainHeight).indices.length).toBe(0);
+  const organic=meshOrganicHorizon(cx*512,cy*512,512,baseTerrainHeight);
+  expect(organic.indices.length).toBeGreaterThan(0);expect([...organic.positions].filter((_,i)=>i%3===1).some(v=>v<-3400)).toBe(true);
   const horizon=meshBlockHorizon(cx*512,cy*512,512,baseTerrainHeight);expect([...horizon.positions].filter((_,i)=>i%3===1).some(v=>v<-3400)).toBe(true);
  });
 });

@@ -13,7 +13,7 @@ export function friendsWaterGround(x:number,y:number){
  * Flat river/lake joins belong to the lake; descending reaches belong to the
  * river. Their boundary has exactly the same elevation and depth on both sides. */
 export function friendsWaterAt(x:number,y:number):FriendsWaterSample|undefined{
-  if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>48000||y>48000)return;
+  if(!Number.isFinite(x)||!Number.isFinite(y))return;
   const river=riverWetAt(x,y);
   const cascade=skyfallWaterLevelAt(x,y);
   let level=river?.level??(cascade&&cascade.side<cascade.width*.64?cascade.level:undefined),bodyId=river?.riverId??(level!==undefined?cascade?.id:undefined);

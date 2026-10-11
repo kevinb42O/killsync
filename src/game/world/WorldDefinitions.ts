@@ -111,9 +111,9 @@ export function higherWorldIds(worldId: WorldId) { const tier = getWorldDefiniti
  * an unannounced death volume. Keep samples allocation-free: movement, spawn
  * placement and AI call this in hot paths. */
 export function sampleWorldSurface(worldId: WorldId, x: number, y: number): WorldSurfaceSample {
-  const sizeX = worldId === 'friends_frontier' ? FRONTIER_SIZE : GAME_WIDTH, sizeY = worldId === 'friends_frontier' ? FRONTIER_SIZE : GAME_HEIGHT;
+  if (worldId === 'friends_frontier') return Number.isFinite(x) && Number.isFinite(y) ? SOLID : VOID;
+  const sizeX = GAME_WIDTH, sizeY = GAME_HEIGHT;
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > sizeX || y > sizeY) return VOID;
-  if (worldId === 'friends_frontier') return SOLID;
   if (worldId === 'neon_bastion') return SOLID;
   if (worldId === 'cinderworks') return sampleCinderworks(x, y);
   if (worldId === 'white_silence') return sampleWhiteSilence(x, y);

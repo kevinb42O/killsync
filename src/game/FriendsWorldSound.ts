@@ -1,3 +1,4 @@
+import { CAVE_LAVA } from './world/FriendsCaveDescent';
 import { LAVA_RIVER_POINTS,LAVA_SEA_ENTRY } from './world/FriendsLavaRiver';
 import { CAVE_ROOMS, CAVE_TREASURES } from './world/FriendsCave';
 import { ISLAND_VOLCANO, islandSurfaceBiome, islandCoastDistance } from './world/FriendsIsland';
@@ -12,7 +13,7 @@ import type { FriendsCue, SurfaceCue } from './FriendsAudio';
 
 export type SoundPoint = { x: number; y: number; z: number };
 export type SpatialSound = { volume: number; pan: number; rate?: number; cutoff?: number };
-export type WorldLoop = 'caveAir' | 'waterfall' | 'lava' | 'volcano' | 'reel' | 'oceanSteam';
+export type WorldLoop = 'caveAir' | 'waterfall' | 'lava' | 'volcano' | 'reel' | 'oceanSteam' | 'boatEngine' | 'boatWater';
 export type WorldSoundMix = Record<WorldLoop, SpatialSound> & {
   drip: SpatialSound; dripSource?: string; steam: SpatialSound; reflection: number; reflectionDelay: number;
 };
@@ -22,7 +23,7 @@ const smooth = (n: number) => { const t = clamp(n); return t * t * (3 - 2 * t); 
 export const SILENT_SPATIAL: SpatialSound = { volume: 0, pan: 0 };
 export const QUIET_WORLD_SOUND: WorldSoundMix = {
   caveAir: SILENT_SPATIAL, waterfall: SILENT_SPATIAL, lava: SILENT_SPATIAL,
-  volcano: SILENT_SPATIAL, reel: SILENT_SPATIAL, oceanSteam:SILENT_SPATIAL, drip: SILENT_SPATIAL, steam: SILENT_SPATIAL,
+  volcano: SILENT_SPATIAL, reel: SILENT_SPATIAL, oceanSteam:SILENT_SPATIAL, boatEngine:SILENT_SPATIAL, boatWater:SILENT_SPATIAL, drip: SILENT_SPATIAL, steam: SILENT_SPATIAL,
   reflection: 0, reflectionDelay: .08,
 };
 
@@ -38,7 +39,7 @@ const FALL_POINTS = [6464, 7360].flatMap(startX => Array.from({ length: 13 }, (_
 }));
 const LAVA_POINTS = [{ x: ISLAND_VOLCANO.x, y: ISLAND_VOLCANO.y, z: ISLAND_VOLCANO.lavaLevel },
   ...LAVA_RIVER_POINTS.filter((_,i)=>i%8===0)];
-const WET_ROOMS = CAVE_ROOMS.filter(r => ['blue', 'well', 'roots', 'deep-1-2', 'deep-2-4', 'deep-3-1', 'deep-4-3'].includes(r.id));
+const WET_ROOMS = CAVE_ROOMS.filter(r => ['blue', 'well', 'roots', 'deep-1-2', 'deep-2-4', 'deep-3-1', 'deep-4-3','descent-crystal'].includes(r.id));
 function nearest<T extends SoundPoint>(points: readonly T[], p: SoundPoint): T {
   return points.reduce((a, b) => Math.hypot(a.x-p.x,a.y-p.y,a.z-p.z) < Math.hypot(b.x-p.x,b.y-p.y,b.z-p.z) ? a : b);
 }
@@ -57,6 +58,8 @@ export function friendsWorldSound(listener: SoundPoint, yaw: number, underground
       const drip = nearest(wet.map(r => ({ id:r.id, x:r.x+r.rx*.3, y:r.y-r.ry*.2, z:r.floor+48 })), listener);
       if (clear(listener, drip)) { mix.drip = spatialSound(drip, listener, yaw, 650, .12); mix.dripSource = drip.id; }
     }
+    const molten=nearest(CAVE_LAVA,listener),hot=spatialSound({...molten,z:molten.z+24},listener,yaw,850,.25);
+    if(hot.volume>.001&&clear({...listener,z:listener.z+32},{...molten,z:molten.z+24})){mix.lava={...hot,cutoff:4200};mix.steam={...hot,volume:hot.volume*.3,cutoff:3200};}
     return mix;
   }
   const falls = nearest(FALL_POINTS, listener), fall = spatialSound(falls, listener, yaw, 3200, .4);

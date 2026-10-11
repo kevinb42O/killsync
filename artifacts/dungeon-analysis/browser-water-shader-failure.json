@@ -1,0 +1,13 @@
+{
+  "origin": "http://localhost:3000",
+  "checks": [],
+  "errors": [
+    "THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false\n\nMaterial Name: \nMaterial Type: ShaderMaterial\n\nProgram Info Log: Vertex shader is not compiled.\n\u0000\nVERTEX\n\nERROR: 0:99: 'w' : undeclared identifier\nERROR: 0:99: 'y' :  field selection requires structure, vector, or interface block on left hand side\n\u0000\n\n  94:       float coastWeight(float depth,vec4 coast){return shorebreakStrength*(1.-smoothstep(65.,150.,depth))*smoothstep(2.,18.,depth)*smoothstep(.015,.05,length(coast.ba))*(1.-smoothstep(.65,1.8,length(coast.ba)));}\n  95: \n  96: float friendsWaterWaveHeight(vec2 p){\n  97:         vec2 uv=(p-waterOrigin)/waterExtent;\n  98:         float depth=texture2D(bathymetry,clamp(uv,0.,1.)).r;\n> 99:         vec2 excavation=excavationAt(p,w.y);if(excavation.y>0.)depth=excavation.y;\n  100:         float shallow=smoothstep(2.,72.,depth);\n  101:         float edge=ocean>.5?1.-smoothstep(patchHalfExtent-700.,patchHalfExtent,max(abs(p.x-patchCentre.x),abs(p.y-patchCentre.y))):1.;\n  102:         vec2 wavePosition=p*mix(1.,1.75,ocean);\n  103:         float displacement=sin(dot(wavePosition,vec2(.0051,.0037))-time*.95)*.60\n  104:           +sin(dot(wavePosition,vec2(-.0082,.0046))+time*.78)*.28+sin(dot(wavePosition,vec2(.016,.012))-time*1.7)*.12;\n  105:         if(ocean>.5&&shorebreakStrength>0.&&depth<150.){\n"
+  ],
+  "views": [],
+  "failure": "AssertionError [ERR_ASSERTION]: outside: invalid WebGL draw\n\n1282 !== 0\n",
+  "state": {
+    "hookPresent": true,
+    "stats": "60 FPS · 1 draws · 0k triangles\nCamera 6090, 5500 · altitude 900\nOcean island · shared voxel landmarks\nBlocks: 84 surface tiles · 166/166 active/cached volumes · 20.2 MiB · 0 jobs\nTrees: 40 3D · 16 batches · 91k triangles\nClouds: 1/78 visible · 1 atlas bakes"
+  }
+}

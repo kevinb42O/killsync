@@ -1,6 +1,8 @@
+import { CAVE_ENTRANCE, CAVE_DESCENT_ROOMS, CAVE_DESCENT_ROUTE, CAVE_LAVA, caveStairsAt, caveStairFloor, CAVE_UPPER_ROUTES, CAVE_BEDROCK_ROOM, CAVE_BEDROCK_ROUTE } from './FriendsCaveDescent';
+import { CAVE_LEGACY_REWARDS } from './FriendsCaveLegacyRewards';
 /** Authored volumetric cave topology. Coordinates use simulation x/y/elevation;
  * the renderer, collisions, mining and prediction share these exact voids. */
-export const CAVE_ENTRANCE = { x:6384, y:5152, radius:176, name:'THE LANTERN DESCENT' };
+export { CAVE_ENTRANCE };
 export type CaveRoom={id:string;name:string;x:number;y:number;rx:number;ry:number;floor:number;roof:number};
 export const CAVE_ROOMS:CaveRoom[]=[
   {id:'vestibule',name:'Lantern Vestibule',x:6576,y:5008,rx:320,ry:240,floor:352,roof:576},
@@ -46,6 +48,9 @@ for(let row=0;row<5;row++){
   const secret={id:`reliquary-${row}`,name:`${districts[row]} · Lost Reliquary`,x:source.x+1024,y:source.y+384,rx:256,ry:256,floor,roof:floor+288};
   CAVE_ROOMS.push(secret);connectRooms(source,secret,-128);
 }
+CAVE_ROOMS.push(...CAVE_DESCENT_ROOMS,CAVE_BEDROCK_ROOM);
+CAVE_ROUTES.push(...CAVE_UPPER_ROUTES,CAVE_BEDROCK_ROUTE);
+for(let i=1;i<CAVE_DESCENT_ROUTE.length;i++)CAVE_ROUTES.push([CAVE_DESCENT_ROUTE[i-1],CAVE_DESCENT_ROUTE[i]]);
 export const CAVE_BOUNDS={minX:6080,maxX:18240,minY:1792,maxY:8832};
 export type CaveRange=[number,number];
 const snap=(n:number)=>Math.round(n/32)*32;
@@ -59,6 +64,11 @@ function indexTiles<T>(map:Map<string,T[]>,value:T,minX:number,maxX:number,minY:
 }
 for(const r of CAVE_ROOMS)indexTiles(roomTiles,r,r.x-r.rx*1.04,r.x+r.rx*1.04,r.y-r.ry*1.04,r.y+r.ry*1.04);
 CAVE_ROUTES.forEach((route,id)=>{for(let i=1;i<route.length;i++){const a=route[i-1],b=route[i];indexTiles(segmentTiles,{a,b,route:id},Math.min(a.x,b.x)-80,Math.max(a.x,b.x)+80,Math.min(a.y,b.y)-80,Math.max(a.y,b.y)+80);}});
+/** Conservative chamber/route bounds for streaming stacked cave levels. */
+export function caveChunkAtElevation(cx:number,cy:number,z:number){
+ const key=`${cx},${cy}`,margin=256;
+ return (roomTiles.get(key)||[]).some(r=>z>=r.floor-margin&&z<=r.roof+margin)||(segmentTiles.get(key)||[]).some(s=>z>=Math.min(s.a.z,s.b.z)-margin&&z<=Math.max(s.a.z,s.b.z)+192+margin);
+}
 /** Northern rim is a stair descent; the centre is a much deeper open shaft. */
 export function caveEntranceFloor(x:number,y:number):number|undefined {
   const dx=x-CAVE_ENTRANCE.x,dy=y-CAVE_ENTRANCE.y,r=Math.hypot(dx,dy);
@@ -83,7 +93,7 @@ export function caveColumn(x:number,y:number):CaveRange[] {
     if(!pillar)for(const room of roomTiles.get(tile)||[]){
       const warp=1+.035*Math.sin(x*.021)*Math.sin(y*.017),d=Math.hypot((x-room.x)/room.rx,(y-room.y)/room.ry)/warp;
       if(d>=1)continue;
-      const floor=room.id==='cathedral'?room.floor:snap(room.floor+Math.sin(x*.013)*Math.sin(y*.011)*22);
+      const floor=room.id==='cathedral'||room.id.startsWith('descent-')?room.floor:snap(room.floor+Math.sin(x*.013)*Math.sin(y*.011)*22);
       const roof=snap(floor+112+(room.roof-floor-112)*Math.sqrt(1-d*d));
       const pit=room.id==='cathedral'&&Math.hypot((x-8608)/264,(y-4800)/248)<1;
       if(pit){
@@ -96,6 +106,9 @@ export function caveColumn(x:number,y:number):CaveRange[] {
       const s=segment(x,y,a,b);if(s.distance<80)ranges.push([s.floor,s.floor+snap(128+64*Math.sqrt(1-(s.distance/80)**2))]);
     }
   }
+  // Excavate backing below the exact small-riser masonry road.
+  for(const stair of caveStairsAt(x,y,32))ranges.push([Math.floor((stair.z-32)/32)*32,Math.ceil((stair.z+192)/32)*32]);
+  for(const lava of CAVE_LAVA)if(Math.hypot((x-lava.x)/lava.rx,(y-lava.y)/lava.ry)<1){const range=ranges.find(r=>r[0]<=lava.z+64&&r[1]>lava.z);if(range)range[0]=Math.min(range[0],lava.bed);}
   ranges.sort((a,b)=>a[0]-b[0]);const merged:CaveRange[]=[];
   for(const range of ranges){const last=merged.at(-1);if(last&&range[0]<=last[1])last[1]=Math.max(last[1],range[1]);else merged.push([...range]);}
   // A narrow solid ledge follows each route's elevation through room unions.
@@ -104,7 +117,7 @@ export function caveColumn(x:number,y:number):CaveRange[] {
     const ramps:CaveRange[]=[];
     const nearestByRoute=new Map<number,{distance:number;floor:number}>();
     for(const {a,b,route} of segments){const s=segment(x,y,a,b),previous=nearestByRoute.get(route);if(!previous||s.distance<previous.distance)nearestByRoute.set(route,s);}
-    for(const nearest of nearestByRoute.values())if(nearest.distance<40)ramps.push([nearest.floor-64,nearest.floor]);
+    for(const nearest of nearestByRoute.values())if(nearest.distance<40&&!caveStairsAt(x,y,32).length)ramps.push([nearest.floor-64,nearest.floor]);
     for(const [low,high]of ramps)for(let i=merged.length-1;i>=0;i--){const [a,b]=merged[i];if(high<=a||low>=b)continue;merged.splice(i,1);if(low-a>=64)merged.splice(i,0,[a,low]);if(b-high>=64)merged.splice(i,0,[high,b]);}
     merged.sort((a,b)=>a[0]-b[0]);
   }
@@ -116,7 +129,7 @@ export function explorationCave(x:number,y:number,z:number){return caveColumn(x,
 export function caveOpenToSky(x:number,y:number,z:number){return caveColumn(x,y).some(([floor,roof])=>z>=floor&&z<roof&&roof===6144);}
 export function caveAt(x:number,y:number,z:number){
   if(!explorationCave(x,y,z)||z>576)return;
-  return CAVE_ROOMS.find(r=>Math.hypot((x-r.x)/r.rx,(y-r.y)/r.ry)<1)?.name || CAVE_ENTRANCE.name;
+  return CAVE_ROOMS.find(r=>z>=r.floor-64&&z<r.roof&&Math.hypot((x-r.x)/r.rx,(y-r.y)/r.ry)<1)?.name || CAVE_ENTRANCE.name;
 }
 export type CaveTorch=CavePoint&{cool?:boolean};
 export const CAVE_TORCHES:CaveTorch[]=[];
@@ -128,10 +141,20 @@ for(const room of CAVE_ROOMS)if(torchRooms.has(room.id)){
   const range=caveColumn(x,y).find(([floor,roof])=>Math.abs(floor-room.floor)<=32&&roof-floor>=96);
   if(range)CAVE_TORCHES.push({x,y,z:range[0],cool:room.id==='blue'});
 }
-for(const [x,y]of [[6256,5104],[6352,5024],[6456,5024],[6496,5136]]){const z=caveEntranceFloor(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16);if(z!==undefined)CAVE_TORCHES.push({x,y,z});}
+for(const [x,y]of [[6256,5104],[6352,5024],[6456,5024],[6496,5136]]){const z=caveStairFloor(x,y,640,0)??caveEntranceFloor(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16);if(z!==undefined)CAVE_TORCHES.push({x,y,z});}
+
+const descentCachePoints=CAVE_DESCENT_ROOMS.map(room=>{
+ const point=[[128,-192],[-128,-192],[192,0],[0,-224],[-128,128]].map(([dx,dy])=>({x:room.x+dx,y:room.y+dy,z:room.floor})).find(p=>caveColumn(p.x,p.y).some(([floor,roof])=>floor===room.floor&&roof-floor>=128));
+ if(!point)throw new Error(`Missing supported discovery platform in ${room.id}`);
+ return point;
+});
+for(const [i,room]of CAVE_DESCENT_ROOMS.entries()){
+ const cache=descentCachePoints[i],torch=[[48,32],[-48,32],[0,-64]].map(([dx,dy])=>({...cache,x:cache.x+dx,y:cache.y+dy})).find(p=>caveColumn(p.x,p.y).some(([floor,roof])=>floor===p.z&&roof-floor>=128));
+ if(torch)CAVE_TORCHES.push({...torch,cool:room.theme==='crystal'||room.theme==='vault'});
+}
 
 // Small lights at the abyss floor reveal its depth from the upper crossing.
-CAVE_TORCHES.push({x:8624,y:4944,z:-416},{x:8512,y:4864,z:-416});
+CAVE_TORCHES.push({x:8432,y:4880,z:-416},{x:8528,y:4800,z:-416});
 /** Static soft bounce, sampled only when a chunk is meshed. Dynamic flames and
  * the nearest direct lights sit on top of this inexpensive distant illumination. */
 const glowTiles=new Map<string,CaveTorch[]>();
@@ -146,9 +169,10 @@ export function caveGlow(x:number,y:number,z:number):[number,number,number]{
   return [Math.min(.8,r),Math.min(.6,g),Math.min(.6,b)];
 }
 
-export type CaveTreasure=CavePoint&{id:string;name:string;gold:number;angle:number};
+export type CaveSupplies=Partial<Record<'wood'|'stone'|'copper'|'iron'|'planks'|'ingots',number>>;
+export type CaveTreasure=CavePoint&{id:string;name:string;gold:number;angle:number;supplies?:CaveSupplies;tools?:boolean;relic?:boolean;description?:string};
 /** Stable IDs keep existing worlds compatible when the cave grows again. */
-export const CAVE_TREASURES:CaveTreasure[]=CAVE_ROOMS.flatMap((room,i)=>{
+const legacyTreasures:CaveTreasure[]=CAVE_ROOMS.filter(r=>!r.id.startsWith('descent-')).flatMap((room,i)=>{
   const locations=room.id==='cathedral'?[[room.x+352,room.y+128]]:[[room.x+96,room.y+96],[room.x-room.rx*.55,room.y+room.ry*.3]];
   return locations.flatMap(([x,y],j)=>{
     x=Math.floor(x/32)*32+16;y=Math.floor(y/32)*32+16;
@@ -156,8 +180,19 @@ export const CAVE_TREASURES:CaveTreasure[]=CAVE_ROOMS.flatMap((room,i)=>{
     return range?[{id:`${room.id}-${j}`,name:room.id.startsWith('reliquary')?'Royal Hoard':'Ancient Chest',x,y,z:range[0],gold:room.id.startsWith('reliquary')?75000+i*1000:5000+i*1250+j*2500,angle:i*2.399}]:[];
   });
 });
-export function nearbyCaveTreasure(player:CavePoint,opened:readonly string[]=[],clear:(x:number,y:number,z:number)=>boolean=explorationCave){
+/** Authored discoveries replace the old two-boxes-per-room distribution. */
+const kept=new Set(['vestibule-0','echo-1','cathedral-0','blue-0','roots-0','well-1']);
+export const CAVE_TREASURES:CaveTreasure[]=[
+ ...legacyTreasures.filter(t=>kept.has(t.id)).map(t=>({...t,supplies:{wood:8,planks:4},description:'Expedition supplies · shared workshop storage'})),
+ ...(legacyTreasures.some(t=>t.id==='cathedral-0')?[]:[{id:'cathedral-0',name:'Cathedral Survey Cache',x:8992,y:4672,z:32,gold:CAVE_LEGACY_REWARDS['cathedral-0'],angle:.3,supplies:{stone:12,planks:8},description:'Shared workshop supplies'}]),
+ ...CAVE_DESCENT_ROOMS.map((r,i)=>({id:`${r.id}-cache`,name:['Miner’s Supply Cache','Archive Relay','Mason’s Cache','Crystal Lens','Ember Survey Cache','Master Forge Tools','Cooling Gallery Cache','Sunline Relic'][i],...descentCachePoints[i],gold:0,angle:.3+i*.7,supplies:i===7?{ingots:24,planks:24}:i===5?{ingots:16,iron:24}:{stone:12,planks:8,copper:8},tools:i===5,relic:i===7,description:i===7?'Sunline relic · home display & return route':i===5?'Reinforced tools for the crew · restore the lift':i===1?'Ancient masonry finish · restore the lift':i===3?'Crystal lighting finish · restore the lift':'Workshop supplies · restore the lift'})),
+];
+export const CAVE_REWARD_GOLD:Readonly<Record<string,number>>={...CAVE_LEGACY_REWARDS,...Object.fromEntries(CAVE_TREASURES.map(t=>[t.id,t.gold]))};
+export function nearbyCaveTreasure(player:CavePoint,opened:readonly string[]=[],clear:(x:number,y:number,z:number)=>boolean=explorationCave,blocked?:(ray:CavePoint&{dx:number;dy:number;dz:number},distance:number)=>boolean){
   return CAVE_TREASURES.filter(t=>!opened.includes(t.id)&&Math.abs(t.z-player.z)<=48&&Math.hypot(t.x-player.x,t.y-player.y)<=112)
     .sort((a,b)=>Math.hypot(a.x-player.x,a.y-player.y)-Math.hypot(b.x-player.x,b.y-player.y))
-    .find(t=>{const steps=Math.max(1,Math.ceil(Math.hypot(t.x-player.x,t.y-player.y)/16));for(let i=0;i<=steps;i++){const f=i/steps;if(!clear(player.x+(t.x-player.x)*f,player.y+(t.y-player.y)*f,player.z+28+(t.z-player.z)*f))return false;}return true;});
+    .find(t=>{const distance=Math.hypot(t.x-player.x,t.y-player.y,t.z-player.z);
+      const inverse=distance>.001?1/distance:0;
+      if(blocked&&blocked({x:player.x,y:player.y,z:player.z+28,dx:(t.x-player.x)*inverse,dy:(t.y-player.y)*inverse,dz:(t.z-player.z)*inverse},distance))return false;
+      const steps=Math.max(1,Math.ceil(Math.hypot(t.x-player.x,t.y-player.y)/16));for(let i=0;i<=steps;i++){const f=i/steps;if(!clear(player.x+(t.x-player.x)*f,player.y+(t.y-player.y)*f,player.z+28+(t.z-player.z)*f))return false;}return true;});
 }

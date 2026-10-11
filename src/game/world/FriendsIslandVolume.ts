@@ -1,6 +1,6 @@
 import { scenicTransitRanges, scenicTransitSurface, scenicTunnelCoverLimit } from './FriendsRailInfrastructure';
 import { islandArchRange } from './FriendsIsland';
-import { baseTerrainHeight, FRONTIER_SIZE } from './FriendsTerrain';
+import { baseTerrainHeight } from './FriendsTerrain';
 import type { HorizonMeshData } from './FriendsHorizonMesh';
 
 /** Continuous rock surface around the mountain vault. Marching tetrahedra
@@ -42,7 +42,7 @@ export function meshIslandVault(tx:number,ty:number,tile:number,sampleHeight=bas
   };
   const corners=[[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]];
   const tetrahedra=[[0,1,2,6],[0,2,3,6],[0,3,7,6],[0,7,4,6],[0,4,5,6],[0,5,1,6]];
-  for(let y=0;y<cells&&ty+y*step<FRONTIER_SIZE;y++)for(let x=0;x<cells&&tx+x*step<FRONTIER_SIZE;x++){
+  for(let y=0;y<cells;y++)for(let x=0;x<cells;x++){
     const high=Math.max(heights[id(x,y)],heights[id(x+1,y)],heights[id(x,y+1)],heights[id(x+1,y+1)]);
     if(high<-192)continue;
     const levels=new Set<number>();

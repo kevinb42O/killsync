@@ -27,9 +27,9 @@ export function fishingRodPose(out:FishingRodPose,heldMs:number|undefined,cast:F
   }else if(cast?.phase==='bite'){
     out.pitch-=.12*Math.sin(now*.023);out.flex=.75+Math.sin(now*.018)*.15;
   }else if(cast?.phase==='reeling'){
-    const grip=smooth((now-cast.atMs)/250);
-    out.pitch-=grip*(.10+.012*Math.sin(now*.011));
-    out.flex=cast.empty?.10+.025*Math.sin(now*.011):.5+.08*Math.sin(now*.011);
+    const grip=smooth((now-cast.atMs)/250),clock=cast.reelElapsedMs??now,cranking=cast.reelActive!==false;
+    out.pitch-=grip*(.10+(cranking?.012*Math.sin(clock*.011):0));
+    out.flex=cast.sharkFatigue!==undefined?.10+.70*(cast.sharkLoad??0)+(cranking?.07:0):cast.empty?.10+(cranking?.025*Math.sin(clock*.011):0):.5+Math.min(.2,cast.size*.025)*Math.sin(clock/2200*Math.PI*2);
   }
   return out;
 }

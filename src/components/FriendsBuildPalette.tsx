@@ -1,7 +1,7 @@
 import type { ConstructionState } from '../game/multiplayer/FriendsConstructionControls';
 import { useEffect, useRef, useState } from 'react';
 import { Hammer, Library, Search, RotateCcw, RotateCw, Undo2, Redo2, X, Paintbrush, Copy, Move, Pin, TrainFront, Download, Upload, ArrowRight, SlidersHorizontal } from 'lucide-react';
-import { FRIENDS_BUILD_CATALOG, FRIENDS_FINISHES, FRIENDS_BUILD_LIMIT, isFriendsShape, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildingSnapshot } from '../game/multiplayer/FriendsBuilding';
+import { FRIENDS_BUILD_CATALOG, FRIENDS_FINISHES, friendsFinishUnlocked, FRIENDS_BUILD_LIMIT, isFriendsShape, type FriendsBuildShape, type FriendsBuildFinish, type FriendsBuildingSnapshot } from '../game/multiplayer/FriendsBuilding';
 import { BUILD_CATEGORIES, BuildWheelGesture, buildCategory, buildDimensions, cycleBuildToolbar, filterBuildLibrary, type BuildCategory } from '../game/multiplayer/FriendsBuildControls';
 import { FriendsToolWheel } from '../game/multiplayer/FriendsToolControls';
 import { buildCost, MATERIAL_NAMES, type FrontierRequest, type Materials, type Resource } from '../game/multiplayer/FriendsFrontier';
@@ -12,7 +12,7 @@ import './friends-building.css';
 
 const finishGroups: { label: string; finishes: FriendsBuildFinish[] }[] = [
   { label: 'From the world', finishes: ['grass', 'soil', 'stone', 'copper', 'iron'] },
-  { label: 'Crafted finishes', finishes: ['timber', 'teal', 'plaster', 'rose'] },
+  { label: 'Crafted finishes', finishes: ['timber', 'teal', 'plaster', 'rose', 'ancient', 'crystal'] },
 ];
 const materialTexture = (finish: FriendsBuildFinish) => ['grass', 'soil'].includes(finish) ? 'Ground037' : ['stone', 'copper', 'iron'].includes(finish) ? 'Rock030' : finish === 'timber' ? 'WoodFloor051' : undefined;
 
@@ -166,7 +166,7 @@ export function FriendsBuildPalette({ construction, shape, finish, toolbar, rota
               : <div className="build-slot-assignment"><label htmlFor="build-slot">Keep in your toolbar · or drag to a slot</label><div><select id="build-slot" value={assignSlot} onChange={e => setAssignSlot(Number(e.target.value))}>{toolbar.map((s, i) => <option key={i} value={i}>Slot {i + 1} · {FRIENDS_BUILD_CATALOG[s].name}</option>)}</select><button type="button" onClick={() => onAssign(assignSlot, shape)} aria-label={`Assign ${selected.name} to slot ${assignSlot + 1}`}><Pin size={16} /></button></div><button type="button" className="build-primary-button" onClick={() => onExpand(false)}>Build with this piece <ArrowRight size={16} /></button></div>}
           </aside>
         </div>
-        <section className={`build-materials ${rails || trainSelected ? 'build-materials--rail' : ''}`} aria-label="Construction materials">{rails || trainSelected ? <><span className="build-section-label">RAILWAY MATERIALS</span><p>Steel rails and timber sleepers have a fixed finish.</p></> : finishGroups.map(group => <div key={group.label}><span className="build-section-label">{group.label}</span><div className="build-materials__row">{group.finishes.map(f => <button type="button" key={f} aria-pressed={f === finish} onClick={() => onFinish(f)}><i style={{ backgroundColor: FRIENDS_FINISHES[f].color, backgroundImage: materialTexture(f) ? `linear-gradient(${FRIENDS_FINISHES[f].color}66,${FRIENDS_FINISHES[f].color}66),url(${import.meta.env.BASE_URL}textures/frontier/${materialTexture(f)}_1K-JPG_Color.jpg)` : undefined }} /><span>{FRIENDS_FINISHES[f].name}</span></button>)}</div></div>)}</section>
+        <section className={`build-materials ${rails || trainSelected ? 'build-materials--rail' : ''}`} aria-label="Construction materials">{rails || trainSelected ? <><span className="build-section-label">RAILWAY MATERIALS</span><p>Steel rails and timber sleepers have a fixed finish.</p></> : finishGroups.map(group => <div key={group.label}><span className="build-section-label">{group.label}</span><div className="build-materials__row">{group.finishes.map(f => <button type="button" key={f} aria-pressed={f === finish} disabled={!friendsFinishUnlocked(f,friends?.progress.openedTreasures)} title={!friendsFinishUnlocked(f,friends?.progress.openedTreasures)?f==='ancient'?'Discover the Buried Archive':'Discover the Listening Cavern':FRIENDS_FINISHES[f].name} onClick={() => onFinish(f)}><i style={{ backgroundColor: FRIENDS_FINISHES[f].color, backgroundImage: materialTexture(f) ? `linear-gradient(${FRIENDS_FINISHES[f].color}66,${FRIENDS_FINISHES[f].color}66),url(${import.meta.env.BASE_URL}textures/frontier/${materialTexture(f)}_1K-JPG_Color.jpg)` : undefined }} /><span>{FRIENDS_FINISHES[f].name}</span></button>)}</div></div>)}</section>
         <div className="build-library__toolbar"><span className="build-section-label">YOUR TOOLBAR <small>1–8 / scroll to select · Drag to arrange</small></span>{toolbarView}</div>
         <footer className="build-library__footer"><div role="status">{message || (moving ? 'Select a destination, then place your moved piece.' : 'Choose a piece and material. Close the library to place it.')}</div>{host && <label><input type="checkbox" checked={building?.guestsCanBuild !== false} onChange={() => onAction('permissions')} /> Friends can build</label>}<button type="button" className="build-primary-button" onClick={() => onExpand(false)}>Return to building <ArrowRight size={16} /></button></footer>
     </section>

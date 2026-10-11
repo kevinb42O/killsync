@@ -4,7 +4,7 @@ import { Renderer3D } from '../Renderer3D';
 import { FriendsSimulation } from '../multiplayer/FriendsSimulation';
 import { FriendsHaulingVisuals } from './FriendsHaulingVisuals';
 import { FriendsRopeMesh } from './FriendsRopeMesh';
-import { FRIENDS_DELIVERY_BAY } from '../world/FriendsHaulingGoal';
+import { FRIENDS_DELIVERY_BAY, haulingJob } from '../world/FriendsHaulingGoal';
 import { FRIENDS_CAMPFIRE } from '../world/FriendsRegion';
 
 function fixture(){
@@ -18,6 +18,59 @@ function fixture(){
   return {scene,viewmodel,camera,handCamera,visuals,snapshot,project};
 }
 describe('held hauling rope attachment',()=>{
+  it('switches all cargo columns to attached destinations until every attachment is released',()=>{
+    const {scene,visuals,snapshot,project}=fixture(),hauling=snapshot.friends!.hauling!;
+    const cargo=hauling.cargo[0],rope={...hauling.ropes[0],cargoId:cargo.id};
+    const crane={pieceId:1,x:cargo.x,y:cargo.y,z:cargo.z+200,rotation:0,length:200,mode:'hold' as const,blocked:false,cargoId:cargo.id};
+    const aircraft={...crane,pieceId:-1,vehicleId:'helicopter'};
+    const update=()=>visuals.update(snapshot,'host',0,0,project);
+    const cargoBeacons=()=>scene.getObjectsByProperty('name','cargo-location-beacon');
+    const destination=scene.getObjectByName('hauling-delivery-goal')!.getObjectByName('delivery-beacon')!;
+    const expectDestinationOnly=()=>{
+      expect(cargoBeacons().every(b=>!b.visible)).toBe(true);
+      expect(destination.visible).toBe(true);
+      expect(destination.getObjectByName('cargo-light-column')).toBeDefined();
+      expect(scene.getObjectByName('hauling-goal-castle-delivery')!.getObjectByName('delivery-beacon')!.visible).toBe(false);
+      expect(scene.getObjectByName('hauling-goal-sanctum-delivery')!.getObjectByName('delivery-beacon')!.visible).toBe(false);
+    };
+    const beacon=()=>scene.getObjectsByProperty('name','cargo-location-beacon').find(b=>b.position.x===cargo.x&&b.position.z===cargo.y)!;
+    hauling.ropes=[];hauling.cranes=[];hauling.aircraftWinch=undefined;update();
+    expect(beacon().visible).toBe(true);expect(destination.visible).toBe(false);
+    for(const attachment of ['rope','crane','helicopter','straps'] as const){
+      if(attachment==='rope')hauling.ropes=[rope];
+      if(attachment==='crane')hauling.cranes=[crane];
+      if(attachment==='helicopter')hauling.aircraftWinch=aircraft;
+      if(attachment==='straps')cargo.secured={vehicleId:'train',x:0,y:0,z:0,angle:0};
+      update();expectDestinationOnly();
+      hauling.ropes=[];hauling.cranes=[];hauling.aircraftWinch=undefined;
+      cargo.secured=undefined;
+      update();expect(cargoBeacons().every(b=>b.visible)).toBe(true);expect(destination.visible).toBe(false);
+    }
+    hauling.ropes=[rope];hauling.cranes=[crane];hauling.aircraftWinch=aircraft;update();
+    hauling.ropes=[];update();expect(beacon().visible).toBe(false);
+    hauling.cranes=[];update();expect(beacon().visible).toBe(false);
+    hauling.aircraftWinch=undefined;update();expect(beacon().visible).toBe(true);
+    for(const other of hauling.cargo.slice(1)){
+      hauling.ropes=[{...rope,cargoId:other.id}];update();
+      expect(cargoBeacons().every(b=>!b.visible)).toBe(true);
+      expect(destination.visible).toBe(false);
+      const goal=haulingJob(other).goal;
+      const marker=scene.getObjectByName(`hauling-goal-${goal.id}`)!.getObjectByName('delivery-beacon')!;
+      expect(marker.visible).toBe(true);
+      expect(marker.getWorldPosition(new THREE.Vector3()).toArray()).toEqual([goal.x,goal.z+2,goal.y]);
+      hauling.ropes=[];update();expect(marker.visible).toBe(false);
+    }
+    const other=hauling.cargo[1],otherGoal=haulingJob(other).goal;
+    hauling.ropes=[rope];hauling.aircraftWinch={...aircraft,cargoId:other.id};update();
+    const otherMarker=scene.getObjectByName(`hauling-goal-${otherGoal.id}`)!.getObjectByName('delivery-beacon')!;
+    expect(cargoBeacons().every(b=>!b.visible)).toBe(true);
+    expect(destination.visible).toBe(true);expect(otherMarker.visible).toBe(true);
+    hauling.ropes=[];update();expect(destination.visible).toBe(false);expect(otherMarker.visible).toBe(true);
+    expect(cargoBeacons().every(b=>!b.visible)).toBe(true);
+    hauling.aircraftWinch=undefined;update();expect(otherMarker.visible).toBe(false);
+    expect(cargoBeacons().every(b=>b.visible)).toBe(true);
+    visuals.dispose();
+  });
   it('preserves the original full-width first-person shoulder and torso rope attachments',()=>{
     const {scene,visuals,snapshot,project,camera,handCamera}=fixture(),host=snapshot.players[0];
     const passenger={...host,id:'guest',label:'Friend',x:host.x+120,y:host.y,z:host.z};snapshot.players.push(passenger);
@@ -91,7 +144,7 @@ describe('held hauling rope attachment',()=>{
     expect(scene.getObjectByName('hauling-delivery-goal')!.position.toArray()).toEqual([g.x,g.z,g.y]);
     expect(scene.getObjectByName('delivery-beacon')!.visible).toBe(true);
     expect(scene.getObjectByName('delivery-complete-check')!.visible).toBe(false);
-    snapshot.friends!.hauling!.delivered=true;visuals.update(snapshot,'host',0,16,project);
+    snapshot.friends!.hauling!.delivered=true;snapshot.friends!.hauling!.ropes=[];visuals.update(snapshot,'host',0,16,project);
     expect(scene.getObjectByName('delivery-beacon')!.visible).toBe(false);
     expect(scene.getObjectByName('delivery-complete-check')!.visible).toBe(true);visuals.dispose();
   });

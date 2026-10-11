@@ -1,3 +1,5 @@
+import { caveStairProtected, caveLavaProtected, caveLandingProtected } from '../world/FriendsCaveDescent';
+import { FRIENDS_MIN_EDIT_VOXEL } from '../world/FriendsTerrainLimits';
 import { retreatWorkReserved } from '../world/FriendsRetreatPaths';
 import { friendsCampfireContains } from '../world/FriendsTerrain';
 import { raycastFriendsBuild, resolveFriendsBuildCollisions, friendsShapeBoxes, worldBox, type FriendsBuildPiece } from './FriendsBuilding';
@@ -58,11 +60,14 @@ export function friendsInteractionTarget(terrain: FriendsTerrain, ray: TerrainRa
   if (result.ground) {
     const g = result.ground, x = (g.vx + .5) * 32, y = (g.vy + .5) * 32, z = (g.vz + .5) * 32;
     let reason: string | undefined;
-    if (friendsFixedPlatformProtected(x, y, z)) reason = friendsSpawnProtected(x,y,z) ? 'The player spawn platform is indestructible.' : friendsCampfireContains(x,y) ? 'Keep the campfire gathering spot intact.' : 'The hauling platform is indestructible.';
+    if(g.caveProp)reason='Keep the dungeon fixtures intact.';
+    else if (friendsFixedPlatformProtected(x, y, z)) reason = friendsSpawnProtected(x,y,z) ? 'The player spawn platform is indestructible.' : friendsCampfireContains(x,y) ? 'Keep the campfire gathering spot intact.' : 'The hauling platform is indestructible.';
     else if (retreatWorkReserved({x,y,z},retreatActive)) reason = 'Keep the quiet place and its approach intact.';
     else if (scenicTransitProtected(x, y, z)) reason = 'Keep the railway corridor clear.';
+    else if(caveStairProtected(x,y,z)||caveLandingProtected(x,y,z))reason='Keep the dungeon stairway intact.';
+    else if(caveLavaProtected(x,y,z))reason='Reinforced basalt contains the lava.';
     else if (tool === 1) reason = 'Aim the axe at a tree trunk.';
-    else if (!fill && g.vz <= -16) reason = 'Bedrock. Explore sideways.';
+    else if (!fill && g.vz < FRIENDS_MIN_EDIT_VOXEL) reason = 'Bedrock. The bottom of the world.';
     else if (tool === 3 && !fill && g.material !== 1) reason = 'Stone needs the pickaxe.';
     else if (!fill && pieces.some(p => friendsShapeBoxes(p.shape).some(local => {
       const b = worldBox(p, local);

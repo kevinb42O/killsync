@@ -1,3 +1,5 @@
+import { friendsWaterWaveShader, friendsWaterWaveUniforms } from './FriendsWaterWaves';
+import { createOuterIslandBathymetry, applyOuterIslandBathymetry } from './FriendsOuterIslandWater';
 import { createSanctumDetails } from './FriendsSanctumVisuals';
 import { FriendsLavaRiverVisuals } from './FriendsLavaRiverVisuals';
 import { LAVA_SURFACE_GLSL } from './FriendsLavaSurface';
@@ -155,33 +157,10 @@ export function islandWater(cx:number,cy:number,width:number,length:number,level
     patchCentre:{value:new THREE.Vector2()},patchHalfExtent:{value:4096},wavePatch:{value:ocean?0:1},waveAmplitude:{value:ocean?5:1.4},shorebreakStrength:{value:1},oceanPatchBlend:{value:1},waterOrigin:{value:origin},waterExtent:{value:new THREE.Vector2(sampleWidth,sampleLength)},ocean:{value:ocean?1:0}},
     vertexShader:`
       #include <fog_pars_vertex>
-      varying vec3 seaWorld;uniform float time,wavePatch,waveAmplitude,ocean,patchHalfExtent,shorebreakStrength;
-      uniform sampler2D bathymetry;uniform vec2 waterOrigin,waterExtent,patchCentre;
-      vec4 coastAt(vec2 uv){
-        vec2 size=vec2(textureSize(bathymetry,0));
-        vec2 cell=clamp(uv*size-.5,vec2(0.),size-1.),base=floor(cell),f=fract(cell);
-        vec2 a=(base+.5)/size,b=min(base+1.5,size-.5)/size;
-        return mix(mix(texture2D(bathymetry,a),texture2D(bathymetry,vec2(b.x,a.y)),f.x),
-          mix(texture2D(bathymetry,vec2(a.x,b.y)),texture2D(bathymetry,b),f.x),f.y);
-      }
-      float coastPhase(vec2 p,vec4 coast){return coast.g*.026+time*.90+sin(p.x*.003+p.y*.002)*.45;}
-      float coastWeight(float depth,vec4 coast){return shorebreakStrength*(1.-smoothstep(65.,150.,depth))*smoothstep(2.,18.,depth)*smoothstep(.015,.05,length(coast.ba))*(1.-smoothstep(.65,1.8,length(coast.ba)));}
-
+      varying vec3 seaWorld;${friendsWaterWaveUniforms}
+      ${friendsWaterWaveShader}
       void main(){vec4 w=modelMatrix*vec4(position,1.);vec2 p=w.xz;
-        vec2 uv=(p-waterOrigin)/waterExtent;
-        float depth=texture2D(bathymetry,clamp(uv,0.,1.)).r;
-        float shallow=smoothstep(2.,72.,depth);
-        float edge=ocean>.5?1.-smoothstep(patchHalfExtent-700.,patchHalfExtent,max(abs(p.x-patchCentre.x),abs(p.y-patchCentre.y))):1.;
-        vec2 wavePosition=p*mix(1.,1.75,ocean);
-        float displacement=sin(dot(wavePosition,vec2(.0051,.0037))-time*.95)*.60
-          +sin(dot(wavePosition,vec2(-.0082,.0046))+time*.78)*.28+sin(dot(wavePosition,vec2(.016,.012))-time*1.7)*.12;
-        if(ocean>.5&&shorebreakStrength>0.&&depth<150.){
-          vec4 coast=coastAt(uv);float phase=coastPhase(p,coast);
-          // A steep front and broad trough, bounded by the existing wave cap.
-          float crest=pow(max(0.,sin(phase)),3.)*1.2-.2;
-          displacement=mix(displacement,crest,coastWeight(depth,coast));
-        }
-        w.y+=displacement*waveAmplitude*wavePatch*shallow*edge;
+        w.y+=friendsWaterWaveHeight(p,w.y);
         seaWorld=w.xyz;vec4 mvPosition=viewMatrix*w;gl_Position=projectionMatrix*mvPosition;
         #include <fog_vertex>
       }`,
@@ -190,15 +169,7 @@ export function islandWater(cx:number,cy:number,width:number,length:number,level
       uniform vec4 rowboatCutout;varying vec3 seaWorld;uniform float time;uniform sampler2D bathymetry;uniform vec2 waterOrigin,waterExtent;uniform float ocean,wavePatch,patchHalfExtent,waveAmplitude,shorebreakStrength,oceanPatchBlend;uniform vec2 patchCentre;
       uniform vec3 waterLightDirection,waterLightColor,waterTint,waterHorizon,waterZenith;uniform float waterDirectStrength;
 
-      vec4 coastAt(vec2 uv){
-        vec2 size=vec2(textureSize(bathymetry,0));
-        vec2 cell=clamp(uv*size-.5,vec2(0.),size-1.),base=floor(cell),f=fract(cell);
-        vec2 a=(base+.5)/size,b=min(base+1.5,size-.5)/size;
-        return mix(mix(texture2D(bathymetry,a),texture2D(bathymetry,vec2(b.x,a.y)),f.x),
-          mix(texture2D(bathymetry,vec2(a.x,b.y)),texture2D(bathymetry,b),f.x),f.y);
-      }
-      float coastPhase(vec2 p,vec4 coast){return coast.g*.026+time*.90+sin(p.x*.003+p.y*.002)*.45;}
-      float coastWeight(float depth,vec4 coast){return shorebreakStrength*(1.-smoothstep(65.,150.,depth))*smoothstep(2.,18.,depth)*smoothstep(.015,.05,length(coast.ba))*(1.-smoothstep(.65,1.8,length(coast.ba)));}
+      ${friendsWaterWaveShader}
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
       float swell(vec2 p){p*=mix(1.,1.75,ocean);return sin(dot(p,vec2(.0051,.0037))-time*.95)*.60
@@ -285,7 +256,9 @@ export function islandWater(cx:number,cy:number,width:number,length:number,level
         float absorption=1.-exp(-opticalDepth*mix(.0055,.0065,ocean));
         float surfaceOpacity=clamp(absorption+(1.-absorption)*fresnel+foam*.55,.08,.995);
         float opacity=smoothstep(1.,8.,depth)*surfaceOpacity;
-        bool underwaterView=cameraPosition.y<seaWorld.y;
+        // The visible face identifies which side of this displaced fragment
+        // the lens sees, even when the camera straddles a wave crest.
+        bool underwaterView=!gl_FrontFacing;
         if(underwaterView){
           // Snell's window: overhead daylight transmits inside the critical
           // angle; the surrounding underside reflects the teal water volume.
@@ -346,11 +319,14 @@ export function islandWater(cx:number,cy:number,width:number,length:number,level
 }
 export class FriendsIslandOcean extends THREE.Group {
   private far:THREE.Mesh;private patch:THREE.Mesh;
+  private outerCoast=createOuterIslandBathymetry();
   constructor(){
     super();this.name='the-surrounding-ocean';
     this.far=islandWater(24000,24000,170000,170000,ISLAND_SEA_LEVEL,islandOceanDepth,true);
+    applyOuterIslandBathymetry(this.far.material as THREE.ShaderMaterial,this.outerCoast);
     const material=(this.far.material as THREE.ShaderMaterial).clone();
     material.uniforms.bathymetry.value=this.far.userData.bathymetry;
+    material.uniforms.outerCoastAtlas.value=this.outerCoast.texture;
     material.uniforms.rowboatCutout=rowboatWaterCutout;
     material.uniforms.patchCentre=(this.far.material as THREE.ShaderMaterial).uniforms.patchCentre;
     material.uniforms.wavePatch.value=1;
@@ -361,12 +337,14 @@ export class FriendsIslandOcean extends THREE.Group {
   update(seconds:number,camera:THREE.Vector3){
     // Stable world-space waves; only one transform and one uniform change.
     const x=Math.round(camera.x/64)*64,z=Math.round(camera.z/64)*64;
+    this.far.position.x=x;this.far.position.z=z;
     this.patch.position.set(x,ISLAND_SEA_LEVEL,z);
     const far=this.far.material as THREE.ShaderMaterial,near=this.patch.material as THREE.ShaderMaterial;
     far.uniforms.patchCentre.value.set(x,z);far.uniforms.time.value=near.uniforms.time.value=seconds;
   }
   setAtmosphere(atmosphere:FriendsDayNightCycle){for(const mesh of [this.far,this.patch])lightIslandWater(mesh.material as THREE.ShaderMaterial,atmosphere);}
   dispose(){
+    this.outerCoast.texture.dispose();
     (this.far.userData.bathymetry as THREE.Texture).dispose();
     for(const mesh of [this.far,this.patch]){mesh.geometry.dispose();(mesh.material as THREE.Material).dispose();}this.removeFromParent();
   }

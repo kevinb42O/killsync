@@ -1,3 +1,4 @@
+import { FRIENDS_BEDROCK_TOP } from '../world/FriendsTerrainLimits';
 import { sanitizeFriendsArms } from './FriendsGestureControls';
 /**
  * Transport-neutral messages for manual WebRTC co-op.
@@ -7,10 +8,8 @@ import { sanitizeFriendsArms } from './FriendsGestureControls';
  * compact, versioned, and safe to reject when an old tab connects.
  */
 
-/** v63 adds charged fishing casts and dry bobber landings. Incrementing this makes
- * a stale tab fail the handshake cleanly instead of silently misreading the
- * new state payload. */
-export const MULTIPLAYER_PROTOCOL_VERSION = 63;
+/** v69 adds the Fun-bar glider slot and physical canopy-contact recovery. */
+export const MULTIPLAYER_PROTOCOL_VERSION = 69;
 
 /** The host is authoritative and holds one WebRTC connection for each guest.
  * Five total players keeps a phone host within a realistic CPU/uplink budget
@@ -37,7 +36,7 @@ export interface MultiplayerInputFrame {
   aimAngle: number;
   /** Quantized camera pitch. Zero is the lowest valid look angle. */
   aimPitch: number;
-  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+  friendsTool?: 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
   /** Menus/building stow fishing equipment without changing the selected slot. */
   friendsFishingBlocked?: boolean;
   /** Four held arm buttons; validated by the host, never persisted. */
@@ -50,6 +49,8 @@ export interface MultiplayerInputFrame {
   friendsFlashlightCone?: number;
   friendsWorkPlane?: {axis:0|1|2;value:number};
   /** Temporary C-toggle for unrestricted flight; only Friends accepts it. */
+  /** Held equipment intent; flight remains trimmed when inputs go stale. */
+  friendsGlider?: boolean;
   friendsDevFlight?: boolean;
   friendsDevFlightDown?: boolean;
   /** Temporary host-only boost to Friends jump launch velocity. */
@@ -217,20 +218,27 @@ export const isMultiplayerWireMessage = (value: unknown): value is MultiplayerWi
 
 const boundedInteger = (value: number, maximum: number) => Number.isFinite(value) ? Math.max(0, Math.min(maximum, Math.trunc(value))) : 0;
 
+const validFriendsTools=new Set([0,1,2,3,5,6,7,8,9,10,11,12,13]);
+/** Unknown equipment must never clamp to an explosive or deployable item. */
+export function sanitizeFriendsTool(value:number|undefined):NonNullable<MultiplayerInputFrame['friendsTool']>{
+  if(value===undefined||value===4)return 0;
+  return Number.isInteger(value)&&validFriendsTools.has(value)?value as NonNullable<MultiplayerInputFrame['friendsTool']>:6;
+}
 export const clampInputFrame = (frame: MultiplayerInputFrame): MultiplayerInputFrame => ({
   type: 'input',
   version: MULTIPLAYER_PROTOCOL_VERSION,
   movement: boundedInteger(frame.movement, 15),
   aimAngle: boundedInteger(frame.aimAngle, 65535),
   aimPitch: boundedInteger(frame.aimPitch, 65535),
-  friendsTool: (boundedInteger(frame.friendsTool, 12) === 4 ? 0 : boundedInteger(frame.friendsTool, 12)) as 0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12,
+  friendsTool: sanitizeFriendsTool(frame.friendsTool),
   friendsFishingBlocked: Boolean(frame.friendsFishingBlocked),
   friendsArms: sanitizeFriendsArms(frame.friendsArms),
   friendsAircraftWinch:frame.friendsAircraftWinch===-1?-1:frame.friendsAircraftWinch===1?1:0,
   friendsAircraftHookHeld:frame.friendsAircraftHookHeld===true,
   friendsFlashlight: frame.friendsFlashlight === true ? true : undefined,
   friendsFlashlightCone: frame.friendsFlashlight === true ? boundedInteger(frame.friendsFlashlightCone, 255) : undefined,
-  friendsWorkPlane: frame.friendsWorkPlane && [0,1,2].includes(frame.friendsWorkPlane.axis) && Number.isFinite(frame.friendsWorkPlane.value) && frame.friendsWorkPlane.value>=-512 && frame.friendsWorkPlane.value<=48000 ? {axis:frame.friendsWorkPlane.axis,value:Math.round(frame.friendsWorkPlane.value/32)*32} : undefined,
+  friendsWorkPlane: frame.friendsWorkPlane && [0,1,2].includes(frame.friendsWorkPlane.axis) && Number.isFinite(frame.friendsWorkPlane.value) && frame.friendsWorkPlane.value>=FRIENDS_BEDROCK_TOP && frame.friendsWorkPlane.value<=48000 ? {axis:frame.friendsWorkPlane.axis,value:Math.round(frame.friendsWorkPlane.value/32)*32} : undefined,
+  friendsGlider: Boolean(frame.friendsGlider),
   friendsDevFlight: Boolean(frame.friendsDevFlight),
   friendsDevFlightDown: Boolean(frame.friendsDevFlightDown),
   friendsDevSuperjump: Boolean(frame.friendsDevSuperjump),

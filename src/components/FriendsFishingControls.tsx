@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { FISHING_CHARGE_MS, fishingCastPower } from '../game/multiplayer/FriendsFishing';
 
 /** Pointer capture keeps a touch hold alive while aiming with the other thumb. */
-export function FriendsFishingControls({ primaryLabel, secondaryLabel, primaryKey, secondaryKey, chargeMs, onPrimary, onSecondary }: {
-  primaryLabel:string; secondaryLabel:string; primaryKey:string; secondaryKey:string; chargeMs?:number;
+export function FriendsFishingControls({ primaryLabel, secondaryLabel, primaryKey, secondaryKey, chargeMs, hideSecondary, onPrimary, onSecondary }: {
+  primaryLabel:string; secondaryLabel:string; primaryKey:string; secondaryKey:string; chargeMs?:number; hideSecondary?:boolean;
   onPrimary:(held:boolean)=>void; onSecondary:()=>void;
 }) {
   const pointer=useRef<number|undefined>(undefined),held=useRef(false),callbacks=useRef({onPrimary,onSecondary});callbacks.current={onPrimary,onSecondary};
@@ -19,7 +19,7 @@ export function FriendsFishingControls({ primaryLabel, secondaryLabel, primaryKe
       onClick={event=>{if(event.detail===0&&!held.current){press();release();}}}>
       <kbd>{primaryKey}</kbd>{primaryLabel}
     </button>
-    <button type="button" onClick={onSecondary}><kbd>{secondaryKey}</kbd>{secondaryLabel}</button>
+    {!hideSecondary&&<button type="button" onClick={onSecondary}><kbd>{secondaryKey}</kbd>{secondaryLabel}</button>}
     {chargeMs!==undefined&&<progress className="friends-fishing-power" aria-label="Casting power" max={FISHING_CHARGE_MS} value={fishingCastPower(chargeMs)*FISHING_CHARGE_MS}/>}
   </>;
 }

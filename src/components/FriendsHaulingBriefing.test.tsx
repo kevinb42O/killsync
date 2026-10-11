@@ -10,7 +10,7 @@ function tether(h:HaulingSnapshot,cargoId:string,playerId='host'){
   h.ropes=[{id:playerId,cargoId,anchorX:36,anchorY:0,anchorZ:26,length:120,tension:0,blocked:false}];
 }
 describe('hauling dispatch events',()=>{
-  it('opens only for a new local attachment, including switching loads and reattaching',()=>{
+  it('opens once per cargo on its first local attachment, without replaying on switches or reattachments',()=>{
     const tracker=new HaulingBriefingTracker(),h=new FriendsHauling().snapshot();
     expect(tracker.observe(h,'host')).toBeUndefined();
     tether(h,'lantern-core','guest');expect(tracker.observe(h,'host')).toBeUndefined();
@@ -18,14 +18,18 @@ describe('hauling dispatch events',()=>{
     for(let i=0;i<20;i++)expect(tracker.observe(structuredClone(h),'host')).toBeUndefined();
     tether(h,'ridge-core');expect(tracker.observe(h,'host')).toEqual({cargoId:'ridge-core',kind:'mission'});
     h.ropes=[];expect(tracker.observe(h,'host')).toBeUndefined();
-    tether(h,'ridge-core');expect(tracker.observe(h,'host')).toEqual({cargoId:'ridge-core',kind:'mission'});
+    tether(h,'ridge-core');expect(tracker.observe(h,'host')).toBeUndefined();
+    tether(h,'lantern-core');expect(tracker.observe(h,'host')).toBeUndefined();
+    tether(h,'sanctum-core');expect(tracker.observe(h,'host')).toEqual({cargoId:'sanctum-core',kind:'mission'});
+    h.ropes=[];expect(tracker.observe(h,'host')).toBeUndefined();
+    tether(h,'sanctum-core');expect(tracker.observe(h,'host')).toBeUndefined();
   });
   it('announces new deliveries once, including crew deliveries, without replaying saved progress',()=>{
     const tracker=new HaulingBriefingTracker(),h=new FriendsHauling().snapshot();
     h.completedCargoIds=['lantern-core'];expect(tracker.observe(h,'host')).toBeUndefined();
     h.completedCargoIds.push('ridge-core');expect(tracker.observe(h,'host')).toEqual({cargoId:'ridge-core',kind:'complete'});
     expect(tracker.observe(structuredClone(h),'host')).toBeUndefined();
-    tether(h,'ridge-core');expect(tracker.observe(h,'host')).toEqual({cargoId:'ridge-core',kind:'complete'});
+    tether(h,'ridge-core');expect(tracker.observe(h,'host')).toBeUndefined();
     h.completedCargoIds.push('sanctum-core');h.delivered=true;
     expect(tracker.observe(h,'host')).toEqual({cargoId:'sanctum-core',kind:'complete'});
   });

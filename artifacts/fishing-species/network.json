@@ -1,0 +1,10 @@
+{
+  "network": {
+    "chargedRelease": true,
+    "catch": true,
+    "drop": true,
+    "pickup": true,
+    "swimAway": true,
+    "errors": []
+  }
+}

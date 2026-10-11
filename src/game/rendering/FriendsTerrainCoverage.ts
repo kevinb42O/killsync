@@ -54,3 +54,9 @@ float terrainDetail=texture2D(fineCoverage,(floor(terrainOwner/512.)+.5)/fineGri
 ${blockMask}`);
   };
 }
+
+/** A repeating ownership grid follows unbounded exploration. Its period is
+ * much wider than the visible scene and the retained terrain cache. */
+export function terrainCoverageIndex(cx:number,cy:number,grid:number) {
+  return ((cy%grid+grid)%grid)*grid+(cx%grid+grid)%grid;
+}

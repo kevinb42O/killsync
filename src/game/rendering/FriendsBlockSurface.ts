@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { meshBlockHorizon, type HorizonMeshData } from '../world/FriendsHorizonMesh';
 import { FriendsTerrain, TERRAIN_GENERATION, type TerrainGrade } from '../world/FriendsTerrain';
 import { BLOCK_CACHE_BYTES, BLOCK_CACHE_TILES, BLOCK_DETAIL_END, BLOCK_RETAIN, BLOCK_SURFACE_TILE, distanceToTerrainTile, surfaceTilesAround } from './FriendsTerrainStreaming';
-import { createTerrainShadowMaterials } from './FriendsTerrainCoverage';
+import { createTerrainShadowMaterials, terrainCoverageIndex } from './FriendsTerrainCoverage';
 
 /** Greedy exterior shells have no allocated underground voxel volume. Two
  * bounded worker jobs and two uploads per frame keep streaming responsive. */
@@ -39,8 +39,8 @@ export class FriendsBlockSurface extends THREE.Group {
     this.startWorker();
   }
   private mask(tx:number,ty:number,value:number){
-    for(let x=tx/512;x<Math.min(this.grid,(tx+BLOCK_SURFACE_TILE)/512);x++)for(let y=ty/512;y<Math.min(this.grid,(ty+BLOCK_SURFACE_TILE)/512);y++){
-      const index=y*this.grid+x;if(this.ready[index]!==value){this.ready[index]=value;this.coverage.needsUpdate=true;}
+    for(let x=tx/512;x<(tx+BLOCK_SURFACE_TILE)/512;x++)for(let y=ty/512;y<(ty+BLOCK_SURFACE_TILE)/512;y++){
+      const index=terrainCoverageIndex(x,y,this.grid);if(this.ready[index]!==value){this.ready[index]=value;this.coverage.needsUpdate=true;}
     }
   }
   private release(key:string){

@@ -1,3 +1,4 @@
+import { FriendsWaterlineComposite, waterlineViewHeights, waterlineViewRange } from './FriendsWaterlineComposite';
 import type { FriendsTerrain } from '../world/FriendsTerrain';
 import { friendsLiveWaterAt, friendsLiveWaterSurface } from '../world/FriendsFloodWater';
 import * as THREE from 'three';
@@ -6,8 +7,13 @@ import { friendsWaterAt } from '../world/FriendsWaterSurface';
 import { bindUnderwaterMaterial, createUnderwaterLightUniforms } from './FriendsUnderwaterLighting';
 
 /** Existing fog/material passes plus a bounded mote batch and soft light planes.
- * No scene copies, reflection cameras or intermediate full-screen targets. */
+ * A bounded pair of HDR targets is used only when the lens crosses the surface. */
 export class FriendsUnderwaterVisuals{
+  private waterline=new FriendsWaterlineComposite();
+  private viewHeights=new THREE.Vector3();
+  private splitView=false;
+  private waterMeshes=new Set<THREE.Mesh>();
+  private surfaceMaterial?:THREE.ShaderMaterial;
   private dressing?:FriendsSubmergedDressing;
   private fog=new THREE.FogExp2(0x225c64,.001);
   private deepColor=new THREE.Color('#082b40');
@@ -69,7 +75,9 @@ export class FriendsUnderwaterVisuals{
     this.bindSceneMaterials();
   }
   private bindMaterials(o:THREE.Object3D){
-    if(!(o instanceof THREE.Mesh))return;for(const material of Array.isArray(o.material)?o.material:[o.material]){
+    if(!(o instanceof THREE.Mesh))return;
+    if(o.material instanceof THREE.ShaderMaterial&&o.material.userData.frontierWater)this.waterMeshes.add(o);
+    for(const material of Array.isArray(o.material)?o.material:[o.material]){
       if(!(material instanceof THREE.MeshStandardMaterial)||this.bindings.has(material))continue;
       const release=bindUnderwaterMaterial(material,this.lighting);
       const disposed=()=>{release();this.bindings.delete(material);material.removeEventListener('dispose',disposed);};
@@ -101,6 +109,7 @@ export class FriendsUnderwaterVisuals{
   }
   /** Restore before daylight updates, then apply after the final camera pose. */
   beginFrame(){
+    this.splitView=false;
     this.prepareStreamedMaterials();
     this.dressing?.hide();this.lighting.enabled.value=0;this.motes.visible=this.shafts.visible=this.overlay.visible=false;
     if(!this.active)return;
@@ -120,23 +129,38 @@ export class FriendsUnderwaterVisuals{
   }
   update(camera:THREE.Camera,elapsed:number,enabled=true,daylight=1,terrain?:FriendsTerrain,swimming=false){
     const water=enabled?(terrain?friendsLiveWaterAt(terrain,camera.position.x,camera.position.z,camera.position.y):friendsWaterAt(camera.position.x,camera.position.z)):undefined;
-    const depth=water?water.level-camera.position.y:0;
-    const surface=water??(enabled&&swimming&&terrain?friendsLiveWaterSurface(terrain,camera.position.x,camera.position.z):undefined);
-    if(enabled&&terrain&&surface&&(swimming||depth>=.5)){
+    const surface=water??(enabled?(terrain?friendsLiveWaterSurface(terrain,camera.position.x,camera.position.z):friendsWaterAt(camera.position.x,camera.position.z)):undefined);
+    const depth=surface?surface.level-camera.position.y:0;
+    this.surfaceMaterial=undefined;
+    if(surface)for(const mesh of this.waterMeshes){
+      if(!mesh.parent){this.waterMeshes.delete(mesh);continue;}
+      const material=mesh.material as THREE.ShaderMaterial,u=material.uniforms;
+      if(Math.abs(mesh.position.y-surface.level)>.1||!u.wavePatch?.value)continue;
+      const origin=u.waterOrigin.value as THREE.Vector2,extent=u.waterExtent.value as THREE.Vector2;
+      if(camera.position.x>=origin.x&&camera.position.x<=origin.x+extent.x&&camera.position.z>=origin.y&&camera.position.z<=origin.y+extent.y){this.surfaceMaterial=material;break;}
+    }
+    const range=surface?waterlineViewRange(waterlineViewHeights(camera,surface.level,this.viewHeights)):undefined;
+    const waveMargin=this.surfaceMaterial?.uniforms.waveAmplitude.value??0;
+    this.splitView=Boolean(range&&range.min<waveMargin&&range.max>-waveMargin);
+    const lensSubmerged=Boolean(range&&range.max<=-waveMargin);
+    const wetView=Boolean((water||depth<=0)&&(this.splitView||lensSubmerged));
+    if(!wetView)this.splitView=false;
+    if(enabled&&terrain&&surface&&(swimming||wetView)){
       if(!this.dressing){this.dressing=new FriendsSubmergedDressing(this.scene);this.dressing.root.traverse(o=>this.bindMaterials(o));}
       this.dressing.update(camera,elapsed,terrain,surface.bodyId);
     }else this.dressing?.hide();
-    if(depth<.5){this.wasSubmerged=false;return;}
+    if(!wetView){this.wasSubmerged=false;return;}
     if(!this.wasSubmerged){this.enteredAt=elapsed;this.wasSubmerged=true;}
     this.originalFog=this.scene.fog;this.originalBackground=this.scene.background;
-    const immersion=THREE.MathUtils.smoothstep(depth,0,18),sea=water!.bodyId==='sea',clarity=sea?.85:1.1;
-    const dark=1-Math.exp(-depth*.0016*clarity),depthLight=Math.exp(-depth*.0013*clarity);
-    const exposure=this.exposure(camera,water!.level,elapsed,terrain);
+    const immersion=1,sea=surface!.bodyId==='sea',clarity=sea?.85:1.1;
+    const opticalDepth=Math.max(0,depth);
+    const dark=1-Math.exp(-opticalDepth*.0016*clarity),depthLight=Math.exp(-opticalDepth*.0013*clarity);
+    const exposure=this.exposure(camera,surface!.level,elapsed,terrain);
     const sun=this.scene.children.find(o=>o instanceof THREE.DirectionalLight) as THREE.DirectionalLight|undefined;
     if(sun){this.lightDirection.subVectors(sun.position,sun.target.position).normalize();this.lighting.sunDirection.value.copy(this.lightDirection);}
     const sunHeight=THREE.MathUtils.smoothstep(this.lighting.sunDirection.value.y,.04,.30);
     const sunlight=daylight*exposure*sunHeight;
-    if(depth>18)for(const name of ['frontier-day-night-sky','frontier-volumetric-cumulus']){
+    for(const name of ['frontier-day-night-sky','frontier-volumetric-cumulus']){
       const object=this.scene.getObjectByName(name);if(object){this.hiddenAtmosphere.push({object,visible:object.visible});object.visible=false;}
     }
     this.fog.color.set(sea?'#398e96':'#397d72').lerp(this.deepColor,dark).multiplyScalar((.12+.88*daylight)*(.025+.975*depthLight));
@@ -145,16 +169,37 @@ export class FriendsUnderwaterVisuals{
     this.fog.density=THREE.MathUtils.lerp(originalDensity,(sea?.00072:.00095)+dark*.0016,immersion);
     this.background.copy(this.fog.color);if(this.originalBackground instanceof THREE.Color)this.background.lerp(this.originalBackground,1-immersion);
     this.scene.fog=this.fog;this.scene.background=this.background;this.active=true;
-    this.lighting.enabled.value=immersion;this.lighting.time.value=elapsed/1000;this.lighting.level.value=water!.level;this.lighting.sunlight.value=sunlight;this.lighting.exposure.value=exposure;this.lighting.clarity.value=sea?.85:1.1;
+    this.lighting.enabled.value=immersion;this.lighting.time.value=elapsed/1000;this.lighting.level.value=surface!.level;this.lighting.sunlight.value=sunlight;this.lighting.exposure.value=exposure;this.lighting.clarity.value=sea?.85:1.1;
     const u=this.overlay.material.uniforms;u.immersion.value=immersion;u.light.value=daylight;u.depth.value=depth;u.time.value=elapsed/1000;u.entry.value=Math.max(0,1-(elapsed-this.enteredAt)/850);this.overlay.visible=true;
-    const m=this.motes.material.uniforms;m.time.value=elapsed/1000;m.level.value=water!.level;m.light.value=daylight*(.035+.965*depthLight);m.immersion.value=immersion;this.motes.visible=true;
+    const m=this.motes.material.uniforms;m.time.value=elapsed/1000;m.level.value=surface!.level;m.light.value=daylight*(.035+.965*depthLight);m.immersion.value=immersion;this.motes.visible=true;
     this.shafts.material.uniforms.strength.value=sunlight*immersion*(1-dark);this.shafts.visible=sunlight>.02&&dark<.95;
     if(this.shafts.visible){const x=Math.round(camera.position.x/160)*160,z=Math.round(camera.position.z/160)*160;for(let i=0;i<9;i++){
       this.matrix.makeTranslation(x+(i%3-1)*250+Math.sin(i*13)*90,0,z+(Math.floor(i/3)-1)*250+Math.cos(i*17)*90);this.shafts.setMatrixAt(i,this.matrix);
     }this.shafts.instanceMatrix.needsUpdate=true;}
   }
+  /** Called after final camera/effect updates and before the viewmodel pass. */
+  render(renderer:THREE.WebGLRenderer,camera:THREE.Camera){
+    if(!this.splitView)return false;
+    const wetFog=this.scene.fog,wetBackground=this.scene.background;
+    const effects=[this.overlay,this.motes,this.shafts,...(this.dressing?[this.dressing.root]:[])];
+    const visible=effects.map(o=>o.visible),enabled=this.lighting.enabled.value;
+    const restoreWet=()=>{
+      this.scene.fog=wetFog;this.scene.background=wetBackground;this.lighting.enabled.value=enabled;
+      effects.forEach((o,i)=>{o.visible=visible[i];});
+      for(const saved of this.hiddenAtmosphere)saved.object.visible=false;
+    };
+    try{
+      this.waterline.render(renderer,this.viewHeights,()=>{
+        this.scene.fog=this.originalFog;this.scene.background=this.originalBackground;this.lighting.enabled.value=0;
+        effects.forEach(o=>{o.visible=false;});
+        for(const saved of this.hiddenAtmosphere)saved.object.visible=saved.visible;
+        renderer.render(this.scene,camera);
+      },()=>{restoreWet();renderer.render(this.scene,camera);},camera,this.surfaceMaterial);
+    }finally{restoreWet();}
+    return true;
+  }
   dispose(){
-    this.beginFrame();this.materialScan.length=0;for(const [material,binding]of this.bindings){material.removeEventListener('dispose',binding.disposed);binding.release();}this.bindings.clear();
+    this.waterline.dispose();this.beginFrame();this.waterMeshes.clear();this.materialScan.length=0;for(const [material,binding]of this.bindings){material.removeEventListener('dispose',binding.disposed);binding.release();}this.bindings.clear();
     for(const object of [this.overlay,this.motes,this.shafts]){object.removeFromParent();object.geometry.dispose();object.material.dispose();}
     this.shafts.dispose();this.dressing?.dispose();
   }

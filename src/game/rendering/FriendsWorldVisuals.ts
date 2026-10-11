@@ -1,3 +1,4 @@
+import { createFriendsFishingBoat, updateFriendsFishingBoat } from './FriendsFishingBoatVisuals';
 import { FriendsAircraftDust } from './FriendsAircraftDust';
 import { rowboatWaterCutout } from './FriendsWaterClip';
 import { createRowboatVisual, updateRowboatVisual } from './FriendsRowboatVisuals';
@@ -131,7 +132,7 @@ export class FriendsVehicleVisuals {
   private gangways = new Map<string, THREE.Group>();
   private readonly aircraftDust = new FriendsAircraftDust(this.group);
   constructor(scene: THREE.Scene) { this.group.name = 'friends-vehicles'; scene.add(this.group); }
-  update(snapshot: FriendsSnapshot | undefined, elapsedMs: number) {
+  update(snapshot: FriendsSnapshot | undefined, elapsedMs: number, camera?:THREE.Vector3) {
     this.group.visible = Boolean(snapshot);
     if (!snapshot){this.aircraftDust.update(undefined,elapsedMs);rowboatWaterCutout.value.x=1e8;return;}
     this.aircraftDust.update(snapshot.vehicles.find(v=>v.kind==='aircraft'),elapsedMs);
@@ -141,8 +142,8 @@ export class FriendsVehicleVisuals {
     for(const mesh of this.gangways.values())mesh.visible=false;
     for (const vehicle of snapshot.vehicles) {
       let mesh = this.vehicles.get(vehicle.id);
-      if (!mesh) { mesh = vehicle.kind==='rowboat' ? createRowboatVisual() : vehicle.kind === 'train' ? vehicle.scenic ? createScenicTrainVisual(Boolean(vehicle.closed),Number(vehicle.id.split('-').at(-1)),vehicle.wagonKind) : vehicle.closed ? createLocomotive() : createTrainCar(Number(vehicle.id.at(-1))) : createAircraft(); mesh.name = vehicle.id; this.vehicles.set(vehicle.id, mesh); this.group.add(mesh); }
-      mesh.visible=true; this.pose(mesh, vehicle);if(vehicle.kind==='rowboat')updateRowboatVisual(mesh,vehicle,elapsedMs);if(vehicle.scenic)updateScenicTrainVisual(mesh,vehicle,(snapshot.scenicRailway?.speed??0)>0);
+      if (!mesh) { mesh = vehicle.kind==='fishingBoat' ? createFriendsFishingBoat() : vehicle.kind==='rowboat' ? createRowboatVisual() : vehicle.kind === 'train' ? vehicle.scenic ? createScenicTrainVisual(Boolean(vehicle.closed),Number(vehicle.id.split('-').at(-1)),vehicle.wagonKind) : vehicle.closed ? createLocomotive() : createTrainCar(Number(vehicle.id.at(-1))) : createAircraft(); mesh.name = vehicle.id; this.vehicles.set(vehicle.id, mesh); this.group.add(mesh); }
+      mesh.visible=true; if(vehicle.kind==='fishingBoat')updateFriendsFishingBoat(mesh,elapsedMs/1000,camera??mesh.position,vehicle);else this.pose(mesh, vehicle);if(vehicle.kind==='rowboat')updateRowboatVisual(mesh,vehicle,elapsedMs);if(vehicle.scenic)updateScenicTrainVisual(mesh,vehicle,(snapshot.scenicRailway?.speed??0)>0);
       if(vehicle.kind==='aircraft')mesh.traverse(child => { if (child.name === 'sunskiff-rotor') child.rotation.y = elapsedMs * (vehicle.pilotId ? .06 : .018); });
     }
     for (const link of trainGangways(snapshot.vehicles)) {

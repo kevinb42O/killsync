@@ -1,3 +1,8 @@
+import { raycastCaveProps } from '../world/FriendsCaveProps';
+import { COOP_PLAYER_RADIUS } from './playerMovement';
+import { nearbyCaveLift, caveLavaAt, CAVE_RETURN, type DescentPoint } from '../world/FriendsCaveDescent';
+import { FriendsFishingBoat, type FishingBoatSave } from './FriendsFishingBoat';
+import { fishingBoatDeckContains, fishingBoatInteraction, FISHING_BOAT_COLLIDERS } from '../world/FriendsFishingBoat';
 import { FriendsAircraftLanding, aircraftDescentSpeed } from './FriendsAircraftLanding';
 import { FriendsBirds, type BirdsSnapshot } from './FriendsBirds';
 import { FriendsStones, type StonesSnapshot } from './FriendsStones';
@@ -14,11 +19,11 @@ import { FriendsCampfireSimulation, type CampfireSnapshot } from './FriendsCampf
 import { sampleRailAlignment } from '../world/FriendsRailAlignment';
 import { FriendsScenicService, type ScenicServiceSave, type ScenicServiceSnapshot, type ScenicSeat } from './FriendsScenicService';
 import { vehicleWorldPoint, vehicleLocalPoint, vehiclePlaneHeight } from './FriendsVehiclePose';
-import { CAVE_TREASURES, nearbyCaveTreasure } from '../world/FriendsCave';
+import { CAVE_TREASURES, CAVE_REWARD_GOLD, nearbyCaveTreasure } from '../world/FriendsCave';
 import { isPlayerRail, playerRailRoute, samplePlayerRail, nearestRailDistance, type PlayerRailRoute } from '../world/FriendsPlayerRail';
-import { FRONTIER_SIZE, FRIENDS_AIRFIELD_HEIGHT, type FriendsTerrain } from '../world/FriendsTerrain';
+import { FRIENDS_AIRFIELD_HEIGHT, type FriendsTerrain } from '../world/FriendsTerrain';
 import type { FrontierSnapshot } from './FriendsFrontier';
-import { friendsBuildFloor, resolveFriendsBuildCollisions, worldBox, friendsShapeBoxes, type FriendsBuildPiece, type FriendsBuildingSnapshot } from './FriendsBuilding';
+import { friendsBuildFloor, resolveFriendsBuildCollisions, raycastFriendsBuild, worldBox, friendsShapeBoxes, type FriendsBuildPiece, type FriendsBuildingSnapshot } from './FriendsBuilding';
 import type { FriendsProjectSnapshot } from './FriendsProjects';
 import { getNearbyWorldObstacles, resolveWorldCollisions } from '../world/WorldLayout';
 import { FRIENDS_AIRPAD, FRIENDS_PLACES, FRIENDS_SIGNALS, insideFriendsCombat } from '../world/FriendsRegion';
@@ -26,9 +31,9 @@ import type { MultiplayerInputFrame } from './protocol';
 import { FriendsHauling, type HaulingSave, type HaulingSnapshot } from './FriendsHauling';
 import { FRIENDS_OPPOSITE_BOAT } from '../world/FriendsFishingDock';
 
-export type FriendsVehicle = { id: string; kind: 'train' | 'aircraft' | 'rowboat'; rowing?:RowingSnapshot; x: number; y: number; z: number; angle: number; length: number; width: number; pilotId?: string; closed?: boolean; pitch?: number; groundZ?: number; scenic?:boolean; wagonKind?:ScenicWagonKind; routeDistance?:number };
+export type FriendsVehicle = { id: string; kind: 'train' | 'aircraft' | 'rowboat' | 'fishingBoat'; moored?:boolean; rudder?:number; speed?:number; rowing?:RowingSnapshot; x: number; y: number; z: number; angle: number; length: number; width: number; pilotId?: string; closed?: boolean; pitch?: number; groundZ?: number; scenic?:boolean; wagonKind?:ScenicWagonKind; routeDistance?:number };
 export type FriendsProgress = { version: 1; discovered: string[]; signals: string[]; salvageCleared: boolean; restored: boolean; openedTreasures?: string[]; caveGold?: number };
-export type FriendsTransportSave = { rowboat?:RowboatSave; retreats?:RetreatSave; campfireFuelSeconds?:number; campfireSiteFuelSeconds?:Record<string,number>; scenicRailway?:ScenicServiceSave | boolean; hauling?: HaulingSave; trainDistance: number; trainStoppedMs: number; lastStop: number; held: boolean; aircraft: FriendsVehicle; railTrain?: { anchor: number; distance: number; direction: 1 | -1; held: boolean } };
+export type FriendsTransportSave = { fishingBoat?:FishingBoatSave; rowboat?:RowboatSave; retreats?:RetreatSave; campfireFuelSeconds?:number; campfireSiteFuelSeconds?:Record<string,number>; scenicRailway?:ScenicServiceSave | boolean; hauling?: HaulingSave; trainDistance: number; trainStoppedMs: number; lastStop: number; held: boolean; aircraft: FriendsVehicle; railTrain?: { anchor: number; distance: number; direction: 1 | -1; held: boolean } };
 export type FriendsSnapshot = { dynamite?: import('./FriendsDynamite').DynamiteSnapshot; birds?:BirdsSnapshot; stones?:StonesSnapshot; confetti?:FriendsConfettiSnapshot; fishing?:FishingSnapshot; environment?:FriendsEnvironmentSnapshot; retreats?:RetreatState; campfire?:CampfireSnapshot; trainHorn?: { serial: number; atMs: number; vehicleId: string }; scenicRailway?:ScenicServiceSnapshot; hauling?: HaulingSnapshot; transport?: FriendsTransportSave; frontier?: FrontierSnapshot; building?: FriendsBuildingSnapshot; projects?: FriendsProjectSnapshot; vehicles: FriendsVehicle[]; trainDistance: number; trainStoppedMs: number; progress: FriendsProgress; salvageState: 'idle' | 'active' | 'cleared'; notice: string; noticeUntilMs: number };
 export const FRIENDS_SAVE_KEY = 'killsync.friends.expedition.v1';
 export const TRAIN_SPEED = 180;
@@ -42,9 +47,9 @@ export function normalizeFriendsProgress(value: unknown): FriendsProgress {
   return { version: 1,
     discovered: FRIENDS_PLACES.filter(place => discovered.includes(place.id)).map(place => place.id),
     signals: FRIENDS_SIGNALS.filter(signal => signals.includes(signal.id)).map(signal => signal.id),
-    openedTreasures: CAVE_TREASURES.filter(t=>Array.isArray(p.openedTreasures)&&p.openedTreasures.includes(t.id)).map(t=>t.id),
+    openedTreasures: Object.keys(CAVE_REWARD_GOLD).filter(id=>Array.isArray(p.openedTreasures)&&p.openedTreasures.includes(id)),
     // Derive the wallet from the fixed rewards so malformed saves cannot mint gold.
-    caveGold: CAVE_TREASURES.reduce((sum,t)=>sum+(Array.isArray(p.openedTreasures)&&p.openedTreasures.includes(t.id)?t.gold:0),0),
+    caveGold: Object.entries(CAVE_REWARD_GOLD).reduce((sum,[id,gold])=>sum+(Array.isArray(p.openedTreasures)&&p.openedTreasures.includes(id)?gold:0),0),
     salvageCleared: p.salvageCleared === true, restored: p.restored === true && FRIENDS_SIGNALS.every(signal => signals.includes(signal.id)),
   };
 }
@@ -71,12 +76,18 @@ export function friendsCockpitInteraction(vehicles: readonly FriendsVehicle[], p
   const local = vehicleLocal(v, player.x, player.y);
   return !v.pilotId && Math.abs(player.z - v.z) < 22 && local.x > 55 && local.x < 165 && Math.abs(local.y) < 55;
 }
+export function friendsFishingBoatInteraction(vehicles:readonly FriendsVehicle[],p:{id:string;x:number;y:number;z:number;friendsSeat?:unknown;friendsDevFlight?:boolean}){return vehicles.some(v=>v.kind==='fishingBoat'&&fishingBoatInteraction(v,p));}
 export function friendsRowboatInteraction(vehicles:readonly FriendsVehicle[],p:{x:number;y:number;z:number}){
   return vehicles.some(v=>v.kind==='rowboat'&&Math.abs(p.z-v.z)<90&&Math.hypot(p.x-v.x,p.y-v.y)<140);
 }
 export function friendsVehicleFloor(vehicles: readonly FriendsVehicle[], x: number, y: number, z: number) {
   let floor: number | undefined;
   for (const v of vehicles) {
+    if(v.kind==='fishingBoat'){
+      const deck=vehiclePlaneHeight(v,x,y);
+      if(fishingBoatDeckContains(v,{x,y})&&z>=deck-18)floor=Math.max(floor??-Infinity,deck);
+      continue;
+    }
     // Rowboat landings sit on the gunwale plane. The authored hull is deep,
     // so using its inner bottom makes small characters look buried in it.
     const deck = vehiclePlaneHeight(v,x,y,v.kind==='rowboat'?10:0);
@@ -126,6 +137,17 @@ export function carryOnVehicle(actor: { x: number; y: number; z: number }, befor
 export function resolveFriendsVehicleCollisions(vehicles: readonly FriendsVehicle[], position: { x: number; y: number }, z: number, radius: number) {
   let collided = false;
   for (const v of vehicles) {
+    if(v.kind==='fishingBoat'){
+      const deck=vehiclePlaneHeight(v,position.x,position.y),local=vehicleLocal(v,position.x,position.y);
+      for(const {x:cx,y:cy,hx,hy,h:height} of FISHING_BOAT_COLLIDERS){
+        if(z>=deck+height||z+50<=deck)continue;
+        const dx=local.x-cx,dy=local.y-cy,ex=hx+radius,ey=hy+radius;
+        if(Math.abs(dx)>=ex||Math.abs(dy)>=ey)continue;
+        if(ex-Math.abs(dx)<ey-Math.abs(dy))local.x=cx+(dx<0?-ex:ex);else local.y=cy+(dy<0?-ey:ey);
+        const c=Math.cos(v.angle),s=Math.sin(v.angle);position.x=v.x+local.x*c-local.y*s;position.y=v.y+local.x*s+local.y*c;collided=true;
+      }
+      continue;
+    }
     if(v.kind==='rowboat'){
       if(z>=v.z-15||z+50<v.z-24)continue;
       const local=vehicleLocal(v,position.x,position.y),ex=v.length*.46+radius,ey=v.width*.43+radius;
@@ -155,6 +177,11 @@ export function friendsWorldFloor(vehicles: readonly FriendsVehicle[], x: number
 export function friendsVehicleCeiling(vehicles: readonly FriendsVehicle[], x: number, y: number, z: number) {
   let ceiling: number | undefined;
   for (const v of vehicles) {
+    if(v.kind==='fishingBoat'){
+      const local=vehicleLocal(v,x,y),roof=vehiclePlaneHeight(v,x,y,105);
+      if(local.x>-8&&local.x<128&&Math.abs(local.y)<48&&z<roof)ceiling=Math.min(ceiling??Infinity,roof);
+      continue;
+    }
     if (v.kind==='rowboat' || v.closed || scenicCargoWagon(v) || !vehicleContains(v, x, y, 2) || z < vehiclePlaneHeight(v,x,y) - 1) continue;
     const local = vehicleLocal(v, x, y);
     if (v.kind === 'aircraft' && local.x < -123) continue;
@@ -164,6 +191,12 @@ export function friendsVehicleCeiling(vehicles: readonly FriendsVehicle[], x: nu
   return ceiling;
 }
 
+/** Shared host/HUD reach test includes solid fixtures and player construction. */
+export function nearbyFriendsCaveTreasure(player:DescentPoint,opened:readonly string[]=[],terrain?:FriendsTerrain,pieces:readonly FriendsBuildPiece[]=[]){
+  return nearbyCaveTreasure(player,opened,terrain?(x,y,z)=>!terrain.material(Math.floor(x/32),Math.floor(y/32),Math.floor(z/32)):undefined,
+    (ray,distance)=>Boolean(raycastCaveProps(ray,distance)||raycastFriendsBuild(pieces,ray,distance)));
+}
+
 type Actor = { id: string; x: number; y: number; z: number; lifeState: string; friendsDevFlight?: boolean; friendsSeat?:ScenicSeat; verticalVelocity?:number; crouching?:boolean; platformVelocityX?: number; platformVelocityY?: number; platformVelocityZ?: number };
 
 export class FriendsExpedition {
@@ -171,6 +204,7 @@ export class FriendsExpedition {
   readonly stones=new FriendsStones();
   readonly confetti=new FriendsConfetti();
   readonly fishing=new FriendsFishing();
+  readonly fishingBoat:FriendsFishingBoat;
   readonly rowboat:FriendsRowboat;
   readonly oppositeRowboat:FriendsRowboat;
   readonly campfire:FriendsCampfireSimulation;
@@ -226,7 +260,8 @@ export class FriendsExpedition {
   private notice = 'Sunline Grand Traverse: walk south from arrival to the level Sunline Commons platform. Board the sightseeing train and F to sit. B builds your own railway; M opens the atlas.';
   private noticeUntilMs = 18000;
   constructor(progress?: FriendsProgress, transport?: FriendsTransportSave, private terrain?: FriendsTerrain) {
-    // The shared skiff always starts at its dock when a world is loaded.
+    // Shared boats always start moored at their docks when a world is loaded.
+    this.fishingBoat=new FriendsFishingBoat(terrain);
     this.rowboat=new FriendsRowboat(undefined,terrain);
     this.oppositeRowboat=new FriendsRowboat(undefined,terrain,OPPOSITE_ROWBOAT_ID,FRIENDS_OPPOSITE_BOAT);
     this.campfire=new FriendsCampfireSimulation(transport?.campfireFuelSeconds,transport?.campfireSiteFuelSeconds);
@@ -278,7 +313,7 @@ export class FriendsExpedition {
     const placement=this.trainPlacement(pieces,actor); if(placement.error)return placement.error;
     this.route=placement.route; this.railTrain={anchor:placement.anchor!,distance:placement.distance!,direction:1,held:true}; this.held=true; this.trainDistance=this.clampTrainDistance(placement.distance!);
   }
-  releasePlayer(id:string) { this.rowboat.release(id);this.oppositeRowboat.release(id); if(this.aircraft.pilotId===id)this.aircraft.pilotId=undefined;this.hauling.detach(id); }
+  releasePlayer(id:string) { this.fishingBoat.release(id); this.rowboat.release(id);this.oppositeRowboat.release(id); if(this.aircraft.pilotId===id)this.aircraft.pilotId=undefined;this.hauling.detach(id); }
   removeTrain(players: readonly Actor[]) {
     if(!this.held)return 'Hold the train before dismantling it.';
     if(this.hauling.hasSecuredTrainCargo())return 'Unload the salvage core before dismantling the train.';
@@ -288,15 +323,16 @@ export class FriendsExpedition {
   private carCount() {return this.route ? Math.min(3,Math.max(0,Math.floor((this.route.length-(this.route.closed?180:256))/195))) : 0;}
   private clampTrainDistance(d:number) { if(!this.route)return 0;return this.route.closed ? (d%this.route.length+this.route.length)%this.route.length : Math.max(90+this.carCount()*195,Math.min(this.route.length-90,d)); }
   vehicles(): FriendsVehicle[] {
-    if(!this.route || !this.railTrain)return [{...this.aircraft},...(this.scenic?.vehicles()||[]),this.rowboat.vehicle(),this.oppositeRowboat.vehicle()];
+    if(!this.route || !this.railTrain)return [{...this.aircraft},...(this.scenic?.vehicles()||[]),this.rowboat.vehicle(),this.oppositeRowboat.vehicle(),this.fishingBoat.vehicle()];
     const train=(id:string,distance:number,closed=false):FriendsVehicle=>{const p=samplePlayerRail(this.route!,distance);return {id,kind:'train',...p,z:p.z+14,length:180,width:112,closed};};
-    return [...Array.from({length:this.carCount()},(_,i)=>train(`sunline-${i}`,this.trainDistance-(i+1)*195)),{...this.aircraft},train('sunline-engine',this.trainDistance,true),...(this.scenic?.vehicles()||[]),this.rowboat.vehicle(),this.oppositeRowboat.vehicle()];
+    return [...Array.from({length:this.carCount()},(_,i)=>train(`sunline-${i}`,this.trainDistance-(i+1)*195)),{...this.aircraft},train('sunline-engine',this.trainDistance,true),...(this.scenic?.vehicles()||[]),this.rowboat.vehicle(),this.oppositeRowboat.vehicle(),this.fishingBoat.vehicle()];
   }
   update(dt: number, elapsed: number, players: readonly Actor[], inputs: ReadonlyMap<string, MultiplayerInputFrame>, pieces: readonly FriendsBuildPiece[] = [], terrain?: FriendsTerrain, allowFlight?:(before:FriendsVehicle,after:FriendsVehicle)=>boolean) {
     this.hornWorldTimeMs = elapsed;
     this.confetti.update(elapsed, players, inputs);
     const before=this.vehicles();
     this.actors=players;
+    this.fishingBoat.update(dt,elapsed,players,inputs,terrain,pieces);
     this.rowboat.update(dt,elapsed,players,inputs,terrain,pieces);
     this.oppositeRowboat.update(dt,elapsed,players,inputs,terrain,pieces);
     updateCampfireSeats(players,new Set([...inputs].filter(([,i])=>i.jumpPressed).map(([id])=>id)));
@@ -325,7 +361,7 @@ export class FriendsExpedition {
       const heading = this.aircraft.angle;
       const dx = (Math.cos(heading) * forward - Math.sin(heading) * strafe) / magnitude * speed * dt / 1000;
       const dy = (Math.sin(heading) * forward + Math.cos(heading) * strafe) / magnitude * speed * dt / 1000;
-      const position = { x: Math.max(256, Math.min(FRONTIER_SIZE - 256, this.aircraft.x + dx)), y: Math.max(256, Math.min(FRONTIER_SIZE - 256, this.aircraft.y + dy)) };
+      const position = { x: this.aircraft.x + dx, y: this.aircraft.y + dy };
       if (this.salvageState === 'active' && insideFriendsCombat(position.x, position.y, this.aircraft.z - 14)) { position.x = this.aircraft.x; position.y = this.aircraft.y; }
       terrain?.collide(position, this.aircraft.z - 14 + .05, 175, 125, 0);
       resolveWorldCollisions(position, 175, false, 'friends_frontier', this.aircraft.z - 14 + .05);
@@ -349,7 +385,7 @@ export class FriendsExpedition {
     }
     const after = this.vehicles();
     for (const p of players) {
-      if (this.hauling.playerCarry.isCarried(p.id) || p.friendsSeat || p.lifeState !== 'alive' || (inputs.get(p.id)?.friendsDevFlight ?? p.friendsDevFlight)) continue;
+      if (after.some(v=>v.pilotId===p.id) || this.hauling.playerCarry.isCarried(p.id) || p.friendsSeat || p.lifeState !== 'alive' || (inputs.get(p.id)?.friendsDevFlight ?? p.friendsDevFlight)) continue;
       const oldPosition = { x: p.x, y: p.y, z: p.z };
       let carried = false;
       for (let i = 0; i < before.length; i++) {
@@ -370,8 +406,9 @@ export class FriendsExpedition {
     }
     if (pilot) { const v = this.aircraft; pilot.x = v.x + Math.cos(v.angle) * 100; pilot.y = v.y + Math.sin(v.angle) * 100; pilot.z = v.z; }
   }
-  interact(player: Actor, elapsed: number): 'salvage' | 'signal' | 'pilot' | 'restore' | 'treasure' | 'seat' | undefined {
+  interact(player: Actor, elapsed: number, pieces:readonly FriendsBuildPiece[]=[]): 'salvage' | 'signal' | 'pilot' | 'restore' | 'treasure' | 'caveLift' | 'seat' | undefined {
     if(player.lifeState!=='alive')return;
+    if(this.fishingBoat.interact(player,this.actors)){this.say(this.fishingBoat.vehicle().pilotId===player.id?'Fishing boat · first-person helm · forward / reverse · left / right turns the wheel · F stops and releases controls.':'Helm released. You stay where you are. Walk through the open cabin door to fish from the deck.',elapsed);return 'pilot';}
     if(this.rowboat.interact(player,this.actors)||this.oppositeRowboat.interact(player,this.actors)){this.say('Reedwater skiff · row alone from the centre with both oars, or share the two seats and control your own side · click or tap forward to stroke · right-click or tap backward to reverse · F / Space to leave.',elapsed);return 'seat';}
     if(this.retreats.interact(player,this.actors,this.terrain))return 'seat';
     if(interactCampfireSeat(player,this.actors))return 'seat';
@@ -379,18 +416,52 @@ export class FriendsExpedition {
     const v = this.aircraft;
     if (v.pilotId === player.id) { v.pilotId = undefined; player.x = v.x + Math.cos(v.angle) * 40; player.y = v.y + Math.sin(v.angle) * 40; this.say('Pilot controls released. The Sunskiff holds its position.', elapsed); return 'pilot'; }
     if (friendsCockpitInteraction([v], player)) { v.pilotId = player.id; this.say('Sunskiff: move to fly · jump to ascend · crouch to descend · interact to release controls.', elapsed); return 'pilot'; }
-    const treasure=nearbyCaveTreasure(player,this.progress.openedTreasures,this.terrain?(x,y,z)=>!this.terrain!.material(Math.floor(x/32),Math.floor(y/32),Math.floor(z/32)):undefined);
+    const treasure=nearbyFriendsCaveTreasure(player,this.progress.openedTreasures,this.terrain,pieces);
     if(treasure){
       this.progress.openedTreasures=[...(this.progress.openedTreasures||[]),treasure.id];
       this.progress.caveGold=(this.progress.caveGold||0)+treasure.gold;
-      this.say(`${treasure.name} opened · +${treasure.gold.toLocaleString('en-US')} gold! Crew treasury: ${this.progress.caveGold.toLocaleString('en-US')} gold.`,elapsed);
+      this.say(`${treasure.name} recovered · ${treasure.description || 'Shared expedition reward'}.${treasure.gold?` +${treasure.gold.toLocaleString('en-US')} gold.`:''}`,elapsed);
       return 'treasure';
     }
+    const lift=nearbyCaveLift(player,this.progress.openedTreasures);
+    if(lift&&this.terrain){
+      const d=lift.destination,landing=this.caveLanding(d,pieces);
+      if(!landing){this.say('The lift landing is obstructed. Clear its stone platform first.',elapsed);return;}
+      this.relocateCaveActor(player,landing);
+      this.say(lift.label,elapsed);return 'caveLift';
+    }
+  }
+  recoverCaveLava(player:Actor,elapsed:number,pieces:readonly FriendsBuildPiece[]=[]){
+    const lava=caveLavaAt(player.x,player.y,player.z);
+    if(!lava||!this.terrain||player.lifeState!=='alive')return false;
+    let landing:DescentPoint|undefined;
+    for(const [dx,dy]of [[0,0],[-64,0],[64,0],[0,-64],[0,64],[-96,-64],[96,-64],[0,-128]]){
+      const candidate=this.caveLanding({...lava.safe,x:lava.safe.x+dx,y:lava.safe.y+dy},pieces);
+      if(candidate&&!caveLavaAt(candidate.x,candidate.y,candidate.z)){landing=candidate;break;}
+    }
+    const local=Boolean(landing);
+    // The campfire gathering apron is already protected from builds/mining.
+    // Only use it when every nearby stone ledge has been obstructed.
+    landing??=this.caveLanding(CAVE_RETURN.destination,pieces);
+    if(!landing)return false;
+    this.relocateCaveActor(player,landing);
+    this.say(local?'Too hot! Back on the last stone ledge. Your expedition supplies are safe.':'The local ledges are blocked. Back at camp with your expedition supplies.',elapsed);return true;
+  }
+  private caveLanding(point:DescentPoint,pieces:readonly FriendsBuildPiece[]):DescentPoint|undefined {
+    if(!this.terrain)return;
+    const floor=this.terrain.floor(point.x,point.y,point.z+8,0);
+    if(floor===undefined||Math.abs(floor-point.z)>16)return;
+    const probe={x:point.x,y:point.y};
+    if(this.terrain.collide(probe,floor,COOP_PLAYER_RADIUS,50,0)||resolveFriendsBuildCollisions(pieces,probe,floor,COOP_PLAYER_RADIUS,50,0))return;
+    return {...point,z:floor};
+  }
+  private relocateCaveActor(player:Actor,landing:DescentPoint){
+    Object.assign(player,landing,{verticalVelocity:0,fallPeakZ:undefined,velocityX:0,velocityY:0,platformVelocityX:0,platformVelocityY:0,platformVelocityZ:0,coyoteMs:0,jumpBufferMs:0,bufferedJumpSequence:undefined,slideMs:0,slideHeld:false,sliding:false,airborneMs:0,groundedMs:0,jetActive:false,jetIgnitedThisAirTime:false,jetLaunchFloor:landing.z,airActionConsumedSinceGrounded:false,swimming:false,swimSubmerged:false,friendsSoaring:undefined});
   }
   controlTrain(action: 'train_hold' | 'train_depart') { this.held = action === 'train_hold'; this.trainStoppedMs=this.held?1:0; }
   get salvageStatus() { return this.salvageState; }
   resetSalvage(elapsed: number) { if (this.salvageState === 'active') { this.salvageState = 'idle'; this.say('Rustwater has reset. The safe valley is yours; return when you want another try.', elapsed); } }
   finishSalvage(elapsed: number) { if (this.salvageState !== 'active') return false; this.salvageState = 'cleared'; this.progress.salvageCleared = true; this.say('Rustwater cleared. Everyone receives 600 credits. The wreck is yours to explore.', elapsed); return true; }
   private say(message: string, elapsed: number) { this.notice = message; this.noticeUntilMs = elapsed + 16000; }
-  snapshot(): FriendsSnapshot { return { birds:this.birds.snapshot(), stones:this.stones.snapshot(), confetti:this.confetti.snapshot(), fishing:this.fishing.snapshot(), retreats:this.retreats.snapshot(), campfire:this.campfire.snapshot(), trainHorn: this.trainHorn && this.hornWorldTimeMs - this.trainHorn.atMs < 4000 ? { ...this.trainHorn } : undefined, scenicRailway:this.scenic?.snapshot(this.actors), hauling: this.hauling.snapshot(), transport: { rowboat:this.rowboat.save(), retreats:this.retreats.save(), campfireFuelSeconds:this.campfire.fuelSeconds,campfireSiteFuelSeconds:this.campfire.siteFuelSave(), scenicRailway:Boolean(this.scenic), hauling: this.hauling.save(), trainDistance: this.trainDistance, trainStoppedMs: this.trainStoppedMs, lastStop: this.lastStop, held: this.held, aircraft: { ...this.aircraft, pilotId: undefined }, railTrain: this.railTrain ? {...this.railTrain,distance:this.trainDistance,held:this.held} : undefined }, vehicles: this.vehicles(), trainDistance: this.trainDistance, trainStoppedMs: this.trainStoppedMs, progress: normalizeFriendsProgress(this.progress), salvageState: this.salvageState, notice: this.notice, noticeUntilMs: this.noticeUntilMs }; }
+  snapshot(): FriendsSnapshot { return { birds:this.birds.snapshot(), stones:this.stones.snapshot(), confetti:this.confetti.snapshot(), fishing:this.fishing.snapshot(), retreats:this.retreats.snapshot(), campfire:this.campfire.snapshot(), trainHorn: this.trainHorn && this.hornWorldTimeMs - this.trainHorn.atMs < 4000 ? { ...this.trainHorn } : undefined, scenicRailway:this.scenic?.snapshot(this.actors), hauling: this.hauling.snapshot(), transport: { fishingBoat:this.fishingBoat.save(), rowboat:this.rowboat.save(), retreats:this.retreats.save(), campfireFuelSeconds:this.campfire.fuelSeconds,campfireSiteFuelSeconds:this.campfire.siteFuelSave(), scenicRailway:Boolean(this.scenic), hauling: this.hauling.save(), trainDistance: this.trainDistance, trainStoppedMs: this.trainStoppedMs, lastStop: this.lastStop, held: this.held, aircraft: { ...this.aircraft, pilotId: undefined }, railTrain: this.railTrain ? {...this.railTrain,distance:this.trainDistance,held:this.held} : undefined }, vehicles: this.vehicles(), trainDistance: this.trainDistance, trainStoppedMs: this.trainStoppedMs, progress: normalizeFriendsProgress(this.progress), salvageState: this.salvageState, notice: this.notice, noticeUntilMs: this.noticeUntilMs }; }
 }

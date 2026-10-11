@@ -1,0 +1,16 @@
+Fishing model credits
+
+Trout by Poly by Google
+Source: https://poly.pizza/m/0HCLwTdxvz5
+License: Creative Commons Attribution 3.0 Unported
+https://creativecommons.org/licenses/by/3.0/
+Original GLB unchanged. Runtime normalization and wriggling added for trout.
+Pike adapts this model with changed proportions, colours and markings.
+
+Koi, Tuna, Shark, Red Snapper, Coral Grouper and Fishing Rod by Quaternius
+Source: https://quaternius.com/packs/cutefish.html
+License: CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/
+Perch/zander adapt Red Snapper, mackerel adapts Tuna, cod adapts Coral Grouper.
+Adaptations change proportions, colours and markings at runtime.
+Individual source and download links are in README.md in this directory.

@@ -11,16 +11,16 @@ const seeds = [{ id: 'host', label: 'Host', color: '#8de6ce' }, { id: 'guest', l
 const input = (sequence: number): MultiplayerInputFrame => ({ type: 'input', version: MULTIPLAYER_PROTOCOL_VERSION, sequence, clientTime: 0, movement: 0, aimAngle: quantizeAngle(0), aimPitch: quantizePitch(0), selectedSlot: 0, firing: false, fireActionId: 0, interactActionId: sequence, sprinting: false, sliding: false, reviving: false, jumpPressed: false, dashPressed: false });
 
 describe('shared cave treasure', () => {
-  it('places valuable treasures on solid floors across a massive connected labyrinth', () => {
+  it('places deliberate, useful discoveries on supported floors', () => {
     expect(CAVE_ROOMS.length).toBeGreaterThanOrEqual(40);
     expect(CAVE_ROUTES.length).toBeGreaterThanOrEqual(50);
-    expect(CAVE_TREASURES.length).toBeGreaterThanOrEqual(70);
+    expect(CAVE_TREASURES.length).toBe(14);
     const terrain = new FriendsTerrain();
     for (const t of CAVE_TREASURES) {
       expect(terrain.supports(t.x, t.y, t.z), t.id).toBe(true);
       expect(terrain.ceiling(t.x, t.y, t.z)! - t.z).toBeGreaterThanOrEqual(96);
     }
-    expect(CAVE_TREASURES.reduce((sum, t) => sum + t.gold, 0)).toBeGreaterThan(2_000_000);
+    expect(CAVE_TREASURES.every(t=>t.supplies&&Object.values(t.supplies).some(n=>n>0))).toBe(true);
   });
   it('awards one shared reward when two players open the same chest, and replicates it', () => {
     const sim = new FriendsSimulation(seeds), t = CAVE_TREASURES[0];

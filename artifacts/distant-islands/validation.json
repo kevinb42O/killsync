@@ -1,0 +1,109 @@
+{
+  "samples": [
+    {
+      "visible": false,
+      "renderMs": 0.38285714302744184,
+      "calls": 34,
+      "triangles": 137014
+    },
+    {
+      "visible": true,
+      "renderMs": 0.4,
+      "calls": 37,
+      "triangles": 140908
+    },
+    {
+      "visible": true,
+      "renderMs": 0.8057142857994352,
+      "calls": 37,
+      "triangles": 140908
+    },
+    {
+      "visible": false,
+      "renderMs": 0.4714285714285714,
+      "calls": 34,
+      "triangles": 137014
+    },
+    {
+      "visible": false,
+      "renderMs": 0.38857142882687706,
+      "calls": 34,
+      "triangles": 137014
+    },
+    {
+      "visible": true,
+      "renderMs": 0.38285714302744184,
+      "calls": 37,
+      "triangles": 140908
+    },
+    {
+      "visible": true,
+      "renderMs": 0.40285714268684386,
+      "calls": 37,
+      "triangles": 140908
+    },
+    {
+      "visible": false,
+      "renderMs": 0.3657142856291362,
+      "calls": 34,
+      "triangles": 137014
+    },
+    {
+      "visible": false,
+      "renderMs": 0.3657142856291362,
+      "calls": 34,
+      "triangles": 137014
+    },
+    {
+      "visible": true,
+      "renderMs": 0.38857142882687706,
+      "calls": 37,
+      "triangles": 140908
+    },
+    {
+      "visible": true,
+      "renderMs": 0.3914285715137209,
+      "calls": 37,
+      "triangles": 140908
+    },
+    {
+      "visible": false,
+      "renderMs": 0.3685714283159801,
+      "calls": 34,
+      "triangles": 137014
+    },
+    {
+      "visible": false,
+      "renderMs": 0.3742857145411628,
+      "calls": 34,
+      "triangles": 137014
+    },
+    {
+      "visible": true,
+      "renderMs": 0.38857142840112957,
+      "calls": 37,
+      "triangles": 140908
+    },
+    {
+      "visible": true,
+      "renderMs": 0.38857142882687706,
+      "calls": 37,
+      "triangles": 140908
+    },
+    {
+      "visible": false,
+      "renderMs": 0.39142857108797346,
+      "calls": 34,
+      "triangles": 137014
+    }
+  ],
+  "meshes": 11,
+  "triangles": 13678,
+  "bytes": 1107918,
+  "gl": 0,
+  "measurement": "GPU-synchronized paired static rendering of islands plus their shoreline atlas in a coastal view; excludes simulation and streaming. Hardware-specific, not an FPS guarantee.",
+  "medianVisibleMs": 0.390000000170299,
+  "medianHiddenMs": 0.3785714287843023,
+  "deltaMs": 0.011428571385996733,
+  "errors": []
+}

@@ -49,8 +49,8 @@ describe('organic island horizon',()=>{
     expect(Array.from(left.normals).some((v,i)=>i%3!==1&&v!==0)).toBe(true);
     expect(left.indices.length).toBeGreaterThan(0);
   });
-  it('omits hidden ocean bed while preserving the volumetric gate roof',()=>{
-    expect(meshOrganicHorizon(0,44032,512).indices.length).toBe(0);
+  it('keeps the explorable ocean bed while preserving the volumetric gate roof',()=>{
+    expect(meshOrganicHorizon(0,44032,512).indices.length).toBeGreaterThan(0);
     const gate=meshOrganicHorizon(15360,10240,512);
     expect(Array.from(gate.normals).some((v,i)=>i%3===1&&v<0)).toBe(true);
   });

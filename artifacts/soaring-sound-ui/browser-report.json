@@ -1,0 +1,90 @@
+{
+  "errors": [],
+  "captures": [
+    {
+      "view": "forward",
+      "cords": 8,
+      "cordsVisible": true,
+      "visibleHands": [
+        {
+          "x": -0.3141981795652549,
+          "y": 0.1624697703697865,
+          "visible": true
+        },
+        {
+          "x": 0.3141981795652549,
+          "y": 0.1624697703697865,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "view": "up",
+      "cords": 8,
+      "cordsVisible": true,
+      "visibleHands": [
+        {
+          "x": -0.7070222176657577,
+          "y": -1.5092949230901813,
+          "visible": false
+        },
+        {
+          "x": 0.7070222176657577,
+          "y": -1.5092949230901813,
+          "visible": false
+        }
+      ]
+    },
+    {
+      "view": "crew",
+      "cords": 8,
+      "cordsVisible": true,
+      "visibleHands": [
+        {
+          "x": -0.17510794541389835,
+          "y": -0.028029224408909266,
+          "visible": true
+        },
+        {
+          "x": 0.4445979734381399,
+          "y": -0.11640500861305501,
+          "visible": true
+        }
+      ]
+    }
+  ],
+  "desktopHud": {
+    "x": 1179.90625,
+    "y": 748,
+    "width": 236.09375,
+    "height": 40
+  },
+  "mobileHands": [
+    {
+      "x": -0.3277144928271348,
+      "y": 0.16041425169452886,
+      "visible": true
+    },
+    {
+      "x": 0.3277144928271348,
+      "y": 0.16041425169452886,
+      "visible": true
+    }
+  ],
+  "mobileHud": {
+    "x": 169.53125,
+    "y": 648.203125,
+    "width": 208.46875,
+    "height": 35.796875
+  },
+  "audio": {
+    "context": "running",
+    "wind": true,
+    "tones": 1,
+    "stoppedOnMute": true
+  },
+  "audioPreview": {
+    "durationSeconds": 14,
+    "peak": 0.18967550992965698
+  }
+}

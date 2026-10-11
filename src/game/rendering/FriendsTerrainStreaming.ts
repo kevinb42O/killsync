@@ -1,7 +1,8 @@
+import { OUTER_ISLAND_MASONRY } from '../world/FriendsOuterIslands';
 import { scenicRailway } from '../world/FriendsScenicRailway';
 import { sampleRailAlignment, railColumns } from '../world/FriendsRailAlignment';
-import { CAVE_BOUNDS, CAVE_ENTRANCE } from '../world/FriendsCave';
-import { FRONTIER_SIZE, TERRAIN_CHUNK, FRIENDS_FIXED_PLATFORMS } from '../world/FriendsTerrain';
+import { CAVE_BOUNDS, CAVE_ENTRANCE, caveChunkAtElevation } from '../world/FriendsCave';
+import { TERRAIN_CHUNK, FRIENDS_FIXED_PLATFORMS } from '../world/FriendsTerrain';
 
 // Units are 1/12 metre: exact blocks to 512 m, fading to the full-map
 // horizon by 683 m. Start work another 85 m ahead of that transition.
@@ -19,8 +20,8 @@ export function distanceToTerrainTile(x:number,y:number,tx:number,ty:number,size
 }
 export function surfaceTilesAround(x:number,y:number) {
   const tiles:{x:number;y:number;distance:number}[]=[];
-  for(let a=Math.max(0,Math.floor((x-BLOCK_PREFETCH)/BLOCK_SURFACE_TILE));a<=Math.min(Math.ceil(FRONTIER_SIZE/BLOCK_SURFACE_TILE)-1,Math.floor((x+BLOCK_PREFETCH)/BLOCK_SURFACE_TILE));a++)
-    for(let b=Math.max(0,Math.floor((y-BLOCK_PREFETCH)/BLOCK_SURFACE_TILE));b<=Math.min(Math.ceil(FRONTIER_SIZE/BLOCK_SURFACE_TILE)-1,Math.floor((y+BLOCK_PREFETCH)/BLOCK_SURFACE_TILE));b++){
+  for(let a=Math.floor((x-BLOCK_PREFETCH)/BLOCK_SURFACE_TILE);a<=Math.floor((x+BLOCK_PREFETCH)/BLOCK_SURFACE_TILE);a++)
+    for(let b=Math.floor((y-BLOCK_PREFETCH)/BLOCK_SURFACE_TILE);b<=Math.floor((y+BLOCK_PREFETCH)/BLOCK_SURFACE_TILE);b++){
       const tx=a*BLOCK_SURFACE_TILE,ty=b*BLOCK_SURFACE_TILE,distance=distanceToTerrainTile(x,y,tx,ty,BLOCK_SURFACE_TILE);
       if(distance<=BLOCK_PREFETCH)tiles.push({x:tx,y:ty,distance});
     }
@@ -29,10 +30,14 @@ export function surfaceTilesAround(x:number,y:number) {
 
 /** Ordinary outdoor terrain needs no volume. Promote only changed columns,
  * their shared borders, the cave entrances, or the local underground view. */
-export function volumeChunksAround(x:number,y:number,edited:ReadonlySet<string>,underground:boolean,reach=2600,excavation?:{x:number;y:number}) {
+export function volumeChunksAround(x:number,y:number,edited:ReadonlySet<string>,underground:boolean,reach=2600,excavation?:{x:number;y:number},elevation?:number) {
   const desired=new Set<string>();
-  const add=(a:number,b:number)=>{if(a>=0&&b>=0&&a<FRONTIER_SIZE/TERRAIN_CHUNK&&b<FRONTIER_SIZE/TERRAIN_CHUNK)desired.add(`${a},${b}`);};
+  const add=(a:number,b:number)=>{desired.add(`${a},${b}`);};
   const promote=(a:number,b:number)=>{for(const [dx,dy]of[[0,0],[-1,0],[1,0],[0,-1],[0,1]])add(a+dx,b+dy);};
+  for(const box of OUTER_ISLAND_MASONRY)if(Math.hypot(x-box.x,y-box.y)<1600){
+    for(let a=Math.floor((box.x-box.w/2)/512);a<=Math.floor((box.x+box.w/2)/512);a++)
+      for(let b=Math.floor((box.y-box.d/2)/512);b<=Math.floor((box.y+box.d/2)/512);b++)add(a,b);
+  }
   for (const spawn of FRIENDS_FIXED_PLATFORMS) if (Math.hypot(x - spawn.x, y - spawn.y) < 1500) {
     for (let a = Math.floor((spawn.x-spawn.size/2)/512); a <= Math.floor((spawn.x+spawn.size/2-1)/512); a++)
       for (let b = Math.floor((spawn.y-spawn.size/2)/512); b <= Math.floor((spawn.y+spawn.size/2-1)/512); b++) add(a,b);
@@ -54,9 +59,10 @@ export function volumeChunksAround(x:number,y:number,edited:ReadonlySet<string>,
   if(underground||approachingCave){
     const radius=reach+512;
     const authored=approachingCave||x>=CAVE_BOUNDS.minX&&x<=CAVE_BOUNDS.maxX&&y>=CAVE_BOUNDS.minY&&y<=CAVE_BOUNDS.maxY;
-    for(let a=Math.max(0,Math.floor((x-radius)/512));a<=Math.min(93,Math.floor((x+radius)/512));a++)for(let b=Math.max(0,Math.floor((y-radius)/512));b<=Math.min(93,Math.floor((y+radius)/512));b++){
+    for(let a=Math.floor((x-radius)/512);a<=Math.floor((x+radius)/512);a++)for(let b=Math.floor((y-radius)/512);b<=Math.floor((y+radius)/512);b++){
       if(distanceToTerrainTile(x,y,a*512,b*512,512)>radius)continue;
       if(authored&&!columns.length&&(a*512>CAVE_BOUNDS.maxX||(a+1)*512<CAVE_BOUNDS.minX||b*512>CAVE_BOUNDS.maxY||(b+1)*512<CAVE_BOUNDS.minY))continue;
+      if(authored&&underground&&!approachingCave&&elevation!==undefined&&![[0,0],[-1,0],[1,0],[0,-1],[0,1]].some(([dx,dy])=>caveChunkAtElevation(a+dx,b+dy,elevation)))continue;
       add(a,b);
     }
   }

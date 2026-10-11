@@ -1,0 +1,27 @@
+{
+  "assets": [
+    {
+      "file": "boat_engine.ogg",
+      "bytes": 357812,
+      "channels": 2,
+      "duration": 35.34367346938775,
+      "loopDuration": 34.543673469387755,
+      "peak": 1.0668325424194336,
+      "rms": 0.10791119110694798
+    },
+    {
+      "file": "boat_hull_water.ogg",
+      "bytes": 179316,
+      "channels": 2,
+      "duration": 21.642448979591837,
+      "loopDuration": 20.842448979591836,
+      "peak": 0.881588876247406,
+      "rms": 0.07905168786853495
+    }
+  ],
+  "graph": {
+    "sharedLoops": 2,
+    "effectsIndependent": true,
+    "muteCleanup": true
+  }
+}

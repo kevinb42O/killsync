@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, ChevronRight, Coins, Crosshair, Database, ExternalLink, Maximize, Minimize, MoreHorizontal, Settings2, Skull, Sprout, Sun, Trophy } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, ChevronRight, Coins, Crosshair, Database, ExternalLink, Maximize, Minimize, MoreHorizontal, Settings2, Skull, Sun, Trophy } from 'lucide-react';
 import type { CoopGameMode } from '../game/multiplayer/CoopGameMode';
 import type { GameState } from '../types';
 import { friendsAudio } from '../game/FriendsAudio';
 import { soundManager } from '../game/SoundManager';
+import { FriendsSceneryLoading } from './FriendsSceneryLoading';
 import './main-menu.css';
 
 export interface MainMenuProps {
@@ -100,6 +101,7 @@ export function MainMenu(p: MainMenuProps) {
   const progress = p.accountLevel >= p.maxAccountLevel ? 100 : Math.max(0, Math.min(100, p.accountXP / Math.max(1, p.accountXPRequired) * 100));
 
   return <div ref={root} className={`two-worlds-menu${selected ? ` two-worlds-menu--entering-${selected}` : ''}`} aria-label="Main menu" aria-busy={Boolean(selected)}>
+    <div className="two-worlds-menu__friends-handoff" aria-hidden="true">{selected === 'friends' && <FriendsSceneryLoading/>}</div>
     <header className="two-worlds-menu__header">
       <span className="two-worlds-menu__wordmark">Two worlds</span>
       <span className="two-worlds-menu__prompt">Choose your world</span>
@@ -110,7 +112,6 @@ export function MainMenu(p: MainMenuProps) {
         <div className="two-worlds-menu__island" aria-hidden="true"/>
         <div className="two-worlds-menu__wash" aria-hidden="true"/>
         <div className="two-worlds-menu__identity">
-          <p className="two-worlds-menu__eyebrow"><Sprout size={16}/>Friends mode</p>
           <h1 id="sunline-title" className="two-worlds-menu__sr">Sunline — Friends mode</h1>
         </div>
         <div className="two-worlds-menu__content">

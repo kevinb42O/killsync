@@ -1,3 +1,6 @@
+import { soaringSuspended } from './FriendsSoaring';
+import { FriendsSoaringVisuals } from '../rendering/FriendsSoaringVisuals';
+import { FriendsFishingBoatHelmCamera } from '../rendering/FriendsFishingBoatHelmCamera';
 import { friendsListenerSubmerged } from './FriendsSwimAudio';
 import { FriendsDynamiteVisuals } from '../rendering/FriendsDynamiteVisuals';
 import { firstPersonEyeZ } from './FirstPersonEye';
@@ -42,6 +45,7 @@ import { Renderer3D } from '../Renderer3D';
 import { soundManager } from '../SoundManager';
 import { friendsAudio, type SurfaceCue } from '../FriendsAudio';
 import { FriendsSoundscape } from '../FriendsSoundscape';
+import { friendsBoatSound } from '../FriendsBoatSound';
 import { FriendsTrainSound } from '../FriendsTrainSound';
 import { FriendsFlightFoliage } from '../FriendsFlightSound';
 import { campfireSound, inCastleMusicArea } from '../FriendsLocationAudio';
@@ -137,12 +141,14 @@ export function shouldPlayResurfaceBreath(wasSubmerged: boolean, friendsWorld: b
 export class MultiplayerRendererBridge {
   private craneControlView?:{id:number;options:CraneCameraOptions};
   private rowboatCameraId?:string;
+  private fishingBoatHelmCamera=new FriendsFishingBoatHelmCamera();
   private readonly renderer: Renderer3D;
   private worldId: WorldId;
   private readonly tacticalVisuals: CoopTacticalVisuals;
   private readonly scenicRailVisuals?:FriendsScenicRailwayVisuals;
   private readonly underwater:FriendsUnderwaterVisuals;
   private oarTimes=[-10000,-10000];
+  private readonly soaringVisuals?:FriendsSoaringVisuals;
   private readonly friendsVehicleVisuals: FriendsVehicleVisuals;
   private readonly friendsHaulingVisuals: FriendsHaulingVisuals;
   private readonly frontierVisuals?: FriendsFrontierVisuals;
@@ -278,7 +284,7 @@ export class MultiplayerRendererBridge {
     if (worldId === 'friends_frontier') { this.friendsSpawnVisuals = new FriendsSpawnVisuals(); this.renderer.scene.add(this.friendsSpawnVisuals); }
     if(worldId==='friends_frontier'){
       this.friendsWorldArrival=new FriendsWorldArrival();
-      this.renderer.presentationWorldRender=(renderer,scene,camera)=>this.friendsWorldArrival!.render(renderer,scene,camera);
+      this.renderer.presentationWorldRender=(renderer,scene,camera)=>this.friendsWorldArrival!.render(renderer,scene,camera)||this.underwater.render(renderer,camera);
     }
     this.friendsHaulingVisuals = new FriendsHaulingVisuals(this.renderer.scene,this.renderer.viewmodelScene);
     if (worldId === 'friends_frontier') this.frontierVisuals = new FriendsFrontierVisuals(this.renderer.scene, this.renderer.viewmodelScene, this.renderer.renderer, this.renderer.camera, {
@@ -311,7 +317,7 @@ export class MultiplayerRendererBridge {
     if (worldId !== 'friends_frontier') void this.localFirearm;
     this.renderer.scene.add(this.arcanaVisuals.group);
     if (worldId !== 'friends_frontier') this.trailSystem = new OperatorTrailSystem(this.renderer.scene);
-    if (worldId === 'friends_frontier') this.underwater.prepare();
+    if (worldId === 'friends_frontier') { this.underwater.prepare(); this.soaringVisuals=new FriendsSoaringVisuals(this.renderer.scene); }
   }
 
   mount(container: HTMLElement) {
@@ -466,6 +472,8 @@ export class MultiplayerRendererBridge {
     this.frontierVisuals?.setCraneCameraLight(id!==null&&options.light!==false);
   }
   setFriendsArms(mask:number){this.friendsArms=mask;}
+  toggleFishingBoatView(){return this.fishingBoatHelmCamera.toggle();}
+  resetFishingBoatView(){this.fishingBoatHelmCamera.resetView();}
   setFriendsTool(tool: FrontierTool, firing: boolean, allowed=true, fill=false) { this.friendsTool = tool; this.friendsToolFiring = firing; this.friendsShovelFill = tool === 3 && fill; this.interactionAllowed=allowed; }
   getFriendsBuildTarget(snapshot: CoopSnapshot | null) {
     const ray = this.playerInteractionRay(snapshot), hit = raycastFriendsBuild(this.nearbyBuilds(snapshot), ray);
@@ -763,7 +771,7 @@ export class MultiplayerRendererBridge {
     const standingLoad=snapshot.friends?.building?.pieces.find(p=>p.attachment&&Math.abs((friendsBuildFloor([p],targetX,targetY,local.z,0)??Infinity)-local.z)<2);
     const standingVehicle = !local.friendsDevFlight ? snapshot.friends?.vehicles.find(v => { if(local.friendsSeat?.vehicleId===v.id||standingLoad?.attachment?.vehicleId===v.id)return true; const floor = friendsVehicleFloor([v], targetX, targetY, local.z); return floor !== undefined && Math.abs(local.z - floor) < 2; }) : undefined;
     const onSpawnDeck = friendsSpawnPlatformContains(local.x, local.y) && Math.abs(local.z-FRIENDS_SPAWN_PLATFORM.top) < .1 && (local.motion?.verticalVelocity ?? 0) <= 0;
-    this.renderer.presentationGrounded = Boolean(snapshot.friends && !local.friendsDevFlight && !local.motion?.swimming && (standingVehicle || onSpawnDeck || local.motion?.verticalVelocity === 0));
+    this.renderer.presentationGrounded = Boolean(snapshot.friends && !local.friendsDevFlight && local.friendsSoaring?.phase!=='flying' && !local.motion?.swimming && (standingVehicle || onSpawnDeck || local.motion?.verticalVelocity === 0));
     if (this.lastPresentedLocalX !== undefined && this.lastPresentedLocalY !== undefined) {
       const reference = { x: this.lastPresentedLocalX, y: this.lastPresentedLocalY, z: this.lastLocalZ };
       if (standingVehicle && this.lastPresentedVehicle?.id === standingVehicle.id) Object.assign(reference,vehicleWorldPoint(standingVehicle,vehicleLocalPoint(this.lastPresentedVehicle,reference)));
@@ -870,7 +878,7 @@ export class MultiplayerRendererBridge {
     this.wallJumpRollTarget *= leanRecovery;
     this.wallJumpPitchTarget *= leanRecovery;
     if (isSpectating || isFallingLocal) this.wallJumpRoll = this.wallJumpPitch = 0;
-    this.renderer.presentationCameraRoll = this.wallJumpRoll;
+    this.renderer.presentationCameraRoll = local.friendsSoaring?.phase==='flying' ? -local.friendsSoaring.bank*.24 : this.wallJumpRoll;
     this.renderer.presentationCameraPitchOffset = this.wallJumpPitch;
     const groundedInValley = snapshot.friends && (this.renderer.presentationGrounded||local.motion?.swimming);
     if (currentZ > 0.08 && !groundedInValley) {
@@ -931,9 +939,10 @@ export class MultiplayerRendererBridge {
     // rich CoopOperatorRig (rendered by syncRemotePlayers) takes its place.
     // We also drive renderer.yaw from the network angle so the camera faces
     // the direction the spectated player is actually moving/looking.
-    const pilotedVehicle = snapshot.friends?.vehicles.find(v => v.kind === 'aircraft' && v.pilotId === localPlayerId);
+    const pilotedVehicle = snapshot.friends?.vehicles.find(v => (v.kind === 'aircraft'||v.kind==='fishingBoat') && v.pilotId === localPlayerId);
+    const boatThirdPerson=this.fishingBoatHelmCamera.update(this.renderer,!isSpectating&&pilotedVehicle?.kind==='fishingBoat'?pilotedVehicle:undefined);
     const rowboatVehicle=!isSpectating&&isRowboatSeat(local.friendsSeat)?snapshot.friends?.vehicles.find(v=>v.id===local.friendsSeat!.vehicleId):undefined;
-    const cameraVehicle=pilotedVehicle??(this.friendsTool===7?undefined:rowboatVehicle);
+    const cameraVehicle=(pilotedVehicle?.kind==='aircraft'||boatThirdPerson?pilotedVehicle:undefined)??(this.friendsTool===7?undefined:rowboatVehicle);
     if(rowboatVehicle&&this.rowboatCameraId!==rowboatVehicle.id)this.renderer.yaw=Math.atan2(-Math.cos(rowboatVehicle.angle),-Math.sin(rowboatVehicle.angle));
     this.rowboatCameraId=rowboatVehicle?.id;
     this.renderer.presentationVehicle = !isSpectating && !isFallingLocal ? cameraVehicle : undefined;
@@ -1008,7 +1017,9 @@ export class MultiplayerRendererBridge {
     // no longer uses the old thirdPersonPlayerGroup for spectating.
     this.syncRemotePlayers(snapshot, localPlayerId, isSpectating || Boolean(cameraVehicle) || Boolean(loadView));
     this.structureVisuals?.update(snapshot.structures || [], snapshot.elapsedMs);
-    this.friendsVehicleVisuals.update(snapshot.friends, snapshot.elapsedMs);
+    friendsAudio.setSoaringSound(!isSpectating&&!this.interactionBlocked?local.friendsSoaring:undefined);
+    this.soaringVisuals?.update(snapshot.players,localPlayerId,snapshot.elapsedMs,Boolean(snapshot.friends),snapshot.friends?.environment,(id,side,out)=>{const rig=this.remotePlayers.get(id);if(!rig||!friendsCharacterHandPoint(rig,out,false,side))return false;rig.root.localToWorld(out);return true;},this.renderer.camera.aspect);
+    this.friendsVehicleVisuals.update(snapshot.friends, snapshot.elapsedMs,this.renderer.camera.position);
     this.confettiVisuals?.update(snapshot.friends?.confetti, this.visualElapsedMs, this.renderer.camera);
     const skiff=snapshot.friends?.vehicles.filter(v=>v.kind==='rowboat').sort((a,b)=>Math.hypot(local.x-a.x,local.y-a.y)-Math.hypot(local.x-b.x,local.y-b.y))[0];
     if(skiff?.rowing){const volume=.17*Math.max(0,1-Math.hypot(local.x-skiff.x,local.y-skiff.y,local.z-skiff.z)/500),sounded=new Set<number>();
@@ -1020,6 +1031,7 @@ export class MultiplayerRendererBridge {
     this.friendsBuildVisuals.update(snapshot.friends?.building);
     this.friendsBuildVisuals.animate(this.visualElapsedMs);
     if(snapshot.friends?.environment)this.frontierVisuals?.synchronizeEnvironment(snapshot.friends.environment);
+    this.frontierVisuals?.setSeagullVehicles(snapshot.friends?.vehicles??[]);
     this.frontierVisuals?.setCampfireState(snapshot.friends?.campfire);
     this.frontierVisuals?.setRetreatState(snapshot.friends?.retreats);
     const retreat=snapshot.friends?.retreats;
@@ -1044,6 +1056,8 @@ export class MultiplayerRendererBridge {
         environment.windSpeed, environment.windSeconds, environment.underground, tree => Boolean(this.getFriendsTerrain()?.supports(tree.x, tree.y, tree.z)),
         this.frontierVisuals.terrain.surfaceHeight(local.x, local.y));
       const indoors=insideStillwater(local,snapshot.friends?.retreats?.active??[]),roomGain=indoors?.3:1;
+      const seagulls=this.frontierVisuals.seagullSoundMix(this.getAimAngle());
+      friendsAudio.setSeagullSound({...seagulls,volume:seagulls.volume*roomGain});
       friendsAudio.setSoundscape({ ...mix, wind:mix.wind*roomGain, birds: bird.volume*roomGain, birdPan: bird.pan });
       this.castleMusicArea = inCastleMusicArea(local, this.castleMusicArea);
       friendsAudio.setCastleMusic(this.castleMusicArea);
@@ -1060,6 +1074,8 @@ export class MultiplayerRendererBridge {
         return distance < 48 || !terrain?.raycast({x:a.x,y:a.y,z:a.z,dx:dx/distance,dy:dy/distance,dz:dz/distance},distance-40);
       });
       if(indoors)worldMix.waterfall={...worldMix.waterfall,volume:worldMix.waterfall.volume*.35};
+      Object.assign(worldMix,friendsBoatSound(snapshot.friends?.vehicles??[],local,this.getAimAngle(),environment.underground));
+      if(indoors){worldMix.boatEngine={...worldMix.boatEngine,volume:worldMix.boatEngine.volume*roomGain};worldMix.boatWater={...worldMix.boatWater,volume:worldMix.boatWater.volume*roomGain};}
       friendsAudio.setWorldSound(worldMix);
       if (snapshot.friends) {
         const train = this.trainSound.sample(snapshot.friends, local, snapshot.elapsedMs, this.getAimAngle(), environment.underground);
@@ -1251,6 +1267,13 @@ export class MultiplayerRendererBridge {
         if(w>=800)camera.setViewOffset(w,h,Math.min(460,w*.4)/2,0,w,h);else camera.setViewOffset(w,h,0,h*.32,w,h);
         camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
       }
+      if(soaringSuspended(local.friendsSoaring)){
+        this.renderer.rightArmRoot.visible=false;this.renderer.weaponRoot.visible=false;
+        if(this.localFirearmInstance)this.localFirearmInstance.group.visible=false;
+        this.frontierVisuals?.hideHeldTool();
+        if(this.gestureViewmodels)this.gestureViewmodels.root.visible=false;
+        this.renderer.fpsWeaponGroup.visible=false;
+      }
       this.underwater.update(this.renderer.camera,this.visualElapsedMs,Boolean(snapshot.friends),this.frontierVisuals?.soundscapeEnvironment.daylight??1,this.frontierVisuals?.terrain,Boolean(local.motion?.swimming)&&!loadView);
       this.frontierVisuals?.syncFlashlightWithCamera();
       if(this.sharedFlashlights && this.frontierVisuals){
@@ -1292,6 +1315,8 @@ export class MultiplayerRendererBridge {
     this.localFirearmInstance?.dispose();
     this.arcanaVisuals.dispose();
     this.underwater.dispose();
+    friendsAudio.setSoaringSound(undefined);
+    this.soaringVisuals?.dispose();
     this.friendsVehicleVisuals.dispose();
     this.scenicRailVisuals?.dispose();
     this.friendsHaulingVisuals.dispose();

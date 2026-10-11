@@ -1,0 +1,32 @@
+{
+  "errors": [],
+  "views": [
+    {
+      "view": "boat",
+      "count": 4,
+      "trianglesPerBird": 22,
+      "drawCalls": 1,
+      "renderedTriangles": 88,
+      "gl": 0
+    },
+    {
+      "view": "deck",
+      "count": 1,
+      "trianglesPerBird": 22,
+      "drawCalls": 1,
+      "renderedTriangles": 22,
+      "gl": 0
+    }
+  ],
+  "audio": {
+    "size": 332115,
+    "duration": 33.562108843537416,
+    "channels": 2,
+    "excerptSeconds": 10,
+    "nonLooping": true,
+    "rangeCleanup": true,
+    "volumeCleanup": true,
+    "flockVolume": 0.11702196143106482,
+    "viewIndependent": true
+  }
+}

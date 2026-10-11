@@ -1,0 +1,58 @@
+{
+  "errors": [],
+  "captures": [
+    {
+      "view": "boat",
+      "meshes": 19,
+      "triangles": 37496,
+      "ready": true,
+      "gl": 0,
+      "heave": -144.57376948868333
+    },
+    {
+      "view": "dock",
+      "meshes": 19,
+      "triangles": 37496,
+      "ready": true,
+      "gl": 0,
+      "heave": -139.07182354818403
+    },
+    {
+      "view": "mooring",
+      "meshes": 19,
+      "triangles": 37496,
+      "ready": true,
+      "gl": 0,
+      "heave": -144.19203939744565
+    }
+  ],
+  "wheelLeft": 2.0420352248331746,
+  "wheelRight": -1.9966653003460826,
+  "glass": [],
+  "release": {
+    "before": {
+      "x": 61.999999999999865,
+      "y": -21.999999999999673,
+      "z": 8.881784197001252e-16
+    },
+    "after": {
+      "x": 61.99999999999997,
+      "y": -21.999999999999766,
+      "z": 5.440092820663267e-15
+    }
+  },
+  "sailing": {
+    "pilotId": "review",
+    "moored": false,
+    "x": 1002.4838377582137,
+    "y": 5329.075643431843,
+    "visualX": 1002.4838377582137,
+    "visualY": 5329.075643431843,
+    "ropesVisible": false
+  },
+  "fishing": {
+    "swimming": false,
+    "seated": false,
+    "casts": 1
+  }
+}

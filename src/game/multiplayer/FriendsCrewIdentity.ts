@@ -1,6 +1,8 @@
 import type { CoopPlayerSeed } from './CoopSimulation';
 
-export const FRIENDS_SESSION_PROTOCOL = 1;
+// The descent's terrain, stairs, solid fixtures and building finishes require matching clients.
+// Crew identities and saved worlds remain on their existing persistent schema.
+export const FRIENDS_SESSION_PROTOCOL = 3;
 export type FriendsCredential = { worldId: string; playerId: string; token: string };
 export type FriendsCrewSave = { worldId: string; hostId: string; members: Record<string, { token: string; label: string }> };
 const CLIENT_KEY = 'killsync.friends.credentials.v1';

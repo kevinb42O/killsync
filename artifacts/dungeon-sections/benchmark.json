@@ -1,0 +1,148 @@
+{
+  "date": "2026-10-11T22:28:58.286Z",
+  "note": "Alternating warm full/sparse Node CPU mesh runs; not browser FPS.",
+  "rows": [
+    {
+      "name": "The Last Shift",
+      "chunk": [
+        18,
+        12
+      ],
+      "fullLayers": 42,
+      "scannedLayers": 27,
+      "bands": [
+        {
+          "bottom": -21,
+          "top": 0
+        },
+        {
+          "bottom": 16,
+          "top": 20
+        }
+      ],
+      "fullMs": 18.39,
+      "sparseMs": 12.96,
+      "percentFaster": 29.5,
+      "fullSamples": 13226,
+      "sparseSamples": 8938,
+      "vertices": 2004,
+      "bytes": 64128
+    },
+    {
+      "name": "The Listening Cavern",
+      "chunk": [
+        26,
+        14
+      ],
+      "fullLayers": 117,
+      "scannedLayers": 53,
+      "bands": [
+        {
+          "bottom": -59,
+          "top": -35
+        },
+        {
+          "bottom": -9,
+          "top": 2
+        },
+        {
+          "bottom": 42,
+          "top": 57
+        }
+      ],
+      "fullMs": 44.13,
+      "sparseMs": 20.84,
+      "percentFaster": 52.8,
+      "fullSamples": 36283,
+      "sparseSamples": 16827,
+      "vertices": 3462,
+      "bytes": 110784
+    },
+    {
+      "name": "The Heart Forge",
+      "chunk": [
+        31,
+        14
+      ],
+      "fullLayers": 170,
+      "scannedLayers": 107,
+      "bands": [
+        {
+          "bottom": -86,
+          "top": -59
+        },
+        {
+          "bottom": -11,
+          "top": -2
+        },
+        {
+          "bottom": 15,
+          "top": 83
+        }
+      ],
+      "fullMs": 78.86,
+      "sparseMs": 46.52,
+      "percentFaster": 41,
+      "fullSamples": 49572,
+      "sparseSamples": 30436,
+      "vertices": 3414,
+      "bytes": 109248
+    },
+    {
+      "name": "The Bedrock Vault",
+      "chunk": [
+        30,
+        9
+      ],
+      "fullLayers": 132,
+      "scannedLayers": 48,
+      "bands": [
+        {
+          "bottom": -115,
+          "top": -92
+        },
+        {
+          "bottom": -9,
+          "top": 7
+        },
+        {
+          "bottom": 10,
+          "top": 16
+        }
+      ],
+      "fullMs": 40.57,
+      "sparseMs": 15.52,
+      "percentFaster": 61.7,
+      "fullSamples": 41296,
+      "sparseSamples": 15440,
+      "vertices": 4074,
+      "bytes": 130368
+    },
+    {
+      "name": "The Last Stone",
+      "chunk": [
+        29,
+        7
+      ],
+      "fullLayers": 141,
+      "scannedLayers": 36,
+      "bands": [
+        {
+          "bottom": -128,
+          "top": -115
+        },
+        {
+          "bottom": -9,
+          "top": 12
+        }
+      ],
+      "fullMs": 37.78,
+      "sparseMs": 10.25,
+      "percentFaster": 72.9,
+      "fullSamples": 44822,
+      "sparseSamples": 11734,
+      "vertices": 2856,
+      "bytes": 91392
+    }
+  ]
+}

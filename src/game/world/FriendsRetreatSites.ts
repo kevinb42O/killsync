@@ -1,3 +1,4 @@
+import { PIER_CAFE_CHAIRS, PIER_CAFE_ID } from './FriendsSeasidePier';
 import { isRowboatSeat } from './FriendsFishingDock';
 /** Authored quiet places. Simulation X/Y horizontal, Z up. No saved terrain edits. */
 export type RetreatPoint = {x:number;y:number;z:number};
@@ -24,7 +25,7 @@ export function retreatLocal(site:{x:number;y:number;angle:number},p:{x:number;y
 }
 export const RETREAT_BULB = retreatPoint(STILLWATER,0,-8,62);
 export const RETREAT_SWITCH = retreatPoint(STILLWATER,-66,24,28);
-export const RETREAT_SEATS:RetreatSeat[] = RETREAT_SITES.flatMap(site=>{
+export const RETREAT_SEATS:RetreatSeat[] = RETREAT_SITES.flatMap<RetreatSeat>(site=>{
   const offsets=site.kind==='house'?[-30,0,30].map(u=>({u,v:25,angle:site.angle-Math.PI/2})):
     site.kind==='fire'?[{u:-30,v:35,angle:site.angle-Math.PI/2},{u:0,v:35,angle:site.angle-Math.PI/2},{u:42,v:0,angle:site.angle+Math.PI},{u:-44,v:0,angle:site.angle},{u:0,v:-43,angle:site.angle+Math.PI/2}]:
     [{u:-16,v:12,angle:site.angle-Math.PI/2},{u:16,v:12,angle:site.angle-Math.PI/2}];
@@ -32,8 +33,8 @@ export const RETREAT_SEATS:RetreatSeat[] = RETREAT_SITES.flatMap(site=>{
     const distance=Math.hypot(o.u,o.v),exit=site.kind==='fire'?retreatPoint(site,Math.max(-site.w/2+16,Math.min(site.w/2-16,o.u+o.u/distance*26)),Math.max(-site.d/2+16,Math.min(site.d/2-16,o.v+o.v/distance*26))):retreatPoint(site,o.u,o.v-26);
     return {...retreatPoint(site,o.u,o.v,16),angle:o.angle,exit,siteId:site.id,index};
   });
-});
-export function isRetreatSeat(seat:{vehicleId:string;index:number}|undefined){return Boolean(seat&&RETREAT_SITES.some(s=>s.id===seat.vehicleId));}
+}).concat(PIER_CAFE_CHAIRS);
+export function isRetreatSeat(seat:{vehicleId:string;index:number}|undefined){return Boolean(seat&&(seat.vehicleId===PIER_CAFE_ID||RETREAT_SITES.some(s=>s.id===seat.vehicleId)));}
 export function isQuietSeat(seat:{vehicleId:string;index:number}|undefined){return isRetreatSeat(seat)||seat?.vehicleId==='commons-campfire'||isRowboatSeat(seat);}
 export function insideStillwater(p:RetreatPoint,active:readonly string[]=RETREAT_SITES.map(s=>s.id)){
   const l=retreatLocal(STILLWATER,p);return active.includes(STILLWATER.id)&&Math.abs(l.u)<STILLWATER.w/2&&Math.abs(l.v)<STILLWATER.d/2&&p.z>=STILLWATER.z-2&&p.z<STILLWATER.z+STILLWATER.height;

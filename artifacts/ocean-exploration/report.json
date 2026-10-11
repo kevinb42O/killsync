@@ -1,0 +1,66 @@
+{
+  "errors": [],
+  "views": [
+    {
+      "name": "west",
+      "x": -32,
+      "y": 24000,
+      "gl": 0,
+      "surface": {
+        "surfaceTiles": 84,
+        "surfaceBytes": 20149480,
+        "surfaceJobs": 0
+      },
+      "horizonTiles": 145,
+      "calls": 31,
+      "triangles": 101930
+    },
+    {
+      "name": "east",
+      "x": 48032,
+      "y": 24000,
+      "gl": 0,
+      "surface": {
+        "surfaceTiles": 16,
+        "surfaceBytes": 86320,
+        "surfaceJobs": 2
+      },
+      "horizonTiles": 144,
+      "calls": 42,
+      "triangles": 303530
+    },
+    {
+      "name": "north",
+      "x": 24000,
+      "y": -32,
+      "gl": 0,
+      "surface": {
+        "surfaceTiles": 57,
+        "surfaceBytes": 8437520,
+        "surfaceJobs": 2
+      },
+      "horizonTiles": 145,
+      "calls": 38,
+      "triangles": 426269
+    },
+    {
+      "name": "south",
+      "x": 24000,
+      "y": 48032,
+      "gl": 0,
+      "surface": {
+        "surfaceTiles": 15,
+        "surfaceBytes": 1856816,
+        "surfaceJobs": 2
+      },
+      "horizonTiles": 144,
+      "calls": 19,
+      "triangles": 89048
+    }
+  ],
+  "ocean": {
+    "seaX": -99968,
+    "patchX": -99968,
+    "gl": 0
+  }
+}

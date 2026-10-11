@@ -1,0 +1,77 @@
+[
+  {
+    "name": "01-coast-overview",
+    "eye": [
+      1500,
+      2900,
+      1450
+    ],
+    "target": [
+      2100,
+      0,
+      90
+    ],
+    "fov": 45
+  },
+  {
+    "name": "02-pavilion",
+    "eye": [
+      2840,
+      1080,
+      420
+    ],
+    "target": [
+      3600,
+      0,
+      160
+    ],
+    "fov": 50
+  },
+  {
+    "name": "03-promenade",
+    "eye": [
+      1150,
+      -90,
+      64
+    ],
+    "target": [
+      3600,
+      0,
+      110
+    ],
+    "fov": 52
+  },
+  {
+    "name": "04-cafe-interior",
+    "eye": [
+      3150,
+      0,
+      65
+    ],
+    "target": [
+      3830,
+      90,
+      70
+    ],
+    "fov": 65
+  },
+  {
+    "name": "05-chair-detail",
+    "view": "seated",
+    "fov": 55
+  },
+  {
+    "name": "06-dome-and-facade",
+    "eye": [
+      3190,
+      710,
+      245
+    ],
+    "target": [
+      3600,
+      30,
+      220
+    ],
+    "fov": 48
+  }
+]

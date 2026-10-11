@@ -1,0 +1,18 @@
+{
+  "scene": "coastal pier review, helm camera",
+  "method": "Same scene and camera; render once with panes, once with glazing mesh hidden. No FPS claim.",
+  "before": {
+    "drawCalls": 25,
+    "renderedTriangles": 99568
+  },
+  "after": {
+    "drawCalls": 23,
+    "renderedTriangles": 98272
+  },
+  "removed": {
+    "glassMeshes": 1,
+    "modelTriangles": 648,
+    "renderedTriangles": 1296,
+    "drawCalls": 2
+  }
+}

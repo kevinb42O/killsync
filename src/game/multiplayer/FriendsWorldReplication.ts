@@ -117,7 +117,7 @@ export class FriendsWorldGuest {
     const motion=m.snapshot.friends;
     // The host appends the shared skiff after the scenic train. Reconstruct
     // that same order when expanding the compact train motion on guests.
-    const vehicles=motion.scenicRailway?[...motion.vehicles.filter(v=>v.kind!=='rowboat'),...scenicVehicles(motion.scenicRailway.distance),...motion.vehicles.filter(v=>v.kind==='rowboat')]:motion.vehicles;
+    const vehicles=motion.scenicRailway?[...motion.vehicles.filter(v=>v.kind!=='rowboat'&&v.kind!=='fishingBoat'),...scenicVehicles(motion.scenicRailway.distance),...motion.vehicles.filter(v=>v.kind==='rowboat'||v.kind==='fishingBoat')]:motion.vehicles;
     return {...m.snapshot,friends:{...motion,vehicles,...this.world,building:this.world.building&&{...this.world.building,pieces:applyCraneMotion(resolveFriendsBuildPieces(this.world.building.pieces,vehicles||[],new Map((motion.hauling?.cranes??[]).filter((c:any)=>c.angle!==undefined).map((c:any)=>[c.pieceId,c.angle]))),motion.hauling?.cranes)},frontier:{...this.world.frontier,feedback:m.feedback||{},damage:m.damage,interaction:m.interaction}}};
   }
 }

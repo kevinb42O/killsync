@@ -1,3 +1,4 @@
+import { advanceFriendsSoaring, type FriendsSoaringState, type SoaringEnvironment } from './FriendsSoaring';
 import { getWorldWallContact, resolveWorldCollisions } from '../world/WorldLayout';
 import { getWorldDefinition, isWorldSurfaceWalkable, sampleWorldSurface, type WorldId } from '../world/WorldDefinitions';
 import type { MultiplayerInputFrame } from './protocol';
@@ -38,6 +39,8 @@ const MOVEMENT_SUBSTEP_MS = 1000 / 120;
 /** Persisted with authoritative snapshots so replay retains momentum and
  * pending actions instead of starting a fresh controller on every packet. */
 export interface PlayerMovementMemory {
+  /** A water landing/recovery requires a fresh equipment selection. */
+  gliderNeedsStow?: boolean;
   swimming?: boolean;
   swimSubmerged?: boolean;
   velocityX?: number;
@@ -54,6 +57,7 @@ export interface PlayerMovementMemory {
 
 export interface PlayerMovementEnvironment {
   elevationAware: boolean;
+  soaring?: SoaringEnvironment;
   /** Host presentation hook; prediction does not emit damage effects. */
   onLanding?: (impactSpeed:number) => void;
   towingScale?: number;
@@ -80,6 +84,7 @@ export interface PlayerMotionState extends PlayerMovementMemory {
   x: number;
   y: number;
   z: number;
+  friendsSoaring?: FriendsSoaringState;
   friendsDevFlight?: boolean;
   friendsDevSuperjump?: boolean;
   angle: number;
@@ -129,6 +134,7 @@ export function advancePlayerMovement(
 ) {
   const duration = Math.max(0, Math.min(50, deltaMs));
   if (duration === 0) return;
+  if(worldId==='friends_frontier'&&input&&!input.friendsGlider)delete player.gliderNeedsStow;
   player.friendsDevSuperjump = Boolean(transport?.devSuperjumpAllowed && (input ? input.friendsDevSuperjump : player.friendsDevSuperjump));
   const wasFlying = player.friendsDevFlight;
   player.friendsDevFlight = Boolean(transport?.devFlightAllowed && (input ? input.friendsDevFlight : wasFlying));
@@ -145,6 +151,7 @@ export function advancePlayerMovement(
     player.sprinting = false;
   }
   if (player.friendsDevFlight) {
+    delete player.friendsSoaring;
     if (!input) return;
     player.angle = input.aimAngle / 65535 * Math.PI * 2;
     const pitch = input.aimPitch / 65535 * (Math.PI * .44 * 2) - Math.PI * .44;
@@ -159,6 +166,21 @@ export function advancePlayerMovement(
     player.y += y * distance;
     player.z += z * distance;
     player.sprinting = input.sprinting;
+    return;
+  }
+  if(worldId==='friends_frontier' && transport?.soaring && (player.friendsSoaring||input?.friendsGlider)) {
+    const count=Math.ceil(duration / MOVEMENT_SUBSTEP_MS);
+    for(let step=0;step<count;step++){
+      const environment={...transport,soaring:{...transport.soaring,timeMs:transport.soaring.timeMs+step*duration/count,worldTimeMs:(transport.soaring.worldTimeMs??transport.soaring.timeMs)+step*duration/count}};
+      if(advanceFriendsSoaring(player,input,duration/count/1000,environment,resolveAdditionalCollisions,getAdditionalFloor))continue;
+      // A landed or already stowed wing no longer owns ground movement,
+      // even while the glider remains the selected Fun item.
+      const preparingWing=player.friendsSoaring
+        ? player.friendsSoaring.phase!=='landed'
+        : input?.friendsGlider&&!player.gliderNeedsStow;
+      const groundInput=preparingWing&&input?{...input,jumpPressed:false,jetHeld:false,dashPressed:false,sliding:false,sprinting:false}:input;
+      advanceMovementStep(player,groundInput,duration/count,resolveAdditionalCollisions,getAdditionalWallContact,getAdditionalFloor,worldId,environment);
+    }
     return;
   }
   // Small shared steps prevent sprint/slide tunnelling and let genuine ramps

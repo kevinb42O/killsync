@@ -42,3 +42,25 @@ The shared 384×384 ocean texture grows from 0.56 MiB to 2.25 MiB (about 1.69 Mi
 Open `/tools/water-polish-review.html?view=shorebreak` and use **Previous coast** / **Shorebreak** to compare against the first water upgrade. Run `FRIENDS_TEST_ORIGIN=http://localhost:3014 node tools/test-shorebreak.mjs` for the coastal comparison, wash sequence captures, freshwater pixel regression, ocean-overlap comparison, GPU timing and real-world browser checks. Output is under `artifacts/shorebreak/`.
 
 The final local 1440×900 comparison measured sea median GPU render time at 3.64 ms before and 4.38 ms after, about 0.74 ms additional cost. Sea p95 was 7.38 ms before and 6.84 ms after, showing timing variability. Lake median changed from 5.87 to 6.04 ms, while rendered lake pixels matched exactly. These fixture measurements are not full-game FPS guarantees.
+
+## Continuous ocean exploration
+
+The original 48,000-unit square is the island region, not an exploration or
+swimming boundary. Collision, water ownership and terrain streaming continue
+beyond all four edges. The horizon retains the submerged seabed instead of
+omitting it; perfectly flat abyss tiles use one quad. Exterior horizon tiles
+and exact nearby shells stream around the camera with bounded caches. Terrain
+coverage wraps through a grid wider than the visible and retained region, so
+negative coordinates and offshore edits have the same layer ownership as land.
+The far sea sheet follows the camera without changing its world-space waves.
+
+Automatic fall repair triggers only below the actual terrain bottom, and stays
+at the player's horizontal exploration location. Return Home remains explicit.
+Both paths clear fall history and motion before the next simulation step.
+
+Regression checks: `FriendsOceanExploration.test.ts` covers all four boundary
+crossings, deep seabed contact, local fall repair, outer-island collision and
+offshore edit persistence. With Vite on port 3014, run
+`node tools/test-ocean-exploration.mjs` for production workers, coverage shaders,
+sea-sheet tracking, WebGL diagnostics and edge screenshots. Output is under
+`artifacts/ocean-exploration/`.

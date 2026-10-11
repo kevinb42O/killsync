@@ -1,0 +1,17 @@
+{
+  "checks": [
+    "Guest equipment intent inflates on the authoritative host",
+    "Guest performs a real mountain foot launch through WebRTC input",
+    "Trimmed flight continues without held forward input",
+    "Late joiner receives the airborne wing and complete flight pose",
+    "Bank and wing heading replicate independently of camera look",
+    "Stale network input returns to trimmed flight without cutting the wing"
+  ],
+  "errors": [],
+  "protocol": 68,
+  "receivedTicks": [
+    218,
+    218
+  ],
+  "transport": "actual local WebRTC + Friends world baseline + motion deltas"
+}

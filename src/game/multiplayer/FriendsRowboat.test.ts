@@ -125,7 +125,7 @@ describe('shared manual two-person rowboat',()=>{
     simulation.tick(50);let action=1,caught=false;
     for(let i=2;i<760;i++){
       if(simulation.createSnapshot().friends?.fishing?.casts[0]?.phase==='bite')action=2;
-      simulation.setInput('host',command(i,{friendsTool:7,fireActionId:action,aimPitch:Math.round((-.3+Math.PI*.44)/(Math.PI*.88)*65535)}));
+      simulation.setInput('host',command(i,{friendsTool:7,fireActionId:action,firing:action===2,aimPitch:Math.round((-.3+Math.PI*.44)/(Math.PI*.88)*65535)}));
       // One physical stroke proves input ownership; then let the hull settle for the catch.
       simulation.setInput('guest',command(i,{friendsTool:6,fireActionId:1}));simulation.tick(50);
       if(simulation.createSnapshot().friends?.fishing?.fish.some(f=>f.ownerId==='host')){caught=true;break;}

@@ -13,13 +13,34 @@ export class FriendsTelescopicCraneVisuals {
   private sections?:THREE.InstancedMesh;
   private winches?:THREE.InstancedMesh;
   private stamp='';
-  constructor(parent:THREE.Group){this.group.name='telescopic-freight-cranes';parent.add(this.group);}
+  constructor(parent:THREE.Group){
+    this.group.name='telescopic-freight-cranes';parent.add(this.group);
+    // Keep the actual instanced shader variants in the scene for startup
+    // warmup, including instance colours, before the first crane is placed.
+    this.reserve(8);
+  }
+  private reserve(cranes:number){
+    const capacity=Math.max(8,2**Math.ceil(Math.log2(Math.max(1,cranes))));
+    if(!this.sections||this.sections.instanceMatrix.count<capacity*128){
+      this.sections?.removeFromParent();this.sections?.dispose();
+      this.sections=new THREE.InstancedMesh(this.steel,this.material,capacity*128);
+      this.sections.name='telescopic-crane-steel';this.sections.castShadow=true;this.sections.receiveShadow=true;
+      this.sections.setColorAt(0,new THREE.Color());
+      this.sections.count=0;this.sections.visible=false;this.sections.userData.friendsStartupWarmup=true;
+      this.group.add(this.sections);
+    }
+    if(!this.winches||this.winches.instanceMatrix.count<capacity){
+      this.winches?.removeFromParent();this.winches?.dispose();
+      this.winches=new THREE.InstancedMesh(this.winchGeometry,this.winchMaterial,capacity);
+      this.winches.name='telescopic-crane-winches';this.winches.castShadow=true;
+      this.winches.count=0;this.winches.visible=false;this.winches.userData.friendsStartupWarmup=true;
+      this.group.add(this.winches);
+    }
+  }
   update(pieces:readonly FriendsBuildPiece[]) {
     const cranes=pieces.filter(p=>p.shape==='crane'),stamp=cranes.map(p=>[p.id,p.x,p.y,p.z,p.rotation,p.craneAngle??0,p.mastExtension??0,p.boomExtension??0].join(':')).join(',');
     if(this.stamp===stamp)return;this.stamp=stamp;
-    const capacity=Math.max(1,cranes.length)*128;
-    if(!this.sections||this.sections.instanceMatrix.count<capacity){this.sections?.removeFromParent();this.sections?.dispose();this.sections=new THREE.InstancedMesh(this.steel,this.material,capacity);this.sections.name='telescopic-crane-steel';this.sections.castShadow=true;this.sections.receiveShadow=true;this.group.add(this.sections);}
-    if(!this.winches||this.winches.instanceMatrix.count<cranes.length){this.winches?.removeFromParent();this.winches?.dispose();this.winches=new THREE.InstancedMesh(this.winchGeometry,this.winchMaterial,Math.max(1,cranes.length));this.winches.name='telescopic-crane-winches';this.winches.castShadow=true;this.group.add(this.winches);}
+    this.reserve(cranes.length);
     const matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),pos=new THREE.Vector3(),scale=new THREE.Vector3(),color=new THREE.Color();let index=0;
     cranes.forEach((p,i)=>{
       const fixed=p.rotation*Math.PI/2,c=Math.cos(fixed),s=Math.sin(fixed);
@@ -40,8 +61,8 @@ export class FriendsTelescopicCraneVisuals {
       const outlet=telescopicCraneOutlet({...p,mastExtension:p.mastExtension??0});
       pos.set(outlet.x,outlet.z+4,outlet.y);q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP,-(fixed+(p.craneAngle??0)));const winchScale=1+2*(p.boomExtension??0)/CRANE_MAX_BOOM_EXTENSION;matrix.compose(pos,q,new THREE.Vector3(winchScale,.625*winchScale,winchScale));this.winches!.setMatrixAt(i,matrix);
     });
-    this.sections.count=index;this.sections.visible=index>0;this.sections.instanceMatrix.needsUpdate=true;if(this.sections.instanceColor)this.sections.instanceColor.needsUpdate=true;this.sections.computeBoundingSphere();
-    this.winches.count=cranes.length;this.winches.visible=cranes.length>0;this.winches.instanceMatrix.needsUpdate=true;this.winches.computeBoundingSphere();
+    this.sections!.count=index;this.sections!.visible=index>0;this.sections!.instanceMatrix.needsUpdate=true;if(this.sections!.instanceColor)this.sections!.instanceColor.needsUpdate=true;this.sections!.computeBoundingSphere();
+    this.winches!.count=cranes.length;this.winches!.visible=cranes.length>0;this.winches!.instanceMatrix.needsUpdate=true;this.winches!.computeBoundingSphere();
   }
   dispose(){this.sections?.dispose();this.winches?.dispose();this.steel.dispose();this.winchGeometry.dispose();this.material.dispose();this.winchMaterial.dispose();this.group.removeFromParent();}
 }

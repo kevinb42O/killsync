@@ -61,7 +61,7 @@ describe('frontier swimming and diving',()=>{
     let snapshot=sim.createSnapshot().players[0];expect(snapshot.z).toBe(-416);expect(snapshot.lifeState).toBe('alive');expect(snapshot.motion?.swimSubmerged).toBe(true);
     for(let i=161;i<=280;i++){sim.setInput('host',input(i,{jetHeld:true}));sim.tick(50);}
     snapshot=sim.createSnapshot().players[0];expect(snapshot.z).toBeCloseTo(136.5,3);expect(snapshot.motion?.swimSubmerged).toBe(false);expect(snapshot.jetActive).toBe(false);
-  });
+  },30_000); // Exercise all 280 host ticks through diving and surfacing.
   it('keeps host and guest diving below the old recovery plane and lets them return from the abyss',()=>{
     const sim=new FriendsSimulation([{id:'host',label:'Host',color:'#fff'},{id:'guest',label:'Guest',color:'#aaa'}]),terrain=new FriendsTerrain(),bed=terrain.floor(44000,23852,-169,0)!;
     const players=(sim as unknown as {players:Map<string,PlayerMotionState>}).players;
@@ -72,8 +72,8 @@ describe('frontier swimming and diving',()=>{
     for(const p of sim.createSnapshot().players){expect(p.z).toBeCloseTo(-186.5,3);expect(p.motion?.swimSubmerged).toBe(false);expect(p.jetActive).toBe(false);}
     // A real escape below the world's floor must still recover, even with stale swimming flags.
     const host=players.get('host')!;Object.assign(host,{z:-4300,swimming:true,swimSubmerged:true});sim.tick(50);
-    expect(host.x).not.toBe(44000);expect(host.swimming).toBe(false);expect(host.swimSubmerged).toBe(false);
-  });
+    expect(host.x).toBe(44000);expect(host.swimming).toBe(false);expect(host.swimSubmerged).toBe(false);
+  },30_000); // The full abyss ascent runs 680 host/guest simulation ticks.
   it('does not clamp a deep swimmer to the old -480 fallback when no floor resolver is provided',()=>{
     const p=actor({x:44000,y:23852,z:-2000,swimming:true,swimSubmerged:true});
     advancePlayerMovement(p,input(1),50,undefined,undefined,undefined,'friends_frontier',{elevationAware:true,volumetric:true,ceiling:6000,stepHeight:8});

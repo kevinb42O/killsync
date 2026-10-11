@@ -1,0 +1,118 @@
+{
+  "captures": [
+    {
+      "name": "split",
+      "gl": 0,
+      "calls": 15,
+      "memory": {
+        "geometries": 12,
+        "textures": 4
+      },
+      "fog": "397d72",
+      "underwater": true
+    },
+    {
+      "name": "just-above",
+      "gl": 0,
+      "calls": 15,
+      "memory": {
+        "geometries": 12,
+        "textures": 4
+      },
+      "fog": "397d72",
+      "underwater": true
+    },
+    {
+      "name": "just-below",
+      "gl": 0,
+      "calls": 15,
+      "memory": {
+        "geometries": 12,
+        "textures": 4
+      },
+      "fog": "397d72",
+      "underwater": true
+    },
+    {
+      "name": "tilted",
+      "gl": 0,
+      "calls": 15,
+      "memory": {
+        "geometries": 12,
+        "textures": 4
+      },
+      "fog": "397d72",
+      "underwater": true
+    },
+    {
+      "name": "above",
+      "gl": 0,
+      "calls": 4,
+      "memory": {
+        "geometries": 12,
+        "textures": 4
+      },
+      "fog": "99bec9",
+      "underwater": false
+    },
+    {
+      "name": "below",
+      "gl": 0,
+      "calls": 10,
+      "memory": {
+        "geometries": 12,
+        "textures": 4
+      },
+      "fog": "36786e",
+      "underwater": true
+    }
+  ],
+  "stress": {
+    "before": {
+      "geometries": 12,
+      "textures": 4
+    },
+    "after": {
+      "geometries": 12,
+      "textures": 4
+    },
+    "gl": 0
+  },
+  "world": {
+    "gl": 0,
+    "draws": 1,
+    "triangles": 1,
+    "terrain": {
+      "floodDrawCalls": 0,
+      "floodGeometryBytes": 0,
+      "floodMaskBytes": 0,
+      "surfaceTiles": 80,
+      "surfaceBytes": 21615984,
+      "surfaceJobs": 0,
+      "pendingVoxels": 0,
+      "patchDraws": 0,
+      "volumeChunks": 0,
+      "volumeActive": 0,
+      "volumeJobs": 0,
+      "editMeshLatencyP95": 0,
+      "editMeshSamples": 0
+    },
+    "frameMs": 13.215833333631357,
+    "rivers": [
+      {
+        "id": "skyfalls-river",
+        "metres": 853.7004754741441
+      },
+      {
+        "id": "gate-river",
+        "metres": 981.2203072476985
+      },
+      {
+        "id": "reedwater",
+        "metres": 1728.7784341462702
+      }
+    ],
+    "bridgeGround": -64
+  },
+  "errors": []
+}

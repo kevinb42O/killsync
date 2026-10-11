@@ -1,3 +1,4 @@
+import { interpolateSoaringState } from './FriendsSoaring';
 import { applyCraneMotion } from './FriendsTelescopicCrane';
 import { resolveFriendsBuildPieces, friendsBuildFloor, type FriendsBuildPiece } from './FriendsBuilding';
 import { scenicVehicles, SCENIC_SEATS } from './FriendsScenicService';
@@ -31,6 +32,7 @@ export function interpolateCoopSnapshot(previous: CoopSnapshot, current: CoopSna
     ...next,
     x: redeployed.has(next.id) ? next.x : lerp(old.x, next.x, progress), y: redeployed.has(next.id) ? next.y : lerp(old.y, next.y, progress), angle: lerpAngle(old.angle, next.angle, progress),
     health: lerp(old.health, next.health, progress), z: redeployed.has(next.id) ? next.z : lerp(old.z, next.z, progress),
+    friendsSoaring:interpolateSoaringState(old.friendsSoaring,next.friendsSoaring,progress),
     friendsHands: old.friendsHands && next.friendsHands ? {...next.friendsHands,
       yaw:lerpAngle(old.friendsHands.yaw,next.friendsHands.yaw,progress),
       pitch:lerp(old.friendsHands.pitch,next.friendsHands.pitch,progress)} : next.friendsHands,
@@ -138,6 +140,7 @@ export class CoopSnapshotInterpolator {
       const old = previousById.get(next.id);
       if (old && !redeployed.has(next.id)) {
         target.x = lerp(old.x, next.x, progress); target.y = lerp(old.y, next.y, progress);
+        target.friendsSoaring=interpolateSoaringState(old.friendsSoaring,next.friendsSoaring,progress);
         target.angle = lerpAngle(old.angle, next.angle, progress);
         target.health = lerp(old.health, next.health, progress); target.z = lerp(old.z, next.z, progress);
         if(old.friendsHands && next.friendsHands) target.friendsHands = {...next.friendsHands,
@@ -230,7 +233,7 @@ function interpolateFriends(previous: FriendsSnapshot | undefined, current: Frie
       // Large teleports (restore or developer travel) are snapped, ordinary motion follows the curve.
       return Math.abs(delta)>900?next:{...next,...((pose)=>({x:pose.x,y:pose.y,z:pose.z,angle:pose.angle,pitch:pose.pitch,routeDistance:pose.routeDistance}))(scenicVehicles(old.routeDistance+delta*alpha)[0])};
     }
-    return {...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha),angle:lerpAngle(old.angle,next.angle,alpha),pitch:lerp(old.pitch||0,next.pitch||0,alpha)};
+    return {...next,x:lerp(old.x,next.x,alpha),y:lerp(old.y,next.y,alpha),z:lerp(old.z,next.z,alpha),angle:lerpAngle(old.angle,next.angle,alpha),pitch:lerp(old.pitch||0,next.pitch||0,alpha),...(next.kind==='fishingBoat'?{rudder:lerp(old.rudder??0,next.rudder??0,alpha),speed:lerp(old.speed??0,next.speed??0,alpha)}:{})};
   });
   const hauling = current.hauling && previous.hauling ? { ...current.hauling,
     cargo: interpolateEntities(previous.hauling.cargo, current.hauling.cargo, alpha, (old,next) => next.secured ? securedCargoPose(next,vehicles) : old.secured ? next : ({ ...next, x:lerp(old.x,next.x,alpha), y:lerp(old.y,next.y,alpha), z:lerp(old.z,next.z,alpha), angle:lerpAngle(old.angle,next.angle,alpha), orientation:interpolateCargoRotation(old,next,alpha) })),

@@ -1,0 +1,80 @@
+{
+  "origin": "http://localhost:3000",
+  "checks": [
+    "upper-mine streams and renders at player eye height",
+    "crystal-cavern streams and renders at player eye height",
+    "heart-forge streams and renders at player eye height",
+    "bedrock-vault streams and renders at player eye height",
+    "last-stone streams and renders at player eye height",
+    "the recovered relic appears at the campfire",
+    "no runtime, shader or WebGL errors"
+  ],
+  "errors": [],
+  "views": [
+    {
+      "name": "upper-mine",
+      "camera": [
+        9324,
+        -450,
+        6063.999999999998
+      ],
+      "glError": 0,
+      "volumes": 131
+    },
+    {
+      "name": "crystal-cavern",
+      "camera": [
+        13388.000000000002,
+        -1666.0000000000002,
+        7408.000000000001
+      ],
+      "glError": 0,
+      "volumes": 60
+    },
+    {
+      "name": "heart-forge",
+      "camera": [
+        16012,
+        -2498,
+        7280
+      ],
+      "glError": 0,
+      "volumes": 58
+    },
+    {
+      "name": "bedrock-vault",
+      "camera": [
+        15244,
+        -3522,
+        4464
+      ],
+      "glError": 0,
+      "volumes": 44
+    },
+    {
+      "name": "last-stone",
+      "camera": [
+        14796,
+        -3970,
+        3888
+      ],
+      "glError": 0,
+      "volumes": 19
+    },
+    {
+      "name": "home-relic",
+      "camera": [
+        6410,
+        766,
+        5630
+      ],
+      "glError": 0,
+      "volumes": 172
+    }
+  ],
+  "content": {
+    "stairs": 1175,
+    "lava": 4,
+    "chests": 14
+  }
+}

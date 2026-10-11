@@ -35,11 +35,11 @@ export class FriendsHaulingVisuals {
   private muzzleRim = new THREE.Object3D();
   private reel = new THREE.Group();
   private goal = new THREE.Group();
-  private goalBeacon = new THREE.Group();
+  private goalBeacon = new FriendsCargoBeacon();
   private goalCheck = new THREE.Group();
   private cargoBeacon = new FriendsCargoBeacon();
   private cargoBeacons=new Map<string,FriendsCargoBeacon>();
-  private goals=new Map<string,{group:THREE.Group;beacon:THREE.Group;check:THREE.Group}>();
+  private goals=new Map<string,{group:THREE.Group;beacon:FriendsCargoBeacon;check:THREE.Group}>();
   private loads = new Map<string, THREE.Group>();
   private cranes:FriendsCraneVisuals;
   private ropes = new Map<string, FriendsRopeMesh>();
@@ -57,7 +57,7 @@ export class FriendsHaulingVisuals {
     (viewmodel.getObjectByProperty('type','PerspectiveCamera') || viewmodel).add(this.gun);
     this.group.name = 'friends-hauling'; this.gun.name = 'rope-launcher';
     this.makeGoal();
-    for(const job of FRIENDS_HAULING_JOBS.slice(1))this.makeGoal(job.goal,new THREE.Group(),new THREE.Group(),new THREE.Group());
+    for(const job of FRIENDS_HAULING_JOBS.slice(1))this.makeGoal(job.goal,new THREE.Group(),new FriendsCargoBeacon(),new THREE.Group());
     this.group.add(this.cargoBeacon);this.cargoBeacons.set('lantern-core',this.cargoBeacon);
     const metal = this.material(0x355e60), brass = this.material(0xffc36e), grip = this.material(0x29383a);
     this.roundedBox(this.gun, .23,.16,.35, 0,0,0, metal,.025);
@@ -106,11 +106,7 @@ export class FriendsHaulingVisuals {
       const arrow=this.box(goal,20,.5,3,x,.4,side*7,paint);arrow.rotation.y=-side*Math.PI/4;
     }
     beacon.name='delivery-beacon';goal.add(beacon);
-    const beamMaterial=new THREE.MeshBasicMaterial({color:g.color,transparent:true,opacity:.2,depthWrite:false});this.materials.push(beamMaterial);
-    const beamGeometry=new THREE.CylinderGeometry(12,28,160,16,1,true);this.geometries.push(beamGeometry);
-    const beam=new THREE.Mesh(beamGeometry,beamMaterial);beam.position.y=80;beacon.add(beam);
-    const diamondGeometry=new THREE.OctahedronGeometry(10);this.geometries.push(diamondGeometry);
-    const diamond=new THREE.Mesh(diamondGeometry,paint);diamond.position.y=165;beacon.add(diamond);
+    beacon.updateLocation({x:0,y:0,z:2},0,g.color);beacon.visible=false;
     check.name='delivery-complete-check';check.position.y=85;goal.add(check);
     const short=this.box(check,16,4,4,-8,-3,0,paint);short.rotation.z=-Math.PI/4;
     const long=this.box(check,28,4,4,6,2,0,paint);long.rotation.z=Math.PI/4;
@@ -145,16 +141,24 @@ export class FriendsHaulingVisuals {
     this.gun.updateWorldMatrix(true,true);
     if(!hauling)return;
     this.cranes.update([...(hauling.cranes??[]),...(hauling.aircraftWinch?[hauling.aircraftWinch]:[])],hauling.cargo,local);
+    const attachedCargoIds=new Set(hauling.ropes.map(rope=>rope.cargoId));
+    for(const crane of hauling.cranes??[])if(crane.cargoId)attachedCargoIds.add(crane.cargoId);
+    if(hauling.aircraftWinch?.cargoId)attachedCargoIds.add(hauling.aircraftWinch.cargoId);
+    for(const cargo of hauling.cargo)if(cargo.secured)attachedCargoIds.add(cargo.id);
+    const attachedCargo=hauling.cargo.filter(c=>attachedCargoIds.has(c.id));
+    const destinationIds=new Set<string>(attachedCargo.map(c=>haulingJob(c).goal.id));
     const goalIds=new Set<string>(hauling.cargo.map(c=>haulingJob(c).goal.id));
     for(const [id,goal]of this.goals){
       goal.group.visible=goalIds.has(id);
       const cargo=hauling.cargo.find(c=>haulingJob(c).goal.id===id),done=Boolean(cargo&&cargoDelivered(hauling,cargo));
-      goal.beacon.visible=!done;goal.check.visible=done;goal.beacon.rotation.y=elapsed/1600;goal.check.rotation.y=elapsed/2200;
+      goal.beacon.updateLocation({x:0,y:0,z:2},elapsed,cargo?haulingJob(cargo).goal.color:FRIENDS_DELIVERY_BAY.color);
+      goal.beacon.visible=destinationIds.has(id);goal.check.visible=done;goal.check.rotation.y=elapsed/2200;
     }
     for(const [id,beacon]of this.cargoBeacons)beacon.visible=hauling.cargo.some(c=>c.id===id);
     for(const cargo of hauling.cargo){
       let beacon=this.cargoBeacons.get(cargo.id);if(!beacon){beacon=new FriendsCargoBeacon();this.group.add(beacon);this.cargoBeacons.set(cargo.id,beacon);}
       beacon.update(cargo,elapsed,cargoDelivered(hauling,cargo),cargo.id==='lantern-core'?'#ffc36e':haulingJob(cargo).goal.color);
+      beacon.visible=attachedCargo.length===0;
     }
     const cargoIds=new Set(hauling.cargo.map(c=>c.id)), ropeIds=new Set([...hauling.ropes,...(hauling.playerRopes??[])].map(r=>r.id));
     for(const [id,group]of this.loads)if(!cargoIds.has(id)){group.visible=false;}
@@ -184,5 +188,5 @@ export class FriendsHaulingVisuals {
       mesh.material.color.setHex('blocked' in rope&&rope.blocked?0xd9947b:0xffffff);
     }
   }
-  dispose(){this.disposed=true;this.cranes.dispose();for(const beacon of this.cargoBeacons.values())beacon.dispose();this.cargoBeacons.clear();this.goals.clear();this.group.removeFromParent();this.gun.removeFromParent();for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose();for(const mesh of this.ropes.values())mesh.dispose();this.fibres.map.dispose();this.fibres.normalMap.dispose();this.loads.clear();this.ropes.clear();}
+  dispose(){this.disposed=true;this.cranes.dispose();for(const beacon of this.cargoBeacons.values())beacon.dispose();this.cargoBeacons.clear();for(const goal of this.goals.values())goal.beacon.dispose();this.goals.clear();this.group.removeFromParent();this.gun.removeFromParent();for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose();for(const mesh of this.ropes.values())mesh.dispose();this.fibres.map.dispose();this.fibres.normalMap.dispose();this.loads.clear();this.ropes.clear();}
 }

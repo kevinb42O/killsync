@@ -2684,6 +2684,7 @@ export class Renderer3D {
       isReloading: this.presentationReloading || this.presentationHandgunReloadProgress > 0.01,
       isDashing: engine.isDashing,
       isSliding: this.presentationSliding,
+      isSwimming: this.presentationSwimming,
       isAirborne: this.presentationVerticalOffset > 0.08 && !this.presentationGrounded,
       verticalOffset: this.worldId === 'friends_frontier' ? undefined : this.presentationVerticalOffset,
       mouseDeltaX: this.lastMouseDeltaX,

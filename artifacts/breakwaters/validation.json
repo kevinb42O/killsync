@@ -1,0 +1,80 @@
+{
+  "groyneCount": 15,
+  "samples": [
+    {
+      "visible": false,
+      "renderMs": 0.35999999990065895,
+      "calls": 11,
+      "triangles": 65788
+    },
+    {
+      "visible": true,
+      "renderMs": 0.38333333333333336,
+      "calls": 14,
+      "triangles": 68892
+    },
+    {
+      "visible": true,
+      "renderMs": 0.3700000002980232,
+      "calls": 14,
+      "triangles": 68892
+    },
+    {
+      "visible": false,
+      "renderMs": 0.38000000019868213,
+      "calls": 11,
+      "triangles": 65788
+    },
+    {
+      "visible": false,
+      "renderMs": 0.3733333334326744,
+      "calls": 11,
+      "triangles": 65788
+    },
+    {
+      "visible": true,
+      "renderMs": 0.3799999997019768,
+      "calls": 14,
+      "triangles": 68892
+    },
+    {
+      "visible": true,
+      "renderMs": 0.4166666666666667,
+      "calls": 14,
+      "triangles": 68892
+    },
+    {
+      "visible": false,
+      "renderMs": 0.3533333331346512,
+      "calls": 11,
+      "triangles": 65788
+    },
+    {
+      "visible": false,
+      "renderMs": 0.35,
+      "calls": 11,
+      "triangles": 65788
+    },
+    {
+      "visible": true,
+      "renderMs": 0.3633333330353101,
+      "calls": 14,
+      "triangles": 68892
+    },
+    {
+      "visible": true,
+      "renderMs": 0.40999999990065894,
+      "calls": 14,
+      "triangles": 68892
+    },
+    {
+      "visible": false,
+      "renderMs": 0.35999999990065895,
+      "calls": 11,
+      "triangles": 65788
+    }
+  ],
+  "gl": 0,
+  "measurement": "Static render-only, paired visible/hidden groynes, GPU synchronized; excludes simulation and terrain streaming.",
+  "errors": []
+}

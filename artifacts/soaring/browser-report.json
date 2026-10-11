@@ -1,0 +1,53 @@
+{
+  "errors": [],
+  "consoleErrors": [],
+  "captures": [
+    {
+      "view": "forward",
+      "gl": 0,
+      "rigs": 3,
+      "lines": true,
+      "finiteCamera": true
+    },
+    {
+      "view": "up",
+      "gl": 0,
+      "rigs": 3,
+      "lines": true,
+      "finiteCamera": true
+    },
+    {
+      "view": "crew",
+      "gl": 0,
+      "rigs": 3,
+      "lines": true,
+      "finiteCamera": true
+    },
+    {
+      "view": "volcano",
+      "gl": 0,
+      "rigs": 3,
+      "lines": true,
+      "finiteCamera": true
+    }
+  ],
+  "launch": {
+    "phase": "flying",
+    "inflation": 1,
+    "heading": -2.8715599776506573,
+    "bank": 0,
+    "airspeed": 8.105482550015752,
+    "brake": 0,
+    "sink": 1.1375105513239756,
+    "lift": 4.621679662728371,
+    "climb": -0.4837757330331874,
+    "agl": 2.6150168634153865,
+    "windX": 4.349340900851807,
+    "windY": 1.210129522658592,
+    "turbulence": 0.26625261556714114,
+    "stall": 0,
+    "flare": 0,
+    "recoveryMs": 0,
+    "message": "Landing approach · hold brake to flare"
+  }
+}

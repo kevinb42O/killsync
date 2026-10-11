@@ -65,7 +65,7 @@ describe('volumetric frontier and resource economy', () => {
   it('prevents filling an operator and rejects invalid terrain edits and malformed planted trees', () => {
     const f = flatFrontier(), p = actor({ x: 8000, y: 8000 }); f.tool(p,3,down(),1000,[]);
     f.tool(p,3,down(),1400,[],true,[actor({ id:'guest', x:8000, y:8000, z:-32 })],undefined,true); expect(f.pack(p).soil).toBe(1);
-    expect(f.terrain.set(-1,2,3,0)).toBe(false); expect(f.terrain.set(250,250,256,1)).toBe(false);
+    expect(f.terrain.set(NaN,2,3,0)).toBe(false); expect(f.terrain.set(250,250,256,1)).toBe(false);
     expect(isFrontierSave({ ...f.snapshot(), planted:[{ id:'bad',x:NaN,y:0,z:0,kind:'pine',scale:1 }] })).toBe(false);
     expect(isFrontierSave({ ...f.snapshot(), terrain:{revision:0,edits:[[1,2,3,9]]} })).toBe(false);
   });

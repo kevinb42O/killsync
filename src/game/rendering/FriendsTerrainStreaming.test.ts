@@ -75,3 +75,13 @@ describe('surface-first block streaming',()=>{
     expect(volumeChunksAround(x,y,new Set(),false,FRIENDS_NIGHT_VISION_RANGE).size).toBe(0);
   });
 });
+
+describe('descent level streaming',()=>{
+ it('keeps the deep forge local while preserving its room and stair neighbors',()=>{
+  const all=volumeChunksAround(16192,7424,new Set(),true,3600),deep=volumeChunksAround(16192,7424,new Set(),true,3600,undefined,-2498);
+  expect(deep.has(`${Math.floor(16192/512)},${Math.floor(7424/512)}`)).toBe(true);
+  expect(deep.size).toBeLessThan(all.size/2);
+  const edited=volumeChunksAround(16192,7424,new Set(['20,5']),true,3600,undefined,-2498);
+  expect(edited.has('20,5')).toBe(true);
+ });
+});

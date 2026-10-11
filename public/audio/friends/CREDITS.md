@@ -279,3 +279,18 @@ sparrow chirp used for the campfire reaction. Audio assets stay local during pla
 
 The lava river retains the bundled **Nature Lava Loop 3** recording above,
 with sound sources following its full route from the crater to the sea.
+
+## Fishing boat recordings
+
+- `boat_engine.ogg`: **Small Boat Engine.wav** by **lolamadeus**, [Freesound source](https://freesound.org/people/lolamadeus/sounds/179362/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+- `boat_hull_water.ogg`: **water on boat - galilee.wav** by **thatjeffcarter**, [Freesound source](https://freesound.org/people/thatjeffcarter/sounds/223295/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Credit thatjeffcarter and Freesound when redistributing the game.
+
+Downloaded 2026-10-11 from each source's public Ogg preview. Files are unchanged; playback applies a 0.8-second loop crossfade, spatial gain/filtering, and conservative motor pitch changes. These are recorded sounds, with no runtime synthesis.
+
+## Coastal seagulls
+
+`seagull_beach.ogg`: **Seagull on beach** by **squashy555**, [Freesound source](https://freesound.org/people/squashy555/sounds/353416/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Downloaded 2026-10-11 from the public Ogg preview. The local file is unchanged; runtime uses ten-second non-looping flock excerpts at 0, 10 and 20 seconds, with a short tail fade, one-time loudness calibration and spatial playback. Sea background is retained.
+
+Soaring uses **Short wind sound** by remaxim ([publisher and CC0 license](https://opengameart.org/content/short-wind-sound)), downloaded 2026-10-12. `soaring_air.wav` is a mono, high-pass-filtered, conservatively normalized edit with a runtime seam crossfade. Original and bundled SHA-256 hashes are in `soaring-sources.json`. This is air/wind sound design, not a recording of an actual paraglider.
+
+Canopy and brake movement reuse `cloth1.ogg`–`cloth4.ogg` from [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio), CC0; their existing hashes are in `sources.json`. Variometer lift pulses, continuous sink tone, and recovery warning are original runtime Web Audio synthesis, with no external recording. Air rush follows airspeed/turbulence and the ambience slider; vario and cloth follow the effects slider. All stop on flight exit, mute, hiding the page, or leaving Friends.

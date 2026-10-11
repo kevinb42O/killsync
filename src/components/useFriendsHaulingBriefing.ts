@@ -3,15 +3,16 @@ import type { HaulingSnapshot } from '../game/multiplayer/FriendsHauling';
 import { cargoDelivered } from '../game/world/FriendsHaulingGoal';
 
 export type HaulingBriefing={cargoId:string;kind:'mission'|'complete'};
-/** Observe attachment edges, rather than fresh network objects on every tick. */
+/** Show each cargo's mission once per player/session, plus new deliveries. */
 export class HaulingBriefingTracker{
   private playerId='';
   private previousCargoId?:string;
   private completed=new Set<string>();
+  private briefed=new Set<string>();
   private initialized=false;
   observe(hauling:HaulingSnapshot|undefined,playerId:string):HaulingBriefing|undefined{
     if(!hauling||this.playerId!==playerId){
-      this.playerId=playerId;this.previousCargoId=undefined;this.completed.clear();this.initialized=false;
+      this.playerId=playerId;this.previousCargoId=undefined;this.completed.clear();this.briefed.clear();this.initialized=false;
       if(!hauling)return;
     }
     const completed=new Set(hauling.cargo.filter(c=>cargoDelivered(hauling,c)).map(c=>c.id));
@@ -21,7 +22,10 @@ export class HaulingBriefingTracker{
     const attached=cargoId!==this.previousCargoId&&hauling.cargo.some(c=>c.id===cargoId);
     this.previousCargoId=cargoId;
     if(newlyDelivered)return {cargoId:newlyDelivered.id,kind:'complete'};
-    if(attached)return {cargoId:cargoId!,kind:completed.has(cargoId!)?'complete':'mission'};
+    if(attached&&!this.briefed.has(cargoId!)){
+      this.briefed.add(cargoId!);
+      if(!completed.has(cargoId!))return {cargoId:cargoId!,kind:'mission'};
+    }
   }
 }
 export function useFriendsHaulingBriefing(hauling:HaulingSnapshot|undefined,playerId:string,suppressed=false){

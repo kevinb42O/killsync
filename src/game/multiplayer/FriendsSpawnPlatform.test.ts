@@ -36,19 +36,20 @@ describe('permanent Friends spawn platform', () => {
     expect(terrain.set(Math.floor(platform.x/32), Math.floor(platform.y/32), platform.top/32-3, 0)).toBe(true);
   });
 
-  it('puts arrivals, late joins, home teleports and repeated fall recovery on the deck', () => {
+  it('puts arrivals, late joins, home on the deck and repairs escaped falls locally', () => {
     const simulation = new FriendsSimulation([host], undefined, undefined, undefined, undefined, excavatedSave());
     for (let i = 1; i < 5; i++) expect(simulation.addPlayer({ ...host, id: `guest${i}` })).toBe(true);
     for (let i = 0; i < 20; i++) simulation.tick(50);
     expect(simulation.createSnapshot().players.every(p => p.z === platform.top)).toBe(true);
     const player = simulation['players'].get(host.id)!;
     for (let i = 0; i < 3; i++) {
-      Object.assign(player, { x: 12000, y: 12000, z: -700, verticalVelocity: -800 });
+      Object.assign(player, { x: 12000, y: 12000, z: -4400, verticalVelocity: -800 });
       simulation.tick(50);
-      expect(player.z).toBe(platform.top);
+      expect(player.x).toBe(12000); expect(player.y).toBe(12000);
+      expect(player.z).toBe(simulation['friendsFrontier']!.terrain.surfaceHeight(12000,12000));
       expect(player.verticalVelocity).toBe(0);
       for (let j = 0; j < 20; j++) simulation.tick(50);
-      expect(player.z).toBe(platform.top);
+      expect(Math.abs(player.x-12000)).toBeLessThan(64); expect(player.health).toBe(player.maxHealth);
     }
     Object.assign(player, { x: 12000, y: 12000, z: 900 });
     expect(simulation.friendsAction(host.id, { requestId: 1, action: 'home' }).ok).toBe(true);

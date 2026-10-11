@@ -21,7 +21,7 @@ Existing materials bind during construction. After the Frontier world is built, 
 
 The production renderer continues passing `FriendsFrontierVisuals.terrain` to `update()`. Water occupancy uses `friendsLiveWaterAt`, including connected excavation water. The real-world river review now passes its terrain instance too.
 
-The renderer does not copy the scene or allocate new full-resolution render targets. In sunlit water the new geometry adds two draws: 192 points and 18 light-plane triangles. Covered/dark water adds only the points draw. The screen overlay was already present before this change.
+Fully dry and fully submerged views use the existing single scene pass. When the camera near plane crosses the surface (including the possible wave displacement), two reusable HDR render targets capture the dry and underwater views. A fullscreen pass selects between them using each pixel’s near-plane world height. The boundary uses the same wave shader and live water material uniforms as the surface and has a one-pixel antialiased edge. Tone mapping and output color conversion happen after compositing. The targets are allocated on the first crossing, resized with the drawing buffer, and disposed with the effect. This temporarily adds a second world render near the waterline. In sunlit water the new geometry adds two draws: 192 points and 18 light-plane triangles. Covered/dark water adds only the points draw. The screen overlay was already present before this change.
 
 ## Review
 
@@ -79,3 +79,11 @@ oblique views against the same scene with the surface hidden: the finite sheet
 is indistinguishable at 75 m and deeper, and the real ocean's overlapping near
 and far surfaces match the surrounding water at 150 m. Point-light visibility and dynamic flooded
 cavity transitions still pass the existing browser integration check.
+
+## Split surface views
+
+The previous whole-screen camera-center threshold and 18-unit immersion fade could only show one environment at a time. `FriendsWaterlineComposite.ts` now reconstructs the near plane from the final camera projection and world transform, supporting pitch, roll and off-axis views. Above-surface pixels select the original fog, background and atmosphere; submerged pixels select underwater fog, lighting, motes and lens effects at full strength. The visible water face selects surface or underside shading per fragment. The live surface query handles above-water lens crossings as well as flooded excavations; a dry cavity below a natural water bed does not enable the effect.
+
+The world-render callback runs the existing arrival presentation first, then waterline composition before the separate viewmodel pass. Render targets, viewport, scissor and auto-clear state are restored even on a failed pass. Wave height follows the surface’s analytic shader; the finite water mesh still interpolates its displaced vertices.
+
+Run `npx vitest run src/game/rendering/FriendsWaterlineComposite.test.ts` and `FRIENDS_TEST_ORIGIN=http://localhost:3015 node tools/test-waterline.mjs` for camera projection, pass restoration, browser shader compilation, tilted captures and 80 repeated crossings with stable GPU resource counts. Captures and results are saved under `artifacts/waterline/`.

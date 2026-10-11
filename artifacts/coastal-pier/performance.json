@@ -1,0 +1,24 @@
+{
+  "viewport": [
+    1440,
+    900
+  ],
+  "metric": "Rendered triangles in the full review scene, not measured gameplay FPS",
+  "before": {
+    "deck": 718218,
+    "inside": 679544,
+    "floorQueries3000Ms": 43.17,
+    "floorExposedMaterialCalls": 143100
+  },
+  "after": {
+    "deck": 243408,
+    "inside": 273778,
+    "floorQueries3000Ms": 2.62,
+    "floorExposedMaterialCalls": 0
+  },
+  "chairTriangles": {
+    "original": 22013,
+    "lod": 2378
+  },
+  "architectureAndFurnitureMeshes": 23
+}

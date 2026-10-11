@@ -1,0 +1,713 @@
+{
+  "builtAt": 27619.39999999106,
+  "costs": [
+    {
+      "label": "CoopSimulation.friendsBuild",
+      "ms": 3.699999988079071,
+      "t": 27619.5,
+      "object": null
+    },
+    {
+      "label": "GL.drawArrays",
+      "ms": 0.10000000894069672,
+      "t": 27665.69999998808,
+      "object": "pier-architecture"
+    },
+    {
+      "label": "GL.useProgram",
+      "ms": 0.10000000894069672,
+      "t": 27668.19999998808,
+      "object": "scenic-body-fittings"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 8.699999988079071,
+      "t": 27661,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.30000001192092896,
+      "t": 27669.69999998808,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 7.5,
+      "t": 27683.79999999702,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 27691.39999999106,
+      "object": null
+    },
+    {
+      "label": "FriendsTelescopicCraneVisuals.update",
+      "ms": 0.4000000059604645,
+      "t": 27709.19999998808,
+      "object": null
+    },
+    {
+      "label": "FriendsBuildVisuals.update",
+      "ms": 0.5,
+      "t": 27709.19999998808,
+      "object": null
+    },
+    {
+      "label": "FriendsBuildVisuals.confirm",
+      "ms": 1.5999999940395355,
+      "t": 27711.09999999404,
+      "object": null
+    },
+    {
+      "label": "FriendsRopeMesh.update",
+      "ms": 2.7999999970197678,
+      "t": 27713.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 98,
+      "t": 27721,
+      "object": "braided-hauling-rope"
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 7.0999999940395355,
+      "t": 27819.09999999404,
+      "object": "braided-hauling-rope"
+    },
+    {
+      "label": "GL.getProgramParameter",
+      "ms": 0.4000000059604645,
+      "t": 27826.19999998808,
+      "object": "braided-hauling-rope"
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 27826.89999999106,
+      "object": "braided-hauling-rope"
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 20.599999994039536,
+      "t": 27831.09999999404,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.10000000894069672,
+      "t": 27851.69999998808,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getProgramParameter",
+      "ms": 0.29999999701976776,
+      "t": 27851.89999999106,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 27852.19999998808,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getActiveUniform",
+      "ms": 0.10000000894069672,
+      "t": 27852.39999999106,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 20.200000002980232,
+      "t": 27853.89999999106,
+      "object": "telescopic-crane-winches"
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.10000000894069672,
+      "t": 27874.19999998808,
+      "object": "telescopic-crane-winches"
+    },
+    {
+      "label": "GL.getProgramParameter",
+      "ms": 0.20000000298023224,
+      "t": 27874.29999999702,
+      "object": "telescopic-crane-winches"
+    },
+    {
+      "label": "GL.drawElements",
+      "ms": 0.10000000894069672,
+      "t": 27876.69999998808,
+      "object": "Mesh"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 161.09999999403954,
+      "t": 27716.79999999702,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.20000000298023224,
+      "t": 27877.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 17.899999991059303,
+      "t": 27891.79999999702,
+      "object": null
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.10000000894069672,
+      "t": 27909.69999998808,
+      "object": null
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 27909.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 27910.19999998808,
+      "object": null
+    },
+    {
+      "label": "GL.drawElements",
+      "ms": 0.10000000894069672,
+      "t": 27916.39999999106,
+      "object": "Mesh"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.899999991059303,
+      "t": 27912,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 27918.89999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.799999997019768,
+      "t": 27928.79999999702,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 67.79999999701977,
+      "t": 27937.09999999404,
+      "object": null
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.20000000298023224,
+      "t": 28004.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramParameter",
+      "ms": 0.4000000059604645,
+      "t": 28005.09999999404,
+      "object": null
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 28005.69999998808,
+      "object": null
+    },
+    {
+      "label": "GL.linkProgram",
+      "ms": 0.10000000894069672,
+      "t": 28007.89999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.399999991059303,
+      "t": 28008,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 28014.39999999106,
+      "object": null
+    },
+    {
+      "label": "GL.useProgram",
+      "ms": 0.10000000894069672,
+      "t": 28030.89999999106,
+      "object": "LineSegments"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.4000000059604645,
+      "t": 28024.59999999404,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 66.90000000596046,
+      "t": 28038.19999998808,
+      "object": null
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 28105.69999998808,
+      "object": null
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 28105.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 44.70000000298023,
+      "t": 28111.79999999702,
+      "object": "braided-hauling-rope"
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.19999998807907104,
+      "t": 28156.5,
+      "object": "braided-hauling-rope"
+    },
+    {
+      "label": "GL.getProgramParameter",
+      "ms": 0.30000001192092896,
+      "t": 28156.69999998808,
+      "object": "braided-hauling-rope"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 53.5,
+      "t": 28108,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 24.400000005960464,
+      "t": 28174.59999999404,
+      "object": null
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.10000000894069672,
+      "t": 28199.19999998808,
+      "object": null
+    },
+    {
+      "label": "GL.getActiveUniform",
+      "ms": 0.10000000894069672,
+      "t": 28199.39999999106,
+      "object": null
+    },
+    {
+      "label": "GL.useProgram",
+      "ms": 0.10000000894069672,
+      "t": 28203.19999998808,
+      "object": "pier-architecture"
+    },
+    {
+      "label": "GL.drawElements",
+      "ms": 0.10000000894069672,
+      "t": 28203.39999999106,
+      "object": "Mesh"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.5,
+      "t": 28200.19999998808,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 28206.69999998808,
+      "object": null
+    },
+    {
+      "label": "GL.drawElements",
+      "ms": 0.10000000894069672,
+      "t": 28224.89999999106,
+      "object": "Mesh"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.9000000059604645,
+      "t": 28220.39999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 28226.39999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.899999991059303,
+      "t": 28231.5,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 28237.39999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.9000000059604645,
+      "t": 28248.39999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 28254.39999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 66.09999999403954,
+      "t": 28267.09999999404,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 4.899999991059303,
+      "t": 28333.29999999702,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.10000000894069672,
+      "t": 28338.19999998808,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getProgramParameter",
+      "ms": 0.3999999910593033,
+      "t": 28338.29999999702,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 28338.89999999106,
+      "object": "telescopic-crane-steel"
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 1.2999999970197678,
+      "t": 28339.29999999702,
+      "object": "telescopic-crane-winches"
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.10000000894069672,
+      "t": 28340.69999998808,
+      "object": "telescopic-crane-winches"
+    },
+    {
+      "label": "GL.getProgramParameter",
+      "ms": 0.20000000298023224,
+      "t": 28340.79999999702,
+      "object": "telescopic-crane-winches"
+    },
+    {
+      "label": "GL.getActiveUniform",
+      "ms": 0.10000000894069672,
+      "t": 28341.19999998808,
+      "object": "telescopic-crane-winches"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 81.6000000089407,
+      "t": 28262.39999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.100000008940697,
+      "t": 28350.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.drawElements",
+      "ms": 0.10000000894069672,
+      "t": 28369.69999998808,
+      "object": "Mesh"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.9000000059604645,
+      "t": 28365.69999998808,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.20000000298023224,
+      "t": 28371.59999999404,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.9000000059604645,
+      "t": 28379.19999998808,
+      "object": null
+    },
+    {
+      "label": "GL.drawElements",
+      "ms": 0.10000000894069672,
+      "t": 28400.69999998808,
+      "object": "Mesh_desk_chair_1"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.5,
+      "t": 28395.69999998808,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.20000000298023224,
+      "t": 28401.29999999702,
+      "object": null
+    },
+    {
+      "label": "GL.drawElementsInstanced",
+      "ms": 0.10000000894069672,
+      "t": 28415.69999998808,
+      "object": "open-cave-torch-bowls"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.299999997019768,
+      "t": 28412.59999999404,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 28418.89999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.9000000059604645,
+      "t": 28442.09999999404,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.19999998807907104,
+      "t": 28449,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 64,
+      "t": 28476.29999999702,
+      "object": null
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 36.20000000298023,
+      "t": 28540.29999999702,
+      "object": null
+    },
+    {
+      "label": "GL.getUniformLocation",
+      "ms": 0.10000000894069672,
+      "t": 28576.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getActiveUniform",
+      "ms": 0.10000000894069672,
+      "t": 28577.19999998808,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 8.100000008940697,
+      "t": 28579.69999998808,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.20000000298023224,
+      "t": 28587.79999999702,
+      "object": null
+    },
+    {
+      "label": "GL.drawArrays",
+      "ms": 0.10000000894069672,
+      "t": 28605.69999998808,
+      "object": "Mesh"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 7.0999999940395355,
+      "t": 28602.59999999404,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 28609.69999998808,
+      "object": null
+    },
+    {
+      "label": "GL.drawElementsInstanced",
+      "ms": 0.10000000894069672,
+      "t": 28618.39999999106,
+      "object": "scenic-body-fittings"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.100000008940697,
+      "t": 28613.89999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.19999998807907104,
+      "t": 28620,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.899999991059303,
+      "t": 28623.5,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.20000000298023224,
+      "t": 28630.39999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 85.40000000596046,
+      "t": 28632.39999999106,
+      "object": null
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 32.8999999910593,
+      "t": 28717.79999999702,
+      "object": null
+    },
+    {
+      "label": "GL.getShaderInfoLog",
+      "ms": 0.10000000894069672,
+      "t": 28750.69999998808,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramParameter",
+      "ms": 0.5,
+      "t": 28750.79999999702,
+      "object": null
+    },
+    {
+      "label": "GL.getActiveUniform",
+      "ms": 0.10000000894069672,
+      "t": 28751.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.drawElementsInstanced",
+      "ms": 0.10000000894069672,
+      "t": 28759.89999999106,
+      "object": "scenic-articulated-running-gear"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 7.700000002980232,
+      "t": 28754.29999999702,
+      "object": null
+    },
+    {
+      "label": "GL.useProgram",
+      "ms": 0.10000000894069672,
+      "t": 28782.69999998808,
+      "object": "Mesh"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 6.399999991059303,
+      "t": 28776.5,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.10000000894069672,
+      "t": 28782.89999999106,
+      "object": null
+    },
+    {
+      "label": "GL.drawArrays",
+      "ms": 0.10000000894069672,
+      "t": 28789.89999999106,
+      "object": "Mesh"
+    },
+    {
+      "label": "GL.useProgram",
+      "ms": 0.10000000894069672,
+      "t": 28791.89999999106,
+      "object": "scenic-body-fittings"
+    },
+    {
+      "label": "GL.drawElementsInstanced",
+      "ms": 0.10000000894069672,
+      "t": 28792.69999998808,
+      "object": "forest-autumnOak-leaves-0-far"
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.899999991059303,
+      "t": 28787.5,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 0.20000000298023224,
+      "t": 28793.39999999106,
+      "object": null
+    },
+    {
+      "label": "WebGLRenderer.render",
+      "ms": 5.800000011920929,
+      "t": 28795.69999998808,
+      "object": null
+    },
+    {
+      "label": "GL.getProgramInfoLog",
+      "ms": 56.70000000298023,
+      "t": 28811.29999999702,
+      "object": null
+    }
+  ]
+}

@@ -144,6 +144,18 @@ describe('background world shader preparation', () => {
 });
 
 describe('initial spawn shader preparation', () => {
+  it('prepares explicitly reserved gameplay shaders while leaving their meshes hidden',()=>{
+    const f=fixture(true,true),reserve=f.add('crane-reserve'),hidden=f.add('ordinary-hidden');
+    reserve.visible=false;reserve.position.x=5000;reserve.userData.friendsStartupWarmup=true;hidden.visible=false;
+    const timer=vi.spyOn(performance,'now').mockReturnValue(0);
+    try{
+      f.warmup.update(f.camera,0);expect(f.compile).toHaveBeenCalledExactlyOnceWith(reserve,f.camera,f.scene);
+      expect(reserve.visible).toBe(false);expect(f.warmup.ready).toBe(false);
+      const program=f.programs.get(reserve.material as THREE.Material)!;
+      expect(program.getUniforms).not.toHaveBeenCalled();f.ready.value=true;f.warmup.update(f.camera,16);
+      expect(program.getUniforms).toHaveBeenCalledOnce();expect(f.warmup.ready).toBe(true);expect(reserve.visible).toBe(false);
+    }finally{timer.mockRestore();f.warmup.dispose();}
+  });
   it('keeps a prepared view ready during a time-sliced rescan with no new material work', () => {
     const f=fixture(true,true);f.ready.value=true;
     const first=f.add('spawn');first.position.z=-10;

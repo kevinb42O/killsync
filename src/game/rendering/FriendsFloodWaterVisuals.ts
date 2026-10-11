@@ -36,7 +36,7 @@ export class FriendsFloodWaterVisuals extends THREE.Group {
           return flood.r!=0.&&abs(level-(flood.r-1024.))<12.?flood:vec2(0.);
         }\n`;
       m.vertexShader=sampling+m.vertexShader.replace('float depth=texture2D(bathymetry,clamp(uv,0.,1.)).r;',`float depth=texture2D(bathymetry,clamp(uv,0.,1.)).r;
-        vec2 excavation=excavationAt(p,w.y);if(excavation.y>0.)depth=excavation.y;`);
+        vec2 excavation=excavationAt(p,baseHeight);if(excavation.y>0.)depth=excavation.y;`);
       m.fragmentShader=sampling+m.fragmentShader.replace('float depth=mix(256.,texture2D(bathymetry,clamp(uv,0.,1.)).r,inside);',`float depth=mix(256.,texture2D(bathymetry,clamp(uv,0.,1.)).r,inside);
         vec2 excavation=excavationAt(p,seaWorld.y);
         if(excavation.y<0.)discard;if(excavation.y>0.)depth=excavation.y;`);

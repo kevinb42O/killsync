@@ -1,3 +1,4 @@
+import { FriendsRockCollisionCache } from '../world/FriendsRocks';
 import { FriendsBuildSpatialIndex } from './FriendsInteractionTargeting';
 import { friendsLiveWaterAt } from '../world/FriendsFloodWater';
 import { retreatPathFloor } from '../world/FriendsRetreatPaths';
@@ -17,6 +18,8 @@ export class LocalPlayerPrediction {
   private pending: MultiplayerInputFrame[] = [];
   private motion?: PlayerMotionState;
   private latestTick = -1;
+  private motionTimeMs=0;
+  private worldTimeOffset=0;
   private lifeState?: CoopPlayerSnapshot['lifeState'];
   private structures: CoopStructureSnapshot[] = [];
   private correction = { x: 0, y: 0, z: 0 };
@@ -24,6 +27,7 @@ export class LocalPlayerPrediction {
   private terrain = new FriendsTerrain();
   private terrainRevision = -1;
   private buildIndex = new FriendsBuildSpatialIndex();
+  private rockCollisions = new FriendsRockCollisionCache();
   private treeCollisions = new FriendsTreeCollisionCache();
   private friends?: FriendsSnapshot;
   private lastRedeployEventId = -1;
@@ -40,6 +44,7 @@ export class LocalPlayerPrediction {
     this.friends = undefined;
     this.buildIndex = new FriendsBuildSpatialIndex();
     this.treeCollisions = new FriendsTreeCollisionCache();
+    this.rockCollisions = new FriendsRockCollisionCache();
     this.correction = { x: 0, y: 0, z: 0 };
   }
 
@@ -59,6 +64,7 @@ export class LocalPlayerPrediction {
     if (rewound || nextWorldId !== this.worldId) {
       this.buildIndex = new FriendsBuildSpatialIndex();
       this.treeCollisions = new FriendsTreeCollisionCache();
+      this.rockCollisions = new FriendsRockCollisionCache();
     }
     this.buildIndex.update(this.friends?.building?.pieces ?? [], this.friends?.building?.revision ?? 0);
     const terrain = snapshot.friends?.frontier?.terrain;
@@ -74,7 +80,9 @@ export class LocalPlayerPrediction {
     if (this.friends && !player.friendsDevFlight && (onLoad || player.friendsSeat || this.friends.hauling?.ropes.some(r => r.id === player.id) || this.friends.vehicles.some(v => v.pilotId === player.id) || (vehicleFloor !== undefined && Math.abs(player.z - vehicleFloor) < 2))) { this.pending = []; this.motion = undefined; this.correction = { x: 0, y: 0, z: 0 }; return; }
     const previous = this.motion;
     this.pending = this.pending.filter(input => input.sequence > (player.lastProcessedInput ?? -1));
-    this.motion = { ...player, verticalVelocity: 0, lastJumpSequence: -1, slideAngle: player.angle, ...player.motion };
+    this.motionTimeMs=snapshot.elapsedMs;
+    this.worldTimeOffset=(snapshot.world?.elapsedMs??snapshot.elapsedMs)-snapshot.elapsedMs;
+    this.motion = { ...player, friendsSoaring:player.friendsSoaring?{...player.friendsSoaring}:undefined, verticalVelocity: 0, lastJumpSequence: -1, slideAngle: player.angle, ...player.motion };
     for (const input of this.pending) this.advance(this.motion, input, COOP_STEP_MS);
     if (previous) {
       const offset = { x: previous.x + this.correction.x - this.motion.x, y: previous.y + this.correction.y - this.motion.y, z: previous.z + this.correction.z - this.motion.z };
@@ -90,18 +98,20 @@ export class LocalPlayerPrediction {
 
   present(snapshot: CoopSnapshot, input: MultiplayerInputFrame, remainderMs: number, deltaMs: number): CoopSnapshot {
     if (!this.motion || this.lifeState !== 'alive') return snapshot;
-    const motion = { ...this.motion };
+    const motion = { ...this.motion, friendsSoaring:this.motion.friendsSoaring?{...this.motion.friendsSoaring}:undefined };
+    const savedTime=this.motionTimeMs;
     if (this.pending.length < 30) this.advance(motion, { ...input, jumpPressed: false }, Math.min(COOP_STEP_MS, remainderMs));
+    this.motionTimeMs=savedTime;
     const decay = Math.exp(-Math.max(0, deltaMs) / 70);
     this.correction.x *= decay; this.correction.y *= decay; this.correction.z *= decay;
     return {
       ...snapshot,
       players: snapshot.players.map(player => player.id !== this.playerId || player.lifeState !== 'alive' ? player : {
         ...player, x: motion.x + this.correction.x, y: motion.y + this.correction.y, z: motion.z + this.correction.z,
-        friendsDevFlight: motion.friendsDevFlight, friendsDevSuperjump: motion.friendsDevSuperjump, angle: motion.angle, sprinting: motion.sprinting, sliding: motion.sliding, crouching: motion.crouching, jetFuel: motion.jetFuel, jetActive: motion.jetActive,
+        friendsSoaring: motion.friendsSoaring, friendsDevFlight: motion.friendsDevFlight, friendsDevSuperjump: motion.friendsDevSuperjump, angle: motion.angle, sprinting: motion.sprinting, sliding: motion.sliding, crouching: motion.crouching, jetFuel: motion.jetFuel, jetActive: motion.jetActive,
         motion: {
           ...player.motion,
-          swimming: motion.swimming, swimSubmerged: motion.swimSubmerged,
+          gliderNeedsStow:motion.gliderNeedsStow, swimming: motion.swimming, swimSubmerged: motion.swimSubmerged,
           velocityX: motion.velocityX,
           velocityY: motion.velocityY,
           coyoteMs: motion.coyoteMs,
@@ -143,6 +153,7 @@ export class LocalPlayerPrediction {
         if (this.friends?.frontier) {
           collided = this.terrain.collide(position, motion.z, radius, 50, FRIENDS_STEP_HEIGHT, (x,y,top)=>friendsInclineConnects(this.buildIndex.near(position.x,position.y,radius+65),position,motion.z,x,y,top)) || collided;
           collided = this.treeCollisions.collide(position,motion.z,radius,this.friends.frontier,this.terrain) || collided;
+          collided = this.rockCollisions.collide(position,motion.z,radius,this.friends.frontier,this.terrain) || collided;
         }
         if (this.friends?.building) collided = this.buildIndex.collide(this.friends.building.pieces, position, motion.z, radius) || collided;
         if (motion.z > 34) return collided;
@@ -169,6 +180,8 @@ export class LocalPlayerPrediction {
         const retreatPoint={x:position.x,y:position.y,z:motion.z};
         const retreatTop=this.friends?.retreats&&Math.max(retreatFloor(retreatPoint,this.friends.retreats.active)??-Infinity,retreatPathFloor(retreatPoint,this.friends.retreats.active)??-Infinity);
         if(retreatTop!==undefined)floor=Math.max(floor??-Infinity,retreatTop);
+        const rockFloor = this.friends?.frontier && this.rockCollisions.floor(position.x,position.y,position.z??motion.z,this.friends.frontier,this.terrain);
+        if (rockFloor !== undefined) floor = Math.max(floor ?? -Infinity, rockFloor);
         const ground = this.friends?.frontier && this.terrain.floor(position.x, position.y, position.z??motion.z);
         if (ground !== undefined) floor = Math.max(floor ?? -Infinity, ground);
         const creative = this.friends?.building && friendsWalkFloor(this.buildIndex.near(position.x,position.y,radius+65), position.x, position.y, motion.z, radius, this.friends?.frontier?this.terrain:undefined);
@@ -181,7 +194,8 @@ export class LocalPlayerPrediction {
         return floor;
       },
       this.worldId,
-      this.friends ? { elevationAware: true, devFlightAllowed: false, devSuperjumpAllowed: false, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), waterAt: (x,y,z)=>friendsLiveWaterAt(this.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.buildIndex.near(position.x,position.y,64), position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, retreatCeiling(position,this.friends?.retreats?.active??[])??Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
+      this.friends ? { soaring:{timeMs:this.motionTimeMs,worldTimeMs:this.motionTimeMs+this.worldTimeOffset,weather:this.friends.environment,available:!motion.carryingHostage&&!this.friends.hauling?.playerRopes?.some(r=>r.playerId===this.playerId||r.id===this.playerId),canopyBlocked:(x,y,z)=>this.terrain.collide({x,y},z,4,8,0)||this.buildIndex.collide(this.friends!.building?.pieces??[],{x,y},z,4,8,0)||Boolean(this.friends!.frontier&&this.treeCollisions.collide({x,y},z,4,this.friends!.frontier,this.terrain))||resolveFriendsVehicleCollisions(this.friends!.vehicles,{x,y},z,4)}, elevationAware: true, devFlightAllowed: false, devSuperjumpAllowed: false, ceiling: FRIENDS_FLIGHT_CEILING, stepHeight: FRIENDS_STEP_HEIGHT, volumetric: Boolean(this.friends.frontier), waterAt: (x,y,z)=>friendsLiveWaterAt(this.terrain,x,y,z), boardingFloor: position => friendsVehicleFloor(this.friends!.vehicles, position.x, position.y, position.z), overhead: position => { const a = friendsVehicleCeiling(this.friends!.vehicles, position.x, position.y, position.z), b = friendsBuildCeiling(this.buildIndex.near(position.x,position.y,64), position.x, position.y, position.z); return Math.min(a ?? Infinity, b ?? Infinity, retreatCeiling(position,this.friends?.retreats?.active??[])??Infinity, this.friends?.frontier ? this.terrain.ceiling(position.x, position.y, position.z) ?? Infinity : Infinity); } } : undefined,
     );
+    this.motionTimeMs+=deltaMs;
   }
 }

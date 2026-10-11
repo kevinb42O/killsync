@@ -1,3 +1,4 @@
+import { PIER_CAFE_ID, collideSeasidePier } from '../world/FriendsSeasidePier';
 import { retreatPaths,retreatWorkReserved } from '../world/FriendsRetreatPaths';
 import { boxOBB,overlapOBB } from './FriendsOrientedBox';
 import { RETREAT_SITES, RETREAT_SEATS, RETREAT_BOXES, RETREAT_SWITCH, STILLWATER, isRetreatSeat, insideStillwater, retreatFloor, collideRetreats, retreatLocal, type RetreatState, type RetreatSave, type RetreatPoint } from '../world/FriendsRetreatSites';
@@ -19,9 +20,9 @@ export function retreatSeatPrompt(player:Actor,players:readonly Actor[],state:Re
   if(player.friendsSeat)return;
   let distance=44,result:{label:string;seat:{vehicleId:string;index:number}}|undefined;
   for(const s of RETREAT_SEATS){
-    if(!state.active.includes(s.siteId as any)||Math.abs(player.z-s.z+16)>14||players.some(p=>p.friendsSeat?.vehicleId===s.siteId&&p.friendsSeat.index===s.index))continue;
+    if((s.siteId!==PIER_CAFE_ID&&!state.active.includes(s.siteId as any))||Math.abs(player.z-s.exit.z)>14||players.some(p=>p.friendsSeat?.vehicleId===s.siteId&&p.friendsSeat.index===s.index))continue;
     const d=Math.hypot(player.x-s.x,player.y-s.y);if(d>=distance)continue;
-    distance=d;result={label:s.siteId===STILLWATER.id?'Sit on the couch':'Sit · enjoy the view',seat:{vehicleId:s.siteId,index:s.index}};
+    distance=d;result={label:s.siteId===STILLWATER.id?'Sit on the couch':s.siteId===PIER_CAFE_ID?'Sit on café chair':'Sit · enjoy the view',seat:{vehicleId:s.siteId,index:s.index}};
   }return result;
 }
 export class FriendsRetreats {
@@ -75,6 +76,7 @@ export class FriendsRetreats {
     for(let i=1;i<8;i++){
       const f=i/8,p={x:player.x+(s.x-player.x)*f,y:player.y+(s.y-player.y)*f,z:player.z+26};
       if(RETREAT_BOXES.some(b=>(b.surface==='wall'||b.surface==='glass')&&b.siteId===s.siteId&&p.z>b.z&&p.z<b.z+b.h&&Math.abs(retreatLocal(b,p).u)<b.w/2&&Math.abs(retreatLocal(b,p).v)<b.d/2))return false;
+      if(s.siteId===PIER_CAFE_ID&&collideSeasidePier({...p},p.z,1,1))return false;
       if(terrain?.material(Math.floor(p.x/32),Math.floor(p.y/32),Math.floor(p.z/32)))return false;
     }
     player.friendsSeat=prompt.seat;Object.assign(player,{x:s.x,y:s.y,z:s.z,angle:s.angle,crouching:true,sprinting:false,sliding:false,jetActive:false,verticalVelocity:0,velocityX:0,velocityY:0});return true;
@@ -82,7 +84,7 @@ export class FriendsRetreats {
   update(players:readonly Actor[],jumping:ReadonlySet<string>,terrain?:FriendsTerrain){
     for(const p of players){if(!isRetreatSeat(p.friendsSeat))continue;
       const s=RETREAT_SEATS.find(s=>s.siteId===p.friendsSeat?.vehicleId&&s.index===p.friendsSeat?.index);
-      if(!s||p.lifeState!=='alive'||p.friendsDevFlight||!this.state.active.includes(s.siteId as any)){delete p.friendsSeat;p.crouching=false;continue;}
+      if(!s||p.lifeState!=='alive'||p.friendsDevFlight||(s.siteId!==PIER_CAFE_ID&&!this.state.active.includes(s.siteId as any))){delete p.friendsSeat;p.crouching=false;continue;}
       if(jumping.has(p.id)&&this.stand(p,players,terrain))continue;
       Object.assign(p,{x:s.x,y:s.y,z:s.z,crouching:true,sprinting:false,sliding:false,jetActive:false,verticalVelocity:0,velocityX:0,velocityY:0});
     }

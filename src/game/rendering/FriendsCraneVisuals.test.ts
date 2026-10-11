@@ -55,11 +55,41 @@ describe('articulated crane instance transforms',()=>{
     visual.dispose();
   });
   it('renders no phantom hook on a pivot without a winch',()=>{
-    const parent=new THREE.Group(),visual=new FriendsCraneVisuals(parent,new THREE.MeshStandardMaterial());visual.update([{pieceId:1,x:1000,y:1000,z:400,rotation:0,length:100,mode:'hold',blocked:false,hasWinch:false}],[],{x:1000,y:1000,z:400});expect(parent.getObjectByName('freight-crane-hooks')).toBeUndefined();visual.dispose();
+    const parent=new THREE.Group(),visual=new FriendsCraneVisuals(parent,new THREE.MeshStandardMaterial());visual.update([{pieceId:1,x:1000,y:1000,z:400,rotation:0,length:100,mode:'hold',blocked:false,hasWinch:false}],[],{x:1000,y:1000,z:400});expect(parent.getObjectByName('freight-crane-hooks')!.visible).toBe(false);expect(parent.getObjectByName('braided-hauling-rope')).toBeUndefined();visual.dispose();
   });
 });
 
 describe('telescopic crane visuals',()=>{
+  it('prepares dormant crane variants and retains batches across placements, removal and capacity growth',async()=>{
+    const {FriendsBuildVisuals}=await import('./FriendsBuildVisuals');
+    const visual=new FriendsBuildVisuals(new THREE.Scene());
+    const steel=visual.group.getObjectByName('telescopic-crane-steel') as THREE.InstancedMesh;
+    const winch=visual.group.getObjectByName('telescopic-crane-winches') as THREE.InstancedMesh;
+    expect(steel.visible).toBe(false);expect(winch.visible).toBe(false);expect(steel.count).toBe(0);
+    expect(steel.instanceColor).not.toBeNull();expect(steel.userData.friendsStartupWarmup).toBe(true);
+    const p={id:1,x:10000,y:10000,z:400,rotation:0,shape:'crane' as const,finish:'teal' as const,author:'Host',revision:1};
+    for(let count=1;count<=8;count++){
+      visual.update({revision:count,guestsCanBuild:true,pieces:Array.from({length:count},(_,i)=>({...p,id:i+1,x:p.x+i*320}))});
+      expect(visual.group.getObjectByName(steel.name)).toBe(steel);expect(visual.group.getObjectByName(winch.name)).toBe(winch);expect(winch.count).toBe(count);
+      expect(steel.count).toBeGreaterThan(count);expect(steel.count).toBeLessThanOrEqual(steel.instanceMatrix.count);
+    }
+    visual.update({revision:9,guestsCanBuild:true,pieces:Array.from({length:9},(_,i)=>({...p,id:i+1}))});
+    const grown=visual.group.getObjectByName(steel.name) as THREE.InstancedMesh;
+    expect(grown).not.toBe(steel);expect(grown.instanceMatrix.count).toBe(16*128);expect(grown.instanceColor).not.toBeNull();
+    visual.update({revision:10,guestsCanBuild:true,pieces:[]});expect(grown.visible).toBe(false);
+    visual.update({revision:11,guestsCanBuild:true,pieces:[p]});expect(visual.group.getObjectByName(steel.name)).toBe(grown);expect(grown.visible).toBe(true);
+    visual.dispose();
+  });
+  it('uses the prewarmed hook and cable on first placement without showing dormant geometry',()=>{
+    const parent=new THREE.Group(),visual=new FriendsCraneVisuals(parent,new THREE.MeshStandardMaterial());
+    const hook=parent.getObjectByName('freight-crane-hooks') as THREE.InstancedMesh;
+    const spare=parent.getObjectByName('freight-crane-rope-reserve') as THREE.Mesh;
+    expect(hook.visible).toBe(false);expect(spare.visible).toBe(false);expect(spare.geometry.drawRange.count).toBe(0);
+    visual.update([{pieceId:1,x:1000,y:1000,z:400,rotation:0,length:200,mode:'hold',blocked:false,mastExtension:0,boomExtension:0}],[],{x:1000,y:1000,z:400});
+    expect(parent.getObjectByName('freight-crane-hooks')).toBe(hook);expect(parent.getObjectByName('braided-hauling-rope')).toBe(spare);
+    expect(spare.visible).toBe(true);expect(spare.geometry.drawRange.count).toBeGreaterThan(0);
+    visual.dispose();expect(parent.children).toHaveLength(0);
+  });
   it('updates giant stages on motion packets while retaining shared geometry and fixed foot transforms',async()=>{
     const {FriendsBuildVisuals}=await import('./FriendsBuildVisuals');
     const visual=new FriendsBuildVisuals(new THREE.Scene()),p={id:1,x:10000,y:10000,z:400,rotation:0,shape:'crane' as const,finish:'teal' as const,author:'Host',revision:1,mastExtension:0,boomExtension:0,craneAngle:0};

@@ -1,3 +1,4 @@
+import { soaringSuspended } from '../multiplayer/FriendsSoaring';
 import { applyFriendsSwimPose, createFriendsSwimPose, type FriendsSwimPose } from './FriendsSwimPose';
 import type { SeedHand } from '../multiplayer/FriendsBirds';
 import { isRowboatSeat } from '../world/FriendsFishingDock';
@@ -36,7 +37,7 @@ export function disposeFriendsCharacterRig(rig: PlayerVisualRig) {
 export function placeFriendsCharacter(rig: PlayerVisualRig, player: CoopPlayerSnapshot, fallProgress?: number) {
   rig.root.visible = player.lifeState !== 'eliminated' || fallProgress !== undefined;
   rig.root.position.set(player.x, player.z, player.y);
-  rig.root.rotation.y = Math.PI / 2 - player.angle + (fallProgress === undefined ? 0 : fallProgress * Math.PI * 2.6);
+  rig.root.rotation.y = Math.PI / 2 - (soaringSuspended(player.friendsSoaring)?player.friendsSoaring.heading:player.angle) + (fallProgress === undefined ? 0 : fallProgress * Math.PI * 2.6);
   rig.avatar.rotation.set(fallProgress === undefined ? 0 : fallProgress * Math.PI * 4.2,
     fallProgress === undefined ? 0 : Math.sin(fallProgress * Math.PI * 3) * .55,
     fallProgress === undefined ? 0 : fallProgress * Math.PI * 2.8);
@@ -61,10 +62,10 @@ export function updateFriendsCharacter(rig:PlayerVisualRig, player:CoopPlayerSna
   const {model}=actor,dt=Math.max(0,Math.min(100,time-actor.previousTime));actor.previousTime=time;
   const speed=Math.hypot((player.motion?.velocityX??0)-(player.platformVelocityX??0),(player.motion?.velocityY??0)-(player.platformVelocityY??0));
   const seated=Boolean(player.friendsSeat),downed=player.lifeState==='downed';
-  const movement=seated||downed||falling||player.friendsDevFlight||player.motion?.swimming?0:Math.min(1,speed/120);
+  const movement=seated||soaringSuspended(player.friendsSoaring)||downed||falling||player.friendsDevFlight||player.motion?.swimming?0:Math.min(1,speed/120);
   actor.movement+=(movement-actor.movement)*(1-Math.exp(-dt*.014));actor.stride+=dt*.001*Math.min(12,speed*.07);
   for(let i=0;i<6;i++){model.parts[i].position.copy(model.basePositions[i]);model.parts[i].rotation.copy(model.baseRotations[i]);model.parts[i].scale.setScalar(1);}
-  if(seated||player.crouching||player.sliding){
+  if(seated||soaringSuspended(player.friendsSoaring)||player.crouching||player.sliding){
     const pose=model.data.animations.find(a=>a.name==='sitting');
     if(pose)for(const [id,track]of Object.entries(pose.tracks)){
       const index=Number(id);if(index>5)continue;const part=model.parts[index];
@@ -132,6 +133,12 @@ export function updateFriendsCharacter(rig:PlayerVisualRig, player:CoopPlayerSna
       rig.firearm.group.rotation.set(-.2, 0, 0);
     }
   } else if (rig.firearm) rig.firearm.group.visible = false;
+  if(soaringSuspended(player.friendsSoaring)){
+    const wing=player.friendsSoaring;
+    model.parts[2].rotation.x=-2.2+Math.min(1,wing.brake+Math.max(0,wing.bank)*.65)*.5;
+    model.parts[3].rotation.x=-2.2+Math.min(1,wing.brake+Math.max(0,-wing.bank)*.65)*.5;
+    rig.avatar.rotation.z=player.friendsSoaring.bank*.4;
+  }
   rig.avatar.updateWorldMatrix(true,true);
 }
 

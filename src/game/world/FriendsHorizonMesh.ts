@@ -1,9 +1,8 @@
 import { interpolateTerrainSurface } from './FriendsWaterBodies';
-import { hydrologyWaterLevel } from './FriendsHydrology';
 import { scenicTransitSurface, scenicTransitRanges } from './FriendsRailInfrastructure';
 import { meshIslandVault } from './FriendsIslandVolume';
 import { islandArchRange } from './FriendsIsland';
-import { baseTerrainHeight, friendsFixedPlatformAt, FRONTIER_SIZE, VOXEL_SIZE, TERRAIN_BOTTOM } from './FriendsTerrain';
+import { baseTerrainHeight, friendsFixedPlatformAt, VOXEL_SIZE, TERRAIN_BOTTOM } from './FriendsTerrain';
 export type HorizonMeshData = { tx: number; ty: number; positions: Int16Array; normals: Int8Array; uv: Float32Array; colors: Uint8Array; indices: Uint32Array }; 
 
 /** Greedy surface-only voxel mesh. All samples use the exact simulation cells:
@@ -33,7 +32,7 @@ export function meshBlockHorizon(tx: number, ty: number, tile = 4096, sampleHeig
   const range=(x:number,y:number)=>ranges[(y+1)*stride+x+1];
   const surface=(x:number,y:number)=>{const r=range(x,y).at(-1);return r&&r[1]===height(x,y)?r[0]:height(x,y);};
   const used=new Uint8Array(cells*cells);
-  const maxX=Math.min(cells,Math.ceil((FRONTIER_SIZE-tx)/VOXEL_SIZE)),maxY=Math.min(cells,Math.ceil((FRONTIER_SIZE-ty)/VOXEL_SIZE));
+  const maxX=cells,maxY=cells;
   for(let y=0;y<maxY;y++)for(let x=0;x<maxX;x++){
     if(used[y*cells+x])continue;const h=surface(x,y);let w=1,d=1;
     while(x+w<maxX&&!used[y*cells+x+w]&&surface(x+w,y)===h)w++;
@@ -109,6 +108,15 @@ export function meshOrganicHorizon(tx:number,ty:number,tile=4096,sampleHeight=ba
   const carved=(x:number,y:number)=>scenicTransitSurface(x,y,sampleHeight(x,y));
   const corner=(x:number,y:number)=>Math.round((carved(x-16,y-16)+carved(x+16,y-16)+carved(x-16,y+16)+carved(x+16,y+16))/4);
   for(let y=-1;y<=cells+1;y++)for(let x=-1;x<=cells+1;x++)heights[(y+1)*stride+x+1]=corner(tx+x*step,ty+y*step);
+  // Much of the abyss is a flat basin. Keep its real surface with one quad,
+  // including a uniform halo so adjacent slope normals still join correctly.
+  if(heights.every(v=>v===heights[0])){
+    const h=heights[0];
+    return {tx,ty,positions:new Int16Array([0,h,0,0,h,tile,tile,h,tile,tile,h,0]),
+      normals:new Int8Array([0,127,0,0,127,0,0,127,0,0,127,0]),
+      uv:new Float32Array([tx/160,ty/160,tx/160,(ty+tile)/160,(tx+tile)/160,(ty+tile)/160,(tx+tile)/160,ty/160]),
+      colors:new Uint8Array(12).fill(255),indices:new Uint32Array([0,1,2,0,2,3])};
+  }
   const h=(x:number,y:number)=>heights[(y+1)*stride+x+1];
   const positions:number[]=[],normals:number[]=[],uv:number[]=[],colors:number[]=[],indices:number[]=[],vertices=new Map<number,number>();
   const vertex=(x:number,y:number)=>{
@@ -118,12 +126,7 @@ export function meshOrganicHorizon(tx:number,ty:number,tile=4096,sampleHeight=ba
     const nx=(h(x-1,y)-h(x+1,y))/(step*2),nz=(h(x,y-1)-h(x,y+1))/(step*2),length=Math.hypot(nx,1,nz);
     normals.push(Math.round(nx/length*127),Math.round(127/length),Math.round(nz/length*127));return index;
   };
-  for(let y=0;y<cells&&ty+y*step<FRONTIER_SIZE;y++)for(let x=0;x<cells&&tx+x*step<FRONTIER_SIZE;x++){
-    // Hidden sea floor is represented by bathymetry, not millions of triangles.
-    if(Math.max(h(x,y),h(x+1,y),h(x,y+1),h(x+1,y+1))<-192){
-      const water=hydrologyWaterLevel(tx+(x+.5)*step,ty+(y+.5)*step);
-      if(water===undefined||water<=-168.5)continue;
-    }
+  for(let y=0;y<cells;y++)for(let x=0;x<cells;x++){
     const a=vertex(x,y),b=vertex(x,y+1),c=vertex(x+1,y+1),d=vertex(x+1,y);
     // Alternating diagonals avoid a visible single-direction triangulation.
     if((x+y)%2)indices.push(a,b,d,b,c,d);else indices.push(a,b,c,a,c,d);

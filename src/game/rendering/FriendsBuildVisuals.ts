@@ -73,7 +73,7 @@ export function createFriendsBuildMaterial(shape: FriendsBuildShape, finish: Fri
   return new THREE.MeshStandardMaterial({ vertexColors: isPlayerRail(shape), color: isPlayerRail(shape) ? '#ffffff' : shape === 'glass' ? '#a9e4d7' : f.color,
     roughness: shape === 'glass' ? .12 : f.roughness, metalness: f.metalness, transparent: shape === 'glass', opacity: shape === 'glass' ? .34 : 1,
     depthWrite: shape !== 'glass', side: shape === 'glass' ? THREE.DoubleSide : THREE.FrontSide,
-    emissive: shape === 'lamp' ? '#ffc879' : shape === 'gathering_beacon' ? '#8de6ce' : shape === 'survey_lens' ? '#baa4fa' : '#000000', emissiveIntensity: .45 });
+    emissive: finish==='crystal'?'#71bacf':shape === 'lamp' ? '#ffc879' : shape === 'gathering_beacon' ? '#8de6ce' : shape === 'survey_lens' ? '#baa4fa' : '#000000', emissiveIntensity: .45 });
 }
 function buildQuaternion(p:FriendsBuildPose,target:THREE.Quaternion){
   const frame=p.assemblyFrame??p.vehicleFrame;
@@ -173,9 +173,9 @@ export class FriendsBuildVisuals {
       const geometry = create();
       const pieces = building.pieces.filter(p => p.shape === shape);
       if (!pieces.length) { geometry.dispose(); return; }
-      const material = new THREE.MeshStandardMaterial({ color, roughness: .65, emissive: luminous ? color : '#000000', emissiveIntensity: luminous ? .8 : 0 });
+      const material = new THREE.MeshStandardMaterial({ color:shape==='lamp'?'#ffffff':color,vertexColors:shape==='lamp', roughness: .65, emissive: luminous ? color : '#000000', emissiveIntensity: luminous ? .8 : 0 });
       const mesh = new THREE.InstancedMesh(geometry, material, pieces.length);
-      pieces.forEach((p,i) => { position.set(p.x,p.z,p.y); buildQuaternion(p,quaternion); matrix.compose(position,quaternion,new THREE.Vector3(1,1,1)); mesh.setMatrixAt(i,matrix); });
+      pieces.forEach((p,i) => { if(shape==='lamp')mesh.setColorAt(i,new THREE.Color(p.finish==='crystal'?'#71bacf':'#ffdb8c'));position.set(p.x,p.z,p.y); buildQuaternion(p,quaternion); matrix.compose(position,quaternion,new THREE.Vector3(1,1,1)); mesh.setMatrixAt(i,matrix); });
       mesh.userData.detailShape=shape; mesh.userData.pieceIds=pieces.map(p=>p.id);mesh.castShadow = true; mesh.computeBoundingSphere(); this.group.add(mesh); this.detailBatches.push(mesh); this.detailGeometries.push(geometry); this.detailMaterials.push(material);
     };
     detail('workbench', () => new THREE.BoxGeometry(68,4,12).translate(0,67,18), '#ded0a6');
@@ -192,7 +192,7 @@ export class FriendsBuildVisuals {
       detail('planter',() => new THREE.CylinderGeometry(1,1,10,5).translate(x,30,z),'#60896a');
       detail('planter',() => new THREE.IcosahedronGeometry(5,0).translate(x,35,z),'#f3d4ad');
     }
-    detail('lamp',() => new THREE.BoxGeometry(12,12,12).translate(0,56,0),'#ffdb8c',true);
+    detail('lamp',() => new THREE.BoxGeometry(12,12,12).translate(0,56,0),'#ffffff',true);
     detail('survey_lens',() => new THREE.CylinderGeometry(12,12,3,20).rotateX(Math.PI/2).translate(0,56,-17),'#b3d9ed',true);
     detail('gathering_beacon',() => new THREE.TorusGeometry(19,2,6,24).rotateX(Math.PI/2).translate(0,57,0),'#a7e5d2',true);
     // The sign carries a physical sun motif visible from either side.

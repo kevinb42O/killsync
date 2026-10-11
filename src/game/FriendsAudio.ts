@@ -1,3 +1,5 @@
+import { FriendsSoaringAudio } from './FriendsSoaringAudio';
+import type { FriendsSoaringState } from './multiplayer/FriendsSoaring';
 import type { FriendsSoundscapeMix } from './FriendsSoundscape';
 import { QUIET_TRAIN, type TrainSoundMix } from './FriendsTrainSound';
 import type { CampfireSoundMix } from './FriendsLocationAudio';
@@ -12,7 +14,7 @@ export type FriendsCue = SurfaceCue | 'wood' | 'stone' | 'soil' | 'ore' | 'dig' 
   | 'dynamiteExplosion' | 'dynamiteFuse'
   | 'stoneThrow' | 'stoneImpact' | 'stoneHurt'
   | 'waterEntry' | 'swimStroke' | 'waterDive' | 'waterSubmerged' | 'waterBreathIn'
-  | 'birdRobin' | 'birdBlueTit' | 'birdSparrow' | 'birdWings' | 'birdStartled'
+  | 'birdSeagull' | 'birdRobin' | 'birdBlueTit' | 'birdSparrow' | 'birdWings' | 'birdStartled'
   | 'trainDepart' | 'trainBrake' | 'trainStop' | 'trainHorn' | 'flightFoliage'
   | 'click' | 'hover' | 'success' | 'error' | 'collect' | 'pack' | 'jump' | 'swing' | 'chest' | 'chime'
   | 'gunfire' | 'reloadRifle' | 'reloadHandgun' | 'reloadShotgun' | 'eat'
@@ -35,6 +37,7 @@ export const FRIENDS_CUE_ASSETS: Readonly<Record<Cue, readonly string[]>> = {
   stoneThrow: [ROOT + 'knifeSlice.ogg'], stoneImpact: variants('impactMining', 5), stoneHurt: [ROOT + 'stone_oof.mp3'],
   wood: variants('impactWood_medium'), stone: variants('impactMining', 5), soil: variants('impactSoft_medium'), ore: variants('impactMetal_light'),
   dig: [ROOT + 'shovel.ogg'], landing: [ROOT + 'landing.wav'], leaves: [ROOT + 'leaves.ogg'], treeBreak: variants('impactWood_heavy'),
+  birdSeagull: [ROOT + 'seagull_beach.ogg'],
   birdCall: variants('bird_call', 4),
   birdRobin: variants('bird_robin',3), birdBlueTit: variants('bird_blue_tit',2), birdSparrow: variants('bird_sparrow',3),
   birdWings: variants('bird_wings',2), birdStartled: variants('bird_startled',2),
@@ -64,6 +67,7 @@ const TRAIN_LOOPS = { engine: ROOT + 'train_drive.ogg', rail: ROOT + 'train_rail
 const WORLD_LOOPS: Record<WorldLoop, string> = {
   caveAir: ROOT + 'cave_air.ogg', waterfall: ROOT + 'waterfall.ogg', lava: ROOT + 'lava.ogg',
   volcano: ROOT + 'volcano.ogg', reel: ROOT + 'reel_motor.ogg', oceanSteam: ROOT + 'ocean_steam_loop.ogg',
+  boatEngine: ROOT + 'boat_engine.ogg', boatWater: ROOT + 'boat_hull_water.ogg',
 };
 const STORAGE = 'sunline.audio.v1';
 const SAMPLE_CUES = new Map(Object.entries(CUES).flatMap(([cue, urls]) => urls.map(url => [url, cue as Cue] as const)));
@@ -92,6 +96,7 @@ export class FriendsAudio {
   private users = 0;
   private releaseTimer?: ReturnType<typeof setTimeout>;
   private context?: AudioContext;
+  private soaringAudio?:FriendsSoaringAudio;
   private effectsGain?: GainNode;
   private effectsWaterFilter?: BiquadFilterNode;
   private ambienceWaterFilter?: BiquadFilterNode;
@@ -125,6 +130,11 @@ export class FriendsAudio {
   private nextBirdCall = 0;
   private nearbyBirdSince?: number;
   private birdVoice?: AudioBufferSourceNode;
+  private seagullVoice?: AudioBufferSourceNode;
+  private nextSeagullCall=0;
+  private seagullGain?: GainNode;
+  private seagullPan?: StereoPannerNode;
+  private seagullExcerpt=0;
   private music = new Map<MusicTheme, MusicLoop>();
   private musicOffsets = new Map<MusicTheme, number>();
   private castleMusic = false;
@@ -152,6 +162,7 @@ export class FriendsAudio {
     this.settings = { music: clamp(patch.music ?? this.settings.music), effects: clamp(patch.effects ?? this.settings.effects), ambience: clamp(patch.ambience ?? this.settings.ambience), muted: patch.muted ?? this.settings.muted };
     try { localStorage.setItem(STORAGE, JSON.stringify(this.settings)); } catch { /* Storage is optional. */ }
     this.applyVolumes();
+    if(this.settings.muted||!this.settings.effects||!this.settings.ambience)this.soaringAudio?.stop();
     if (this.settings.muted || !this.settings.effects) {
       // Cancel scheduled reward layers as well as sounds already playing.
       for (const voice of this.settings.muted ? this.voices : this.effectVoices) {
@@ -160,7 +171,7 @@ export class FriendsAudio {
       }
       this.effectVoices.clear();
     }
-    if (this.settings.muted || !this.settings.ambience) { this.nearbyBirdSince = undefined; this.stopBirdCall(); }
+    if (this.settings.muted || !this.settings.ambience) { this.nearbyBirdSince = undefined; this.stopBirdCall(); this.stopSeagullCall(); }
     if (this.settings.muted || !this.settings.ambience) this.resetDrips();
     this.syncMusic();
     this.syncAmbience();
@@ -192,6 +203,7 @@ export class FriendsAudio {
         window.removeEventListener('keydown', this.activate, true);
         document.removeEventListener('visibilitychange', this.onVisibility);
         this.stopMusic();
+        this.soaringAudio?.stop();
         this.clearSoundscape();
         this.underwaterDiveRequested = false; this.applyVolumes(); this.stopUnderwaterDive(false); this.cancelResurfaceBreath();
         for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } voice.disconnect(); }
@@ -211,11 +223,24 @@ export class FriendsAudio {
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.stopMusic(); this.clearSoundscape(); this.underwaterDiveRequested = false; this.applyVolumes(); this.stopUnderwaterDive(false); this.cancelResurfaceBreath();
     for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } voice.disconnect(); }
+    this.setSoaringSound(undefined);
     this.voices.clear(); this.effectVoices.clear(); this.buffers.clear(); this.bufferTrims.clear(); this.musicOffsets.clear();
     this.effectsWaterFilter?.disconnect();this.ambienceWaterFilter?.disconnect();
     this.effectsWaterFilter=this.ambienceWaterFilter=undefined;
     this.outputGuard?.disconnect(); this.outputGuard = undefined;
     void this.context?.close().catch(() => {}); this.context = undefined;
+  }
+  /** Original vario synthesis and licensed air/fabric recordings share the
+   * ordinary effects and ambience controls. Downloads never start stale audio. */
+  setSoaringSound(state:FriendsSoaringState|undefined){
+    const c=this.context;
+    if(!state||!this.active||document.hidden||this.settings.muted){this.soaringAudio?.stop();return;}
+    if(!c||c.state!=='running'||!this.effectsGain||!this.ambienceGain)return;
+    this.soaringAudio??=new FriendsSoaringAudio(c,this.effectsGain,this.ambienceGain);
+    const wind=ROOT+'soaring_air.wav',cloth=[1,2,3,4].map(i=>ROOT+`cloth${i}.ogg`);
+    if(this.settings.ambience)void this.load(wind,true,.25);
+    if(this.settings.effects)for(const url of cloth)void this.load(url);
+    this.soaringAudio.update(state,this.buffers.get(wind),cloth.flatMap(url=>{const buffer=this.buffers.get(url);return buffer?[buffer]:[];}),Boolean(this.settings.effects),Boolean(this.settings.ambience));
   }
   activate = () => {
     if (!this.active) return;
@@ -280,7 +305,7 @@ export class FriendsAudio {
     this.loads.set(url, promise);
     return promise;
   }
-  play(cue: Cue, volume = .3, cooldownMs = 80, rate = 1, duration?: number, options?: { ambience?: boolean; pan?: number; delay?: number; offset?: number; fadeOutSeconds?: number; loop?:boolean }) {
+  play(cue: Cue, volume = .3, cooldownMs = 80, rate = 1, duration?: number, options?: { ambience?: boolean; pan?: number; delay?: number; offset?: number; fadeOutSeconds?: number; fadeInSeconds?:number; loop?:boolean }) {
     const context = this.context;
     if(this.underwaterDiveRequested&&(cue==='swimStroke'||cue==='waterStep'))return;
     if (!this.active || !context || context.state !== 'running' || document.hidden || this.settings.muted || !(options?.ambience ? this.settings.ambience : this.settings.effects) || this.voices.size >= 20) return;
@@ -290,7 +315,7 @@ export class FriendsAudio {
     const previous = this.lastVariant.get(cue) ?? -1;
     // Drops use random selection without immediate repeats, not a five-beat cycle.
     let index = (previous + 1) % urls.length;
-    if (cue === 'caveDrip' || cue.startsWith('bird')) {
+    if (urls.length>1 && (cue === 'caveDrip' || cue.startsWith('bird'))) {
       index = Math.floor(Math.random() * (urls.length - (previous >= 0 ? 1 : 0)));
       if (previous >= 0 && index >= previous) index++;
     }
@@ -304,20 +329,22 @@ export class FriendsAudio {
     source.loop=Boolean(options?.loop);
     const level = clamp(volume) * (this.bufferTrims.get(urls[index]) ?? 1);
     gain.gain.value = level;
+    if(options?.fadeInSeconds){gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(level,start+Math.min(length/source.playbackRate.value,Math.max(0,options.fadeInSeconds)));}
     if (duration !== undefined) {
       const end = start + length / source.playbackRate.value;
       const fadeOutSeconds = Math.min(length / source.playbackRate.value, Math.max(0, options?.fadeOutSeconds ?? .025));
       gain.gain.setValueAtTime(level, Math.max(start, end - fadeOutSeconds));
       gain.gain.linearRampToValueAtTime(0, end);
     }
-    const pan = options?.pan && context.createStereoPanner ? context.createStereoPanner() : undefined;
+    const pan = (options?.pan || cue==='birdSeagull') && context.createStereoPanner ? context.createStereoPanner() : undefined;
     source.connect(gain);
     if (pan) { pan.pan.value = Math.max(-1, Math.min(1, options!.pan!)); gain.connect(pan); pan.connect(options?.ambience ? this.ambienceGain! : this.effectsGain!); }
     else gain.connect(options?.ambience ? this.ambienceGain! : this.effectsGain!);
     if (!options?.ambience && this.reflectionInput) (pan ?? gain).connect(this.reflectionInput);
+    if(cue==='birdSeagull'){this.seagullGain=gain;this.seagullPan=pan;}
     this.voices.add(source);
     if (!options?.ambience) this.effectVoices.add(source);
-    source.onended = () => { this.voices.delete(source); this.effectVoices.delete(source); if (this.birdVoice === source) this.birdVoice = undefined; if (this.dripVoice === source) this.dripVoice = undefined; source.disconnect(); gain.disconnect(); pan?.disconnect(); };
+    source.onended = () => { this.voices.delete(source); this.effectVoices.delete(source); if (this.birdVoice === source) this.birdVoice = undefined; if(this.seagullVoice===source){this.seagullVoice=undefined;this.seagullGain=undefined;this.seagullPan=undefined;} if (this.dripVoice === source) this.dripVoice = undefined; source.disconnect(); gain.disconnect(); pan?.disconnect(); };
     source.start(start, offset, length);
     return source;
   }
@@ -475,7 +502,7 @@ export class FriendsAudio {
     if (!context || context.state !== 'running' || document.hidden) return;
     if (!only) this.syncReflections();
     for (const key of (only ? [only] : Object.keys(WORLD_LOOPS)) as WorldLoop[]) {
-      const sound=this.worldMix[key], effects=key==='reel', enabled=effects?this.settings.effects:this.settings.ambience;
+      const sound=this.worldMix[key], effects=key==='reel'||key==='boatEngine', enabled=effects?this.settings.effects:this.settings.ambience;
       let loop=this.worldLoops.get(key);
       if (!enabled || sound.volume <= .003) {
         if (loop) { loop.gain.gain.setTargetAtTime(0,context.currentTime,effects ? .04 : .18); this.retiringWorldSources.add(loop.source); loop.source.stop(context.currentTime+(effects ? .18 : .8)); this.worldLoops.delete(key); }
@@ -526,7 +553,33 @@ export class FriendsAudio {
       this.play('leaves', mix.foliage, 4000, .9 + Math.random() * .2, undefined, { ambience: true, pan: mix.foliagePan });
     }
   }
+  /** One shared flock recording, with natural pauses and no per-bird playback. */
+  setSeagullSound(mix:{volume:number;pan:number}) {
+    const context=this.context,now=context?.currentTime??0;
+    if(!this.active||!this.activated||!context||context.state!=='running'||document.hidden||this.settings.muted||!this.settings.ambience||mix.volume<=.006){this.stopSeagullCall();return;}
+    // Brief range changes must not keep pushing the first call into the future.
+    if(!this.nextSeagullCall)this.nextSeagullCall=now+1+Math.random()*2;
+    for(const url of CUES.birdSeagull)if(!this.buffers.has(url)&&!this.loads.has(url))void this.load(url);
+    const trim=this.bufferTrims.get(CUES.birdSeagull[0])??1;
+    if(this.seagullVoice){
+      this.seagullGain?.gain.setTargetAtTime(clamp(mix.volume)*trim,now,.3);
+      this.seagullPan?.pan.setTargetAtTime(Math.max(-1,Math.min(1,mix.pan)),now,.3);
+      return;
+    }
+    const buffer=this.buffers.get(CUES.birdSeagull[0]);
+    if(now>=this.nextSeagullCall&&buffer){
+      const offset=Math.min([0,10,20][this.seagullExcerpt%3],Math.max(0,buffer.duration-10));
+      this.seagullVoice=this.play('birdSeagull',mix.volume,0,1,10,{ambience:true,pan:mix.pan,offset,fadeOutSeconds:.8,fadeInSeconds:.3});
+      // Retry next sample if the shared voice budget prevented playback.
+      if(this.seagullVoice){this.seagullExcerpt++;this.nextSeagullCall=now+Math.min(10,buffer.duration-offset)+12+Math.random()*12;}
+    }
+  }
+  private stopSeagullCall(){
+    if(this.seagullVoice){try{this.seagullVoice.stop();}catch{}this.seagullVoice=undefined;}
+    this.seagullGain=undefined;this.seagullPan=undefined;
+  }
   clearSoundscape() {
+    this.stopSeagullCall();this.nextSeagullCall=0;
     this.soundscapeEnabled = false; this.soundscape = QUIET_SOUNDSCAPE; this.nextRustle = 0; this.nextBirdCall = 0; this.nearbyBirdSince = undefined;
     this.stopAmbience();
     this.stopBirdCall();
@@ -681,7 +734,8 @@ export class FriendsAudio {
   }
   private onVisibility = () => {
     if (document.hidden) {
-      this.nearbyBirdSince = undefined; this.stopBirdCall();
+      this.soaringAudio?.stop();
+      this.nearbyBirdSince = undefined; this.stopBirdCall();this.stopSeagullCall();
       this.resetDrips(); this.nextSteam = 0;
       for(const source of this.voices){try{source.stop();}catch{} }this.voices.clear(); this.effectVoices.clear();
       void this.context?.suspend().catch(() => {});

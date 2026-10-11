@@ -1,3 +1,4 @@
+import {cavePropOverlaps} from '../world/FriendsCaveProps';
 import { telescopicCraneSections, validCraneDimensions, restoreCraneDimensions, applyCraneMotion, type CraneDimensions } from './FriendsTelescopicCrane';
 import { boxOBB, overlapOBB } from './FriendsOrientedBox';
 import { orientedBuildBox, resolveAssemblyPose, type CraneAttachment, type AssemblyFrame } from './FriendsAssemblyPose';
@@ -27,9 +28,12 @@ export const FRIENDS_FINISHES = {
   timber: { name: 'Warm timber', color: '#a5734f', roughness: .86, metalness: 0 },
   teal: { name: 'Teal alloy', color: '#498b88', roughness: .48, metalness: .42 },
   plaster: { name: 'Soft plaster', color: '#f0e8d3', roughness: .96, metalness: 0 },
+  ancient: {name:'Ancient masonry',color:'#b4a17a',roughness:.95,metalness:.04},
+  crystal: {name:'Crystal light',color:'#71bacf',roughness:.25,metalness:.25},
   rose: { name: 'Terracotta', color: '#ca8672', roughness: .9, metalness: .04 },
 } as const;
 export type FriendsBuildFinish = keyof typeof FRIENDS_FINISHES;
+export function friendsFinishUnlocked(finish:string,claims:readonly string[]=[]){return finish==='ancient'?claims.includes('descent-archive-cache'):finish==='crystal'?claims.includes('descent-crystal-cache'):true;}
 export type BuildBox = { x: number; y: number; z: number; w: number; d: number; h: number };
 export type FriendsBuildDefinition = { name: string; group: 'Shapes' | 'Architecture' | 'Garden & social' | 'Utilities' | 'Railway'; w: number; d: number; h: number; description: string };
 export const FRIENDS_BUILD_CATALOG: Record<FriendsBuildShape, FriendsBuildDefinition> = {
@@ -345,6 +349,7 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
     // at its actual continuous orientation, including occupants.
     for(const localBox of friendsShapeBoxes(shape)){
       const b=worldBox(resolved,localBox),exact=boxOBB(orientedBuildBox({...resolved,id:ignoringId??-1,shape,finish:'teal',author:'',revision:0},localBox));
+      if(!restoring&&cavePropOverlaps(b))return 'Leave space for the dungeon fixtures.';
       if(b.z< TERRAIN_BOTTOM+32||b.z+b.h>6000)return 'Keep the arm inside the building height limit.';
       if(actor&&Math.hypot(resolved.x-actor.x,resolved.y-actor.y,resolved.z-actor.z)>FRIENDS_BUILD_REACH+64)return 'Move closer to that crane socket.';
       if(bodies.some(p=>p.lifeState==='alive'&&overlapOBB(exact,boxOBB(box(p.x,p.y,p.z,p.bodyWidth??38,p.bodyDepth??38,p.bodyHeight??50)),.1)))return 'A friend or load is in the way.';
@@ -412,6 +417,7 @@ export function friendsPlacementError(pieces: readonly FriendsBuildPiece[], shap
   const boxes=candidateParts.map(p=>p.bounds);
   if(boxes.some(b=>b.z+b.h>6000||b.x-b.w/2<128||b.x+b.w/2>FRONTIER_SIZE-128||b.y-b.d/2<128||b.y+b.d/2>FRONTIER_SIZE-128))return 'Keep the crane inside the valley and below the height limit.';
   for (const [index,b] of boxes.entries()) {
+    if(!restoring&&cavePropOverlaps(b))return 'Leave space for the dungeon fixtures.';
     if(!restoring)for(let dx=-b.w/2;dx<=b.w/2;dx+=32)for(let dy=-b.d/2;dy<=b.d/2;dy+=32)for(let z=b.z;z<=b.z+b.h;z+=32)
       if(scenicTransitProtected(b.x+dx,b.y+dy,z))return 'Leave the Grand Traverse railway clearance free. Build beside or below the line.';
     if (terrain) {

@@ -40,6 +40,25 @@ describe('downloaded Friends audio', () => {
   });
   afterEach(() => { releases.forEach(release => release()); vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
   const load = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+  it('loads soaring recordings without reviving a hidden or released flight',async()=>{
+    context.createOscillator.mockImplementation(()=>{const source=context.createBufferSource();source.frequency={value:0,setTargetAtTime:vi.fn()};return source;});
+    releases.push(audio.acquire());audio.activate();await load();
+    const {createSoaringState}=await import('./multiplayer/FriendsSoaring');
+    const wing={...createSoaringState(0),phase:'flying' as const,inflation:1,airspeed:9.5,climb:1};
+    audio.setSoaringSound(wing);await load();audio.setSoaringSound(wing);
+    const engine=(audio as any).soaringAudio;expect(engine.wind).toBeDefined();expect(engine.tones.size).toBe(1);
+    doc.hidden=true;doc.dispatchEvent(new Event('visibilitychange'));
+    expect(engine.wind).toBeUndefined();expect(engine.tones.size).toBe(0);
+    audio.setSoaringSound(wing);await load();expect(engine.wind).toBeUndefined();
+    doc.hidden=false;doc.dispatchEvent(new Event('visibilitychange'));await load();audio.setSoaringSound(wing);expect(engine.wind).toBeDefined();
+    releases[0]();vi.runOnlyPendingTimers();expect(engine.wind).toBeUndefined();expect(engine.tones.size).toBe(0);
+    audio.setSoaringSound(wing);expect(engine.wind).toBeUndefined();
+  });
+  it('verifies the bundled soaring wind against its own source manifest',()=>{
+    const manifest=JSON.parse(readFileSync(resolve('public/audio/friends/soaring-sources.json'),'utf8'));
+    expect(manifest.license).toBe('CC0-1.0');
+    expect(createHash('sha256').update(readFileSync(resolve('public/audio/friends',manifest.file))).digest('hex')).toBe(manifest.sha256);
+  });
   it('plays single randomized drops with sparse gaps, no loop and no immediate repeats',async()=>{
     vi.spyOn(Math,'random').mockReturnValue(.5);
     releases.push(audio.acquire());audio.activate();await load();
@@ -90,6 +109,55 @@ describe('downloaded Friends audio', () => {
     expect(state.worldLoops.get('reel').source).toBe(reel.source);
     audio.setReelSound({volume:0,pan:0}); expect(reel.source.stop).toHaveBeenCalledWith(context.currentTime+.18);
     audio.clearSoundscape(); expect(state.worldLoops.size+state.retiringWorldSources.size).toBe(0);
+  });
+  it('lazily shares boat loops, separates buses and releases them on mute/exit',async()=>{
+    releases.push(audio.acquire());audio.activate();await load();
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('boat_'))).toBe(false);
+    const mix={...QUIET_WORLD_SOUND,boatEngine:{volume:.2,pan:.3,rate:1.1},boatWater:{volume:.08,pan:.3}};
+    audio.setWorldSound(mix);await load();const state=audio as any;
+    const motor=state.worldLoops.get('boatEngine'),water=state.worldLoops.get('boatWater');
+    expect(motor.filter.connect).toHaveBeenCalledWith(gains[0]);expect(water.filter.connect).toHaveBeenCalledWith(gains[2]);
+    for(let i=0;i<30;i++)audio.setWorldSound(mix);
+    expect(state.worldLoops.get('boatEngine').source).toBe(motor.source);
+    expect(state.worldLoops.get('boatWater').source).toBe(water.source);
+    audio.setSettings({effects:0});expect(motor.source.stop).toHaveBeenCalled();expect(state.worldLoops.get('boatWater').source).toBe(water.source);
+    audio.setSettings({muted:true});expect(water.source.stop).toHaveBeenCalled();
+    audio.clearSoundscape();expect(state.worldLoops.size+state.retiringWorldSources.size).toBe(0);
+  });
+  it('plays one shared flock recording promptly and preserves natural gaps',async()=>{
+    releases.push(audio.acquire());audio.activate();await load();
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('seagull'))).toBe(false);
+    const mix={volume:.15,pan:.4};audio.setSeagullSound(mix);await load();const state=audio as any;
+    expect(state.seagullVoice).toBeUndefined();
+    expect(state.nextSeagullCall-context.currentTime).toBeGreaterThanOrEqual(1);
+    expect(state.nextSeagullCall-context.currentTime).toBeLessThanOrEqual(3);
+    const initialDeadline=state.nextSeagullCall;audio.setSeagullSound({volume:0,pan:0});
+    context.currentTime+=.5;audio.setSeagullSound(mix);expect(state.nextSeagullCall).toBe(initialDeadline);
+    context.currentTime=state.nextSeagullCall+.01;audio.setSeagullSound(mix);
+    const voice=state.seagullVoice;expect(voice).toBeDefined();expect(voice.loop).toBe(false);
+    expect(voice.start.mock.calls[0][2]).toBe(10);const gap=state.nextSeagullCall;
+    expect(gap-context.currentTime).toBeGreaterThanOrEqual(22);expect(gap-context.currentTime).toBeLessThanOrEqual(34);
+    const count=sources.length;audio.setSeagullSound({volume:.25,pan:-.2});
+    expect(sources.length).toBe(count);expect(state.seagullVoice).toBe(voice);
+    expect(state.seagullGain.gain.setTargetAtTime).toHaveBeenCalled();
+    audio.setSeagullSound({volume:0,pan:0});expect(voice.stop).toHaveBeenCalled();
+    context.currentTime+=1;audio.setSeagullSound(mix);expect(state.nextSeagullCall).toBe(gap);expect(state.seagullVoice).toBeUndefined();
+    context.currentTime=gap+.01;audio.setSeagullSound(mix);const next=state.seagullVoice;
+    expect(next.start.mock.calls[0][1]).toBe(0); // Short mock recording uses the whole available clip.
+    audio.setSettings({ambience:0});expect(next.stop).toHaveBeenCalled();expect(state.seagullVoice).toBeUndefined();
+    audio.setSettings({ambience:.5});audio.setSeagullSound(mix);context.currentTime=state.nextSeagullCall+.01;audio.setSeagullSound(mix);
+    const hidden=state.seagullVoice;doc.hidden=true;doc.dispatchEvent(new Event('visibilitychange'));expect(hidden.stop).toHaveBeenCalled();
+    audio.clearSoundscape();expect(state.seagullVoice).toBeUndefined();
+  });
+  it('retries flock playback when the voice budget is full without scheduling a silent gap',async()=>{
+    releases.push(audio.acquire());audio.activate();await load();
+    audio.setSeagullSound({volume:.3,pan:0});await load();const state=audio as any;
+    context.currentTime=state.nextSeagullCall+.01;
+    const occupied=Array.from({length:20},()=>({}));occupied.forEach(v=>state.voices.add(v));
+    const deadline=state.nextSeagullCall;audio.setSeagullSound({volume:.3,pan:0});
+    expect(state.seagullVoice).toBeUndefined();expect(state.nextSeagullCall).toBe(deadline);expect(state.seagullExcerpt).toBe(0);
+    occupied.forEach(v=>state.voices.delete(v));audio.setSeagullSound({volume:.3,pan:0});
+    expect(state.seagullVoice).toBeDefined();expect(state.seagullExcerpt).toBe(1);
   });
   it('loads the ocean hiss only on approach, reuses one loop, and releases it on mute and exit',async()=>{
     releases.push(audio.acquire());audio.activate();await load();
