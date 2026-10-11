@@ -40,7 +40,15 @@ function apiUrl(path: string) {
   return `${configured || ''}/api/multiplayer${path}`;
 }
 
-export function friendsUsesHttp() { return import.meta.env.VITE_FRIENDS_SIGNALING_MODE !== 'broker'; }
+export function friendsUsesHttp() {
+  const mode = import.meta.env.VITE_FRIENDS_SIGNALING_MODE;
+  if (mode === 'http') return true;
+  if (mode === 'broker') return false;
+  // A same-origin API may be absent on static hosts or belong to a separate
+  // local dev server on each player's computer. Only default to HTTP when
+  // all players have been given a shared signaling service.
+  return hasHttpSignalingFallback();
+}
 
 function hasHttpSignalingFallback() {
   return Boolean(import.meta.env.VITE_MULTIPLAYER_SIGNALING_URL?.trim());
@@ -73,7 +81,7 @@ export async function listPublicLobbies(gameMode: CoopGameMode = 'survival'): Pr
     state: l.state,
     gameMode: l.gameMode,
     pingMs: l.pingMs,
-  }));
+  })).filter(lobby => gameMode !== 'friends' || lobby.gameMode === 'friends');
 
   // Direct browser deployments use MQTT only for signaling. Do not probe a
   // same-origin API that does not exist (and cannot race the broker join).
@@ -81,7 +89,7 @@ export async function listPublicLobbies(gameMode: CoopGameMode = 'survival'): Pr
 
   try {
     const response = await request<{ rooms: PublicLobby[] }>('/rooms');
-    const localRooms = response.rooms || [];
+    const localRooms = (response.rooms || []).filter(room => gameMode !== 'friends' || room.gameMode === 'friends');
     
     // Strict deduplication by unique normalized room code
     const seenCodes = new Set<string>();
@@ -326,7 +334,15 @@ export class LobbyJoin {
     ensureLobbyDiscoveryStarted();
     // Check if room exists in broker discovery or matches code
     const lobby = globalLobbyDiscovery.findLobbyByCode(roomId);
-    const targetRoomId = lobby ? lobby.id : roomId;
+    if (gameMode === 'friends' && lobby && lobby.gameMode !== 'friends') {
+      throw new Error('That code opens a Survival room.');
+    }
+    // Hosts publish under room-<lowercase code>. A pasted code must resolve to
+    // that same topic even when discovery has not received a heartbeat yet.
+    const targetRoomId = lobby ? lobby.id : gameMode !== 'friends' ? roomId
+      : normalizeRoomCode(roomId).startsWith('ROOM-')
+        ? normalizeRoomCode(roomId).toLowerCase()
+        : `room-${normalizeRoomCode(roomId).toLowerCase()}`;
 
     const autoJoin = new AutoLobbyJoin(targetRoomId, guestName, spectate);
 

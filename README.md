@@ -147,10 +147,13 @@ core reset when starting or restoring an island. Saved player railway state
 persists; the Grand Traverse starts a fresh journey. This is separate
 from Survival career saves.
 
-Friends uses the controlled HTTP lobby service by default. `npm run dev`
-provides it locally; production uses `npm run build` followed by
-`npm run serve:multiplayer`. Static hosting requires deploying that service and
-setting `VITE_MULTIPLAYER_SIGNALING_URL` to its HTTPS origin at build time.
+Friends uses shared MQTT lobby discovery when no HTTP service is configured,
+so static hosting and players running separate local servers can meet in the
+same lobby. Set `VITE_MULTIPLAYER_SIGNALING_URL` to a shared service's HTTPS
+origin at build time to use HTTP signaling. For a game and service sharing an
+origin, set `VITE_FRIENDS_SIGNALING_MODE=http`; `npm run dev` provides that
+service locally, and production uses `npm run build` followed by
+`npm run serve:multiplayer`. All players must use the same signaling setup.
 Configure server-side TURN for restrictive networks as described above.
 Survival retains its existing broker discovery and three-channel raw snapshot
 path. Shared protocol **45** stays unchanged; Friends adds its own session

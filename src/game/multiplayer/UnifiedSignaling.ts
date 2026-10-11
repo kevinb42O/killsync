@@ -101,7 +101,6 @@ export class MqttWsSignalingClient {
         const timeout = setTimeout(() => {
           if (this.connecting && this.ws === ws) {
             ws.close();
-            this.tryNextBroker();
             settle(false);
           }
         }, 5_000);
@@ -117,6 +116,7 @@ export class MqttWsSignalingClient {
         };
 
         ws.onmessage = (event) => {
+          if (this.ws !== ws || this.closed) return;
           const buffer = event.data instanceof ArrayBuffer
             ? new Uint8Array(event.data)
             : new Uint8Array(event.data.buffer || event.data);
@@ -124,6 +124,15 @@ export class MqttWsSignalingClient {
 
           const packetType = buffer[0] >> 4;
           if (packetType === 2) { // CONNACK
+            // A CONNACK also carries refusals (e.g. server unavailable).
+            // Only return code zero means subscriptions/publications can run.
+            // Treating a refusal as success discards queued lobby heartbeats.
+            if (buffer.length < 4 || buffer[3] !== 0) {
+              clearTimeout(timeout);
+              settle(false);
+              ws.close();
+              return;
+            }
             clearTimeout(timeout);
             this.connected = true;
             this.connecting = false;
@@ -168,6 +177,7 @@ export class MqttWsSignalingClient {
   private scheduleReconnect() {
     clearTimeout(this.reconnectTimer as number);
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = 0;
       if (!this.closed && !this.connected && !this.connecting) {
         this.tryNextBroker();
         void this.connect();
@@ -252,7 +262,9 @@ export class MqttWsSignalingClient {
   publish(topic: string, message: string): void {
     if (!this.connected || !this.ws || this.ws.readyState !== 1) {
       this.enqueueMessage({ topic, payload: message });
-      if (!this.connecting && !this.closed) void this.connect();
+      // Heartbeats must not bypass scheduled failover by reconnecting to the
+      // refused broker just before the backup retry timer fires.
+      if (!this.connecting && !this.closed && !this.reconnectTimer) void this.connect();
       return;
     }
 
