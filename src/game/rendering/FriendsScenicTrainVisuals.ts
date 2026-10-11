@@ -61,7 +61,6 @@ export function createScenicTrainVisual(closed:boolean,index:number,wagonKind:Sc
       box(3,22,2,-76,41,side*52.5,M.zinc);box(3,22,2,-70,41,side*52.5,M.zinc);
     }
     for(const side of [-32,32]){const lamp=cylinder(5,3,87,36,side,M.steel);lamp.rotation.z=Math.PI/2;const lens=cylinder(3.8,3.5,88,36,side,M.light);lens.rotation.z=Math.PI/2;}
-    const headlight=new THREE.SpotLight(0xffdfb5,80000,1800,.48,.55,2);headlight.name='scenic-headlight';headlight.visible=false;headlight.position.set(92,36,0);headlight.target.position.set(900,20,0);headlight.castShadow=true;headlight.shadow.mapSize.set(512,512);headlight.shadow.camera.near=4;headlight.shadow.normalBias=.3;headlight.shadow.bias=-.0001;group.add(headlight,headlight.target);group.userData.scenicHeadlight=headlight;
     box(52,18,66,-44,112,0,M.steel);
     for(let x=-64;x<=-24;x+=8)box(2,2,64,x,122,0,M.zinc);
     const exhaust=cylinder(5,15,8,60,0,M.steel);exhaust.name='scenic-exhaust';
@@ -141,7 +140,6 @@ export function createScenicTrainVisual(closed:boolean,index:number,wagonKind:Sc
 export function updateScenicTrainVisual(group:THREE.Group,vehicle:FriendsVehicle,powered=true){
   if(group.userData.scenicPowered!==powered){
     group.userData.scenicPowered=powered;
-    const headlight=group.userData.scenicHeadlight as THREE.SpotLight|undefined;if(headlight)headlight.visible=powered;
     (group.userData.scenicLampMaterial as THREE.MeshBasicMaterial).color.setHex(powered?0xffd6a1:0x514d43);
   }
   const route=scenicRailway(),distance=vehicle.routeDistance??0,previous=group.userData.scenicPreviousDistance as number|undefined;

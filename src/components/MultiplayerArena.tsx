@@ -141,6 +141,7 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const [pauseOpen, setPauseOpen] = useState(false);
   const pauseOpenRef = useRef(false);
   const clearControlsRef = useRef<() => void>(() => {});
+  const releaseHeldItemRef = useRef<() => void>(() => {});
   const aircraftWinchTouchHandlerRef=useRef<((control:'raise'|'lower'|'hook',held:boolean)=>void)|null>(null);
   useEffect(()=>{clearControlsRef.current();},[controlScheme]);
   const [preferences, setPreferences] = useState(readGamePreferences);
@@ -321,7 +322,10 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
   const lastHeldToolRef = useRef<FrontierTool>(1);
   const selectFrontierTool = (tool: FrontierTool) => {
     if (isRoastingSeat(snapshotRef.current?.players.find(player => player.id === launch.localPlayerId)?.friendsSeat) && tool!==SEEDS_TOOL && tool!==STONE_TOOL && tool!==MARSHMALLOW_TOOL && tool!==CONFETTI_TOOL && tool!==EMPTY_HANDS) return;
-    if (tool !== inputRef.current.friendsTool) {gestureReleaseRef.current=gestureControlsRef.current.mask||inputRef.current.friendsArms||0;clearControlsRef.current();}
+    if (tool !== inputRef.current.friendsTool) {
+      gestureReleaseRef.current |= gestureControlsRef.current.mask || inputRef.current.friendsArms || 0;
+      releaseHeldItemRef.current();
+    }
     gestureControlsRef.current.clear();
     if (tool !== EMPTY_HANDS) lastHeldToolRef.current = tool;
     if (tool !== inputRef.current.friendsTool) friendsAudio.play('pack', .12, 80);
@@ -2398,11 +2402,21 @@ export function MultiplayerArena({ launch, controlScheme, onExit, cinematicProfi
       }
       changeSelectedWeapon(direction);
     };
-    const clearControls = () => {
+    // Switching equipment releases the previous item's actions, but must not
+    // erase held movement keys or touch locomotion. Only menus/focus loss do that.
+    const releaseHeldItem = () => {
       if(inputRef.current.friendsTool===7)inputRef.current={...inputRef.current,altFireActionId:++altFireActionId};
       gestureControlsRef.current.clear();
+      firing = false; buildHeld = false; dismantleHeld = false;
+      constructionRef.current.release();
+      mobile.fire = false; mobile.aim = false;
+      inputRef.current = { ...inputRef.current, friendsArms: 0, firing: false, aiming: false };
+    };
+    releaseHeldItemRef.current = releaseHeldItem;
+    const clearControls = () => {
+      releaseHeldItem();
       aircraftTouch.raise=aircraftTouch.lower=aircraftTouch.hook=false;
-      keys.clear(); firing = false; buildHeld=false;dismantleHeld=false;constructionRef.current.release();updateInput();
+      keys.clear(); updateInput();
       mobile.moveX = 0; mobile.moveY = 0; mobile.fire = false; mobile.aim = false; mobile.jump = false; mobile.slide = false; mobile.sprint = false; mobile.stickSprint = false; mobile.interact = false;
       inputRef.current = neutralizeMenuInput(inputRef.current);
     };
