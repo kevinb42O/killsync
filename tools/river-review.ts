@@ -14,6 +14,7 @@ import { FriendsSimulation } from '../src/game/multiplayer/FriendsSimulation';
 import { FRIENDS_RIVERS, RIVER_CROSSING } from '../src/game/world/FriendsHydrology';
 import { friendsWaterGround } from '../src/game/world/FriendsWaterSurface';
 import { baseTerrainHeight } from '../src/game/world/FriendsTerrain';
+import { LAVA_RIVER_POINTS } from '../src/game/world/FriendsLavaRiver';
 console.info('River review: modules loaded');
 const scene=new THREE.Scene();scene.background=new THREE.Color('#b5cccf');scene.fog=new THREE.FogExp2('#b5cccf',.000015);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(1);renderer.setSize(innerWidth,innerHeight);renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;
@@ -53,6 +54,7 @@ const views:Record<string,number[]>={
   island:[-2000,27000,52000,22500,0,22500],
   deepmere:[15100,1700,26100,12128,154,23600],
   skyfalls:[8500,1700,22400,6850,666,21000],
+  lava_crater:[35800,3900,35600,34240,2714,33792],
   skyfalls_underpass:[8670,600,24770,8000,442,24348],
   world_gate:[14200,860,14600,14900,603,13000],
   gate_run:[13900,850,16400,12800,330,17800],
@@ -61,6 +63,19 @@ const views:Record<string,number[]>={
   gorge:[25100,640,28100,24600,-40,27500],
   mouth:[30000,650,26600,31170,-168,24502],
 };
+const lavaBank=LAVA_RIVER_POINTS[58];
+views.lava_bank=[lavaBank.x+480,lavaBank.z+350,lavaBank.y+450,lavaBank.x,lavaBank.z,lavaBank.y];
+// Ordered production-scene inspection from the caldera to the ocean.
+views.lava_summit=[41100,10200,44900,36400,1200,37600];
+views.lava_rim=[35150,3260,34220,34060,2714,33580];
+for(const [name,index,lift,offset] of [
+  ['lava_outlet',13,800,800],['lava_upper',36,950,1050],
+  ['lava_middle',76,850,1000],['lava_lower',119,600,850],
+  ['lava_ocean',145,650,1000],
+] as const){
+  const p=LAVA_RIVER_POINTS[index];
+  views[name]=[p.x+offset,p.z+lift,p.y+offset*.5,p.x,p.z,p.y];
+}
 const crossingPoint=FRIENDS_RIVERS[2].points.reduce((a,p)=>Math.hypot(p.x-RIVER_CROSSING.x,p.y-RIVER_CROSSING.y)<Math.hypot(a.x-RIVER_CROSSING.x,a.y-RIVER_CROSSING.y)?p:a);
 const waterEye=FRIENDS_RIVERS[2].points.find(p=>p.distance>crossingPoint.distance-550)!;
 views.water_bridge=[waterEye.x,waterEye.z+34,waterEye.y,20000,170,26900];

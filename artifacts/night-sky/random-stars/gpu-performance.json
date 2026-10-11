@@ -1,0 +1,20 @@
+{
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+  "viewport": [
+    1440,
+    900
+  ],
+  "background": {
+    "samples": 30,
+    "medianGpuMs": 2.709041,
+    "p95GpuMs": 7.404291
+  },
+  "skyAndRandomStars": {
+    "samples": 30,
+    "medianGpuMs": 3.9035,
+    "p95GpuMs": 6.213499
+  },
+  "glError": 0,
+  "starCount": 11000,
+  "starBytes": 308000
+}

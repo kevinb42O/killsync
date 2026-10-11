@@ -4,7 +4,7 @@ import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {mkdir,writeFile} from 'node:fs/promises';
 const require=createRequire(import.meta.url),{chromium}=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
-const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3014',directory=process.env.FISHING_ARTIFACT_DIR||'artifacts/fishing-casting-realism';
+const origin=process.env.FRIENDS_TEST_ORIGIN||'http://localhost:3014',directory=process.env.FISHING_ARTIFACT_DIR||'artifacts/fishing-idle-bobber';
 await mkdir(directory,{recursive:true});
 const browser=await chromium.launch({headless:true,args:['--use-angle=metal']}),report={errors:[],frames:[]};
 try{
@@ -25,10 +25,26 @@ try{
   assert(report.frames[2].tipCamera[2]>report.frames[0].tipCamera[2]);
   assert(report.frames[4].tipCamera[2]<report.frames[0].tipCamera[2]);
   assert.equal(report.frames[2].pitch,report.frames[3].pitch);
-  assert.equal(report.frames[0].calls,report.frames[2].calls);
-  assert.equal(report.frames[3].floatVisible,false);assert.equal(report.frames[3].lineVisible,false);
+  // Charging can swing the three bobber meshes out of the camera frustum.
+  assert(Math.abs(report.frames[0].calls-report.frames[2].calls)<=3);
+  assert.equal(report.frames[0].floatVisible,true);assert.equal(report.frames[0].lineVisible,true);
+  assert.equal(report.frames[3].floatVisible,true);assert.equal(report.frames[3].lineVisible,true);
   assert.equal(report.frames[4].floatVisible,true);assert.equal(report.frames[4].lineVisible,true);
   assert(report.frames.every(f=>f.gl===0));assert.deepEqual(report.errors,[]);
+  report.idle=await page.evaluate(()=>{
+    const r=fishingReview,state={equipped:['review'],casts:[],fish:[]};
+    r.setStage('rod');
+    const update=(now)=>{r.handCamera.position.copy(r.camera.position);r.handCamera.quaternion.copy(r.camera.quaternion);r.fishing.update(state,[r.player],'review',7,r.camera,now,16,true,r.project,()=>false);};
+    update(22000);const rod=r.fishing.rods.get('review'),buffer=rod.line.geometry.attributes.position.array;
+    const directions=[];
+    for(let i=0;i<60;i++){r.camera.position.x+=.4;update(22016+i*16);directions.push(Math.abs(rod.bobber.direction.x));}
+    const swing=Math.max(...directions);
+    for(let i=0;i<600;i++)update(23000+i*16);
+    const result={swing,settled:rod.bobber.direction.y,visible:rod.float.visible&&rod.line.visible,bufferReused:buffer===rod.line.geometry.attributes.position.array,viewmodel:rod.float.parent===r.handCamera};
+    r.setStage('rod');r.handCamera.position.copy(r.camera.position);r.handCamera.quaternion.copy(r.camera.quaternion);
+    return result;
+  });
+  assert(report.idle.swing>.02);assert(report.idle.settled<-.999);assert(report.idle.visible);assert(report.idle.bufferReused);assert(report.idle.viewmodel);
   report.remote=await page.evaluate(()=>{
     const r=fishingReview,checks=[];
     for(const angle of [0,Math.PI/2,Math.PI,Math.PI*1.5]){

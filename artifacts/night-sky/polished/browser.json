@@ -1,0 +1,68 @@
+{
+  "errors": [],
+  "phases": [
+    {
+      "name": "midnight",
+      "draws": 1,
+      "triangles": 2208,
+      "error": 0,
+      "stars": 1,
+      "compiles": 2
+    },
+    {
+      "name": "dusk",
+      "draws": 1,
+      "triangles": 2208,
+      "error": 0,
+      "stars": 0.7351966613240277,
+      "compiles": 2
+    },
+    {
+      "name": "noon",
+      "draws": 1,
+      "triangles": 2208,
+      "error": 0,
+      "stars": 0,
+      "compiles": 2
+    },
+    {
+      "name": "dawn",
+      "draws": 1,
+      "triangles": 2208,
+      "error": 0,
+      "stars": 0.5890037187622527,
+      "compiles": 2
+    }
+  ],
+  "checks": [
+    "one sky draw, unchanged geometry, no WebGL errors or shader recompilations across day/night",
+    "all three planets and the moon render at close range without shader recompilation; no invalid black horizon pixels at any phase",
+    "a visible shooting star freezes correctly on the paused animation clock"
+  ],
+  "bodies": [
+    {
+      "id": "planet",
+      "compiles": 2,
+      "error": 0,
+      "draws": 1
+    },
+    {
+      "id": "blue",
+      "compiles": 2,
+      "error": 0,
+      "draws": 1
+    },
+    {
+      "id": "rocky",
+      "compiles": 2,
+      "error": 0,
+      "draws": 1
+    },
+    {
+      "id": "moon",
+      "compiles": 2,
+      "error": 0,
+      "draws": 1
+    }
+  ]
+}

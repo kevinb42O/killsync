@@ -1,0 +1,4 @@
+{
+  "errors": [],
+  "stats": "60 FPS · 1 draws · 0k triangles\nCamera 27360, 20240 · altitude 620\nOcean island · shared voxel landmarks\nBlocks: 89 surface tiles · 23/29 active/cached volumes · 26.3 MiB · 0 jobs\nTrees: 432 3D · 12 batches · 508k triangles\nClouds: 21/78 visible · 1 atlas bakes"
+}

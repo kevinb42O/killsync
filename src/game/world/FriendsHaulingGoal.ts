@@ -39,7 +39,7 @@ export const FRIENDS_HAULING_JOBS = [
       title:'Return to Sender',issuer:'Mira · Tidal archivist',difficulty:'LONG HAUL · RUIN STEPS',
       dispatch:'This core belongs to the ancient ocean gateway. Someone “borrowed” it centuries ago. Consider this the island’s most overdue return.',
       objective:'Take the Sanctum core across the island to the Tidal Sanctum. Deliver it to the purple bay at the top of the monument’s south stairs.',
-      route:['Collect the core at the freight yard south of Sunline Commons. Survey the route to the eastern ocean monument; a train or aircraft can help with the long haul.', 'The monument’s south face has a narrow stone stairway. Keep the core centred, reel from above, and build a ramp if a ledge needs help.', 'Leave the core fully inside the purple square on the upper terrace. Let it settle, then deliver it.'],
+      route:['Collect the core at the freight yard south of Sunline Commons. Survey the route to the eastern ocean monument; a train or aircraft can help with the long haul.', 'The sanctuary’s south face has a broad stone stairway. Keep the core centred, reel from above, and build a ramp if a ledge needs help.', 'Leave the core fully inside the purple square on the upper terrace. Let it settle, then deliver it.'],
       completionTitle:'Only a Few Centuries Late',completion:'The Sanctum core is back on its terrace. The archivist has waived the late fee. Mostly because nobody could count that high.',
     },
   },

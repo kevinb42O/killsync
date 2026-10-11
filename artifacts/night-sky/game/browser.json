@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-11T04:03:02.640Z",
+  "origin": "http://localhost:3000",
+  "checks": [],
+  "errors": [],
+  "phases": [],
+  "frames": [],
+  "failure": "TimeoutError: locator.waitFor: Timeout 90000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.coop-arena') to be visible\u001b[22m\n\u001b[2m    2 × waiting for \"http://localhost:3000/?mode=friends\" navigation to finish...\u001b[22m\n\u001b[2m      - navigated to \"http://localhost:3000/?mode=friends\"\u001b[22m\n",
+  "text": "Friends mode\nLanguage\nEnglish\nРусский\nResume scenery\nSunline\n·\nFriends mode\nA little adventure, together.\n\nExplore the island, make something, and see where the day takes you.\n\nYour name\nContinue your island\nSaved on this device · Oct 11\nOpen my island\nJoin a friend\nPlay on my own\n\nOpen islands appear in the room list. Your world is saved on this device.\n\nSunline island\nRoom to wander. Time to make something."
+}

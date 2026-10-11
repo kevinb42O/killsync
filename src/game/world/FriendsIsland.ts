@@ -1,3 +1,4 @@
+import { createTidalSanctum } from './FriendsSanctum';
 import { lavaRiverAt } from './FriendsLavaRiver';
 import { createHighfallCastle, HIGHFALL_CASTLE } from './FriendsCastle';
 import { ISLAND_SEA_LEVEL, ISLAND_LAKES, waterBasinRadius } from './FriendsWaterBodies';
@@ -87,7 +88,9 @@ export function islandClimate(x:number,y:number):[number,number,number,number]{
   let wet=Math.exp(-(((x-20500)/5800)**2+((y-30700)/4800)**2))
     *(.65+.35*Math.sin(x/1200)*Math.sin(y/1500));
   const river=riverSampleAt(x,y);if(river)wet=Math.max(wet,.6*(1-islandSmooth((river.side-river.width/2)/160)));
-  const volcanic=1-islandSmooth((islandVolcanoRadius(x,y)-3000)/3600);
+  const molten=lavaRiverAt(x,y);
+  const scorched=molten?1-islandSmooth((molten.side-molten.width/2-48)/240):0;
+  const volcanic=Math.max(1-islandSmooth((islandVolcanoRadius(x,y)-3000)/3600),scorched);
   const glacier=Math.exp(-(((x-24100)/3600)**2+((y-16800)/4000)**2));
   return [coast,wet,volcanic,glacier];
 }
@@ -133,7 +136,7 @@ export function islandArchRange(x: number, y: number): [number, number] | undefi
 export const ISLAND_LANDMARK_SITES = [
   { id: 'arch', name: 'THE WORLD GATE', x: 16992, y: 11264, detail: 'A colossal natural arch through Highfall. Fly through the mountain or land beneath its stone vault.', color: '#a7d8e5' },
   { id: 'citadel', name: 'CROWN OF HIGHFALL', x: HIGHFALL_CASTLE.x - 256, y: HIGHFALL_CASTLE.y + 800, detail: 'A torchlit mountain fortress with a great hall, open courtyard and battlement walks. Follow the continuous stone viaduct up from the eastern ridge.', color: '#edd6a7' },
-  { id: 'portal', name: 'THE TIDAL SANCTUM', x: 27008, y: 19456, detail: 'An ancient stepped monument and a luminous ruined gateway overlooking the eastern ocean.', color: '#83e4dc' },
+  { id: 'portal', name: 'THE TIDAL SANCTUM', x: 27008, y: 19456, detail: 'A pale-stone ocean sanctuary with a broad processional stair, copper-capped colonnades and a turquoise-inlaid gateway.', color: '#83e4dc' },
   { id:'volcano',name:'EMBER CALDERA',x:34240,y:33792,detail:'A molten river winds from the fractured crater to a steaming ocean delta. Rest at Ember Lookout beside the flow.',color:'#ff9560' },
   { id: 'falls', name: 'THE SKYFALLS', x: 6912, y: 19584, detail: 'Twin waterfalls plunge from the western alpine wall into a turquoise hanging basin.', color: '#a0d5e3' },
 ] as const;
@@ -141,28 +144,8 @@ export type IslandStoneBox = { x: number; y: number; z: number; w: number; d: nu
 /** Solid ruins are voxel-aligned and mineable. The skyline renderer uses these
  * exact boxes until streamed voxel chunks take over. */
 export function createIslandRuins(sampleHeight: (x: number, y: number) => number): IslandStoneBox[] {
-  const boxes: IslandStoneBox[] = [], snap = (n: number) => Math.round(n / 32) * 32;
-  const box = (x: number, y: number, z: number, w: number, d: number, h: number, tint: IslandStoneBox['tint'] = 'stone') => {
-    w=Math.max(32,Math.ceil(w/32)*32);d=Math.max(32,Math.ceil(d/32)*32);h=Math.max(32,Math.ceil(h/32)*32);
-    boxes.push({x:snap(x-w/2)+w/2,y:snap(y-d/2)+d/2,z:snap(z),w,d,h,tint});
-  };
+  const boxes: IslandStoneBox[] = [];
   boxes.push(...createHighfallCastle(sampleHeight).boxes);
-  const px=27008,py=19456,pbase=sampleHeight(px,py);
-  for(let i=0;i<6;i++)box(px,py,pbase-96+i*64,1152-i*128,1024-i*128,64,i%2?'stone':'dark');
-  const top=pbase+288;
-  // Ruined portal: asymmetric obsidian uprights, fractured lintel, cyan inlay.
-  for(const [dx,height]of[[-224,736],[224,576]]){
-    box(px+dx,py,top,128,192,height,'dark');
-    box(px+dx,py-112,top+128,32,32,height-192,'glow');
-    box(px+dx,py,top+height,192,256,64);
-  }
-  box(px-32,py,top+736,448,192,96,'dark');
-  box(px-96,py-112,top+768,256,32,32,'glow');
-  for(const dx of [-448,448])for(const dy of [-384,384]){
-    box(px+dx,py+dy,pbase+32,96,96,384,'dark');
-    box(px+dx,py+dy,pbase+416,128,128,32,'copper');
-  }
-  // Walkable stairs ascend the south face of the ocean monument.
-  for(let i=0;i<12;i++)box(px,py+672-i*32,pbase-64+i*32,192,32,32);
+  boxes.push(...createTidalSanctum());
   return boxes;
 }

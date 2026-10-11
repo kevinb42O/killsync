@@ -2,8 +2,10 @@ import { FriendsFrontier, frontierTrees } from '../multiplayer/FriendsFrontier';
 import { FriendsRetreats } from '../multiplayer/FriendsRetreats';
 import { RETREAT_SITES,retreatPoint,emberRetreatTreeClearance,EMBER_RETREAT_TREE_RADIUS } from './FriendsRetreatSites';
 import { describe,it,expect } from 'vitest';
-import { LAVA_RIVER_POINTS,lavaRiverAt,LAVA_SEA_ENTRY,LAVA_TREE_CLEARANCE,lavaRiverTreeClearance } from './FriendsLavaRiver';
-import { baseTerrainHeight } from './FriendsTerrain';
+import { LAVA_RIVER_POINTS,lavaRiverAt,LAVA_SEA_ENTRY,LAVA_TREE_CLEARANCE,lavaRiverTreeClearance,LAVA_SOURCE } from './FriendsLavaRiver';
+import { baseTerrainHeight, FriendsTerrain } from './FriendsTerrain';
+import { organicHorizonHeightAt, meshBlockHorizon } from './FriendsHorizonMesh';
+import { advancePlayerMovement, type PlayerMotionState } from '../multiplayer/playerMovement';
 import { islandCoastDistance,ISLAND_SEA_LEVEL,ISLAND_VOLCANO } from './FriendsIsland';
 describe('Ember river terrain containment',()=>{
   it('introduces the lookout to older saves and preserves subsequent site choices',()=>{
@@ -25,14 +27,77 @@ describe('Ember river terrain containment',()=>{
     expect(islandCoastDistance(LAVA_SEA_ENTRY.x,LAVA_SEA_ENTRY.y)).toBeLessThan(0);
     expect(LAVA_RIVER_POINTS.at(-1)!.z).toBeLessThan(ISLAND_SEA_LEVEL);
   });
-  it('keeps the solid voxel field below the entire ribbon, including its edges',()=>{
+  it('keeps a deep solid bed under the molten core throughout the descent',()=>{
     for(let i=1;i<152;i++){
       const p=LAVA_RIVER_POINTS[i],next=LAVA_RIVER_POINTS[i+1],a=Math.atan2(next.y-p.y,next.x-p.x);
-      for(const side of [-1,0,1]){
+      for(const side of [-.5,0,.5]){
         const x=p.x-Math.sin(a)*side*p.width/2,y=p.y+Math.cos(a)*side*p.width/2;
         expect(lavaRiverAt(x,y)).toBeDefined();expect(baseTerrainHeight(x,y)).toBeLessThan(p.z-20);
       }
     }
+  });
+  it('opens the submerged mouth to the ocean instead of raising a terminal dam',()=>{
+    const tip=LAVA_RIVER_POINTS[152],before=LAVA_RIVER_POINTS[151];
+    const length=Math.hypot(tip.x-before.x,tip.y-before.y);
+    const dx=(tip.x-before.x)/length,dy=(tip.y-before.y)/length;
+    for(const side of [-140,0,140]){
+      const x=tip.x+dx*192-dy*side,y=tip.y+dy*192+dx*side;
+      expect(baseTerrainHeight(x,y)).toBeLessThan(ISLAND_SEA_LEVEL-32);
+    }
+  });
+  it('buries every rendered river edge in solid banks at both terrain detail levels',()=>{
+    const terrain=new FriendsTerrain();
+    for(let i=7;i<152;i++){
+      const p=LAVA_RIVER_POINTS[i],a=LAVA_RIVER_POINTS[i-1],b=LAVA_RIVER_POINTS[i+1],angle=Math.atan2(b.y-a.y,b.x-a.x);
+      for(const sign of [-1,1]){
+        const x=p.x-Math.sin(angle)*sign*p.width*.85,y=p.y+Math.cos(angle)*sign*p.width*.85;
+        const top=baseTerrainHeight(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16);
+        expect(top,`unsupported bank at ${i}, side ${sign}`).toBeGreaterThan(p.z+8);
+        expect(organicHorizonHeightAt(x,y)).toBeGreaterThan(p.z+8);
+        expect(terrain.floor(x,y,top,0)).toBeCloseTo(top,6);
+        expect(terrain.supports(x,y,top)).toBe(true);
+        expect(terrain.material(Math.floor(x/32),Math.floor(y/32),top/32-1)).toBeGreaterThan(0);
+      }
+    }
+  });
+  it('seals the molten crater with solid blocks everywhere except its supported outlet',()=>{
+    const terrain=new FriendsTerrain();
+    for(let i=0;i<160;i++){
+      const angle=i*Math.PI*2/160,r=1240*(1+.08*Math.sin(angle*5)+.045*Math.sin(angle*9+.6));
+      const x=LAVA_SOURCE.x+Math.cos(angle)*r,y=LAVA_SOURCE.y+Math.sin(angle)*r;
+      const river=lavaRiverAt(x,y);if(river&&river.side<river.width*.85)continue;
+      const top=baseTerrainHeight(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16);
+      expect(top,`open crater edge ${i}`).toBeGreaterThan(LAVA_SOURCE.level+8);
+      expect(organicHorizonHeightAt(x,y)).toBeGreaterThan(LAVA_SOURCE.level+8);
+      expect(terrain.floor(x,y,top,0)).toBe(top);
+      expect(terrain.supports(x,y,top)).toBe(true);
+    }
+  });
+  it('lands the real player controller on both banks after a fast fall and keeps it supported',()=>{
+    const terrain=new FriendsTerrain();
+    for(const i of [8,18,35,68,95,120,148])for(const sign of [-1,1]){
+      const p=LAVA_RIVER_POINTS[i],next=LAVA_RIVER_POINTS[i+1],angle=Math.atan2(next.y-p.y,next.x-p.x);
+      const x=p.x-Math.sin(angle)*sign*p.width*.85,y=p.y+Math.cos(angle)*sign*p.width*.85;
+      const top=baseTerrainHeight(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16);
+      const player:PlayerMotionState={x,y,z:top+300,angle:0,sprinting:false,sliding:false,crouching:false,verticalVelocity:-1800,lastJumpSequence:-1,slideAngle:0};
+      for(let tick=0;tick<30;tick++)advancePlayerMovement(player,undefined,50,
+        (position,radius)=>terrain.collide(position,player.z,radius),undefined,
+        position=>terrain.floor(position.x,position.y,position.z??player.z),'friends_frontier',
+        {elevationAware:true,volumetric:true,ceiling:6000});
+      expect(player.z,`fell through bank at ${i}, side ${sign}`).toBe(top);
+      expect(player.verticalVelocity).toBe(0);
+    }
+  });
+  it('renders the near bank blocks at the same height the controller stands on',()=>{
+    const p=LAVA_RIVER_POINTS[60],tx=Math.floor(p.x/512)*512,ty=Math.floor(p.y/512)*512;
+    const mesh=meshBlockHorizon(tx,ty,512);let tops=0;
+    for(let i=0;i<mesh.indices.length;i+=3){
+      const a=mesh.indices[i],b=mesh.indices[i+1],c=mesh.indices[i+2];if(mesh.normals[a*3+1]!==127)continue;
+      const x=tx+(mesh.positions[a*3]+mesh.positions[b*3]+mesh.positions[c*3])/3;
+      const y=ty+(mesh.positions[a*3+2]+mesh.positions[b*3+2]+mesh.positions[c*3+2])/3;
+      expect(mesh.positions[a*3+1]).toBe(baseTerrainHeight(Math.floor(x/32)*32+16,Math.floor(y/32)*32+16));tops++;
+    }
+    expect(tops).toBeGreaterThan(5);
   });
 });
 

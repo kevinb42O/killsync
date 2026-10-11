@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { friendsWaterAt, friendsWaterDepth, friendsWaterGround, friendsWaterRenderDepth } from './FriendsWaterSurface';
 import { FRIENDS_RIVERS } from './FriendsHydrology';
 import { ISLAND_LAKES } from './FriendsIsland';
-import { FriendsTerrain, skyfallWaterLevelAt } from './FriendsTerrain';
+import { FriendsTerrain, skyfallWaterLevelAt, baseTerrainHeight } from './FriendsTerrain';
+import { scenicRailway } from './FriendsScenicRailway';
 import { meshOrganicHorizon, organicHorizonHeightAt } from './FriendsHorizonMesh';
 import { islandWater } from '../rendering/FriendsIslandVisuals';
 
@@ -21,6 +22,26 @@ function connected(start:{x:number;y:number},end:{x:number;y:number}){
   }return false;
 }
 describe('water geometry and actual navigation continuity',()=>{
+  it('contains every Skyfalls lake cell with solid shoreline or a connected waterway',()=>{
+    const lake=ISLAND_LAKES[0];let shoreCells=0;
+    for(let x=4400;x<9300;x+=32)for(let y=18608;y<22500;y+=32){
+      const wet=friendsWaterAt(x,y);if(wet?.bodyId!==lake.id)continue;
+      for(const [dx,dy]of [[32,0],[-32,0],[0,32],[0,-32]]){
+        if(friendsWaterAt(x+dx,y+dy))continue;
+        shoreCells++;
+        expect(friendsWaterGround(x+dx,y+dy),`open lake edge at ${x},${y}`).toBeGreaterThanOrEqual(lake.level-2);
+      }
+    }
+    expect(shoreCells).toBeGreaterThan(100);
+  });
+  it('keeps the full railway corridor beside Skyfalls dry without changing its surveyed ground',()=>{
+    for(const p of scenicRailway().points.filter(p=>p.x<9500&&p.y>19500&&p.y<22200))for(const side of [-120,0,120]){
+      const x=p.x-Math.sin(p.angle)*side,y=p.y+Math.cos(p.angle)*side;
+      expect(friendsWaterAt(x,y),`water over Skyfalls railway at ${x},${y}`).toBeUndefined();
+      expect(friendsWaterRenderDepth(x,y,'skyfalls')).toBeLessThan(0);
+      expect(baseTerrainHeight(x,y)).toBe(baseTerrainHeight(x,y,false));
+    }
+  });
   it('supports each steep Skyfalls sheet across full collision cells and joins the lake',()=>{
     const terrain=new FriendsTerrain();
     for(const start of [6464,7360])for(let y=18992;y<=20368;y+=16){

@@ -52,7 +52,24 @@ export const ISLAND_BIOME_GLSL=`
   float volcanic=smoothstep(.12,.8,islandClimate.b);
   vec3 basalt=mix(vec3(.065,.073,.076),vec3(.24,.15,.105),broad*.8)*(.75+rockTex.r*.65);
   terrain=mix(terrain,basalt,volcanic);
+  // Skyfalls is an alpine plunge basin: pale mineral gravel under the water,
+  // darker wet cobbles at the lip, then moss returning on the upper banks.
+  // Apply in world space so voxel walls and distant terrain share the finish.
+  vec2 fallsDelta=(frontierWorld.xz-vec2(6912.,20448.))/vec2(1568.,1120.);
+  float fallsAngle=atan(fallsDelta.y,fallsDelta.x);
+  float fallsRadius=length(fallsDelta)/(1.+.13*sin(fallsAngle*3.+.4)+.065*sin(fallsAngle*7.-1.2))
+    +.035*sin(frontierWorld.x/170.)*sin(frontierWorld.z/210.);
+  fallsRadius=max(fallsRadius,length(vec2(max(0.,frontierWorld.x-6912.)/748.,(frontierWorld.z-20448.)/1568.)));
+  float fallsBed=(1.-smoothstep(1.12,1.42,fallsRadius))*(1.-smoothstep(682.,738.,elevation));
+  float cobbles=islandNoise(frontierWorld.xz/9.);
+  vec3 gravel=mix(vec3(.31,.35,.34),vec3(.55,.54,.44),cobbles*.65+detail*.35);
+  gravel*=.82+rockTex.r*.34;
+  float fallsWet=1.-smoothstep(660.,705.,elevation);
+  gravel=mix(gravel,gravel*vec3(.58,.70,.72),fallsWet*.58);
+  gravel=mix(gravel,stone,slope*.65);
+  terrain=mix(terrain,gravel,fallsBed);
   diffuseColor.rgb=terrain;
   roughnessFactor=mix(roughnessFactor,.36,wetSand*shore*.65+mud*.45);
   roughnessFactor=mix(roughnessFactor,.27,ice*.8);
+  roughnessFactor=mix(roughnessFactor,.55,fallsWet*fallsBed*.6);
 `;

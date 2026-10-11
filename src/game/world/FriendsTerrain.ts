@@ -1,6 +1,7 @@
+import { sanctumTerrainHeight } from './FriendsSanctum';
 import { FRIENDS_TERRAIN_BOTTOM } from './FriendsTerrainLimits';
-import { lavaChannelTerrain, lavaRiverTreeClearance } from './FriendsLavaRiver';
-import { skyfallCascadeAt, interpolateTerrainSurface } from './FriendsWaterBodies';
+import { lavaChannelTerrain, lavaCraterTerrain, lavaRiverTreeClearance } from './FriendsLavaRiver';
+import { skyfallCascadeAt, interpolateTerrainSurface, containedLakeRadius } from './FriendsWaterBodies';
 import { retreatClearing } from './FriendsRetreatSites';
 import { scenicTransitAir, scenicRailColumns, scenicTransitProtected, scenicTransitSurface, scenicStructureRanges, scenicRailFloor, scenicRailCeiling } from './FriendsRailInfrastructure';
 import { ISLAND_SEA_LEVEL, ISLAND_ARCH, ISLAND_LANDMARK_SITES, islandCoastDistance, islandMountainHeight, islandSeaStackHeight, islandVolcanoHeight, ISLAND_LAKES, islandLakeRadius, islandSmooth, islandArchRange, createIslandRuins, type IslandStoneBox } from './FriendsIsland';
@@ -120,12 +121,28 @@ export function baseTerrainHeight(x: number, y: number, includeRivers=true) {
   if(entrance===undefined)for(const [,roof] of caveColumn(x,y))h=Math.max(h,roof+64);
   else h=Math.min(h,entrance);
   const mountain=castleTerrainHeight(x,y,Math.min(5856,Math.max(h,islandSeaStackHeight(x,y,h))));
-  let ground=castleStairsField?.terrainHeight(x,y,mountain)??mountain;
+  let ground=sanctumTerrainHeight(x,y,castleStairsField?.terrainHeight(x,y,mountain)??mountain);
   const camp=FRIENDS_CAMPFIRE;
   if(Math.abs(x-camp.x)<camp.radius+160&&Math.abs(y-camp.y)<camp.radius+160)
     ground=grade(ground,x,y,camp.x,camp.y,camp.z,camp.radius,160);
   // Do not remove the World Gate roof: its river carves the cavity floor.
   if(includeRivers){
+    const basin=Math.abs(x-lake.x)<lake.rx*1.9&&Math.abs(y-lake.y)<lake.ry*1.9?containedLakeRadius(x,y,lake):Infinity;
+    if(basin<1.65&&!hydrologyProtected(x,y)){
+      // Sculpt the whole hanging basin, including its submerged shelf. A low,
+      // broad shore replaces the old steep berm and half-submerged hilltops;
+      // a long outer transition rejoins the alpine hillside. Inlets and the
+      // river outlet are carved into this profile by their shared fields below.
+      const bed=lake.level-240+24*terrainNoise(x/290,y/310);
+      const shelf=lake.level-48;
+      const crest=lake.level+64+12*terrainNoise(x/220,y/270);
+      const bottom=bed+(shelf-bed)*smooth((basin-.38)/.42);
+      const shore=shelf+(crest-shelf)*smooth((basin-.80)/.26);
+      const profile=basin<.80?bottom:shore;
+      const sculpted=profile+(ground-profile)*smooth((basin-1.24)/.41);
+      // Keep the tall waterfall chutes and their upstream shoulders intact.
+      ground+=(sculpted-ground)*smooth((y-19440)/400);
+    }
     const arch=islandArchRange(x,y);
     // A flared cave mouth is open sky when its roof exceeds the mountain.
     // In that case the cavity floor must be the real terrain surface too.
@@ -155,7 +172,7 @@ export function baseTerrainHeight(x: number, y: number, includeRivers=true) {
     }
     ground=riverBridgeField?.terrainHeight(x,y,ground)??ground;
   }
-  return gridHeight(lavaChannelTerrain(x,y,ground));
+  return gridHeight(lavaChannelTerrain(x,y,lavaCraterTerrain(x,y,ground)));
 }
 const skyfallLevels=new Map<string,number>();
 export function skyfallWaterLevelAt(x:number,y:number){

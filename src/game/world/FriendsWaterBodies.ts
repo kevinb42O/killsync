@@ -13,6 +13,15 @@ export function waterBasinRadius(x:number,y:number,lake:typeof ISLAND_LAKES[numb
     Math.hypot(dx,dy)/(1+.13*Math.sin(a*3+.4)+.065*Math.sin(a*7-1.2))+.035*Math.sin(x/170)*Math.sin(y/210);
 }
 
+/** The hanging basin ends west of the railway cut. Keep the original terrain
+ * datum separate: bridge sockets and waterfall heights still use that survey. */
+export function containedLakeRadius(x:number,y:number,lake:typeof ISLAND_LAKES[number]){
+  const radius=waterBasinRadius(x,y,lake);
+  if(lake.id!=='skyfalls')return radius;
+  const easternShore=Math.hypot(Math.max(0,x-lake.x)/748,(y-lake.y)/(lake.ry*1.4));
+  return Math.max(radius,easternShore);
+}
+
 export type SkyfallSample={id:string;index:number;x:number;y:number;side:number;width:number};
 export function skyfallCascadeAt(x:number,y:number):SkyfallSample|undefined{
   if(y<18976||y>20384||x<6200||x>7700)return;

@@ -1,0 +1,34 @@
+{
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+  "viewport": [
+    1440,
+    900
+  ],
+  "phases": {
+    "midnight": {
+      "baseline": {
+        "samples": 30,
+        "medianGpuMs": 3.979916,
+        "p95GpuMs": 4.025125
+      },
+      "enhanced": {
+        "samples": 30,
+        "medianGpuMs": 5.08975,
+        "p95GpuMs": 5.147499
+      }
+    },
+    "day": {
+      "baseline": {
+        "samples": 30,
+        "medianGpuMs": 3.957208,
+        "p95GpuMs": 4.05075
+      },
+      "enhanced": {
+        "samples": 30,
+        "medianGpuMs": 2.164916,
+        "p95GpuMs": 3.467291
+      }
+    }
+  },
+  "errors": []
+}

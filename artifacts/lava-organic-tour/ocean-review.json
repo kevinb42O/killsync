@@ -1,0 +1,83 @@
+{
+  "errors": [],
+  "results": [
+    {
+      "view": "lava_summit",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/01-lava_summit.png",
+      "stats": {
+        "draws": 286,
+        "triangles": 3429598,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 0,
+          "surfaceBytes": 0,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 0,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 6.9191666667660074,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_ocean",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/09-lava_ocean.png",
+      "stats": {
+        "draws": 758,
+        "triangles": 4951762,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 72,
+          "surfaceBytes": 19169176,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 0,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 14.161666666654249,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    }
+  ]
+}

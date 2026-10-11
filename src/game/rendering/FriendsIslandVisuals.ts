@@ -1,4 +1,7 @@
+import { createSanctumDetails } from './FriendsSanctumVisuals';
 import { FriendsLavaRiverVisuals } from './FriendsLavaRiverVisuals';
+import { LAVA_SURFACE_GLSL } from './FriendsLavaSurface';
+import { lavaCraterRadius, lavaRiverAt, LAVA_SOURCE } from '../world/FriendsLavaRiver';
 import { rowboatWaterCutout } from './FriendsWaterClip';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -13,7 +16,7 @@ function lightIslandWater(material:THREE.ShaderMaterial,atmosphere:FriendsDayNig
   material.uniforms.waterZenith={value:atmosphere.zenith};
 }
 import { ISLAND_SEA_LEVEL, ISLAND_LAKES, ISLAND_VOLCANO, islandVolcanoRadius } from '../world/FriendsIsland';
-import { baseTerrainHeight, FRONTIER_SIZE, ISLAND_RUINS } from '../world/FriendsTerrain';
+import { baseTerrainHeight, FRONTIER_SIZE, ISLAND_RUINS, skyfallWaterLevelAt } from '../world/FriendsTerrain';
 import { FriendsVolcanoSmoke } from './FriendsVolcanoSmoke';
 import { FriendsVolcanoGlow } from './FriendsVolcanoGlow';
 import { configureTerrainCoverage } from './FriendsTerrainCoverage';
@@ -21,6 +24,7 @@ import { FriendsIslandMasonry } from './FriendsIslandMasonry';
 import { FriendsCastleTorches } from './FriendsCastleTorches';
 import { FriendsCastleStairVisuals } from './FriendsCastleStairVisuals';
 import { FriendsRiverVisuals } from './FriendsRiverVisuals';
+import { createSkyfallsShore } from './FriendsSkyfallsShore';
 import { friendsWaterAt, friendsWaterRenderDepth } from '../world/FriendsWaterSurface';
 import { FRIENDS_FISHING_DOCK, FRIENDS_FISHING_PLATFORM, FRIENDS_OPPOSITE_DOCK } from '../world/FriendsFishingDock';
 
@@ -370,11 +374,18 @@ export class FriendsIslandOcean extends THREE.Group {
 export const createIslandOcean=()=>new FriendsIslandOcean();
 export function createIslandRuinMaterials(stone:THREE.MeshStandardMaterial) {
   const colors=['#ddd3b9','#89969d','#b77942','#7ad9d1'];
-  return colors.map(color=>{
+  return colors.map((color,index)=>{
     const m=stone.clone(),decorate=stone.onBeforeCompile;m.color.set(color);m.vertexColors=false;
     m.emissive.set('#526269');m.emissiveIntensity=.025;
-    m.onBeforeCompile=(shader,renderer)=>{decorate(shader,renderer);shader.fragmentShader=shader.fragmentShader.replace('diffuseColor*=vec4(mix(primary.rgb,secondary.rgb,.45),primary.a);','diffuseColor*=vec4(mix(vec3(.60),mix(primary.rgb,secondary.rgb,.45),.55),primary.a);');};
-    m.customProgramCacheKey=()=> 'island-ruins-v3';return m;
+    m.onBeforeCompile=(shader,renderer)=>{decorate(shader,renderer);
+      shader.uniforms.sanctumTint={value:new THREE.Color(['#e9e3d2','#31565b','#c69752','#7ad9d1'][index])};
+      shader.fragmentShader='uniform vec3 sanctumTint;\n'+shader.fragmentShader.replace('diffuseColor*=vec4(mix(primary.rgb,secondary.rgb,.45),primary.a);',`
+        diffuseColor*=vec4(mix(vec3(.60),mix(primary.rgb,secondary.rgb,.45),.55),primary.a);
+        float sanctum=step(abs(frontierWorld.x-27008.),650.)*step(abs(frontierWorld.z-19456.),1000.);
+        diffuseColor.rgb=mix(diffuseColor.rgb,sanctumTint*(.86+.14*primary.r),sanctum);
+      `);
+    };
+    m.customProgramCacheKey=()=> 'island-ruins-v4-sanctum';return m;
   });
 }
 export class FriendsIslandVisuals extends THREE.Group {
@@ -385,7 +396,7 @@ export class FriendsIslandVisuals extends THREE.Group {
   private lavaRiver=new FriendsLavaRiverVisuals();
   private torches=new FriendsCastleTorches();
   constructor(ruinMaterials:THREE.MeshStandardMaterial[],coverage:THREE.DataTexture,grid:number){
-    super();this.name='island-monuments-and-skyfalls';this.add(this.smoke,this.lavaGlow,this.lavaRiver,this.torches,new FriendsCastleStairVisuals(ruinMaterials[0]));
+    super();this.name='island-monuments-and-skyfalls';this.add(createSanctumDetails(),this.smoke,this.lavaGlow,this.lavaRiver,this.torches,new FriendsCastleStairVisuals(ruinMaterials[0]));
     const materials=Object.fromEntries(['stone','dark','copper','glow'].map((tint,i)=>{
       const m=ruinMaterials[i].clone();m.onBeforeCompile=ruinMaterials[i].onBeforeCompile;m.customProgramCacheKey=ruinMaterials[i].customProgramCacheKey;
       configureTerrainCoverage(m,coverage,grid,'horizon');return [tint,m];
@@ -399,7 +410,9 @@ export class FriendsIslandVisuals extends THREE.Group {
     // Rune faces sit just outside solid stone and stay visible at every LOD.
     const glow=new THREE.MeshBasicMaterial({color:'#71fff0',toneMapped:false});
     for(const b of ISLAND_RUINS.filter(b=>b.tint==='glow')){
-      const rune=new THREE.Mesh(new THREE.PlaneGeometry(b.w*.55,b.h*.85),glow);rune.position.set(b.x,b.z+b.h/2,b.y-b.d/2-.5);rune.rotation.y=Math.PI;this.add(rune);
+      const rune=new THREE.Mesh(new THREE.PlaneGeometry(b.w*.55,b.h*.85),glow);
+      const south=b.x>26000&&b.x<28000;
+      rune.position.set(b.x,b.z+b.h/2,b.y+(south?b.d/2+.5:-b.d/2-.5));rune.rotation.y=south?0:Math.PI;this.add(rune);
     }
     // The cascade surfaces are carved, contained water ribbons, constructed
     // with the rivers below. Mist is the only nonphysical waterfall decoration.
@@ -407,32 +420,52 @@ export class FriendsIslandVisuals extends THREE.Group {
       vertexShader:'varying vec2 mistUv;void main(){mistUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
       fragmentShader:'varying vec2 mistUv;void main(){float a=pow(max(0.,1.-length((mistUv-.5)*2.)),2.);gl_FragColor=vec4(.85,.96,1.,a*.25);}'});
     mistMaterial.userData.frontierExterior=true;
-    for(const startX of [6464,7360])for(let i=0;i<3;i++){const mist=new THREE.Mesh(new THREE.PlaneGeometry(400,200),mistMaterial);mist.position.set(startX+60,744+i*48,20240+i*32);mist.rotation.y=i*.7-.7;this.add(mist);}
+    const impacts=[6464,7360].map(startX=>{
+      for(let y=18976;y<=20384;y+=8){
+        const t=(y-18976)/1312,x=startX+Math.sin(t*Math.PI)*96+Math.sin(t*8)*40;
+        if(skyfallWaterLevelAt(x,y)!.level<=ISLAND_LAKES[0].level)return new THREE.Vector2(x,y);
+      }
+      return new THREE.Vector2(startX,20384);
+    });
+    for(const impact of impacts)for(let i=0;i<3;i++){
+      const mist=new THREE.Mesh(new THREE.PlaneGeometry(240+i*36,140),mistMaterial);
+      mist.position.set(impact.x,ISLAND_LAKES[0].level+48+i*28,impact.y+24+i*20);
+      mist.rotation.y=i*.7-.7;this.add(mist);
+    }
     for(const lake of ISLAND_LAKES){
       const water=islandWater(lake.x,lake.y,lake.rx*3.2,lake.ry*3.2,lake.level,
         (x,y)=>friendsWaterRenderDepth(x,y,lake.id),false,Math.ceil(Math.max(lake.rx,lake.ry)*3.2/24));
       water.name=lake.id==='gate'?'world-gate-glacial-lake':lake.id==='deepmere'?'deepmere-deep-lake':'skyfalls-carved-basin';
+      if(lake.id==='skyfalls'){
+        const material=water.material;
+        material.uniforms.skyfallsImpacts={value:new THREE.Vector4(impacts[0].x,impacts[0].y,impacts[1].x,impacts[1].y)};
+        material.fragmentShader='uniform vec4 skyfallsImpacts;\n'+material.fragmentShader;
+        material.fragmentShader=material.fragmentShader.replace('foam*=.45+.55*noise(p/19.+time*.09);',`
+          foam*=.45+.55*noise(p/19.+time*.09);
+          float impactDistance=min(length(p-skyfallsImpacts.xy),length(p-skyfallsImpacts.zw));
+          float spray=(1.-smoothstep(20.,115.,impactDistance))*(.35+.35*noise(p/12.+time*.3));
+          float ring=pow(max(0.,sin(impactDistance*.075-time*1.6+noise(p/35.)*2.)),8.);
+          foam=max(foam,spray+ring*.14*(1.-smoothstep(70.,210.,impactDistance)));
+        `);
+      }
       this.add(water);this.animated.push(water.material as THREE.ShaderMaterial);
     }
-    const rivers=new FriendsRiverVisuals(islandWater,ruinMaterials[0]);this.add(rivers);this.animated.push(...rivers.waterMaterials);
+    const rivers=new FriendsRiverVisuals(islandWater,ruinMaterials[0]);this.add(rivers,createSkyfallsShore());this.animated.push(...rivers.waterMaterials);
     const v=ISLAND_VOLCANO;
-    const lava=islandWater(v.x,v.y,3000,3000,v.lavaLevel,(x,y)=>islandVolcanoRadius(x,y)<1100?v.lavaLevel-baseTerrainHeight(x,y):-32);
+    const lava=islandWater(v.x,v.y,3200,3200,v.lavaLevel,(x,y)=>{
+      if(lavaCraterRadius(x,y)>1240)return -32;
+      const river=lavaRiverAt(x,y);
+      if(river&&river.side<river.width*.85&&river.z<LAVA_SOURCE.level-.01)return -32;
+      return Math.max(1,v.lavaLevel-baseTerrainHeight(x,y));
+    });
     const lavaMaterial=new THREE.ShaderMaterial({uniforms:(lava.material as THREE.ShaderMaterial).uniforms,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2,
       vertexShader:(lava.material as THREE.ShaderMaterial).vertexShader,
       fragmentShader:`
       #include <fog_pars_fragment>
       uniform vec4 rowboatCutout;varying vec3 seaWorld;uniform sampler2D bathymetry;uniform vec2 waterOrigin,waterExtent;uniform float time;
-        float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-        float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
+        ${LAVA_SURFACE_GLSL}
         void main(){vec2 uv=(seaWorld.xz-waterOrigin)/waterExtent;float d=texture2D(bathymetry,uv).r;if(d<=0.)discard;
-          vec2 p=seaWorld.xz/110.;p+=vec2(sin(p.y*.6+time*.10),cos(p.x*.5-time*.07))*.45;
-          p+=vec2(noise(p*.24+time*.018),noise(p*.31-time*.021))*1.4;
-          float cells=noise(p+time*.025)*.64+noise(p*2.1-time*.04)*.26+noise(p*4.3)*.10;
-          float crust=smoothstep(.44,.66,cells),cracks=pow(max(0.,1.-abs(sin(p.x*.8+p.y*.55+noise(p*.55)*7.))),10.);
-          float heat=clamp((1.-crust)*.75+cracks*.80,0.,1.);
-          vec3 molten=mix(vec3(.72,.025,.002),vec3(1.,.62,.075),heat);
-          vec3 c=mix(vec3(.047,.025,.020),molten,heat);c=mix(vec3(.09,.029,.013),c,smoothstep(0.,36.,d));
-          gl_FragColor=vec4(c*(1.+heat*.65),1.);
+          gl_FragColor=vec4(lavaSurface(seaWorld.xz,time,0.,1.-smoothstep(0.,60.,d)),1.);
         }`});
     (lava.material as THREE.Material).dispose();lava.material=lavaMaterial;lavaMaterial.toneMapped=false;lavaMaterial.uniforms.waveAmplitude.value=.4;
     lava.name='ember-caldera-molten-crater';this.add(lava);this.animated.push(lavaMaterial);

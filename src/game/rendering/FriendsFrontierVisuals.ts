@@ -68,7 +68,7 @@ export function frontierMaterial(asset: 'Ground037' | 'Rock030' | 'WoodFloor051'
       diffuseColor.rgb*=.92+.08*sin(frontierWorld.x*.0011+sin(frontierWorld.z*.0007)*2.)*sin(frontierWorld.z*.0015);
       `).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n'+(alpine ? ISLAND_BIOME_GLSL.slice(ISLAND_BIOME_GLSL.indexOf('  vec4 islandClimate')) : ''));
   };
-  material.customProgramCacheKey = () => `${worldProjected ? 'frontier-world-projected' : 'frontier-uv'}-${alpine?'island-biomes-v4':'v1'}`;
+  material.customProgramCacheKey = () => `${worldProjected ? 'frontier-world-projected' : 'frontier-uv'}-${alpine?'island-biomes-v6':'v1'}`;
   return material;
 }
 function disposeGroup(group: THREE.Group) {

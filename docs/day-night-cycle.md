@@ -20,7 +20,8 @@ still use the underground check. Never cache and restore a daylight background.
    for the dominant light and stable texel anchoring at every sun angle.
 3. Render a camera-centered procedural sky: vertical atmosphere, warm light
    near the rising/setting sun, solar disc and halo, a shaded moon, stable stars
-   and a faint galactic band. Sky geometry must never respond to roof detection.
+   with varied brightness, a textured galactic band, three shaded planets and
+   occasional shooting stars. Sky geometry must never respond to roof detection.
 4. Drive ambient light, hemisphere fill, exposure and exterior fog from the
    same sample. Preserve cave torch/flashlight contrast and smoothly blend cave
    mist using elapsed time rather than frame count.
@@ -40,9 +41,36 @@ still use the underground check. Never cache and restore a daylight background.
 
 Applies to Friends Frontier only. Preserve combat-world themes and the existing
 safe exploration rules. No new weather or nighttime enemy rules. Use one sky
-draw, existing cloud volumes and existing surface shaders; only one celestial
+draw and one static star batch at night, existing cloud volumes and existing
+surface shaders; only one celestial
   shadow map updates at a time, at the existing throttled cadence. Keep moonlit
   terrain legible while letting flashlights and night vision retain their purpose.
+
+Atmosphere, planets, moon and meteors remain in the single sky draw. A seamless 256² single-channel
+nebula texture (64 KiB base, about 85 KiB with mipmaps) is generated once and
+disposed with the sky; it replaces per-pixel fractal noise. The previous cube-cell
+star shader exposed rows and diagonals. Stars now use 11,000 independent random
+directions sampled uniformly on the sphere with a fixed integer seed, with no
+grid, face seams or repeated layout. One static point batch uses about 301 KiB
+of vertex data and is hidden entirely during daytime. Gaussian sprites integrate
+their light over the pixel footprint and retain stable positions during movement.
+Terrain depth and later cloud draws occlude the stars; celestial masks prevent
+stars shining through the planets/moon and attenuate them through the rings.
+Planet surface and ring shading run only near their
+discs, with explicit mip selection to suppress distant cloud/terrain shimmer.
+All bodies share the world's solar direction and blend behind the local sky
+atmosphere. The ring plane controls front/back occlusion and mutual globe/ring
+shadows; fine radial bands fade below pixel resolution. The blue planet has
+clouds and polar caps, the rocky planet has mineral variation, and the moon has
+smooth maria and crater relief instead of blocky hash noise. One reusable meteor
+follows a great-circle trail and lasts 1.4 seconds within each 18-second
+window, varies its direction deterministically, and follows the animation clock
+rather than accelerated time of day. All additions fade with the existing star
+visibility, and daytime skips the night detail. No additional lights or shadow
+maps are allocated, and the star batch has no per-frame particle simulation or
+geometry rebuilds. `tools/night-sky-review.html` provides
+an isolated interactive preview; `tools/test-friends-night-sky.mjs` verifies
+phase transitions, shader reuse and paused meteor behavior in WebGL.
 
 ## Cloud and developer controls follow-up
 

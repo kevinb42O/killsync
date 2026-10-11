@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { sampleFrontierDayNight, type FrontierDayNightSample } from '../world/FriendsDayNight';
 import { updateFrontierSunShadow } from './FriendsSunShadow';
 import { FriendsSunShadowCache } from './FriendsSunShadowCache';
+import { createNightNebulaTexture, NIGHT_SKY_GLSL, updateNightMeteor } from './FriendsNightSky';
+import { FriendsStarField } from './FriendsStarField';
 
 export type FrontierCelestialLighting = {
   sun: THREE.DirectionalLight;
@@ -21,7 +23,7 @@ const palette = {
   clouds: [color(0x435579), color(0xf5efda), color(0xe9a280)],
 };
 
-/** A single sky draw and shared uniforms for every exterior shader. The
+/** One atmosphere draw, one random star batch and shared exterior uniforms. The
  * atmosphere lives outside cave classification; real roofs provide occlusion. */
 export class FriendsDayNightCycle {
   readonly sky: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
@@ -46,6 +48,8 @@ export class FriendsDayNightCycle {
   private shadowDirection = new THREE.Vector3();
   private shadowFocus = new THREE.Vector3();
   private shadowCache: FriendsSunShadowCache;
+  private nebulaTexture = createNightNebulaTexture();
+  private starField: FriendsStarField;
   constructor(private scene: THREE.Scene, private renderer: THREE.WebGLRenderer,
     private camera: THREE.PerspectiveCamera, private lights: FrontierCelestialLighting) {
     this.originalBackground = scene.background; scene.background = this.background;
@@ -63,13 +67,16 @@ export class FriendsDayNightCycle {
         sunDirection: { value: this.sunDirection }, moonDirection: { value: this.moonDirection },
         sunColor: { value: new THREE.Color() }, daylight: this.daylight,
         twilight: { value: 0 }, stars: { value: 0 }, time: { value: 0 },
+        meteorHead: { value: new THREE.Vector3() }, meteorTail: { value: new THREE.Vector3() },
+        meteorStrength: { value: 0 },
+        nebulaMap: { value: this.nebulaTexture },
       },
       vertexShader: `varying vec3 skyDirection;
         void main(){skyDirection=position;vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_Position=p.xyww;}`,
       fragmentShader: `varying vec3 skyDirection;
         uniform vec3 horizon,zenith,sunDirection,moonDirection,sunColor;
         uniform float daylight,twilight,stars,time;
-        float hash(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+        ${NIGHT_SKY_GLSL}
         void main(){
           vec3 d=normalize(skyDirection);float h=max(0.,d.y);
           vec3 c=mix(horizon,zenith,pow(h,.42));
@@ -81,40 +88,39 @@ export class FriendsDayNightCycle {
           c+=sunColor*(pow(max(0.,solar),64.)*.14+pow(max(0.,solar),800.)*.32)*sunUp;
           float disc=smoothstep(cos(.009),cos(.007),solar)*sunUp;
           c+=sunColor*disc*4.;
-          // Hash the two face coordinates, never a dominant coordinate rounded
-          // near +/-340. Integrate small stars over the pixel footprint so
-          // camera motion cannot make pinpoints pop on and off between pixels.
-          vec3 ad=abs(d);vec2 faceUv;float face;
-          if(ad.x>=ad.y&&ad.x>=ad.z){faceUv=d.yz/ad.x;face=d.x>0.?0.:1.;}
-          else if(ad.y>=ad.z){faceUv=d.xz/ad.y;face=d.y>0.?2.:3.;}
-          else{faceUv=d.xy/ad.z;face=d.z>0.?4.:5.;}
-          vec2 p=faceUv*340.;vec3 cell=vec3(floor(p),face);float seed=hash(cell);
-          vec2 centre=cell.xy+vec2(.3+.4*hash(cell+1.),.3+.4*hash(cell+3.));
-          vec2 delta=p-centre,footprint=fwidth(p);
-          float variance=.0064+dot(footprint,footprint)/12.;
-          float stellar=exp(-dot(delta,delta)/(2.*variance))*(.0064/variance)*step(.986,seed);
-          stellar*=1.-smoothstep(.96,1.,max(abs(faceUv.x),abs(faceUv.y)));
-          float twinkle=.85+.15*sin(time*.45+seed*350.);
-          vec3 starColor=mix(vec3(.55,.73,1.),vec3(1.,.85,.62),hash(cell+11.));
-          float galaxy=pow(max(0.,1.-abs(dot(d,normalize(vec3(.25,.8,.48))))),26.);
-          float grain=hash(floor(d*220.));
-          c+=(starColor*stellar*twinkle*.9+vec3(.012,.016,.028)*galaxy*(.4+.6*grain))*stars*smoothstep(-.02,.15,d.y);
+          vec3 skyAir=c;
+          float skyPixel=length(fwidth(d));
+          if(stars>0.001) c=nightSky(c,d,skyPixel);
           float lunar=dot(d,moonDirection);
-          float moonDisc=smoothstep(cos(.014),cos(.0125),lunar)*smoothstep(-.025,.025,moonDirection.y);
-          vec3 right=normalize(cross(vec3(0.,1.,0.),moonDirection));vec3 up=cross(moonDirection,right);
-          vec2 uv=vec2(dot(d,right),dot(d,up))/.014;
-          vec3 normal=vec3(uv,sqrt(max(0.,1.-dot(uv,uv))));
-          float shade=max(.12,dot(normal,normalize(vec3(.25,.2,1.))));
-          float craters=.82+.18*hash(vec3(floor(uv*18.),2.));
-          c=mix(c,vec3(.72,.82,1.)*shade*craters*.9,moonDisc);
-          c+=vec3(.07,.11,.2)*pow(max(0.,lunar),350.)*stars;
+          float moonUp=smoothstep(-.025,.025,moonDirection.y);
+          if(lunar>.9997&&moonUp>0.){
+            vec3 right=normalize(cross(vec3(0.,1.,0.),moonDirection));vec3 up=cross(moonDirection,right);
+            vec2 uv=vec2(dot(d,right),dot(d,up))/.014;
+            float r=length(uv),aa=max(skyPixel/.014,.002);
+            if(r<1.+aa){
+              vec3 normal=vec3(uv,sqrt(max(0.,1.-r*r)));
+              vec3 light=normalize(vec3(dot(sunDirection,right),dot(sunDirection,up),-dot(sunDirection,moonDirection)));
+              float detailLod=max(0.,log2(max(1.,aa*128.)));
+              float rock=textureLod(nebulaMap,uv*.38+vec2(.32,.57),detailLod).r;
+              float maria=smoothstep(.43,.65,textureLod(nebulaMap,uv*.12+vec2(.14,.23),detailLod).r);
+              float relief=lunarCrater(uv,vec2(-.34,.32),.17)+lunarCrater(uv,vec2(.40,-.26),.12)
+                +lunarCrater(uv,vec2(.18,.54),.09)+lunarCrater(uv,vec2(-.18,-.55),.13);
+              float shade=.16+.84*max(0.,dot(normal,light));
+              vec3 surface=vec3(.58,.65,.76)*shade*(.85+.15*rock-maria*.17+relief);
+              float transmission=exp(-.075/max(moonDirection.y,.06));
+              c=mix(c,mix(skyAir,surface,transmission),(1.-smoothstep(1.-aa*.5,1.+aa*.5,r))*moonUp);
+            }
+          }
+          c+=vec3(.027,.046,.083)*pow(max(0.,lunar),500.)*stars*moonUp;
           gl_FragColor=vec4(c,1.);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
     }));
     this.sky.name = 'frontier-day-night-sky'; this.sky.renderOrder = -1000; this.sky.frustumCulled = false;
-    scene.add(this.sky); this.update(0);
+    scene.add(this.sky);
+    this.starField = new FriendsStarField(scene, this.sky.material.uniforms as { stars: THREE.IUniform; time: THREE.IUniform; moonDirection: THREE.IUniform });
+    this.update(0);
   }
   update(elapsedMs: number, frameMs = elapsedMs) {
     const state = this.state = sampleFrontierDayNight(elapsedMs);
@@ -126,6 +132,9 @@ export class FriendsDayNightCycle {
     const u = this.sky.material.uniforms;
     u.sunColor.value.copy(palette.sun[0]).lerp(palette.sun[1], THREE.MathUtils.smoothstep(this.sunDirection.y, 0, .55));
     u.twilight.value = t; u.stars.value = state.stars; u.time.value = frameMs / 1000;
+    u.meteorStrength.value = state.stars > .001
+      ? updateNightMeteor(frameMs / 1000, u.meteorHead.value, u.meteorTail.value) : 0;
+    this.starField.update(this.camera, this.renderer, state.stars > .001);
     this.daylight.value = d;
     this.lights.ambient.color.copy(palette.ambient[0]).lerp(palette.ambient[1], d);
     this.lights.ambient.intensity = state.ambientIntensity;
@@ -164,6 +173,8 @@ export class FriendsDayNightCycle {
   }
   dispose() {
     this.shadowCache.dispose();
+    this.nebulaTexture.dispose();
+    this.starField.dispose();
     this.sky.geometry.dispose(); this.sky.material.dispose(); this.sky.removeFromParent();
     this.moon.shadow.dispose(); this.moon.removeFromParent(); this.moon.target.removeFromParent();
     if (this.scene.background === this.background) this.scene.background = this.originalBackground;

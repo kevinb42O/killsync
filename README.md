@@ -216,8 +216,9 @@ cast shadows. Small shrubs and grass sit beneath them, with distant undergrowth
 released from memory. **The World Gate** is a
 colossal, physically open mountain arch above a glacial lake. **Crown of
 Highfall** is a summit citadel with four ruined towers and a broken causeway.
-**The Tidal Sanctum** combines a stepped ocean monument with a luminous ruined
-gateway. **The Skyfalls** descend into a hanging basin on the western massif.
+**The Tidal Sanctum** is a pale-stone coastal sanctuary with a supported south
+stairway, copper-capped colonnades and a tall turquoise-inlaid arch. Its open
+upper terrace preserves the Sanctum core delivery bay and clear hauling lane. **The Skyfalls** descend into a hanging basin on the western massif.
 The volcanic **Ember Caldera** has a broken rim, a molten crater and black ash
 fields. All nine survey sites appear in the atlas. The stone monuments share the same
 voxel field as mining and collision, and the distant arch retains its opening.

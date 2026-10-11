@@ -1,6 +1,7 @@
-import { ISLAND_LAKES, ISLAND_SEA_LEVEL, islandArchRange, islandLakeRadius, islandCoastDistance } from './FriendsIsland';
+import { ISLAND_LAKES, ISLAND_SEA_LEVEL, islandArchRange, islandCoastDistance } from './FriendsIsland';
 import { baseTerrainHeight, skyfallWaterLevelAt } from './FriendsTerrain';
 import { riverWetAt, riverSampleAt } from './FriendsHydrology';
+import { containedLakeRadius } from './FriendsWaterBodies';
 
 export type FriendsWaterSample = { level:number; depth:number; bodyId:string };
 /** Match the actual 32-unit collision cells, including open cave mouths. */
@@ -17,8 +18,8 @@ export function friendsWaterAt(x:number,y:number):FriendsWaterSample|undefined{
   const cascade=skyfallWaterLevelAt(x,y);
   let level=river?.level??(cascade&&cascade.side<cascade.width*.64?cascade.level:undefined),bodyId=river?.riverId??(level!==undefined?cascade?.id:undefined);
   for(const lake of ISLAND_LAKES){
-    if(Math.abs(x-lake.x)>lake.rx*1.5||Math.abs(y-lake.y)>lake.ry*1.5||islandLakeRadius(x,y,lake)>1.45)continue;
-    if(river&&Math.abs(river.level-lake.level)>.05||cascade&&cascade.level>lake.level+1)continue;
+    if(Math.abs(x-lake.x)>lake.rx*1.5||Math.abs(y-lake.y)>lake.ry*1.5||containedLakeRadius(x,y,lake)>(lake.id==='skyfalls'?1.1:1.45))continue;
+    if(river&&Math.abs(river.level-lake.level)>.05||cascade&&cascade.side<cascade.width*.64&&cascade.level>lake.level+1)continue;
     if(friendsWaterGround(x,y)>=lake.level-1)continue;
     level=lake.level;bodyId=lake.id;break;
   }
@@ -48,8 +49,8 @@ export function friendsWaterRenderDepth(x:number,y:number,bodyId:string){
   // Give dry bank texels the same lake ownership as their adjacent wet
   // texels. Extending two translucent sheets over a join would darken it.
   for(const lake of ISLAND_LAKES){
-    if(Math.abs(x-lake.x)>lake.rx*1.5||Math.abs(y-lake.y)>lake.ry*1.5||islandLakeRadius(x,y,lake)>1.45)continue;
-    if(river&&Math.abs(river.level-lake.level)>1||cascade&&cascade.level>lake.level+1)continue;
+    if(Math.abs(x-lake.x)>lake.rx*1.5||Math.abs(y-lake.y)>lake.ry*1.5||containedLakeRadius(x,y,lake)>(lake.id==='skyfalls'?1.18:1.45))continue;
+    if(river&&Math.abs(river.level-lake.level)>1||cascade&&cascade.side<cascade.width*.8+32&&cascade.level>lake.level+1)continue;
     owner=lake.id;level=lake.level;break;
   }
   return owner===bodyId&&level!==undefined?Math.max(1,level-friendsWaterGround(x,y)):-32;

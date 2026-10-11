@@ -1,0 +1,395 @@
+{
+  "errors": [],
+  "results": [
+    {
+      "view": "lava_summit",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/01-lava_summit.png",
+      "stats": {
+        "draws": 316,
+        "triangles": 3502628,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 0,
+          "surfaceBytes": 0,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 0,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 5.0083333325882755,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_crater",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/02-lava_crater.png",
+      "stats": {
+        "draws": 925,
+        "triangles": 4507792,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 82,
+          "surfaceBytes": 25844520,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 21,
+          "volumeActive": 21,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 8.920000000422199,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_rim",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/03-lava_rim.png",
+      "stats": {
+        "draws": 684,
+        "triangles": 4778388,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 88,
+          "surfaceBytes": 26847912,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 21,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 8.85166666706403,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_outlet",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/04-lava_outlet.png",
+      "stats": {
+        "draws": 416,
+        "triangles": 1619492,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 88,
+          "surfaceBytes": 26847912,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 21,
+          "volumeActive": 20,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 7.918333333109816,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_upper",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/05-lava_upper.png",
+      "stats": {
+        "draws": 340,
+        "triangles": 2097042,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 97,
+          "surfaceBytes": 29811288,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 21,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 11.394166666766008,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_bank",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/06-lava_bank.png",
+      "stats": {
+        "draws": 817,
+        "triangles": 5063328,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 96,
+          "surfaceBytes": 29957824,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 21,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 16.504166666542492,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_middle",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/07-lava_middle.png",
+      "stats": {
+        "draws": 295,
+        "triangles": 1249548,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 97,
+          "surfaceBytes": 29464032,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 21,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 10.140833333258827,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_lower",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/08-lava_lower.png",
+      "stats": {
+        "draws": 463,
+        "triangles": 3889060,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 93,
+          "surfaceBytes": 26643552,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 21,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 12.688333333594104,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "lava_ocean",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/09-lava_ocean.png",
+      "stats": {
+        "draws": 760,
+        "triangles": 4968598,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 84,
+          "surfaceBytes": 23313680,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 21,
+          "volumeActive": 0,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 15.931666666517655,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    },
+    {
+      "view": "skyfalls",
+      "path": "/Users/kevin/PROJECTS/vampire-survivors-2026/artifacts/lava-organic-tour/10-skyfalls.png",
+      "stats": {
+        "draws": 573,
+        "triangles": 1302473,
+        "terrain": {
+          "floodDrawCalls": 0,
+          "floodGeometryBytes": 0,
+          "floodMaskBytes": 0,
+          "surfaceTiles": 81,
+          "surfaceBytes": 22483864,
+          "surfaceJobs": 0,
+          "pendingVoxels": 0,
+          "patchDraws": 0,
+          "volumeChunks": 23,
+          "volumeActive": 23,
+          "volumeJobs": 0,
+          "editMeshLatencyP95": 0,
+          "editMeshSamples": 0
+        },
+        "frameMs": 16.762500000124177,
+        "rivers": [
+          {
+            "id": "skyfalls-river",
+            "metres": 853.7004754741441
+          },
+          {
+            "id": "gate-river",
+            "metres": 981.2203072476985
+          },
+          {
+            "id": "reedwater",
+            "metres": 1728.7784341462702
+          }
+        ],
+        "bridgeGround": -64
+      }
+    }
+  ]
+}
