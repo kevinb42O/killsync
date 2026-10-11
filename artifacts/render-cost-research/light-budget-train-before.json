@@ -1,0 +1,47 @@
+{
+  "errors": [],
+  "frames": [
+    {
+      "name": "far",
+      "renderMs": 26.700000002980232,
+      "compiled": 0,
+      "linked": 0,
+      "blockingMs": 0
+    },
+    {
+      "name": "far-repeat",
+      "renderMs": 13.299999997019768,
+      "compiled": 0,
+      "linked": 0,
+      "blockingMs": 0
+    },
+    {
+      "name": "approach-train",
+      "renderMs": 1302.8999999985099,
+      "compiled": 126,
+      "linked": 63,
+      "blockingMs": 14.600000008940697
+    },
+    {
+      "name": "near-repeat",
+      "renderMs": 13,
+      "compiled": 0,
+      "linked": 0,
+      "blockingMs": 0
+    }
+  ],
+  "warmup": {
+    "submitted": 504,
+    "completed": 504,
+    "queued": 0,
+    "scanning": false,
+    "pending": false,
+    "pendingCount": 0,
+    "texturesQueued": 0,
+    "failures": 0,
+    "maxSubmitMs": 5,
+    "maxReadinessMs": 46.5,
+    "maxScanMs": 2.1999999955296516,
+    "maxTextureMs": 0
+  }
+}

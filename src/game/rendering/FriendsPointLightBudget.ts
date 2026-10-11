@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 
-/** Three reserves shader work for every visible light, even at intensity zero.
+/** Experimental benchmark controller; do not install in live gameplay.
+ * First use of a new bucket can block the main thread compiling world shaders.
+ * Three reserves shader work for every visible light, even at intensity zero.
  * Keep a small, stable point-light layout without changing authored lights or
  * their shadows. Grow in eight-slot steps; never discard a contributing light.
  * Delay shrinking for five seconds to avoid shader churn at lamp boundaries. */

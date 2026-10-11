@@ -100,3 +100,5 @@ Raw results: `artifacts/friends-cpu-optimisation/cpu-benchmark.json`, `baseline-
 ## Subsequent rendering optimisation
 
 The rendered-game measurements above isolate the CPU changes and predate the compact point-light layout. The later rendering implementation and repeated live FPS comparison are documented in [the render-cost research follow-up](render-cost-research-2026-10-10.md#follow-up-audit-and-live-gameplay-fps). That comparison keeps these CPU changes enabled in both conditions and toggles only the lighting budget; its FPS increase should not be attributed to the CPU caches.
+
+On 11 October the adaptive lighting budget was withdrawn from gameplay after reproducing shader-compilation stalls while approaching the stopped train. Its historical FPS gains no longer describe production. The CPU changes remain enabled; see the [freeze investigation](render-cost-research-2026-10-10.md#freeze-investigation--stopped-train-at-spawn-11-october-2026).

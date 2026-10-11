@@ -8,7 +8,6 @@ import { createBreachCathedral } from './rendering/RealityBreachVisuals';
 import * as THREE from 'three';
 import { FriendsNightVision } from './rendering/FriendsNightVision';
 import { FriendsShaderWarmup } from './rendering/FriendsShaderWarmup';
-import { FriendsPointLightBudget } from './rendering/FriendsPointLightBudget';
 import type { FriendsFlashlightGlare } from './rendering/FriendsSharedFlashlights';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { GameEngine } from './Engine';
@@ -114,7 +113,6 @@ export class Renderer3D {
   private speedLineIntensity = 0;
   private nightVision?: FriendsNightVision;
   private friendsShaderWarmup?: FriendsShaderWarmup;
-  private friendsPointLightBudget?: FriendsPointLightBudget;
   /** Kept wholly separate from desktop settings so touch hardware trades a
    * little invisible rendering detail for materially steadier frame pacing. */
   private readonly mobilePerformance: boolean;
@@ -496,7 +494,6 @@ export class Renderer3D {
     if (this.worldId === 'friends_frontier') this.nightVision = new FriendsNightVision(this.scene,
       this.mobilePerformance ? {maxPixels:1600*900,samples:0} : undefined);
     if (this.worldId === 'friends_frontier') this.friendsShaderWarmup = new FriendsShaderWarmup(this.renderer, this.scene);
-    if (this.worldId === 'friends_frontier') this.friendsPointLightBudget = new FriendsPointLightBudget(this.renderer, this.scene);
 
     // 6. Setup High-End FPS Viewmodel (Production Cyber Arm & Blaster)
     this.setupFPSViewmodel();
@@ -532,7 +529,6 @@ export class Renderer3D {
   setCoopWorld(worldId: WorldId) {
     if (!this.floatingPlatform || worldId === this.worldId) return;
     this.worldId = worldId;
-    if (this.friendsPointLightBudget) this.friendsPointLightBudget.enabled = worldId === 'friends_frontier';
     this.camera.near = worldId === 'friends_frontier' ? 2 : .05;
     this.camera.updateProjectionMatrix();
     this.rebuildEnvironment();
@@ -3106,8 +3102,10 @@ export class Renderer3D {
     beforeSceneRender?.();
     const nightVisionPass = this.nightVision?.beginFrame(this.renderer, this.camera, deltaTime,
       this.worldId === 'friends_frontier' && viewMode === 'FIRST_PERSON' && !this.presentationSpectating);
-    if (nightVisionPass && !this.presentationPreparingWorld) this.friendsPointLightBudget?.withLayout(this.camera,
-      () => this.friendsShaderWarmup?.update(this.camera));
+    // Keep authored light slots fixed during play. Changing the point-light
+    // count when station lamps activate can synchronously compile every world
+    // shader and freeze the main thread for several seconds.
+    if (nightVisionPass && !this.presentationPreparingWorld) this.friendsShaderWarmup?.update(this.camera);
     if (!this.presentationWorldRender?.(this.renderer,this.scene,this.camera)) this.renderer.render(this.scene, this.camera);
     if (viewMode === 'FIRST_PERSON' && this.presentationViewmodelVisible) {
       this.renderer.autoClear = false;
@@ -5656,7 +5654,6 @@ export class Renderer3D {
   }
 
   destroy() {
-    this.friendsPointLightBudget?.dispose();
     this.friendsShaderWarmup?.dispose();
     this.nightVision?.dispose();
     for (const object of this.environmentObjects) { object.userData.skyTexture?.dispose(); object.traverse(child => { child.userData.disposed = true; }); }

@@ -1,5 +1,7 @@
 # Rendering cost research — 10 October 2026
 
+**Status — 11 October 2026:** The adaptive point-light budget has been withdrawn from live gameplay after reproducing multi-second shader-compilation stalls when nearby lamps activate. The FPS gains below describe the withdrawn experiment, not the current production renderer. See the freeze investigation at the end of this report.
+
 The largest demonstrated costs in the current Friends island are high pixel density, excessive inactive light slots in shader layouts, and forest foliage. The clearest structural inefficiency in CPU draw submission is fragmented terrain and prop rendering. Improving simulation microseconds cannot remove these graphics costs.
 
 This audit examined the shared renderer and Friends rendering systems, existing GPU/CPU reports, the installed Three.js 0.185.1 source, original tree GLBs, and current engine/browser guidance. Fresh measurements cover the actual Friends arena at spawn on Apple M1 / Chromium ANGLE Metal. Survival/combat mode, other GPUs, caves, flight, construction stress scenes and five-player lighting were not newly benchmarked. Prior measurements elsewhere in the repository are supporting context, not interchangeable benchmark results.
@@ -271,3 +273,29 @@ FRIENDS_TEST_ORIGIN=http://localhost:3002 FRIENDS_PROFILE_PHASES=baseline-island
 
 
 Final combined push checks: **232 test files / 1,858 tests passed**, including eight point-light budget tests. `npm run lint`, `npm run build`, staged whitespace checks, and the live swimming browser review all passed. The review confirmed that snapshot deltas create replacement arrays/objects, as required by the guest tree cache, and that construction pose keys include the scalar inputs used by vehicle/crane transforms. The empty research placeholder was removed and historical research probes now dispose the budget in their isolated browser before probing the original layout. The compiled-light audit renders that layout before reading shader sources.
+
+
+## Freeze investigation — stopped train at spawn, 11 October 2026
+
+A player reported freezing while approaching the stopped train near spawn. Inspection found that the adaptive point-light budget invalidated the stable layout intentionally maintained by the six railway lamps and eight castle torches. Increasing the active point count beyond a bucket boundary changes Three.js's shader program key. Background warmup prepared the current bucket only, so the first draw using a larger bucket synchronously compiled the world shader variants. Completion of the current warmup did not prevent this.
+
+Controlled reproduction held the real world camera and HDR target fixed, stopped bridge updates, and activated the six existing railway lamp slots. The approach frame took **1,302.9 ms**, compiling **126 shaders / linking 63 programs**. The repeat frame took 13 ms and compiled nothing. The analogous castle-light transition took **4,636.9 ms**, with the same 63-program burst, despite all 504 background warmup jobs completing successfully. This demonstrates a real multi-second main-thread stall, rather than proving that every reported permanent lockup has the same cause. The stationary FPS tests and pixel-equivalence tests failed to exercise first-use bucket transitions and were insufficient release validation.
+
+The production renderer now retains its authored fixed point-light slots and updates normal background shader warmup without adaptive culling. The experimental budget is available only through explicit opt-in in benchmark tools. Movement caches, grove ordering, swimming presentation, spotlight cookies, infrared and shadow behaviour are retained. The earlier claimed 26–31% FPS improvement is withdrawn from production until a safe strategy can be validated across approaches and cold shader caches.
+
+The fixed production probe uses the actual railway light selector at the home station `(6800, 786, 7500)`, with the train untouched. Both far and near retain fixed slots. It observed zero lamps far and six active lamps near; the approach frame took **16.4 ms**, the near repeat 17.1 ms, and both compiled/linked **zero programs**. The initial far render took 130.3 ms; that separate first scene submission is not hidden in the approach figures.
+
+Evidence:
+- `artifacts/render-cost-research/light-budget-train-before.json`: controlled six-lamp activation with the unsafe production controller.
+- `artifacts/render-cost-research/light-budget-transitions-before.json`: castle bucket transition and completed warmup statistics.
+- `artifacts/render-cost-research/light-budget-train-after.json`: actual home-station selector with fixed production light slots.
+
+Reproduce the fixed regression probe:
+
+```sh
+FRIENDS_TEST_ORIGIN=http://localhost:3002 FRIENDS_ASSERT_NO_TRANSITION=true node tools/test-friends-light-budget-transitions.mjs
+```
+
+To explicitly reproduce the withdrawn adaptive controller, set `FRIENDS_TEST_ADAPTIVE=true` and choose a separate output with `FRIENDS_TRANSITION_OUTPUT`. The normal production renderer does not install that controller.
+
+Hotfix validation: **235 test files / 1,877 tests passed**, `npm run lint` and `npm run build` passed, and the real-browser station probe reported no page errors or shader compilations during approach.

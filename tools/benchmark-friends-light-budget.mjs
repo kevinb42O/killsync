@@ -16,7 +16,10 @@ try{
  console.log('Opening Friends benchmark');await page.goto(origin+'/?mode=friends');await page.getByLabel('Your name',{exact:true}).fill('Render research');await page.getByRole('button',{name:'Open my island',exact:true}).click();await page.getByRole('button',{name:'Head into the island',exact:true}).click();await page.locator('.coop-arena').waitFor();await page.waitForFunction(()=>window.bridge);console.log('Island loaded; settling');await page.waitForTimeout(20000);
  await page.evaluate(()=>{bridge.frontierVisuals.setEnvironment({hour:9,speed:0,windSpeed:0});bridge.renderer.yaw=-2.3;bridge.renderer.pitch=-.3;});await page.waitForTimeout(10000);
  console.log('Measuring alternating GPU samples and pixels');const result=await page.evaluate(async()=>{
-  const b=window.bridge,p=b.renderer,r=p.renderer,scene=p.scene,camera=p.camera,budget=p.friendsPointLightBudget;
+  const b=window.bridge,p=b.renderer,r=p.renderer,scene=p.scene,camera=p.camera;
+  // Experimental opt-in only: adaptive layouts are not installed in gameplay.
+  if(!p.friendsPointLightBudget){const {FriendsPointLightBudget}=await import('/src/game/rendering/FriendsPointLightBudget.ts');p.friendsPointLightBudget=new FriendsPointLightBudget(r,scene);}
+  const budget=p.friendsPointLightBudget;
   if(!budget)throw Error('Point-light budget was not installed');
   const renderFrame=b.render.bind(b),frameArgs=window.lastRenderArgs.slice();frameArgs[2]=1000/60;b.render=()=>{};
   const gl=r.getContext(),ext=gl.getExtension('EXT_disjoint_timer_query_webgl2');if(!ext)throw Error('No GPU timer query extension');
