@@ -6,6 +6,7 @@ import { quantizeAngle, quantizePitch } from './CoopSimulation';
 import { FriendsSimulation } from './FriendsSimulation';
 import { SnapshotDecoder, compactSnapshotWirePayload } from './snapshotReplication';
 import { advancePlayerMovement, type PlayerMotionState } from './playerMovement';
+import { firstPersonEyeZ } from './FirstPersonEye';
 
 const input=(extra:Partial<MultiplayerInputFrame>={}):MultiplayerInputFrame=>({type:'input',version:MULTIPLAYER_PROTOCOL_VERSION,sequence:1,clientTime:0,movement:0,aimAngle:quantizeAngle(0),aimPitch:quantizePitch(0),friendsTool:STONE_TOOL,selectedSlot:0,firing:false,fireActionId:0,sprinting:false,sliding:false,reviving:false,jumpPressed:false,dashPressed:false,...extra});
 const actor=(id='host',x=0):FishingActor=>({id,x,y:0,z:0,angle:0,lifeState:'alive'});
@@ -19,6 +20,36 @@ function fixture(environment=env){
 
 describe('Friends Fun stones',()=>{
   it('clamps the new slot and keeps mining input inactive',()=>{expect(clampInputFrame(input()).friendsTool).toBe(8);});
+  it('launches along the center view ray at every pitch and posture, then falls under gravity',()=>{
+    for(const pitch of [-1.3,-.4,0,.8,1.3])for(const posture of [{},{sliding:true},{friendsSeat:{vehicleId:'bench',index:0}}]){
+      const stones=new FriendsStones(),p={...actor(),z:100,...posture},angle=1.1;
+      const environment={...env,water:()=>undefined,floor:()=>undefined};
+      const commands=new Map([[p.id,input({fireActionId:1,aimAngle:quantizeAngle(angle),aimPitch:quantizePitch(pitch)})]]);
+      stones.update(0,50,[p],commands,environment,()=>{});
+      const launch=stones.snapshot().stones[0],speed=Math.hypot(launch.vx,launch.vy,launch.vz);
+      expect(launch.vx/speed).toBeCloseTo(Math.cos(angle)*Math.cos(pitch),4);
+      expect(launch.vy/speed).toBeCloseTo(Math.sin(angle)*Math.cos(pitch),4);
+      expect(launch.vz/speed).toBeCloseTo(Math.sin(pitch),4);
+      expect(launch.x-p.x).toBeCloseTo(launch.vx/speed*6);
+      expect(launch.y-p.y).toBeCloseTo(launch.vy/speed*6);
+      expect(launch.z-firstPersonEyeZ(p)).toBeCloseTo(launch.vz/speed*6);
+      for(let i=1;i<=4;i++)stones.update(50,50+i*50,[p],commands,environment,()=>{});
+      const flight=stones.snapshot().stones[0];
+      expect(flight.vz).toBeCloseTo(launch.vz-230*.2);
+      expect(flight.z).toBeLessThan(launch.z+launch.vz*.2);
+      expect(flight.x).toBeCloseTo(launch.x+launch.vx*.2);
+      expect(flight.y).toBeCloseTo(launch.y+launch.vy*.2);
+    }
+  });
+  it('uses the ceiling-adjusted viewpoint and cannot release through a close wall',()=>{
+    const stones=new FriendsStones(),p=actor(),commands=new Map([[p.id,input({fireActionId:1})]]);
+    const environment={...env,eyeCeiling:()=>45};
+    stones.update(0,50,[p],commands,environment,()=>{});
+    expect(stones.snapshot().stones[0].z).toBeCloseTo(42,3);
+    const blocked=new FriendsStones();
+    blocked.update(0,50,[p],commands,{...environment,blocked:(a,b)=>a.x<3&&b.x>=3},()=>{});
+    expect(blocked.snapshot().stones).toHaveLength(0);
+  });
   it('charges once, throws on release and refills without repeating held or replayed input',()=>{
     const f=fixture();f.command=input({fireActionId:1,firing:true});f.step(STONE_CHARGE_MS);
     expect(f.stones.snapshot().stones).toHaveLength(0);expect(f.stones.snapshot().equipped[0].chargeAt).toBe(50);
@@ -29,7 +60,8 @@ describe('Friends Fun stones',()=>{
     f.step(300);f.command={...f.command,fireActionId:1};f.step();expect(f.stones.snapshot().stones).toHaveLength(1);
   });
   it('skips several times at a shallow angle and sinks on a steep impact',()=>{
-    const shallow=fixture();shallow.tap();shallow.step(1100);
+    const shallow=fixture();shallow.command=input({fireActionId:1,firing:true});shallow.step(STONE_CHARGE_MS+50);
+    shallow.command={...shallow.command,firing:false};shallow.step();shallow.step(1400);
     expect(shallow.stones.snapshot().stones[0]?.skips).toBeGreaterThanOrEqual(2);
     expect(shallow.stones.snapshot().splashes.some(s=>s.skip>0)).toBe(true);
     const steep=fixture();steep.tap(-.7);steep.step(700);

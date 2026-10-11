@@ -2,6 +2,7 @@ import { friendsWaterAt } from '../world/FriendsWaterSurface';
 import { isRowboatSeat } from '../world/FriendsFishingDock';
 import type { FishingActor, FishingEnvironment, FishingPoint } from './FriendsFishing';
 import type { MultiplayerInputFrame } from './protocol';
+import { firstPersonEyeZ } from './FirstPersonEye';
 
 export const STONE_TOOL = 8 as const;
 export const STONE_CHARGE_MS = 900;
@@ -41,10 +42,14 @@ export class FriendsStones {
       if(hand.chargeAt!==undefined&&!input.firing){
         const power=Math.min(1,(now-hand.chargeAt)/STONE_CHARGE_MS),speed=360+power*340;
         const angle=input.aimAngle/65535*Math.PI*2,pitch=input.aimPitch/65535*Math.PI*.88-Math.PI*.44;
-        const stone:ThrownStone={id:++this.serial,ownerId:p.id,x:p.x+Math.cos(angle)*24,y:p.y+Math.sin(angle)*24,z:p.z+24,
-          vx:Math.cos(angle)*Math.cos(pitch)*speed,vy:Math.sin(angle)*Math.cos(pitch)*speed,vz:Math.sin(pitch)*speed,atMs:now,skips:0};
+        // Start on the camera's center ray; a waist-height launch runs parallel
+        // below the crosshair and can begin behind the view when looking up.
+        const eye={x:p.x,y:p.y,z:firstPersonEyeZ(p,env.eyeCeiling?.(p))};
+        const direction={x:Math.cos(angle)*Math.cos(pitch),y:Math.sin(angle)*Math.cos(pitch),z:Math.sin(pitch)};
+        const stone:ThrownStone={id:++this.serial,ownerId:p.id,x:eye.x+direction.x*6,y:eye.y+direction.y*6,z:eye.z+direction.z*6,
+          vx:direction.x*speed,vy:direction.y*speed,vz:direction.z*speed,atMs:now,skips:0};
         // The release point cannot reach through nearby walls.
-        if(!env.blocked({...p,z:p.z+24},stone)){this.stones.push(stone);if(this.stones.length>40)this.stones.shift();}
+        if(!env.blocked(eye,stone)){this.stones.push(stone);if(this.stones.length>40)this.stones.shift();}
         hand.chargeAt=undefined;hand.readyAt=now+STONE_REFILL_MS;hand.throwAt=now;
       }
       this.equipped.push({playerId:p.id,readyAt:hand.readyAt,chargeAt:hand.chargeAt,throwAt:hand.throwAt});
