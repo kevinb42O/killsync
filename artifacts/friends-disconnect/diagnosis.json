@@ -1,0 +1,27 @@
+{
+  "observedError": "TypeError: Cannot read properties of undefined (reading length)",
+  "observedBundle": "https://www.killsync.be/assets/index-BvQrRmdF.js",
+  "observedStack": [
+    "diffEntity",
+    "createSnapshotDelta",
+    "SnapshotReplicator.payloadFor",
+    "ManualWebRTCSession.broadcastState",
+    "HostSimulationClock.pulse"
+  ],
+  "cause": "JSON.stringify(undefined) has no string length when optional entity fields are cleared. Nested undefined fields also require removals on the JSON wire.",
+  "realGameplayReproduction": "Capture armed Friends snapshot as the peer baseline; switch to fishing while moving; original serializer crashes while generating next payload. Fixed regression tests cover both empty hands and fishing while moving.",
+  "originalSerializerReproduced": true,
+  "targetedNetworkTestsPassed": 29,
+  "liveOptionalFieldCyclesPassed": 6,
+  "liveGuestConnected": true,
+  "fullSuite": {
+    "passed": 1865,
+    "timedOut": 2
+  },
+  "rerun": {
+    "swimmingPassed": true,
+    "snapshotReplicationPassed": true,
+    "castleCargoTimedOut": true
+  },
+  "productionDeploymentPerformed": false
+}

@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Users/kevin/PROJECTS/vampire-survivors-2026
+
+
+ Test Files  4 passed (4)
+      Tests  29 passed (29)
+   Start at  01:49:51
+   Duration  2.71s (transform 744ms, setup 0ms, import 1.54s, tests 818ms, environment 0ms)

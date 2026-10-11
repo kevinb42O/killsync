@@ -1,0 +1,20 @@
+{
+  "cycles": 12,
+  "guestCount": 2,
+  "moving": true,
+  "motionLoss": 0.25,
+  "delayMs": 80,
+  "fishingAfterReconnect": true,
+  "receivedSnapshots": [
+    240,
+    403
+  ],
+  "finalTick": 404,
+  "errors": [],
+  "expectedDepartureErrors": [
+    "The island data channel closed. Rejoin the room.",
+    "The reliable channel with peer-kv2nif207k9v encountered an error.",
+    "The friends-world channel with peer-kv2nif207k9v encountered an error."
+  ],
+  "browserErrors": []
+}

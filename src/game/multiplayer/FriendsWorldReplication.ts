@@ -12,14 +12,17 @@ type Durable = Pick<FriendsSnapshot, 'building'|'frontier'|'progress'|'projects'
 type Patch = { value?: unknown; object?: Record<string,Patch>; array?: Record<string,Patch>; length?:number; remove?:string[] };
 export function worldDiff(a:unknown,b:unknown):Patch|undefined {
   if(a===b)return;
-  if(Array.isArray(a)&&Array.isArray(b)) { const array:Record<string,Patch>={}; for(let i=0;i<b.length;i++){const p=worldDiff(a[i],b[i]);if(p)array[i]=p;} return Object.keys(array).length||a.length!==b.length?{array,length:b.length}:undefined; }
+  if(Array.isArray(a)&&Array.isArray(b)) { const array:Record<string,Patch>={}; for(let i=0;i<b.length;i++){const p=i>=a.length&&b[i]===undefined?{value:null}:worldDiff(a[i],b[i]);if(p)array[i]=p;} return Object.keys(array).length||a.length!==b.length?{array,length:b.length}:undefined; }
   if(a && b && typeof a==='object' && typeof b==='object' && !Array.isArray(a) && !Array.isArray(b)) {
     const object:Record<string,Patch>={}, remove:string[]=[];
-    for(const [k,v] of Object.entries(b)){const p=worldDiff((a as any)[k],v);if(p)object[k]=p;}
-    for(const k of Object.keys(a))if(!Object.hasOwn(b,k))remove.push(k);
+    // JSON drops undefined object fields. Encode cleared links as removals,
+    // otherwise {value:undefined} becomes {} and retains the old attachment.
+    for(const [k,v] of Object.entries(b)){if(v===undefined)continue;const p=worldDiff((a as any)[k],v);if(p)object[k]=p;}
+    for(const k of Object.keys(a))if(!Object.hasOwn(b,k)||(b as any)[k]===undefined)remove.push(k);
     return Object.keys(object).length||remove.length?{object,remove}:undefined;
   }
-  return {value:b};
+  // JSON serializes undefined array entries as null.
+  return {value:b===undefined?null:b};
 }
 export function worldPatch(a:unknown,p:Patch|undefined,depth=0):any {
   if(depth>64)throw new Error('World patch is too deep');

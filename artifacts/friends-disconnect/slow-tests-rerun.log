@@ -1,0 +1,26 @@
+
+ RUN  v4.1.11 /Users/kevin/PROJECTS/vampire-survivors-2026
+
+ ❯ src/game/multiplayer/FriendsCastleCargo.test.ts (2 tests | 1 failed) 34564ms
+     × solo hauls the Watchfire core up the entire castle approach, through the gate and into its courtyard bay 34460ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/game/multiplayer/FriendsCastleCargo.test.ts > exact castle cargo support > solo hauls the Watchfire core up the entire castle approach, through the gate and into its courtyard bay
+Error: Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/game/multiplayer/FriendsCastleCargo.test.ts:27:3
+     25|     expect(physics.world.bodies.length).toBeLessThan(400);
+     26|   });
+     27|   it('solo hauls the Watchfire core up the entire castle approach, thr…
+       |   ^
+     28|     const sim=new FriendsSimulation([{id:'host',label:'Host',color:'#f…
+     29|     const cargo=sim['friends']!.hauling.getCargo()[1],player=sim['play…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 17 passed (18)
+   Start at  01:43:30
+   Duration  44.33s (transform 1.46s, setup 0ms, import 3.05s, tests 40.66s, environment 0ms)

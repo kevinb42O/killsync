@@ -1,0 +1,23 @@
+PASS 4 simultaneous playable late joins
+PASS distinct crew identities
+PASS guest input reaches authority
+PASS lost reply retries without duplicate mutation
+PASS host editing permissions reject guest mutations
+PASS building retries commit exactly one shared piece
+PASS another guest edits the shared construction
+PASS guest builds a usable workshop
+PASS shared construction converges on all guests
+PASS crafting retry spends materials once
+PASS guest storage transfers conserve crew materials
+PASS populated fixture reaches terrain capacity
+PASS all guests catch up after a dropped bulk fragment and 25% motion packet loss
+PASS rejoin with renamed crew restores identity
+PASS spent pack survives reconnect and rename
+PASS browser mirror and IndexedDB save
+PASS IndexedDB recovers corrupt current and previous mirrors
+PASS mirror quota failure still saves IndexedDB
+PASS 5-player populated-world soak continues under motion faults
+PASS host departure tears down guest peer
+PASS no browser runtime exceptions
+PASS Survival raw-snapshot WebRTC regression
+PASS Survival input still moves the authoritative player

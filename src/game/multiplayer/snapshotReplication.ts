@@ -208,6 +208,12 @@ function diffEntity(previous: IdentifiedEntity | undefined, next: IdentifiedEnti
   const remove: string[] = [];
   for (const [key, value] of Object.entries(next)) {
     if (key === 'id') continue;
+    // JSON omits undefined object fields. A cleared optional field must be a
+    // removal, not a replacement whose serialization has no string length.
+    if (value === undefined) {
+      if (previous[key] !== undefined) remove.push(key);
+      continue;
+    }
     const nested = diffJson(previous[key], value);
     if (!nested) continue;
     // Weapon runtimes and passive arrays are nested, mostly-static state. A
@@ -251,14 +257,17 @@ function diffJson(previous: unknown, next: unknown): JsonPatch | undefined {
     }
     return Object.keys(array).length ? { array } : undefined;
   }
-  if (!isPlainRecord(previous) || !isPlainRecord(next)) return { value: next };
+  // Undefined array entries become null on the JSON wire; object parents
+  // handle undefined children as property removals below.
+  if (!isPlainRecord(previous) || !isPlainRecord(next)) return { value: next === undefined ? null : next };
   const object: Record<string, JsonPatch> = {};
   const remove: string[] = [];
   for (const key of Object.keys(next)) {
+    if (next[key] === undefined) continue;
     const patch = diffJson(previous[key], next[key]);
     if (patch) object[key] = patch;
   }
-  for (const key of Object.keys(previous)) if (!(key in next)) remove.push(key);
+  for (const key of Object.keys(previous)) if (!(key in next) || next[key] === undefined && previous[key] !== undefined) remove.push(key);
   return { ...(Object.keys(object).length ? { object } : {}), ...(remove.length ? { remove } : {}) };
 }
 

@@ -1,0 +1,25 @@
+
+> react-example@0.1.0 build
+> vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 2392 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/hostClock.worker-BZUVNM8e.js                 0.19 kB
+dist/index.html                                          0.86 kB │ gzip:     0.41 kB
+dist/assets/friendsIslandMasonry.worker-D339QNto.js     47.97 kB
+dist/assets/frontierVegetation.worker-CbEOvYwW.js       54.19 kB
+dist/assets/friendsTerrain.worker-Dew5HaXG.js           62.53 kB
+dist/assets/friendsSurface.worker-D6wRF-1F.js           63.52 kB
+dist/assets/friendsHorizon.worker-C0_9vH6w.js           63.69 kB
+dist/assets/index-DC6zWcA7.css                         368.74 kB │ gzip:    56.80 kB
+dist/assets/FriendsMenuScene-CeHe9H_Q.js                 5.24 kB │ gzip:     2.30 kB
+dist/assets/index-CXBEKx4r.js                        3,483.35 kB │ gzip: 1,027.54 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.34s
